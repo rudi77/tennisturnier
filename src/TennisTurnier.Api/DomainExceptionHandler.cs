@@ -33,6 +33,7 @@ internal sealed class DomainExceptionHandler : IExceptionHandler
         {
             AccessDeniedException denied => Denied(denied),
             NotFoundException notFound => NotFound(notFound),
+            ConcurrencyConflictException conflict => Conflict(conflict),
             DomainException domain => Unprocessable(domain),
             _ => null,
         };
@@ -73,6 +74,17 @@ internal sealed class DomainExceptionHandler : IExceptionHandler
     {
         Status = StatusCodes.Status404NotFound,
         Title = "Nicht gefunden",
+        Detail = exception.Message,
+    };
+
+    /// <summary>
+    /// Zwei Eingaben zum selben Match sind am Turniertag der Normalfall. Der
+    /// Aufrufer soll neu laden und es wiederholen — dafür ist 409 da.
+    /// </summary>
+    private static ProblemDetails Conflict(ConcurrencyConflictException exception) => new()
+    {
+        Status = StatusCodes.Status409Conflict,
+        Title = "Zwischenzeitlich geändert",
         Detail = exception.Message,
     };
 

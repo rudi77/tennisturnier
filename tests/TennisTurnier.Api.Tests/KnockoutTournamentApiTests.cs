@@ -334,18 +334,105 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
         var courts = await client.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
         var courtId = courts!.Single().Id;
 
-        async Task AssignAsync(int sequence) =>
-            await client.PostAsJsonAsync(
+        async Task<AssignCourtResult> AssignAsync(int sequence) =>
+            (await (await client.PostAsJsonAsync(
                 $"/api/matches/{match.Id}/court",
                 new AssignCourtRequest(courtId, sequence, null, null, null),
-                Json);
+                Json)).Content.ReadFromJsonAsync<AssignCourtResult>(Json))!;
 
-        await AssignAsync(1);
-        await AssignAsync(3);
+        var first = await AssignAsync(1);
+        var second = await AssignAsync(3);
 
         var updated = Assert.Single(await PhasesAsync(client, tournamentId));
 
         Assert.Equal(3, updated.Matches.First(m => m.Id == match.Id).Assignment!.SequenceOnCourt);
+
+        // Dieselbe Zuweisung, nicht eine zweite: nur auf einer bestehenden Zeile
+        // wirkt der Zähler für Nebenläufigkeit. Wurde sie stattdessen gelöscht und
+        // neu angelegt, liefen zwei gleichzeitige Zuweisungen beide durch und
+        // hinterließen zwei aktive Zeilen für dasselbe Match.
+        Assert.Equal(first.AssignmentId, second.AssignmentId);
+    }
+
+    [Fact]
+    public async Task Eine_bereits_vergebene_Zuweisung_bleibt_bei_gleichzeitiger_Aenderung_eindeutig()
+    {
+        // Regression: die zweite Zuweisung war ein Löschen und Neuanlegen. Zwei
+        // gleichzeitige Aufrufe lasen beide dieselbe alte Zuweisung, löschten sie
+        // beide und legten je eine neue an — am Ende stand das Match zweimal in
+        // der Platzbelegung, ohne dass irgendwer einen Konflikt gesehen hätte.
+        var (client, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var match = phase.Matches.First(m => m.Round == 1);
+
+        var courts = await client.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+        var courtId = courts!.Single().Id;
+
+        await client.PostAsJsonAsync(
+            $"/api/matches/{match.Id}/court", new AssignCourtRequest(courtId, 1, null, null, null), Json);
+
+        var responses = await Task.WhenAll(
+            Enumerable.Range(2, 4).Select(sequence => client.PostAsJsonAsync(
+                $"/api/matches/{match.Id}/court",
+                new AssignCourtRequest(courtId, sequence, null, null, null),
+                Json)));
+
+        var assignmentIds = new List<Guid>();
+        foreach (var response in responses.Where(r => r.IsSuccessStatusCode))
+        {
+            assignmentIds.Add((await response.Content.ReadFromJsonAsync<AssignCourtResult>(Json))!.AssignmentId);
+        }
+
+        Assert.Single(assignmentIds.Distinct());
+        Assert.All(responses.Where(r => !r.IsSuccessStatusCode), r =>
+            Assert.Equal(HttpStatusCode.Conflict, r.StatusCode));
+    }
+
+    [Fact]
+    public async Task Ein_Turnierleiter_ohne_Vereinsrolle_kann_einen_Platz_vergeben()
+    {
+        // Regression: die Plätze hängen am Verein, und der Query-Filter auf Club
+        // kannte nur Vereinsrollen. Der Turnierleiter fand damit sein Turnier,
+        // aber nicht den Verein — die Platzvergabe endete in einem 404 auf den
+        // ausrichtenden Verein selbst.
+        var (admin, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(admin, tournamentId));
+        var match = phase.Matches.First(m => m.Round == 1);
+
+        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+
+        var director = $"director-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(director, Role.TournamentDirector, ResourceScope.Tournament(tournamentId));
+        var client = _factory.CreateClientAs(director);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/matches/{match.Id}/court",
+            new AssignCourtRequest(courts!.Single().Id, 1, null, null, null),
+            Json);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Und der Platz trägt seinen Namen: ohne den Verein blieb er „(unbekannt)".
+        var updated = Assert.Single(await PhasesAsync(client, tournamentId));
+        Assert.Equal("Platz 1", updated.Matches.First(m => m.Id == match.Id).Assignment!.CourtName);
+    }
+
+    [Fact]
+    public async Task Ein_Freilos_laesst_sich_nicht_zurueckziehen()
+    {
+        // Regression: das Freilos ließ sich zurücknehmen wie ein eingetragenes
+        // Ergebnis. Danach wartete die nächste Runde dauerhaft auf einen Sieger,
+        // den niemand mehr eintragen kann — die Phase war nicht mehr spielbar.
+        var (client, _, tournamentId) = await DrawnTournamentAsync(3);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var bye = phase.Matches.Single(m => m.Score?.Outcome == MatchOutcome.Bye);
+
+        var response = await client.DeleteAsync($"/api/matches/{bye.Id}/result");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        var after = Assert.Single(await PhasesAsync(client, tournamentId));
+        Assert.Equal(MatchOutcome.Bye, after.Matches.Single(m => m.Id == bye.Id).Score!.Outcome);
     }
 
     [Fact]

@@ -18,14 +18,27 @@ public sealed class ScoreConverter : ValueConverter<Score, string>
     }
 }
 
+/// <summary>
+/// Vergleicht Ergebnisse nach Inhalt.
+///
+/// Die Momentaufnahme ist das Ergebnis selbst: <see cref="Score"/> ist
+/// unveränderlich, eine Kopie könnte sich also nie von ihm unterscheiden. Zuvor
+/// entstand sie über Serialisieren und Zurücklesen — und weil der Vergleich
+/// damit auf zwei verschiedene Objekte traf, hielt die Änderungsverfolgung jedes
+/// geladene Match für verändert und schrieb es bei jedem Speichern zurück. Auf
+/// SQLite, das datenbankweit serialisiert, ist das spürbar.
+///
+/// Die inhaltliche Gleichheit bringt <see cref="Score"/> selbst mit, deshalb
+/// genügt hier der Operator. Sie wird gebraucht, sobald ein inhaltsgleiches
+/// Ergebnis neu zugewiesen wird.
+/// </summary>
 public sealed class ScoreComparer : ValueComparer<Score>
 {
     public ScoreComparer()
         : base(
             (left, right) => left == right,
-            score => FormatJson.Serialize(StoredScore.From(score)).GetHashCode(StringComparison.Ordinal),
-            score => FormatJson.Deserialize<StoredScore>(FormatJson.Serialize(StoredScore.From(score)), "Ergebnis")
-                .ToScore())
+            score => score.GetHashCode(),
+            score => score)
     {
     }
 }

@@ -76,24 +76,37 @@ public sealed class TennisTurnierDbContext : DbContext
         // ADR-0004: Der Query-Filter ist die eigentliche Sicherheitsgrenze. Eine
         // vergessene Prüfung im Endpunkt darf keine fremden Vereinsdaten
         // ausliefern können.
+        // Auch der ausrichtende Verein gehört zum Sichtfeld eines Turnierleiters,
+        // sonst kann er keinen Platz vergeben: die Plätze hängen am Verein. Der
+        // Unterabfrage genügt die Zugehörigkeit — welche Turniere sichtbar sind,
+        // entscheidet der Filter auf Tournament selbst.
         modelBuilder.Entity<Club>()
-            .HasQueryFilter(club => SeesAllClubs || VisibleClubIds.Contains(club.Id));
+            .HasQueryFilter(club =>
+                SeesAllClubs
+                || VisibleClubIds.Contains(club.Id)
+                || Tournaments.Any(tournament => tournament.ClubId == club.Id));
 
         modelBuilder.Entity<Court>()
-            .HasQueryFilter(court => SeesAllClubs || VisibleClubIds.Contains(court.ClubId));
+            .HasQueryFilter(court =>
+                SeesAllClubs
+                || VisibleClubIds.Contains(court.ClubId)
+                || Tournaments.Any(tournament => tournament.ClubId == court.ClubId));
 
         // Auch die Kindtabellen brauchen den Filter. Über die Navigation vom
         // Verein aus wären sie zwar bereits abgeschirmt, aber ADR-0004 begründet
         // den Filter gerade damit, dass er nicht davon abhängt, auf welchem Weg
         // jemand abfragt. Ein direktes `Set<CourtBlock>()` lieferte sonst die
         // internen Notizen fremder Vereine.
+        //
+        // Die Unterabfrage nennt keine Bedingung: auf `Courts` liegt bereits der
+        // Filter des Platzes. Damit gibt es genau eine Stelle, an der steht, wer
+        // einen Platz sieht — und die Kindtabellen können nicht dahinter
+        // zurückfallen.
         modelBuilder.Entity<AvailabilityWindow>()
-            .HasQueryFilter(window => SeesAllClubs || Courts.Any(
-                court => court.Id == window.CourtId && VisibleClubIds.Contains(court.ClubId)));
+            .HasQueryFilter(window => SeesAllClubs || Courts.Any(court => court.Id == window.CourtId));
 
         modelBuilder.Entity<CourtBlock>()
-            .HasQueryFilter(block => SeesAllClubs || Courts.Any(
-                court => court.Id == block.CourtId && VisibleClubIds.Contains(court.ClubId)));
+            .HasQueryFilter(block => SeesAllClubs || Courts.Any(court => court.Id == block.CourtId));
 
         // Zwei Wege führen zu einem Turnier: über den ausrichtenden Verein oder
         // über eine turniergebundene Rolle. Beide gehören in den Filter, sonst

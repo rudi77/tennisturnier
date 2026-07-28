@@ -397,6 +397,37 @@ public sealed record Score
         }
     }
 
+    /// <summary>
+    /// Zwei Ergebnisse sind gleich, wenn sie dasselbe aussagen.
+    ///
+    /// Die vom Record erzeugte Gleichheit vergleicht die Satzliste über ihre
+    /// Referenz und hielte damit zwei inhaltsgleiche Ergebnisse für verschieden.
+    /// Das ist nicht bloß unschön: die Änderungsverfolgung der Persistenz baut
+    /// darauf auf und schriebe sonst jedes geladene Match bei jedem Speichern
+    /// erneut — auf SQLite, das datenbankweit serialisiert, spürbar.
+    /// </summary>
+    public bool Equals(Score? other) =>
+        other is not null
+        && Outcome == other.Outcome
+        && WinnerSide == other.WinnerSide
+        && AbandonedSet == other.AbandonedSet
+        && CompletedSets.SequenceEqual(other.CompletedSets);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Outcome);
+        hash.Add(WinnerSide);
+        hash.Add(AbandonedSet);
+
+        foreach (var set in CompletedSets)
+        {
+            hash.Add(set);
+        }
+
+        return hash.ToHashCode();
+    }
+
     public override string ToString() => Outcome switch
     {
         MatchOutcome.Normal => string.Join(", ", Sets),

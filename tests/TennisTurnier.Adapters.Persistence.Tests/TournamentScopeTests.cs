@@ -27,7 +27,12 @@ public sealed class TournamentScopeTests : IAsyncLifetime
         await using var db = _database.NewContext();
 
         var club = new Club(Guid.NewGuid(), "TC Alpha", "Europe/Vienna");
+        var court = club.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
+        court.AddAvailability(
+            Guid.NewGuid(), DayOfWeek.Saturday, new TimeOnly(8, 0), new TimeOnly(20, 0), new DateOnly(2026, 1, 1));
+
         var otherClub = new Club(Guid.NewGuid(), "TC Beta", "Europe/Vienna");
+        otherClub.AddCourt(Guid.NewGuid(), "Fremder Platz", CourtSurface.Clay, CourtLocation.Outdoor);
         var template = new FormatTemplate(Guid.NewGuid(), null, BuiltInFormats.Knockout);
         db.Clubs.AddRange(club, otherClub);
         db.FormatTemplates.Add(template);
@@ -114,6 +119,43 @@ public sealed class TournamentScopeTests : IAsyncLifetime
         await using var db = _database.NewContext();
 
         Assert.Single(await db.Set<TournamentEntry>().ToListAsync());
+    }
+
+    [Fact]
+    public async Task Ein_Turnierleiter_erreicht_den_ausrichtenden_Verein_samt_Plaetzen()
+    {
+        // Regression: der Filter auf Club kannte nur Vereinsrollen. Ein
+        // Turnierleiter sah damit sein Turnier, aber nicht den Verein, an dem die
+        // Plätze hängen — die Platzvergabe, für die er berufen wurde, endete in
+        // einem 404 auf den eigenen Verein.
+        _database.ActingAs = With((Role.TournamentDirector, ResourceScope.Tournament(_tournamentId)));
+        await using var db = _database.NewContext();
+
+        var club = await db.Clubs.Include(c => c.Courts).FirstOrDefaultAsync(c => c.Id == _clubId);
+
+        Assert.NotNull(club);
+        Assert.Equal("Platz 1", Assert.Single(club.Courts).Name);
+    }
+
+    [Fact]
+    public async Task Ein_Turnierleiter_sieht_die_Oeffnungszeiten_der_Plaetze_seines_Turniers()
+    {
+        // Ohne sie hielte die Spielplanprüfung jeden Platz für dauerhaft
+        // geschlossen und meldete zu jeder Zuweisung einen Verstoß.
+        _database.ActingAs = With((Role.TournamentDirector, ResourceScope.Tournament(_tournamentId)));
+        await using var db = _database.NewContext();
+
+        Assert.Single(await db.Set<AvailabilityWindow>().ToListAsync());
+    }
+
+    [Fact]
+    public async Task Ein_Turnierleiter_sieht_den_Verein_eines_fremden_Turniers_nicht()
+    {
+        _database.ActingAs = With((Role.TournamentDirector, ResourceScope.Tournament(_tournamentId)));
+        await using var db = _database.NewContext();
+
+        Assert.Null(await db.Clubs.FirstOrDefaultAsync(c => c.Id == _otherClubId));
+        Assert.Equal([_clubId], (await db.Courts.ToListAsync()).Select(c => c.ClubId).Distinct());
     }
 
     [Fact]

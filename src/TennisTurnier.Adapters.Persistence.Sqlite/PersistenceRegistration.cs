@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TennisTurnier.Adapters.Persistence.Sqlite.Repositories;
+using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 
 namespace TennisTurnier.Adapters.Persistence.Sqlite;
@@ -37,6 +38,21 @@ internal sealed class UnitOfWork : IUnitOfWork
 
     public UnitOfWork(TennisTurnierDbContext db) => _db = db;
 
-    public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
-        _db.SaveChangesAsync(cancellationToken);
+    /// <summary>
+    /// Speichert und übersetzt den Nebenläufigkeitskonflikt in die Sprache der
+    /// Anwendung. Ohne diese Übersetzung käme der Normalfall „jemand war
+    /// schneller" beim Aufrufer als Serverfehler an — und die Zähler, die
+    /// eigens dafür gepflegt werden, blieben nach außen wirkungslos.
+    /// </summary>
+    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            throw new ConcurrencyConflictException(exception);
+        }
+    }
 }

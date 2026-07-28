@@ -164,6 +164,44 @@ public sealed class CourtAssignment : Entity
         Touch();
     }
 
+    /// <summary>
+    /// Setzt die gesamte Planung einer noch nicht aufgerufenen Zuweisung neu.
+    ///
+    /// Bewusst alle Angaben auf einmal statt einzeln: eine Umplanung ohne
+    /// Planzeit soll keine alte Planzeit stehen lassen. Und bewusst dieselbe
+    /// Zuweisung statt einer neuen — der Zähler <see cref="Version"/>
+    /// wirkt nur auf einer bestehenden Zeile. Zwei gleichzeitige Zuweisungen
+    /// desselben Matches liefen sonst beide durch und hinterließen zwei aktive
+    /// Zuweisungen, von denen die zweite die erste stillschweigend verdrängt.
+    /// </summary>
+    public void Replan(
+        Guid courtId,
+        int sequenceOnCourt,
+        DateTimeOffset? plannedStart,
+        DateTimeOffset? earliestStart,
+        TimeSpan estimatedDuration,
+        AssignmentSource source)
+    {
+        RequireStatus(AssignmentStatus.Planned);
+
+        if (courtId == Guid.Empty)
+        {
+            throw new DomainException("Eine Platzzuweisung braucht einen Platz.");
+        }
+
+        if (estimatedDuration <= TimeSpan.Zero)
+        {
+            throw new DomainException($"Die geschätzte Dauer muss positiv sein, war {estimatedDuration}.");
+        }
+
+        CourtId = courtId;
+        PlannedStart = plannedStart;
+        EarliestStart = earliestStart;
+        EstimatedDuration = estimatedDuration;
+        Source = source;
+        SetSequence(sequenceOnCourt);
+    }
+
     // --- Tagesbetrieb ------------------------------------------------------
 
     public void Call()

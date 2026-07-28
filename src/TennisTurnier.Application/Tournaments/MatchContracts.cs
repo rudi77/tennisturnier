@@ -27,10 +27,18 @@ public sealed record MatchDetail(
 /// </summary>
 public sealed record MatchSideDetail(Guid? EntryId, string? ParticipantName, string Origin);
 
+/// <summary>
+/// Ein Ergebnis für die Ausgabe.
+///
+/// Gespielte und abgebrochene Sätze stehen getrennt, wie in der Domäne: läge der
+/// abgebrochene auch in <see cref="CompletedSets"/>, zeigte ihn ein Client
+/// doppelt an, und wer daraus Satzgewinne zählt, zählte einen Satz mit, den
+/// niemand gewonnen hat.
+/// </summary>
 public sealed record ScoreDetail(
     MatchOutcome Outcome,
     int WinnerSide,
-    IReadOnlyList<SetScore> Sets,
+    IReadOnlyList<SetScore> CompletedSets,
     SetScore? AbandonedSet,
     string Display);
 

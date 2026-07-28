@@ -307,7 +307,21 @@ public sealed class MatchPersistenceTests : IAsyncLifetime
         // Ohne eigene Wertvergleicher für Referenz und Ergebnis hielte EF Core
         // jeden geladenen Baum für verändert und schriebe ihn bei jedem Laden
         // zurück — auf SQLite, das datenbankweit serialisiert, spürbar.
+        //
+        // Der Baum trägt dafür ein Ergebnis mit beiden Satzlisten: ohne
+        // eingetragenes Ergebnis liefe der Vergleicher des Ergebnisses nie, und
+        // der Test prüfte nur die halbe Behauptung.
         var phaseId = await SeedPhaseAsync();
+
+        await using (var seed = _database.NewContext())
+        {
+            var phase = await seed.Phases.SingleAsync(p => p.Id == phaseId);
+            phase.RecordResult(
+                phase.Matches.First(m => m.Round == 1).Id,
+                Score.Retired([new SetScore(6, 4)], new SetScore(2, 1), retiringSide: 2, Standard));
+
+            await seed.SaveChangesAsync();
+        }
 
         await using var db = _database.NewContext();
         _ = await db.Phases.SingleAsync(p => p.Id == phaseId);

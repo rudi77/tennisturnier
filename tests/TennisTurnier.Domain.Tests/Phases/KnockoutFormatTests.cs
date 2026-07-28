@@ -281,6 +281,23 @@ public sealed class KnockoutFormatTests
             () => byeMatch.RecordResult(Score.Played([new SetScore(6, 0), new SetScore(6, 0)], Standard)));
     }
 
+    [Fact]
+    public void Ein_Freilos_laesst_sich_nicht_zuruecknehmen()
+    {
+        // Regression: das Freilos ließ sich zurücknehmen wie ein eingetragenes
+        // Ergebnis. Danach stand das Match ohne Ergebnis da, ohne dass es je
+        // gespielt worden wäre — und die nächste Runde wartete dauerhaft auf
+        // einen Sieger, den niemand mehr eintragen kann.
+        var phase = BuildPhase(Entries(3));
+        var byeMatch = phase.Matches.Single(m => m.Round == 1 && m.HasBye);
+
+        Assert.Throws<DomainException>(() => phase.ClearResult(byeMatch.Id));
+        Assert.NotNull(byeMatch.Score);
+
+        var final = phase.Matches.Single(m => m.Round == 2);
+        Assert.Contains(byeMatch.WinnerEntryId, new[] { final.Side1.EntryId, final.Side2.EntryId });
+    }
+
     // --- Korrektur ---------------------------------------------------------
 
     [Fact]

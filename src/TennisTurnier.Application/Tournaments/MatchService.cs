@@ -163,41 +163,34 @@ public sealed class MatchService : IMatchService
 
         var existing = await _assignments.ListByTournamentAsync(tournament.Id, cancellationToken);
 
-        // Eine erneute Zuweisung desselben Matches ersetzt die bisherige, solange
-        // noch nicht gespielt wurde. Eine bereits gelaufene bleibt stehen — sie
-        // ist Teil der Historie des Turniertags (ADR-0002).
-        var previous = existing.FirstOrDefault(a => a.MatchId == matchId && !a.IsOver);
-        if (previous is not null)
+        var duration = request.EstimatedDuration ?? DefaultMatchDuration;
+        var source = request.Pinned ? AssignmentSource.Pinned : AssignmentSource.Manual;
+
+        // Eine erneute Zuweisung desselben Matches plant die bestehende um,
+        // solange sie noch nicht aufgerufen wurde. Sobald sie läuft, unterbrochen
+        // oder beendet ist, bleibt sie stehen — sie ist dann Teil der Historie des
+        // Turniertags, und eine Fortsetzung auf einem anderen Platz ist eine
+        // eigene Zuweisung (ADR-0002).
+        var assignment = existing.FirstOrDefault(
+            a => a.MatchId == matchId && a.Status == AssignmentStatus.Planned);
+
+        if (assignment is null)
         {
-            _assignments.Remove(previous);
+            assignment = new CourtAssignment(
+                Guid.NewGuid(), tournament.Id, matchId, court.Id, request.SequenceOnCourt, duration, source);
+
+            _assignments.Add(assignment);
         }
 
-        var assignment = new CourtAssignment(
-            Guid.NewGuid(),
-            tournament.Id,
-            matchId,
-            court.Id,
-            request.SequenceOnCourt,
-            request.EstimatedDuration ?? DefaultMatchDuration,
-            request.Pinned ? AssignmentSource.Pinned : AssignmentSource.Manual);
+        assignment.Replan(
+            court.Id, request.SequenceOnCourt, request.PlannedStart, request.EarliestStart, duration, source);
 
-        if (request.PlannedStart is { } plannedStart)
-        {
-            assignment.PlanFor(plannedStart);
-        }
-
-        if (request.EarliestStart is { } earliestStart)
-        {
-            assignment.PromiseNotBefore(earliestStart);
-        }
-
-        _assignments.Add(assignment);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var violations = await ValidateAsync(
             tournament,
             club,
-            existing.Where(a => a != previous).Append(assignment).ToList(),
+            existing.Where(a => a.Id != assignment.Id).Append(assignment).ToList(),
             cancellationToken);
 
         return new AssignCourtResult(assignment.Id, violations);
@@ -358,7 +351,7 @@ public sealed class MatchService : IMatchService
         score is null
             ? null
             : new ScoreDetail(
-                score.Outcome, score.WinnerSide, score.Sets, score.AbandonedSet, score.ToString());
+                score.Outcome, score.WinnerSide, score.CompletedSets, score.AbandonedSet, score.ToString());
 
     private static CourtAssignmentDetail? Describe(CourtAssignment? assignment, DescribeContext context) =>
         assignment is null

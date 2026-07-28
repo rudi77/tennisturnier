@@ -296,4 +296,30 @@ public sealed class ScoreTests
         Score.Played([Set(5, 4, 3), Set(4, 1)], shortSets);
         Assert.Throws<DomainException>(() => Score.Played([Set(7, 6, 5), Set(4, 1)], shortSets));
     }
+
+    [Fact]
+    public void Zwei_inhaltsgleiche_Ergebnisse_sind_gleich()
+    {
+        // Der vom Record erzeugte Vergleich prüft die Satzliste über ihre
+        // Referenz und hielte diese beiden für verschieden. Die
+        // Änderungsverfolgung der Persistenz baut darauf auf: sie schriebe dann
+        // ein unverändertes Ergebnis erneut in die Datenbank.
+        var a = Score.Played([Set(6, 4), Set(7, 6, 5)], Standard);
+        var b = Score.Played([Set(6, 4), Set(7, 6, 5)], Standard);
+
+        Assert.Equal(a, b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void Ein_abweichender_abgebrochener_Satz_macht_zwei_Ergebnisse_verschieden()
+    {
+        // Die Gegenprobe: ohne sie wäre die Gleichheit oben auch dann erfüllt,
+        // wenn sie schlicht alles für gleich hielte.
+        var a = Score.Retired([Set(6, 4)], Set(2, 1), retiringSide: 2, Standard);
+        var b = Score.Retired([Set(6, 4)], Set(3, 1), retiringSide: 2, Standard);
+
+        Assert.NotEqual(a, b);
+        Assert.NotEqual(a, Score.Retired([Set(6, 4)], null, retiringSide: 2, Standard));
+    }
 }

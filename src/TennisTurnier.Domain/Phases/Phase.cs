@@ -126,6 +126,16 @@ public sealed class Phase : Entity
             return;
         }
 
+        // Ein Freilos ist kein eingetragenes Ergebnis, sondern eine Folge des
+        // Baums: es entsteht beim Auslosen und wird nirgends von Hand gesetzt.
+        // Nähme man es zurück, bliebe das Match ohne Ergebnis stehen, und die
+        // nächste Runde wartete auf einen Sieger, den nie jemand eintragen kann.
+        if (match.Score.Outcome == MatchOutcome.Bye)
+        {
+            throw new DomainException(
+                $"„{match}“ ist ein Freilos und hat kein eingetragenes Ergebnis, das sich zurücknehmen ließe.");
+        }
+
         var blocking = _matches.FirstOrDefault(m =>
             m.Score is not null
             && (DependsOn(m.Side1.Origin, matchId) || DependsOn(m.Side2.Origin, matchId)));
