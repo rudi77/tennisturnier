@@ -53,13 +53,25 @@ bestehenden Verträge zu brechen.
   Endrunde bekäme es Gruppenplätze, hinter denen noch niemand steht — es könnte
   seine erste Runde nicht ansetzen, und das Turnier bliebe stehen. Die Definition
   weist das ab. Umgekehrt — Schweizer Vorrunde, K.-o.-Endrunde — geht.
-- **Die Paarung sucht, sie optimiert nicht.** Gefunden wird die erste Paarung,
-  die keine Wiederholung enthält und der idealen Dutch-Paarung am nächsten
-  kommt; ein Maximum-Weight-Matching über gewichtete Abweichungen wäre in
-  Randfällen eine Spur besser verteilt. Für Vereinsfelder trägt die Suche: die
-  bevorzugte Paarung passt fast immer sofort, und die Rückverfolgung hat eine
-  Obergrenze, damit ein pathologischer Fall als klare Absage endet und nicht als
-  Anfrage, die nie zurückkommt.
+- **Die Paarung sucht, sie optimiert nicht — und sie schaut nicht voraus.**
+  Gefunden wird die erste Paarung, die keine Wiederholung enthält und der idealen
+  Dutch-Paarung am nächsten kommt; ein Maximum-Weight-Matching über gewichtete
+  Abweichungen wäre in Randfällen eine Spur besser verteilt. Gewichtiger ist,
+  dass jede Runde nach dem Stand von jetzt gepaart wird: nahe der Obergrenze
+  (etwa acht Spieler über sieben Runden) kann sich das Verfahren in eine Runde
+  manövrieren, für die keine wiederholungsfreie Paarung mehr existiert. Dann wird
+  eine ausgewiesene Wiederholung angesetzt statt abgebrochen — ein Abbruch hieße,
+  dass sich das letzte Ergebnis der vorigen Runde nicht mehr eintragen lässt. Eine
+  Rückverfolgung über Rundengrenzen hinweg würde das auflösen; sie steht aus, und
+  bis zur Voreinstellung `ceil(log2(n))` tritt der Fall in keinem geprüften
+  Verlauf auf.
+- **Eine Korrektur des Schiedsrichters verwirft angesetzte Paarungen.** Er darf
+  Ergebnisse eintragen und zurücknehmen; im Schweizer System zieht das die
+  Neupaarung der Folgerunden nach sich, samt ihrer noch wartenden
+  Platzzuweisungen. Das ist die Folge der Korrektur und kein zusätzliches Recht —
+  was am Platz steht, bleibt unangetastet. Ob eine Korrektur mit dieser Tragweite
+  der Turnierleitung vorbehalten sein sollte, ist eine Regelfrage der
+  Ausschreibung und bislang nicht entschieden.
 - **Die Öffnungszeit ist am Turniertag eine Auskunft, keine Schranke.** Der
   Solver setzt nur in freie Fenster an; die Warteschlange wandert aber mit jedem
   überzogenen Match nach hinten und irgendwann darüber hinaus. Sie dort

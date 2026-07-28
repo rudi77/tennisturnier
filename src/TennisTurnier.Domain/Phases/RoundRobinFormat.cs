@@ -54,19 +54,25 @@ public sealed class RoundRobinFormat : IPhaseFormat
         // niemand steht, wäre schlimmer als eine leere.
         var settled = state.Entries.Where(entry => entry.IsSettled).ToList();
         var groups = GroupsFromMatches(settled, state.Matches);
-        var context = StandingsBuilder.ContextOf(state);
-        var places = new List<Standing>();
 
-        foreach (var (name, members) in groups)
-        {
-            var table = members
-                .Select(entry => StandingsBuilder.Accumulate(entry, groups.Count > 1 ? name : null, state))
-                .ToList();
+        var tables = groups
+            .Select(group => group.Members
+                .Select(entry => StandingsBuilder.Accumulate(
+                    entry, groups.Count > 1 ? group.Name : null, state))
+                .ToList())
+            .ToList();
 
-            places.AddRange(StandingsBuilder.Rank(table, state.Definition.Tiebreakers, context));
-        }
+        // Der Tiebreak-Kontext spannt die ganze Phase, gerankt wird je Gruppe:
+        // Buchholz eines Gruppenspielers hängt an den Punkten seiner Gegner, und
+        // die stehen in derselben Gruppe, aber gerechnet wird über die eine
+        // Tabelle, die es schon gibt.
+        var context = StandingsBuilder.ContextOf([.. tables.SelectMany(table => table)], state.Matches);
 
-        return new Standings(places);
+        return new Standings(
+        [
+            .. tables.SelectMany(table =>
+                StandingsBuilder.Rank(table, state.Definition.Tiebreakers, context)),
+        ]);
     }
 
     /// <summary>

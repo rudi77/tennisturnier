@@ -37,7 +37,7 @@ public sealed class SwissFormat : IPhaseFormat
             return [];
         }
 
-        return NextRound(state, players, playedRounds + 1);
+        return NextRound(state, playedRounds + 1);
     }
 
     /// <summary>
@@ -124,12 +124,16 @@ public sealed class SwissFormat : IPhaseFormat
     }
 
     /// <summary>
-    /// Weist ein Turnier zurück, das mehr Runden vorsieht, als das Feld hergibt.
+    /// Weist ein Turnier zurück, das mehr Runden vorsieht, als das Feld überhaupt
+    /// hergibt: bei gerader Teilnehmerzahl hat jeder n-1 mögliche Gegner, bei
+    /// ungerader kommt ein Freilos hinzu. Darüber hinaus wäre jede weitere Runde
+    /// zwangsläufig eine Wiederholung.
     ///
-    /// Bei gerader Teilnehmerzahl hat jeder n-1 mögliche Gegner, bei ungerader
-    /// kommt ein Freilos hinzu. Darüber hinaus gibt es keine wiederholungsfreie
-    /// Paarung mehr — und das soll beim Auslosen auffallen und nicht mitten im
-    /// Turnier, wenn die Runde ansteht, die nicht mehr geht.
+    /// Das ist eine Grenze der Möglichkeit, keine Empfehlung. Je näher die
+    /// Rundenzahl ihr kommt, desto wahrscheinlicher wird eine Wiederholung, weil
+    /// das Verfahren jede Runde nach dem Stand von jetzt paart und nicht
+    /// vorausschaut. Sinnvoll ist die Voreinstellung <c>ceil(log2(n))</c>; sie
+    /// bleibt in allen geprüften Verläufen wiederholungsfrei.
     /// </summary>
     private static void RequirePlayableField(int players, int rounds)
     {
@@ -149,12 +153,13 @@ public sealed class SwissFormat : IPhaseFormat
         }
     }
 
-    private static IReadOnlyList<Pairing> NextRound(
-        PhaseState state,
-        IReadOnlyList<SeededEntry> players,
-        int round)
+    private IReadOnlyList<Pairing> NextRound(PhaseState state, int round)
     {
-        var standings = ComputeOrder(state, players);
+        // Vor der ersten Runde hat niemand Punkte, und die Tiebreaker-Kette fällt
+        // bis auf die Setzung durch — damit paart die erste Runde den Ersten der
+        // Setzliste gegen den Ersten der unteren Hälfte, wie es das Dutch-System
+        // vorsieht.
+        var standings = ComputeStandings(state).Places;
         var order = standings.Select(place => place.EntryId).ToList();
         var points = standings.ToDictionary(place => place.EntryId, place => place.Points);
         var previous = OpponentsSoFar(state.Matches);
@@ -171,33 +176,34 @@ public sealed class SwissFormat : IPhaseFormat
                 ++position,
                 ParticipantRef.Of(resting),
                 ParticipantRef.ByeSlot,
-                Label(round)));
+                Label(round, rematch: false)));
         }
 
-        foreach (var (side1, side2) in SwissPairing.PairRound(order, points, previous))
+        foreach (var (side1, side2, rematch) in SwissPairing.PairRound(order, points, previous))
         {
             pairings.Add(new Pairing(
-                round, ++position, ParticipantRef.Of(side1), ParticipantRef.Of(side2), Label(round)));
+                round,
+                ++position,
+                ParticipantRef.Of(side1),
+                ParticipantRef.Of(side2),
+                Label(round, rematch)));
         }
 
         return pairings;
     }
 
-    private static string Label(int round) => $"Runde {round}";
-
     /// <summary>
-    /// Die Tabelle als Reihenfolge. Vor der ersten Runde hat niemand Punkte, und
-    /// die Tiebreaker-Kette fällt bis auf die Setzung durch — die erste Runde
-    /// paart damit den Ersten der Setzliste gegen den Ersten der unteren Hälfte,
-    /// genau wie es das Dutch-System vorsieht.
+    /// Die Beschriftung einer Paarung — und der Ort, an dem eine Wiederholung
+    /// sichtbar wird.
+    ///
+    /// Sie kommt vor, wenn sich das Verfahren in eine Runde manövriert hat, für
+    /// die es keine wiederholungsfreie Paarung mehr gibt. Sie stillschweigend
+    /// anzusetzen wäre das Schlimmste von beidem: die Zusage des Formats gebrochen
+    /// und niemand erfährt davon. So steht sie im Aushang, und die Turnierleitung
+    /// kann entscheiden, ob sie die Rundenzahl kürzt.
     /// </summary>
-    private static IReadOnlyList<Standing> ComputeOrder(PhaseState state, IReadOnlyList<SeededEntry> players)
-    {
-        var table = players.Select(entry => StandingsBuilder.Accumulate(entry, null, state)).ToList();
-        var context = StandingsBuilder.ContextOf(table, state.Matches);
-
-        return [.. StandingsBuilder.Rank(table, state.Definition.Tiebreakers, context)];
-    }
+    private static string Label(int round, bool rematch) =>
+        rematch ? $"Runde {round} · Wiederholung" : $"Runde {round}";
 
     private static IReadOnlyDictionary<Guid, IReadOnlySet<Guid>> OpponentsSoFar(IReadOnlyList<Match> matches)
     {

@@ -105,15 +105,22 @@ public sealed class Phase : Entity
     ///
     /// Gedacht für Formate, die im Verlauf paaren: wird ein Ergebnis korrigiert,
     /// stammt die Paarung der Folgerunden aus einer Tabelle, die es nicht mehr
-    /// gibt. Gespielt wurde in ihnen dann noch nichts — sonst wäre die Korrektur
-    /// selbst schon abgelehnt worden, und hier ist der Punkt, an dem das
-    /// auffällt, statt stillschweigend ein Ergebnis zu verwerfen.
+    /// gibt.
     ///
-    /// Gibt zurück, ob etwas zurückgenommen wurde.
+    /// Zurückgenommen wird nur, was noch nicht begonnen hat. Ein eingetragenes
+    /// Ergebnis wiegt dabei nicht schwerer als zwei Spielerinnen, die schon auf
+    /// dem Platz stehen: <paramref name="onCourt"/> nennt die Matches, die am
+    /// Turniertag aufgerufen, laufend oder unterbrochen sind. Ohne diese Angabe
+    /// verschwände ein laufendes Match samt seiner Platzzuweisung, während darauf
+    /// gespielt wird.
+    ///
+    /// Gibt die tatsächlich zurückgenommenen Matches zurück — ihre Ansetzungen
+    /// muss der Aufrufer aus den Warteschlangen nehmen.
     /// </summary>
-    public bool Withdraw(IReadOnlyCollection<Guid> matchIds)
+    public IReadOnlyList<Guid> Withdraw(IReadOnlyCollection<Guid> matchIds, IReadOnlySet<Guid> onCourt)
     {
         ArgumentNullException.ThrowIfNull(matchIds);
+        ArgumentNullException.ThrowIfNull(onCourt);
 
         var affected = _matches.Where(match => matchIds.Contains(match.Id)).ToList();
 
@@ -124,12 +131,19 @@ public sealed class Phase : Entity
                 "Zuerst deren Ergebnis zurücknehmen.");
         }
 
+        if (affected.FirstOrDefault(match => onCourt.Contains(match.Id)) is { } running)
+        {
+            throw new DomainException(
+                $"Die Paarung „{running}“ steht bereits am Platz und lässt sich nicht zurücknehmen. " +
+                "Zuerst die Partie beenden oder ihre Platzzuweisung aufheben.");
+        }
+
         foreach (var match in affected)
         {
             _matches.Remove(match);
         }
 
-        return affected.Count > 0;
+        return [.. affected.Select(match => match.Id)];
     }
 
     /// <summary>

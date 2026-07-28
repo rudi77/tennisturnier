@@ -13,13 +13,17 @@ namespace TennisTurnier.Domain.Phases;
 internal static class SwissPairing
 {
     /// <summary>
-    /// Obergrenze für die Schritte der Rückverfolgung.
+    /// Obergrenze für die Schritte einer Rückverfolgung.
     ///
     /// Für Vereinsfelder wird sie nie erreicht — die bevorzugte Paarung passt
-    /// fast immer sofort. Sie steht da, damit ein pathologischer Fall als klare
-    /// Absage endet und nicht als Anfrage, die nie zurückkommt.
+    /// fast immer sofort. Sie steht da, damit ein pathologischer Fall abbricht
+    /// und nicht als Anfrage endet, die nie zurückkommt.
+    ///
+    /// Jeder Anlauf bekommt sein eigenes Budget. Teilten sie sich eines, könnte
+    /// eine erschöpfte Suche in den Punktgruppen den nächsten Anlauf mitreißen —
+    /// und der wäre womöglich der, der eine gültige Paarung gefunden hätte.
     /// </summary>
-    private const int SearchBudget = 500_000;
+    private const int SearchBudget = 200_000;
 
     /// <summary>
     /// Wer bei ungerader Teilnehmerzahl aussetzt: der Letzte der Tabelle, der
@@ -62,12 +66,31 @@ internal static class SwissPairing
     /// („Floater"). Abgestiegen wird von unten: wer in seiner Punktgruppe hinten
     /// steht, trifft auf die nächstschwächere, nicht umgekehrt.
     ///
-    /// Über allem steht die harte Bedingung, dass sich zwei Spieler nicht zweimal
+    /// Darüber steht die Bedingung, dass sich zwei Spieler nicht zweimal
     /// begegnen. Sie lässt sich nicht durch Sortieren erfüllen, sondern nur
     /// suchend: gefunden wird die Paarung, die der idealen am nächsten kommt und
     /// keine Wiederholung enthält.
+    ///
+    /// Drei Anläufe, in dieser Reihenfolge:
+    /// <list type="number">
+    ///   <item>Punktgruppen mit Absteigern, wiederholungsfrei — der Regelfall.</item>
+    ///   <item>Das ganze Feld in Tabellenreihenfolge, wiederholungsfrei. Die
+    ///     Punktgruppen sind eine Konvention, die Wiederholungsfreiheit eine
+    ///     Regel; gehen sie nicht zusammen, weicht die Konvention.</item>
+    ///   <item>Das ganze Feld, Wiederholungen erlaubt und nur so viele wie
+    ///     nötig.</item>
+    /// </list>
+    ///
+    /// Der dritte Anlauf ist der Grund, warum diese Methode praktisch nie wirft.
+    /// Das Verfahren paart jede Runde nach dem Stand von jetzt und schaut nicht
+    /// voraus; es kann sich damit selbst in eine Runde manövrieren, für die es
+    /// keine wiederholungsfreie Paarung mehr gibt — bei acht Spielern und sieben
+    /// Runden in etwa jedem sechsten Verlauf. Dort abzubrechen hieße: das letzte
+    /// Ergebnis der vorigen Runde lässt sich nicht mehr eintragen, und das
+    /// Turnier steht ohne Vor- und ohne Rückweg. Eine ausgewiesene Wiederholung
+    /// ist das kleinere Übel — und sie wird ausgewiesen, nicht verschwiegen.
     /// </summary>
-    internal static IReadOnlyList<(Guid Side1, Guid Side2)> PairRound(
+    internal static IReadOnlyList<(Guid Side1, Guid Side2, bool Rematch)> PairRound(
         IReadOnlyList<Guid> standingsOrder,
         IReadOnlyDictionary<Guid, int> pointsByEntry,
         IReadOnlyDictionary<Guid, IReadOnlySet<Guid>> previousOpponents)
@@ -83,24 +106,29 @@ internal static class SwissPairing
                 "Das Freilos wird vorher vergeben.");
         }
 
-        var budget = new Budget(SearchBudget);
-
-        return ByScoreGroups(standingsOrder, pointsByEntry, previousOpponents, budget)
-            // Die Punktgruppen sind eine Konvention, die Wiederholungsfreiheit
-            // eine Regel. Geht beides nicht zusammen, gilt die Regel: gesucht
-            // wird dann über das ganze Feld, in der Reihenfolge der Tabelle.
-            ?? Match([.. standingsOrder], previousOpponents, budget)
+        var pairs =
+            ByScoreGroups(standingsOrder, pointsByEntry, previousOpponents)
+            ?? Match([.. standingsOrder], previousOpponents, new Budget(SearchBudget), allowRematch: false)
+            ?? Match([.. standingsOrder], previousOpponents, new Budget(SearchBudget), allowRematch: true)
             ?? throw new DomainException(
-                "Für diese Runde gibt es keine Paarung mehr, in der nicht mindestens zwei Spieler " +
-                "ein zweites Mal aufeinandertreffen. Das Feld ist für so viele Runden zu klein.");
+                $"Für diese Runde lässt sich aus {standingsOrder.Count} Spielern keine Paarung bilden.");
+
+        return
+        [
+            .. pairs.Select(pair => (
+                pair.Item1,
+                pair.Item2,
+                previousOpponents.GetValueOrDefault(pair.Item1)?.Contains(pair.Item2) == true)),
+        ];
     }
 
     private static List<(Guid, Guid)>? ByScoreGroups(
         IReadOnlyList<Guid> standingsOrder,
         IReadOnlyDictionary<Guid, int> pointsByEntry,
-        IReadOnlyDictionary<Guid, IReadOnlySet<Guid>> previousOpponents,
-        Budget budget)
+        IReadOnlyDictionary<Guid, IReadOnlySet<Guid>> previousOpponents)
     {
+        var budget = new Budget(SearchBudget);
+
         var groups = standingsOrder
             .GroupBy(id => pointsByEntry.GetValueOrDefault(id))
             .OrderByDescending(group => group.Key)
@@ -124,7 +152,7 @@ internal static class SwissPairing
             for (var floaters = pool.Count % 2; floaters <= maxFloaters && !matched; floaters += 2)
             {
                 var stay = pool.Take(pool.Count - floaters).ToList();
-                var matching = Match(stay, previousOpponents, budget);
+                var matching = Match(stay, previousOpponents, budget, allowRematch: false);
 
                 if (matching is null)
                 {
@@ -146,8 +174,7 @@ internal static class SwissPairing
     }
 
     /// <summary>
-    /// Sucht eine wiederholungsfreie Paarung einer nach Tabellenstand geordneten
-    /// Menge.
+    /// Sucht eine Paarung einer nach Tabellenstand geordneten Menge.
     ///
     /// Der Erste bekommt den Gegner, der ihm im Dutch-System zusteht: den Ersten
     /// der unteren Hälfte. Geht das nicht, rückt der Gegner in der unteren Hälfte
@@ -155,11 +182,17 @@ internal static class SwissPairing
     /// obere Hälfte in Frage. Jede Wahl wird zurückgenommen, wenn sich der Rest
     /// nicht mehr paaren lässt — sonst scheitert die Runde an ihrem letzten Paar,
     /// obwohl weiter oben eine Alternative lag.
+    ///
+    /// Mit <paramref name="allowRematch"/> kommen bereits gespielte Paarungen in
+    /// Frage — aber erst, nachdem jeder ungespielte Gegner erfolglos war. Damit
+    /// entstehen so wenige Wiederholungen wie möglich statt einer beliebigen
+    /// Paarung.
     /// </summary>
     private static List<(Guid, Guid)>? Match(
         List<Guid> pool,
         IReadOnlyDictionary<Guid, IReadOnlySet<Guid>> previousOpponents,
-        Budget budget)
+        Budget budget,
+        bool allowRematch)
     {
         if (pool.Count == 0)
         {
@@ -171,20 +204,16 @@ internal static class SwissPairing
             return null;
         }
 
-        budget.Spend();
+        if (!budget.Spend())
+        {
+            return null;
+        }
 
         var top = pool[0];
         var met = previousOpponents.GetValueOrDefault(top);
 
-        foreach (var index in Preferences(pool.Count))
+        foreach (var index in Candidates(pool, met, allowRematch))
         {
-            var opponent = pool[index];
-
-            if (met is not null && met.Contains(opponent))
-            {
-                continue;
-            }
-
             var rest = new List<Guid>(pool.Count - 2);
             for (var i = 1; i < pool.Count; i++)
             {
@@ -194,14 +223,46 @@ internal static class SwissPairing
                 }
             }
 
-            if (Match(rest, previousOpponents, budget) is { } tail)
+            if (Match(rest, previousOpponents, budget, allowRematch) is { } tail)
             {
-                tail.Insert(0, (top, opponent));
+                tail.Insert(0, (top, pool[index]));
                 return tail;
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Die Gegner des Ersten in der Reihenfolge, in der sie in Frage kommen:
+    /// zuerst alle ungespielten nach Dutch-Vorzug, dann — nur wenn Wiederholungen
+    /// erlaubt sind — die bereits gespielten in derselben Reihenfolge.
+    /// </summary>
+    private static IEnumerable<int> Candidates(
+        List<Guid> pool,
+        IReadOnlySet<Guid>? met,
+        bool allowRematch)
+    {
+        foreach (var index in Preferences(pool.Count))
+        {
+            if (met?.Contains(pool[index]) != true)
+            {
+                yield return index;
+            }
+        }
+
+        if (!allowRematch || met is null)
+        {
+            yield break;
+        }
+
+        foreach (var index in Preferences(pool.Count))
+        {
+            if (met.Contains(pool[index]))
+            {
+                yield return index;
+            }
+        }
     }
 
     /// <summary>
@@ -224,18 +285,16 @@ internal static class SwissPairing
         }
     }
 
+    /// <summary>
+    /// Eine erschöpfte Suche gibt auf, sie wirft nicht: der nächste Anlauf soll
+    /// noch zum Zug kommen. Geworfen wird erst, wenn auch der letzte nichts
+    /// findet — und der letzte lässt Wiederholungen zu und braucht deshalb keine
+    /// Rückverfolgung.
+    /// </summary>
     private sealed class Budget(int limit)
     {
         private int _left = limit;
 
-        internal void Spend()
-        {
-            if (--_left < 0)
-            {
-                throw new DomainException(
-                    "Die Suche nach einer wiederholungsfreien Paarung findet kein Ende. " +
-                    "Das Feld ist für so viele Runden zu klein.");
-            }
-        }
+        internal bool Spend() => --_left >= 0;
     }
 }

@@ -19,32 +19,40 @@ public static class PhaseOrchestrator
 {
     /// <summary>
     /// Reicht die Ergebnisse abgeschlossener Phasen an die jeweils folgende
-    /// weiter. Gibt zurück, ob sich etwas geändert hat.
+    /// weiter und setzt an, was anzusetzen ist.
     ///
     /// Läuft über alle Phasen der Reihe nach, nicht nur über die eine, in der
     /// gerade ein Ergebnis stand: eine Gruppenphase kann eine Zwischenrunde
     /// besetzen, deren Freilose sofort die Endrunde entscheiden.
+    ///
+    /// <paramref name="onCourt"/> nennt die Matches, die am Turniertag schon am
+    /// Platz stehen; sie werden auch dann nicht zurückgenommen, wenn ihre Paarung
+    /// hinfällig geworden ist. Zurückgegeben werden die Matches, deren Paarung
+    /// tatsächlich verworfen wurde — ihre Ansetzungen muss der Aufrufer aus den
+    /// Warteschlangen nehmen.
     /// </summary>
-    public static bool Advance(
+    public static IReadOnlyList<Guid> Advance(
         Tournament tournament,
         IReadOnlyList<Phase> phases,
-        IReadOnlyDictionary<Guid, string> namesByEntry)
+        IReadOnlyDictionary<Guid, string> namesByEntry,
+        IReadOnlySet<Guid> onCourt)
     {
         ArgumentNullException.ThrowIfNull(tournament);
         ArgumentNullException.ThrowIfNull(phases);
         ArgumentNullException.ThrowIfNull(namesByEntry);
+        ArgumentNullException.ThrowIfNull(onCourt);
 
         if (tournament.Format?.Definition is not { } definition)
         {
-            return false;
+            return [];
         }
 
         var ordered = phases.OrderBy(phase => phase.Ordinal).ToList();
-        var changed = false;
+        var withdrawn = new List<Guid>();
 
         foreach (var phase in ordered)
         {
-            changed |= Repair(tournament, definition, phase, namesByEntry);
+            withdrawn.AddRange(Repair(tournament, definition, phase, namesByEntry, onCourt));
         }
 
         foreach (var phase in ordered)
@@ -76,10 +84,10 @@ public static class PhaseOrchestrator
                 ? Qualifier.Resolve(sourceState, format.ComputeStandings(sourceState))
                 : new Dictionary<(string Group, int Rank), Guid>();
 
-            changed |= phase.ResolveGroupPositions(source.Id, qualified);
+            phase.ResolveGroupPositions(source.Id, qualified);
         }
 
-        return changed;
+        return withdrawn;
     }
 
     /// <summary>
@@ -92,34 +100,30 @@ public static class PhaseOrchestrator
     /// genau dieser Unterschied ist der Grund, warum die Frage an das Format
     /// geht und nicht an eine Fallunterscheidung hier (ADR-0001).
     /// </summary>
-    private static bool Repair(
+    private static IReadOnlyList<Guid> Repair(
         Tournament tournament,
         FormatDefinition definition,
         Phase phase,
-        IReadOnlyDictionary<Guid, string> namesByEntry)
+        IReadOnlyDictionary<Guid, string> namesByEntry,
+        IReadOnlySet<Guid> onCourt)
     {
         if (DefinitionOf(definition, phase) is not { } phaseDefinition)
         {
-            return false;
+            return [];
         }
 
         var format = PhaseFormats.For(phase.Format);
-        var changed = phase.Withdraw(format.ObsoletePairings(
-            StateOf(tournament, definition, phaseDefinition, phase, namesByEntry)));
+
+        var withdrawn = phase.Withdraw(
+            format.ObsoletePairings(StateOf(tournament, definition, phaseDefinition, phase, namesByEntry)),
+            onCourt);
 
         // Erst nach dem Zurücknehmen: sonst entstünde die nächste Runde aus einer
         // Tabelle, in der die eben verworfene noch steht.
-        var pairings = format.GeneratePairings(
-            StateOf(tournament, definition, phaseDefinition, phase, namesByEntry));
+        phase.AddPairings(format.GeneratePairings(
+            StateOf(tournament, definition, phaseDefinition, phase, namesByEntry)));
 
-        if (pairings.Count == 0)
-        {
-            return changed;
-        }
-
-        phase.AddPairings(pairings);
-
-        return true;
+        return withdrawn;
     }
 
     /// <summary>Die Phasendefinition zu einer angelegten Phase.</summary>

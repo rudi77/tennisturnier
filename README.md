@@ -200,18 +200,26 @@ Punktgruppe in obere und untere Hälfte, gepaart wird über Kreuz. Bleibt in ein
 Punktgruppe jemand übrig, steigt er in die nächste ab — von unten, denn wer in
 seiner Gruppe hinten steht, soll nicht die leichtere Aufgabe bekommen.
 
-Darüber steht die harte Bedingung, dass sich zwei Spieler nicht zweimal
-begegnen. Sie lässt sich nicht durch Sortieren erfüllen, sondern nur suchend:
-gefunden wird die Paarung, die der idealen am nächsten kommt und keine
-Wiederholung enthält. Geht das innerhalb der Punktgruppen nicht auf, gilt die
-Regel vor der Konvention und es wird über das ganze Feld gesucht.
+Darüber steht die Bedingung, dass sich zwei Spieler nicht zweimal begegnen. Sie
+lässt sich nicht durch Sortieren erfüllen, sondern nur suchend: gefunden wird
+die Paarung, die der idealen am nächsten kommt und keine Wiederholung enthält.
+Geht das innerhalb der Punktgruppen nicht auf, gilt die Regel vor der Konvention
+und es wird über das ganze Feld gesucht.
+
+Gepaart wird nach dem Stand von jetzt, ohne Vorausschau. Bei sehr vielen Runden
+kann sich das Verfahren damit selbst in eine Runde manövrieren, für die es keine
+wiederholungsfreie Paarung mehr gibt. Dann wird wiederholt — und die Paarung
+trägt es im Namen („Runde 6 · Wiederholung"). Abzubrechen wäre die schlechtere
+Antwort: es hieße, dass sich das letzte Ergebnis der vorigen Runde nicht mehr
+eintragen lässt und das Turnier ohne Vor- und Rückweg steht.
 
 Bei ungerader Teilnehmerzahl setzt jede Runde einer aus — der Letzte der
 Tabelle, der noch kein Freilos hatte, und höchstens einmal pro Turnier. Das
 Freilos zählt wie ein Sieg: sonst fiele zurück, wer nichts dafür kann.
-Entsprechend sind bei geradem Feld höchstens *n-1* Runden spielbar und bei
-ungeradem *n*; mehr weist die Auslosung ab, statt das Turnier später an der
-Runde scheitern zu lassen, die nicht mehr geht.
+Entsprechend sind bei geradem Feld höchstens *n-1* Runden möglich und bei
+ungeradem *n*; mehr weist die Auslosung ab. Das ist eine Grenze der
+Möglichkeit, keine Empfehlung — je näher die Rundenzahl ihr kommt, desto
+wahrscheinlicher wird eine Wiederholung.
 
 Die Rundenzahl kommt aus der Definition, ohne Angabe `ceil(log2(n))` — so viele
 Runden, wie ein K.-o.-Baum desselben Feldes hätte. Die Tabelle entscheidet
@@ -222,8 +230,13 @@ Punktestand, und ohne dieses Kriterium wäre die Tabelle weitgehend aussagelos.
 Wird ein Ergebnis korrigiert, werden alle daraus entstandenen Runden
 zurückgenommen und neu gepaart — mit ihnen weiterzuspielen hieße, Paarungen zu
 verwenden, die niemand mehr herleiten kann. Ist eine dieser Runden schon
-gespielt, wird die Korrektur abgewiesen: diese Kette muss von hinten aufgerollt
-werden.
+gespielt oder steht eine ihrer Partien am Platz, wird die Korrektur abgewiesen:
+diese Kette muss von hinten aufgerollt werden.
+
+Das gilt für beide Wege, ein Ergebnis zu ändern. Eine Korrektur durch
+Überschreiben (`PUT`) wird deshalb als das ausgeführt, was sie ist: erst
+zurücknehmen, dann neu eintragen. Sonst verhielten sich die beiden Wege
+unterschiedlich, und nur einer von ihnen zöge die Folgen nach.
 
 ## Der Turnierbaum
 

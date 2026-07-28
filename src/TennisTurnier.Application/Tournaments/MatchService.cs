@@ -131,10 +131,22 @@ public sealed class MatchService : IMatchService
         RequireResultPermission(tournament);
 
         // Ein bereits eingetragenes Ergebnis zu überschreiben ist eine Korrektur
-        // und keine Eingabe — sie kann eine Folgephase umbesetzen.
+        // und keine Eingabe. Sie wird deshalb auch als das ausgeführt, was sie
+        // ist: erst zurücknehmen, dann neu eintragen.
+        //
+        // Das ist kein Umweg, sondern der Unterschied zwischen einer Korrektur,
+        // die durchschlägt, und einer, die nur die eine Zeile ändert. Das
+        // Zurücknehmen prüft, ob ein Folgematch schon entschieden ist, und lässt
+        // die Runden verwerfen, die aus dem alten Ergebnis hervorgegangen sind —
+        // beim Überschreiben bliebe die Runde „vollständig", und das Schweizer
+        // System spielte mit Paarungen weiter, die zur neuen Tabelle nicht mehr
+        // passen.
         if (match.Score is not null)
         {
             RequireLaterPhasesUntouched(tournament, phases, phase);
+
+            phase.ClearResult(matchId);
+            await AdvancePhasesAsync(tournament, phases, cancellationToken);
         }
 
         var matchFormat = MatchFormatOf(tournament, phase);
@@ -146,7 +158,7 @@ public sealed class MatchService : IMatchService
             tournament.Start();
         }
 
-        await ReleaseQueueAsync(tournament.Id, matchId, cancellationToken);
+        await ReleaseQueueAsync(tournament.Id, [matchId], cancellationToken);
         await AdvancePhasesAsync(tournament, phases, cancellationToken);
 
         // Zwischenspeichern, bevor die öffentliche Ansicht entsteht: sie soll den
@@ -174,12 +186,17 @@ public sealed class MatchService : IMatchService
     /// </summary>
     private async Task ReleaseQueueAsync(
         Guid tournamentId,
-        Guid matchId,
+        IReadOnlyCollection<Guid> matchIds,
         CancellationToken cancellationToken)
     {
+        if (matchIds.Count == 0)
+        {
+            return;
+        }
+
         var all = await _assignments.ListByTournamentAsync(tournamentId, cancellationToken);
         var waiting = all
-            .Where(a => a.MatchId == matchId && a.Status == AssignmentStatus.Planned)
+            .Where(a => matchIds.Contains(a.MatchId) && a.Status == AssignmentStatus.Planned)
             .ToList();
 
         foreach (var assignment in waiting)
@@ -251,14 +268,34 @@ public sealed class MatchService : IMatchService
     }
 
     /// <summary>
-    /// Reicht abgeschlossene Phasen an die jeweils folgende weiter (ADR-0001).
+    /// Reicht abgeschlossene Phasen an die jeweils folgende weiter und setzt an,
+    /// was anzusetzen ist (ADR-0001).
+    ///
+    /// Was der Turniertag schon in der Hand hat, bleibt dabei unangetastet: ein
+    /// Match, das aufgerufen wurde, läuft oder unterbrochen ist, wird nicht
+    /// zurückgenommen, auch wenn seine Paarung hinfällig geworden ist. Für die
+    /// übrigen wird der Platz freigegeben und die Warteschlange nachgezogen —
+    /// eine Ansetzung ohne Match wäre eine Nummer, die am Platz vorgelesen wird
+    /// und zu der niemand kommt.
     /// </summary>
     private async Task AdvancePhasesAsync(
         Tournament tournament,
         IReadOnlyList<Phase> phases,
-        CancellationToken cancellationToken) =>
-        PhaseOrchestrator.Advance(
-            tournament, phases, await NamesByEntryAsync(tournament, cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        var assignments = await _assignments.ListByTournamentAsync(tournament.Id, cancellationToken);
+
+        var onCourt = assignments
+            .Where(a => a.Status is AssignmentStatus.Called or AssignmentStatus.Running
+                or AssignmentStatus.Suspended)
+            .Select(a => a.MatchId)
+            .ToHashSet();
+
+        var withdrawn = PhaseOrchestrator.Advance(
+            tournament, phases, await NamesByEntryAsync(tournament, cancellationToken), onCourt);
+
+        await ReleaseQueueAsync(tournament.Id, withdrawn, cancellationToken);
+    }
 
     public async Task<AssignCourtResult> AssignCourtAsync(
         Guid matchId,

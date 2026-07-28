@@ -54,9 +54,9 @@ public sealed class SwissFormatTests
         internal Standings Standings => _format.ComputeStandings(State);
 
         /// <summary>Setzt an, was anzusetzen ist. Gibt die Zahl der neuen Matches zurück.</summary>
-        internal int Advance()
+        internal int Advance(IReadOnlySet<Guid>? onCourt = null)
         {
-            Phase.Withdraw(_format.ObsoletePairings(State));
+            Phase.Withdraw(_format.ObsoletePairings(State), onCourt ?? new HashSet<Guid>());
 
             var pairings = _format.GeneratePairings(State);
             Phase.AddPairings(pairings);
@@ -174,27 +174,20 @@ public sealed class SwissFormatTests
     }
 
     /// <summary>
-    /// Property-Test: unabhängig davon, wie die Matches ausgehen, darf keine
-    /// Paarung zweimal entstehen und niemand zweimal aussetzen.
-    ///
-    /// Der Ergebnisverlauf ist der einzige Freiheitsgrad des Verfahrens — an ihm
-    /// hängt die Tabelle, an der Tabelle die Punktgruppen und daran die Paarung.
-    /// Ein einzelner Durchlauf prüft davon eine Möglichkeit von vielen.
+    /// Spielt ein Turnier mit zufälligen Ergebnissen durch und gibt zurück, was
+    /// dabei passiert ist: die gesehenen Paarungen, die Freilose und die Zahl der
+    /// Wiederholungen.
     /// </summary>
-    [Theory]
-    [InlineData(16, 4, 1)]
-    [InlineData(16, 4, 7)]
-    [InlineData(24, 5, 13)]
-    [InlineData(11, 5, 23)]
-    [InlineData(13, 6, 42)]
-    [InlineData(9, 9, 99)]
-    [InlineData(30, 6, 2026)]
-    public void Kein_Ergebnisverlauf_erzwingt_eine_Wiederholung(int players, int rounds, int seed)
+    private static (List<(Guid, Guid)> Pairs, List<Guid> Byes, int Rematches) Simulate(
+        int players,
+        int rounds,
+        int seed)
     {
         var random = new Random(seed);
         var turnier = new Turnier(players, rounds);
-        var seen = new HashSet<(Guid, Guid)>();
+        var pairs = new List<(Guid, Guid)>();
         var byes = new List<Guid>();
+        var rematches = 0;
 
         for (var round = 1; round <= rounds; round++)
         {
@@ -208,18 +201,95 @@ public sealed class SwissFormatTests
                     continue;
                 }
 
-                var pair = Ordered(match.Side1.EntryId!.Value, match.Side2.EntryId!.Value);
-                Assert.True(seen.Add(pair), $"Runde {round} wiederholt eine Paarung.");
+                pairs.Add(Ordered(match.Side1.EntryId!.Value, match.Side2.EntryId!.Value));
+
+                if (match.Label?.Contains("Wiederholung", StringComparison.Ordinal) == true)
+                {
+                    rematches++;
+                }
 
                 turnier.Win(match, random.Next(2) + 1);
             }
         }
 
-        // Jeder spielt jede Runde, abzüglich des einen Freiloses bei ungerader
-        // Teilnehmerzahl.
-        Assert.Equal(rounds * (players / 2), seen.Count);
-        Assert.Equal(players % 2 == 0 ? 0 : rounds, byes.Count);
-        Assert.Equal(byes.Count, byes.Distinct().Count());
+        return (pairs, byes, rematches);
+    }
+
+    /// <summary>
+    /// Über den Ergebnisverlauf hinweg darf keine Paarung zweimal entstehen und
+    /// niemand zweimal aussetzen.
+    ///
+    /// Der Verlauf ist der einzige Freiheitsgrad des Verfahrens — an ihm hängt die
+    /// Tabelle, an der Tabelle die Punktgruppen und daran die Paarung. Deshalb
+    /// wird über <em>viele</em> Verläufe geprüft und nicht über einen: mit einem
+    /// einzigen Startwert prüft man, ob dieser eine gut geht, und das ist keine
+    /// Eigenschaft, sondern ein Glücksfall.
+    /// </summary>
+    [Theory]
+    [InlineData(16, 4)]
+    [InlineData(24, 5)]
+    [InlineData(11, 5)]
+    [InlineData(13, 4)]
+    [InlineData(9, 4)]
+    [InlineData(30, 5)]
+    [InlineData(7, 3)]
+    public void Bei_vorgesehener_Rundenzahl_erzwingt_kein_Verlauf_eine_Wiederholung(int players, int rounds)
+    {
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            var (pairs, byes, rematches) = Simulate(players, rounds, seed);
+
+            Assert.Equal(rounds * (players / 2), pairs.Count);
+            Assert.Equal(pairs.Count, pairs.Distinct().Count());
+            Assert.Equal(0, rematches);
+
+            // Jeder spielt jede Runde, abzüglich des einen Freiloses bei
+            // ungerader Teilnehmerzahl.
+            Assert.Equal(players % 2 == 0 ? 0 : rounds, byes.Count);
+            Assert.Equal(byes.Count, byes.Distinct().Count());
+        }
+    }
+
+    /// <summary>
+    /// Bis zur Grenze des Möglichen kann das Verfahren sich festfahren — es paart
+    /// jede Runde nach dem Stand von jetzt und schaut nicht voraus. Dann gibt es
+    /// eine ausgewiesene Wiederholung, und das Turnier läuft weiter.
+    ///
+    /// Der Punkt ist nicht die Wiederholung, sondern dass nichts abbricht: eine
+    /// Ausnahme hier hieße, dass sich das letzte Ergebnis der vorigen Runde nicht
+    /// mehr eintragen lässt und das Turnier ohne Vor- und Rückweg steht.
+    /// </summary>
+    [Theory]
+    [InlineData(8, 7)]
+    [InlineData(12, 11)]
+    [InlineData(16, 15)]
+    [InlineData(9, 9)]
+    [InlineData(11, 11)]
+    public void An_der_Grenze_wiederholt_das_Verfahren_lieber_als_stehenzubleiben(int players, int rounds)
+    {
+        var withRematch = 0;
+
+        for (var seed = 1; seed <= 25; seed++)
+        {
+            var (pairs, byes, rematches) = Simulate(players, rounds, seed);
+
+            // Vollständig bleibt die Runde in jedem Fall: jeder hat einen Gegner.
+            Assert.Equal(rounds * (players / 2), pairs.Count);
+            Assert.Equal(players % 2 == 0 ? 0 : rounds, byes.Count);
+            Assert.Equal(byes.Count, byes.Distinct().Count());
+
+            // Und jede Wiederholung ist als solche beschriftet.
+            Assert.Equal(pairs.Count - pairs.Distinct().Count(), rematches);
+
+            if (rematches > 0)
+            {
+                withRematch++;
+            }
+        }
+
+        // Nicht als Zusage, sondern als Beleg dafür, dass dieser Test den Fall
+        // wirklich trifft: an der Grenze kommt er vor.
+        Assert.True(withRematch > 0, "Kein Verlauf erreichte die Grenze — der Test prüft nichts.");
     }
 
     // --- Paarung nach Punktestand ------------------------------------------
@@ -366,25 +436,76 @@ public sealed class SwissFormatTests
         }
 
         var places = turnier.Standings.Places;
-        var byPoints = places.GroupBy(p => p.Points).Where(g => g.Count() > 1);
 
-        foreach (var tied in byPoints)
+        // Wer die stärkeren Gegner hatte, steht bei gleichem Punktestand vorn.
+        // Der Erwartungswert wird hier aus den Matches gerechnet und nicht der
+        // Implementierung abgeschaut: Summe der Punkte aller Gegner.
+        var points = places.ToDictionary(p => p.EntryId, p => p.Points);
+
+        int Buchholz(Guid entryId) => turnier.Phase.Matches
+            .Where(m => !m.HasBye && (m.Side1.EntryId == entryId || m.Side2.EntryId == entryId))
+            .Select(m => m.Side1.EntryId == entryId ? m.Side2.EntryId!.Value : m.Side1.EntryId!.Value)
+            .Sum(opponent => points.GetValueOrDefault(opponent));
+
+        var tied = places.GroupBy(p => p.Points).Where(g => g.Count() > 1).ToList();
+        Assert.NotEmpty(tied);
+
+        foreach (var group in tied)
         {
-            var order = tied.OrderBy(p => p.Rank).Select(p => p.EntryId).ToList();
-            var buchholz = order.Select(id => BuchholzOf(turnier, id)).ToList();
+            var buchholz = group.OrderBy(p => p.Rank).Select(p => Buchholz(p.EntryId)).ToList();
 
             Assert.Equal(buchholz.OrderByDescending(v => v), buchholz);
         }
     }
 
-    private static int BuchholzOf(Turnier turnier, Guid entryId)
+    /// <summary>
+    /// Buchholz zählt die <em>Punkte</em> der Gegner, nicht ihre Siege.
+    ///
+    /// Der Unterschied wird sichtbar, sobald ein Sieg nicht die volle Punktzahl
+    /// bringt. Hier gewinnt Spielerin 3 kampflos: ein Sieg, aber null Punkte. Wer
+    /// gegen sie gespielt hat, hat damit einen schwachen Gegner gehabt — nach
+    /// Siegen gerechnet einen starken, und die Tabelle stünde anders herum.
+    /// </summary>
+    [Fact]
+    public void Buchholz_zaehlt_die_Punkte_der_Gegner_und_nicht_ihre_Siege()
     {
-        var points = turnier.Standings.Places.ToDictionary(p => p.EntryId, p => p.Points);
+        var definition = new PhaseDefinition
+        {
+            Ordinal = 1,
+            Format = PhaseFormatKind.Swiss,
+            Rounds = 2,
+            Scoring = new ScoringRules(Win: 2, Loss: 0, Walkover: 0),
+            Tiebreakers = [Tiebreaker.Buchholz, Tiebreaker.Lot],
+        };
 
-        return turnier.Phase.Matches
-            .Where(m => !m.HasBye && (m.Side1.EntryId == entryId || m.Side2.EntryId == entryId))
-            .Select(m => m.Side1.EntryId == entryId ? m.Side2.EntryId!.Value : m.Side1.EntryId!.Value)
-            .Sum(opponent => points.GetValueOrDefault(opponent));
+        var entries = Entries(4);
+        var phase = new Phase(Guid.NewGuid(), Guid.NewGuid(), 1, PhaseFormatKind.Swiss, "Schweizer System");
+        var format = new SwissFormat();
+        var state = new PhaseState(phase.Id, definition, Standard, entries, phase.Matches);
+
+        phase.AddPairings(format.GeneratePairings(state));
+
+        // Runde 1 paart nach Setzung obere gegen untere Hälfte: 1–3 und 2–4.
+        var first = phase.Matches.Single(m => m.Side1.EntryId == entries[0].EntryId);
+        var second = phase.Matches.Single(m => m.Side1.EntryId == entries[1].EntryId);
+
+        // Spielerin 1 tritt nicht an — Spielerin 3 gewinnt kampflos, ohne Punkte.
+        phase.RecordResult(first.Id, Score.Walkover(absentSide: 1));
+        phase.RecordResult(
+            second.Id, Score.Played([new SetScore(6, 4), new SetScore(6, 2)], Standard));
+
+        var places = format.ComputeStandings(state).Places;
+        var rank = places.ToDictionary(p => p.EntryId, p => p.Rank);
+
+        // Alle drei Verliererinnen stehen bei null Punkten. Spielerin 4 hatte mit
+        // Spielerin 2 die einzige Gegnerin mit Punkten und steht deshalb vor
+        // Spielerin 1 — nach Siegen gerechnet stünden beide gleich, und die
+        // Setzung entschiede zugunsten von Spielerin 1.
+        Assert.Equal(0, places.Single(p => p.EntryId == entries[3].EntryId).Points);
+        Assert.Equal(0, places.Single(p => p.EntryId == entries[0].EntryId).Points);
+        Assert.True(
+            rank[entries[3].EntryId] < rank[entries[0].EntryId],
+            "Spielerin 4 hatte die punktstärkere Gegnerin und muss vor Spielerin 1 stehen.");
     }
 
     [Fact]
@@ -428,6 +549,29 @@ public sealed class SwissFormatTests
         turnier.Advance();
 
         Assert.Equal(4, turnier.Round(2).Count);
+    }
+
+    /// <summary>
+    /// Ein Match, das schon am Platz steht, wird nicht zurückgenommen. Es
+    /// verschwände samt seiner Platzzuweisung, während zwei Spielerinnen darauf
+    /// spielen — und in der öffentlichen Ansicht wäre die Partie nie gewesen.
+    /// </summary>
+    [Fact]
+    public void Eine_Paarung_am_Platz_wird_nicht_zurueckgenommen()
+    {
+        var turnier = new Turnier(8, rounds: 3);
+        turnier.Advance();
+        turnier.PlayRound(1);
+        turnier.Advance();
+
+        var onCourt = turnier.Round(2)[0];
+        turnier.Phase.ClearResult(turnier.Round(1)[0].Id);
+
+        var error = Assert.Throws<DomainException>(
+            () => turnier.Advance(new HashSet<Guid> { onCourt.Id }));
+
+        Assert.Contains("steht bereits am Platz", error.Message, StringComparison.Ordinal);
+        Assert.Equal(8, turnier.Phase.Matches.Count);
     }
 
     [Fact]

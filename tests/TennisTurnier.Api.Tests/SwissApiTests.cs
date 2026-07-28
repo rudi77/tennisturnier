@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
+using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Security;
@@ -303,6 +304,49 @@ public sealed class SwissApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.Empty(rebuilt.Intersect(second));
     }
 
+    /// <summary>
+    /// Auch die Korrektur durch Überschreiben, nicht nur die durch Rücknahme.
+    ///
+    /// Beim Überschreiben bleibt die Runde durchgehend „vollständig" — würde die
+    /// Rücknahme der Folgerunden daran hängen, spielte das Turnier mit Paarungen
+    /// weiter, die zur neuen Tabelle nicht mehr passen, und die beiden
+    /// Korrekturwege verhielten sich unterschiedlich.
+    /// </summary>
+    [Fact]
+    public async Task Auch_ein_ueberschriebenes_Ergebnis_setzt_die_Folgerunde_neu_an()
+    {
+        var (client, tournamentId) = await DrawnAsync();
+        await PlayRoundAsync(client, tournamentId, 1);
+
+        var before = await PhaseAsync(client, tournamentId);
+        var second = before.Matches.Where(m => m.Round == 2).Select(m => m.Id).ToList();
+        var corrected = before.Matches.First(m => m.Round == 1);
+
+        // Dasselbe Match, umgedrehtes Ergebnis — ohne Rücknahme.
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.PutAsJsonAsync(
+                $"/api/matches/{corrected.Id}/result",
+                new RecordResultRequest(MatchOutcome.Normal, [new SetScore(4, 6), new SetScore(2, 6)]),
+                Json)).StatusCode);
+
+        var after = await PhaseAsync(client, tournamentId);
+        var rebuilt = after.Matches.Where(m => m.Round == 2).ToList();
+
+        Assert.Equal(4, rebuilt.Count);
+        Assert.Empty(rebuilt.Select(m => m.Id).Intersect(second));
+
+        // Und die neue Runde passt zur neuen Tabelle: Punktgleiche gegen
+        // Punktgleiche.
+        var standings = await client.GetFromJsonAsync<StandingsDetail>(
+            $"/api/tournaments/{tournamentId}/phases/{after.Id}/standings", Json);
+        var points = standings!.Places.ToDictionary(p => p.EntryId, p => p.Points);
+
+        Assert.All(
+            rebuilt,
+            match => Assert.Equal(points[match.Side1.EntryId!.Value], points[match.Side2.EntryId!.Value]));
+    }
+
     [Fact]
     public async Task Eine_gespielte_Folgerunde_verhindert_die_Korrektur()
     {
@@ -328,6 +372,62 @@ public sealed class SwissApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.Equal(
             corrected.Score!.Display,
             unchanged.Matches.Single(m => m.Id == corrected.Id).Score!.Display);
+    }
+
+    /// <summary>
+    /// Der Fall, in dem die Rücknahme einer Runde am teuersten wäre: eine Partie
+    /// der Folgerunde läuft bereits auf dem Platz.
+    ///
+    /// Sie zu verwerfen hieße, das Match samt seiner Platzzuweisung zu löschen,
+    /// während zwei Spielerinnen darauf spielen — die Partie wäre in der
+    /// öffentlichen Ansicht nie gewesen, und der Platz stünde als frei. Die
+    /// Korrektur wird deshalb abgewiesen, nicht die Partie.
+    /// </summary>
+    [Fact]
+    public async Task Eine_laufende_Partie_der_Folgerunde_verhindert_die_Korrektur()
+    {
+        _factory.Clock.Now = new DateTimeOffset(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2));
+
+        var (client, tournamentId) = await DrawnAsync();
+        var clubId = (await client.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json))!.ClubId;
+
+        var courtId = await CreatedIdAsync(await client.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/courts",
+            new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor),
+            Json));
+
+        await client.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/courts/{courtId}/availability",
+            new CreateAvailabilityRequest(
+                DayOfWeek.Saturday, new TimeOnly(8, 0), new TimeOnly(21, 0), new DateOnly(2026, 1, 1), null),
+            Json);
+
+        await PlayRoundAsync(client, tournamentId, 1);
+
+        var phase = await PhaseAsync(client, tournamentId);
+        var running = phase.Matches.First(m => m.Round == 2);
+
+        var assignmentId = (await (await client.PostAsJsonAsync(
+            $"/api/matches/{running.Id}/court",
+            new AssignCourtRequest(courtId, 1, null, null, null, false),
+            Json)).Content.ReadFromJsonAsync<AssignCourtResult>(Json))!.AssignmentId;
+
+        await client.PostAsync($"/api/tournaments/{tournamentId}/scheduling/match-day", null);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.PostAsync($"/api/assignments/{assignmentId}/start", null)).StatusCode);
+
+        var response = await client.DeleteAsync(
+            $"/api/matches/{phase.Matches.First(m => m.Round == 1).Id}/result");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        // Die laufende Partie steht unverändert am Platz.
+        var board = (await client.GetFromJsonAsync<List<CourtBoard>>(
+            $"/api/tournaments/{tournamentId}/courts", Json))!;
+
+        Assert.Equal(running.Id, Assert.Single(board).Current!.MatchId);
     }
 
     /// <summary>
