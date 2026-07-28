@@ -13,7 +13,7 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M5 | RoundRobin + Phasen | Gruppenphase mit anschließendem K.O. | ✅ |
 | M6 | Auto-Scheduling | Spielplanvorschlag mit Diff und Bestätigung | ✅ |
 | M7 | Turniertag-Queue | Betrieb ohne starres Zeitraster | ✅ |
-| M8 | SwissFormat | Schweizer System ohne Wiederholungspaarungen | ⬜ |
+| M8 | SwissFormat | Schweizer System ohne Wiederholungspaarungen | ✅ |
 
 M0–M4 ergeben die erste vorführbare Version. M5–M8 bauen darauf auf, ohne die
 bestehenden Verträge zu brechen.
@@ -48,6 +48,18 @@ bestehenden Verträge zu brechen.
   Teilbestätigung ist ausdrücklich keine Aufforderung, den Rest zu löschen —
   wer eine Ansetzung loswerden will, hebt sie über
   `DELETE /api/assignments/{id}` auf.
+- **Das Schweizer System ist nur als erste Phase vorgesehen.** Es paart nach
+  Punktestand und braucht dafür in der ersten Runde ein Feld, das feststeht. Als
+  Endrunde bekäme es Gruppenplätze, hinter denen noch niemand steht — es könnte
+  seine erste Runde nicht ansetzen, und das Turnier bliebe stehen. Die Definition
+  weist das ab. Umgekehrt — Schweizer Vorrunde, K.-o.-Endrunde — geht.
+- **Die Paarung sucht, sie optimiert nicht.** Gefunden wird die erste Paarung,
+  die keine Wiederholung enthält und der idealen Dutch-Paarung am nächsten
+  kommt; ein Maximum-Weight-Matching über gewichtete Abweichungen wäre in
+  Randfällen eine Spur besser verteilt. Für Vereinsfelder trägt die Suche: die
+  bevorzugte Paarung passt fast immer sofort, und die Rückverfolgung hat eine
+  Obergrenze, damit ein pathologischer Fall als klare Absage endet und nicht als
+  Anfrage, die nie zurückkommt.
 - **Die Öffnungszeit ist am Turniertag eine Auskunft, keine Schranke.** Der
   Solver setzt nur in freie Fenster an; die Warteschlange wandert aber mit jedem
   überzogenen Match nach hinten und irgendwann darüber hinaus. Sie dort
@@ -61,11 +73,11 @@ bestehenden Verträge zu brechen.
   bündeln setzt eine Bewertung voraus — und damit die lokale Suche oben.
 
 - **Buchholz in einer Gruppenphase.** Das Kriterium stammt aus dem Schweizer
-  System. In einer vollständig ausgespielten Gruppe ist es exakt die
-  Gesamtpunktzahl minus die eigene und damit eine Umkehrung der Tabelle. Es
-  bleibt konfigurierbar, steht aber in keiner mitgelieferten
-  Round-Robin-Vorlage; ab M8 trägt es dort etwas bei, wo nicht jeder gegen
-  jeden spielt.
+  System, wo es seit M8 die tragende Unterscheidung ist: nach fünf Runden stehen
+  regelmäßig ein halbes Dutzend Spieler auf demselben Punktestand. In einer
+  vollständig ausgespielten Gruppe dagegen ist es exakt die Gesamtpunktzahl minus
+  die eigene und damit eine Umkehrung der Tabelle. Es bleibt konfigurierbar,
+  steht aber in keiner mitgelieferten Round-Robin-Vorlage.
 - **Kampfloser Sieg und Satzverhältnis.** Ein Nichtantreten zählt als Sieg,
   bringt aber weder Sätze noch Spiele. Im Satzverhältnis steht ein kampfloser
   Sieg damit schlechter da als ein erspielter. Welche Zahl dort stehen soll, ist

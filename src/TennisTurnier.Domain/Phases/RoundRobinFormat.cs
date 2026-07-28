@@ -54,20 +54,26 @@ public sealed class RoundRobinFormat : IPhaseFormat
         // niemand steht, wäre schlimmer als eine leere.
         var settled = state.Entries.Where(entry => entry.IsSettled).ToList();
         var groups = GroupsFromMatches(settled, state.Matches);
-        var context = BuildContext(state);
+        var context = StandingsBuilder.ContextOf(state);
         var places = new List<Standing>();
 
         foreach (var (name, members) in groups)
         {
             var table = members
-                .Select(entry => Accumulate(entry, name, state, groups.Count > 1))
+                .Select(entry => StandingsBuilder.Accumulate(entry, groups.Count > 1 ? name : null, state))
                 .ToList();
 
-            places.AddRange(Rank(table, state.Definition.Tiebreakers, context));
+            places.AddRange(StandingsBuilder.Rank(table, state.Definition.Tiebreakers, context));
         }
 
         return new Standings(places);
     }
+
+    /// <summary>
+    /// Alle Paarungen entstehen beim Auslosen; eine Korrektur macht keine davon
+    /// hinfällig. Wer im Verlauf paart, muss hier antworten (ADR-0001).
+    /// </summary>
+    public IReadOnlyList<Guid> ObsoletePairings(PhaseState state) => [];
 
     /// <summary>
     /// Weist eine Auslosung zurück, bei der eine Gruppe allein bliebe.
@@ -251,133 +257,4 @@ public sealed class RoundRobinFormat : IPhaseFormat
         circle.Insert(1, last);
     }
 
-    // --- Tabelle -----------------------------------------------------------
-
-    private static TableRecord Accumulate(
-        SeededEntry entry,
-        string groupName,
-        PhaseState state,
-        bool withGroup)
-    {
-        int played = 0, won = 0, lost = 0, points = 0;
-        int setsWon = 0, setsLost = 0, gamesWon = 0, gamesLost = 0;
-
-        foreach (var match in state.Matches)
-        {
-            // Ein Freilos wurde nicht gespielt und zählt in keiner Statistik.
-            if (match.Score is not { } score || score.Outcome == MatchOutcome.Bye)
-            {
-                continue;
-            }
-
-            var side = SideOf(match, entry.EntryId);
-            if (side is not { } mine)
-            {
-                continue;
-            }
-
-            var other = mine == 1 ? 2 : 1;
-
-            played++;
-            setsWon += score.SetsWonBy(mine);
-            setsLost += score.SetsWonBy(other);
-            gamesWon += score.GamesWonBy(mine);
-            gamesLost += score.GamesWonBy(other);
-
-            if (score.WinnerSide == mine)
-            {
-                won++;
-                points += score.Outcome == MatchOutcome.Walkover
-                    ? state.Definition.Scoring.Walkover
-                    : state.Definition.Scoring.Win;
-            }
-            else
-            {
-                lost++;
-                points += state.Definition.Scoring.Loss;
-            }
-        }
-
-        return new TableRecord(
-            entry.EntryId,
-            entry.DisplayName,
-            withGroup ? groupName : null,
-            entry.Seed,
-            played,
-            won,
-            lost,
-            points,
-            setsWon,
-            setsLost,
-            gamesWon,
-            gamesLost);
-    }
-
-    private static int? SideOf(Match match, Guid entryId) =>
-        match.Side1.EntryId == entryId ? 1
-        : match.Side2.EntryId == entryId ? 2
-        : null;
-
-    /// <summary>
-    /// Sortiert die Tabelle: erst Punkte, dann die Tiebreaker-Kette innerhalb
-    /// jeder punktgleichen Gruppe.
-    /// </summary>
-    private static IEnumerable<Standing> Rank(
-        IReadOnlyList<TableRecord> table,
-        IReadOnlyList<Tiebreaker> tiebreakers,
-        TiebreakContext context)
-    {
-        var rank = 0;
-
-        foreach (var group in table.GroupBy(record => record.Points).OrderByDescending(g => g.Key))
-        {
-            foreach (var record in TiebreakerChain.Order([.. group], tiebreakers, context))
-            {
-                yield return record.ToStanding(++rank);
-            }
-        }
-    }
-
-    internal static TiebreakContext BuildContext(PhaseState state)
-    {
-        var headToHead = new Dictionary<(Guid Winner, Guid Loser), int>();
-        var wins = new Dictionary<Guid, int>();
-        var opponents = new Dictionary<Guid, List<Guid>>();
-
-        foreach (var match in state.Matches)
-        {
-            if (match.Score is not { } score
-                || score.Outcome == MatchOutcome.Bye
-                || match.WinnerEntryId is not { } winner
-                || match.LoserEntryId is not { } loser)
-            {
-                continue;
-            }
-
-            headToHead[(winner, loser)] = headToHead.GetValueOrDefault((winner, loser)) + 1;
-            wins[winner] = wins.GetValueOrDefault(winner) + 1;
-
-            Opponents(opponents, winner).Add(loser);
-            Opponents(opponents, loser).Add(winner);
-        }
-
-        // Buchholz: die Summe der Siege aller Gegner. Wer gegen die Starken
-        // spielen musste, steht bei Punktgleichheit vorn.
-        var buchholz = opponents.ToDictionary(
-            pair => pair.Key,
-            pair => pair.Value.Sum(opponent => wins.GetValueOrDefault(opponent)));
-
-        return new TiebreakContext(headToHead, buchholz);
-    }
-
-    private static List<Guid> Opponents(Dictionary<Guid, List<Guid>> map, Guid entryId)
-    {
-        if (!map.TryGetValue(entryId, out var list))
-        {
-            list = [];
-            map[entryId] = list;
-        }
-
-        return list;
-    }
 }

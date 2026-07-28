@@ -80,6 +80,12 @@ public sealed class KnockoutFormat : IPhaseFormat
         return new Standings(places);
     }
 
+    /// <summary>
+    /// Der Baum entsteht in einem Zug; eine Korrektur macht keine Paarung
+    /// hinfällig, sondern löst nur die Referenzen dahinter neu auf (ADR-0001).
+    /// </summary>
+    public IReadOnlyList<Guid> ObsoletePairings(PhaseState state) => [];
+
     // --- Aufbau des Baums --------------------------------------------------
 
     private static IReadOnlyList<Pairing> BuildBracket(PhaseState state)

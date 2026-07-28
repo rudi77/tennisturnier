@@ -101,6 +101,38 @@ public sealed class Phase : Entity
     }
 
     /// <summary>
+    /// Nimmt angesetzte, aber noch nicht gespielte Paarungen zurück.
+    ///
+    /// Gedacht für Formate, die im Verlauf paaren: wird ein Ergebnis korrigiert,
+    /// stammt die Paarung der Folgerunden aus einer Tabelle, die es nicht mehr
+    /// gibt. Gespielt wurde in ihnen dann noch nichts — sonst wäre die Korrektur
+    /// selbst schon abgelehnt worden, und hier ist der Punkt, an dem das
+    /// auffällt, statt stillschweigend ein Ergebnis zu verwerfen.
+    ///
+    /// Gibt zurück, ob etwas zurückgenommen wurde.
+    /// </summary>
+    public bool Withdraw(IReadOnlyCollection<Guid> matchIds)
+    {
+        ArgumentNullException.ThrowIfNull(matchIds);
+
+        var affected = _matches.Where(match => matchIds.Contains(match.Id)).ToList();
+
+        if (affected.FirstOrDefault(match => match.Score is not null) is { } played)
+        {
+            throw new DomainException(
+                $"Die Paarung „{played}“ ist bereits gespielt und lässt sich nicht zurücknehmen. " +
+                "Zuerst deren Ergebnis zurücknehmen.");
+        }
+
+        foreach (var match in affected)
+        {
+            _matches.Remove(match);
+        }
+
+        return affected.Count > 0;
+    }
+
+    /// <summary>
     /// Trägt ein Ergebnis ein und reicht es an die abhängigen Matches weiter.
     /// </summary>
     public void RecordResult(Guid matchId, Score score)

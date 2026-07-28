@@ -17,6 +17,7 @@ public static class PhaseFormats
         {
             [PhaseFormatKind.Knockout] = new KnockoutFormat(),
             [PhaseFormatKind.RoundRobin] = new RoundRobinFormat(),
+            [PhaseFormatKind.Swiss] = new SwissFormat(),
         };
 
     public static IPhaseFormat For(PhaseFormatKind kind) =>

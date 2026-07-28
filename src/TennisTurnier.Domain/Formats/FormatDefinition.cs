@@ -206,6 +206,19 @@ public sealed record PhaseDefinition
             case PhaseFormatKind.Swiss when Rounds is < 1:
                 throw new DomainException($"{path}: rounds muss mindestens 1 sein, war {Rounds}.");
 
+            // Das Schweizer System paart nach Punktestand und braucht dafür in
+            // der ersten Runde ein Feld, das feststeht. Als Folgephase bekäme es
+            // Gruppenplätze, hinter denen noch niemand steht — es könnte seine
+            // erste Runde nicht ansetzen und das Turnier bliebe stehen. Als
+            // Vorrunde vor einer Endrunde ist es dagegen vorgesehen.
+            case PhaseFormatKind.Swiss when Ordinal > 1:
+                throw new DomainException(
+                    $"{path}: das Schweizer System paart nach Punktestand und ist deshalb nur als erste Phase " +
+                    "vorgesehen, nicht als Endrunde.");
+
+            case PhaseFormatKind.Swiss when GroupCount > 1:
+                throw new DomainException($"{path}: das Schweizer System kennt keine Gruppen.");
+
             case PhaseFormatKind.Knockout when GroupCount > 1:
                 throw new DomainException($"{path}: eine K.-o.-Phase kennt keine Gruppen.");
         }

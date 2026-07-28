@@ -118,4 +118,15 @@ public interface IPhaseFormat
     bool IsComplete(PhaseState state);
 
     Standings ComputeStandings(PhaseState state);
+
+    /// <summary>
+    /// Die Matches, deren Paarung nicht mehr gilt.
+    ///
+    /// Ein Format, das im Verlauf paart, leitet seine Paarungen aus dem
+    /// bisherigen Ergebnis ab. Wird eines davon korrigiert, sind alle daraus
+    /// entstandenen Runden hinfällig — sie stehen zu lassen hieße,
+    /// weiterzuspielen nach einer Tabelle, die es nicht mehr gibt. Formate, die
+    /// beim Auslosen fertig paaren, antworten mit einer leeren Menge.
+    /// </summary>
+    IReadOnlyList<Guid> ObsoletePairings(PhaseState state);
 }

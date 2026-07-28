@@ -44,6 +44,11 @@ public static class PhaseOrchestrator
 
         foreach (var phase in ordered)
         {
+            changed |= Repair(tournament, definition, phase, namesByEntry);
+        }
+
+        foreach (var phase in ordered)
+        {
             var qualification = DefinitionOf(definition, phase)?.Qualification;
             if (qualification is null)
             {
@@ -75,6 +80,46 @@ public static class PhaseOrchestrator
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// Bringt eine Phase, die im Verlauf paart, auf den Stand ihrer Ergebnisse:
+    /// hinfällige Runden zurücknehmen, die nächste ansetzen.
+    ///
+    /// Für K.o. und Gruppenphase geschieht hier nichts — sie paaren beim
+    /// Auslosen und antworten auf beide Fragen mit „nichts". Das Schweizer System
+    /// dagegen kennt seine zweite Runde erst, wenn die erste gespielt ist, und
+    /// genau dieser Unterschied ist der Grund, warum die Frage an das Format
+    /// geht und nicht an eine Fallunterscheidung hier (ADR-0001).
+    /// </summary>
+    private static bool Repair(
+        Tournament tournament,
+        FormatDefinition definition,
+        Phase phase,
+        IReadOnlyDictionary<Guid, string> namesByEntry)
+    {
+        if (DefinitionOf(definition, phase) is not { } phaseDefinition)
+        {
+            return false;
+        }
+
+        var format = PhaseFormats.For(phase.Format);
+        var changed = phase.Withdraw(format.ObsoletePairings(
+            StateOf(tournament, definition, phaseDefinition, phase, namesByEntry)));
+
+        // Erst nach dem Zurücknehmen: sonst entstünde die nächste Runde aus einer
+        // Tabelle, in der die eben verworfene noch steht.
+        var pairings = format.GeneratePairings(
+            StateOf(tournament, definition, phaseDefinition, phase, namesByEntry));
+
+        if (pairings.Count == 0)
+        {
+            return changed;
+        }
+
+        phase.AddPairings(pairings);
+
+        return true;
     }
 
     /// <summary>Die Phasendefinition zu einer angelegten Phase.</summary>

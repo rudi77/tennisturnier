@@ -76,7 +76,7 @@ public static class Qualifier
             .DefaultIfEmpty(0)
             .Max();
 
-        var context = RoundRobinFormat.BuildContext(sourceState);
+        var context = StandingsBuilder.ContextOf(sourceState);
 
         for (var rank = 1; rank <= deepest; rank++)
         {

@@ -162,7 +162,7 @@ anschließendem K.o." ist deshalb kein eigenes Format, sondern eine Komposition
 aus einer Round-Robin- und einer K.-o.-Phase. Ein eigener Modus entsteht als neue
 Vorlage — neue Phasenfolge, neue Parameter, kein Deployment.
 
-Umgesetzt sind K.-o.-System und Round Robin; das Schweizer System folgt in M8.
+Umgesetzt sind K.-o.-System, Round Robin und das Schweizer System.
 Mitgeliefert sind `ko-single`, `group-then-ko`, `liga-round-robin` und `swiss`.
 Sie lassen sich nicht ändern, aber kopieren; die Kopie gehört dem Verein und ist
 frei bearbeitbar.
@@ -187,6 +187,43 @@ Spielverhältnis, Buchholz, Los. Die Reihenfolge kommt aus der Phasendefinition,
 nicht aus dem Code — sie ist eine Festlegung der Ausschreibung. Der direkte
 Vergleich zählt dabei nur die Begegnungen der Punktgleichen untereinander; bei
 einem Dreier-Ringschluss entscheidet das nächste Kriterium.
+
+### Das Schweizer System
+
+Alle spielen jede Runde, gepaart wird nach Punktestand. Das ist das einzige
+Format, dessen Draw beim Auslosen unvollständig ist: nur die erste Runde steht.
+Jede weitere entsteht, sobald die vorige gespielt ist — sie hängt davon ab, wie
+sie ausgegangen ist, und ein Draw, der sie vorab zeigte, zeigte eine Erfindung.
+
+Gepaart wird nach dem Dutch-System: die Tabelle zerfällt in Punktgruppen, jede
+Punktgruppe in obere und untere Hälfte, gepaart wird über Kreuz. Bleibt in einer
+Punktgruppe jemand übrig, steigt er in die nächste ab — von unten, denn wer in
+seiner Gruppe hinten steht, soll nicht die leichtere Aufgabe bekommen.
+
+Darüber steht die harte Bedingung, dass sich zwei Spieler nicht zweimal
+begegnen. Sie lässt sich nicht durch Sortieren erfüllen, sondern nur suchend:
+gefunden wird die Paarung, die der idealen am nächsten kommt und keine
+Wiederholung enthält. Geht das innerhalb der Punktgruppen nicht auf, gilt die
+Regel vor der Konvention und es wird über das ganze Feld gesucht.
+
+Bei ungerader Teilnehmerzahl setzt jede Runde einer aus — der Letzte der
+Tabelle, der noch kein Freilos hatte, und höchstens einmal pro Turnier. Das
+Freilos zählt wie ein Sieg: sonst fiele zurück, wer nichts dafür kann.
+Entsprechend sind bei geradem Feld höchstens *n-1* Runden spielbar und bei
+ungeradem *n*; mehr weist die Auslosung ab, statt das Turnier später an der
+Runde scheitern zu lassen, die nicht mehr geht.
+
+Die Rundenzahl kommt aus der Definition, ohne Angabe `ceil(log2(n))` — so viele
+Runden, wie ein K.-o.-Baum desselben Feldes hätte. Die Tabelle entscheidet
+Punktgleichheit zuerst über Buchholz, die Summe der Punkte aller Gegner: nach
+fünf Runden stehen regelmäßig ein halbes Dutzend Spieler auf demselben
+Punktestand, und ohne dieses Kriterium wäre die Tabelle weitgehend aussagelos.
+
+Wird ein Ergebnis korrigiert, werden alle daraus entstandenen Runden
+zurückgenommen und neu gepaart — mit ihnen weiterzuspielen hieße, Paarungen zu
+verwenden, die niemand mehr herleiten kann. Ist eine dieser Runden schon
+gespielt, wird die Korrektur abgewiesen: diese Kette muss von hinten aufgerollt
+werden.
 
 ## Der Turnierbaum
 
