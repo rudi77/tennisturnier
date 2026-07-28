@@ -7,7 +7,7 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 |---|---|---|---|
 | M0 | Fundament | Solution, Fitnessfunktionen, ADRs, CI | ✅ |
 | M1 | Club, Court, Verfügbarkeit, Auth | Verein und Plätze verwaltbar, Club-Scope dicht | ✅ |
-| M2 | Tournament, Entry, Format | Turnier durchläuft seinen Zustandsautomaten | ⬜ |
+| M2 | Tournament, Entry, Format | Turnier durchläuft seinen Zustandsautomaten | ✅ |
 | M3 | KnockoutFormat | K.O.-Turnier von der Anmeldung bis zum Finale spielbar | ⬜ |
 | M4 | Öffentliche Ansicht | Live-Bracket mit ETag und SignalR-Push | ⬜ |
 | M5 | RoundRobin + Phasen | Gruppenphase mit anschließendem K.O. | ⬜ |
@@ -17,6 +17,18 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 
 M0–M4 ergeben die erste vorführbare Version. M5–M8 bauen darauf auf, ohne die
 bestehenden Verträge zu brechen.
+
+## Bewusst nicht gebaut
+
+- **JSON-Schema für die Formatdefinition.** Ursprünglich als
+  `docs/schemas/format-definition.schema.json` geplant. Die Prüfung liegt
+  stattdessen in `FormatDefinition.Validate()` — sie läuft beim Speichern einer
+  Vorlage und erneut beim Einfrieren in ein Turnier, prüft mehr als ein Schema
+  ausdrücken könnte (etwa dass eine Qualifikation auf eine frühere Phase zeigt)
+  und ist die Stelle, die tatsächlich greift. Ein zweites Schema daneben wäre
+  eine zweite Wahrheit, die auseinanderläuft. Für Editorunterstützung beim
+  Schreiben eigener Formate wäre es dennoch nützlich — dann aber erzeugt aus dem
+  Code, nicht von Hand gepflegt.
 
 ## Bewusst offene Punkte
 

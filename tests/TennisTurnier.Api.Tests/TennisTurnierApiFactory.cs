@@ -96,6 +96,7 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
             }
 
             Services.MigrateDatabaseAsync().GetAwaiter().GetResult();
+            Services.SeedBuiltInFormatsAsync().GetAwaiter().GetResult();
             _migrated = true;
         }
     }

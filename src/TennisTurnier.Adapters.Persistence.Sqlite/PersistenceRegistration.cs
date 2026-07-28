@@ -19,6 +19,9 @@ public static class PersistenceRegistration
         services.AddDbContext<TennisTurnierDbContext>(options => options.UseSqlite(connectionString));
 
         services.AddScoped<IClubRepository, ClubRepository>();
+        services.AddScoped<ITournamentRepository, TournamentRepository>();
+        services.AddScoped<IFormatTemplateRepository, FormatTemplateRepository>();
+        services.AddScoped<IPlayerRepository, PlayerRepository>();
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 

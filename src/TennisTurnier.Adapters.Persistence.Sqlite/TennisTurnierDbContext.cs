@@ -2,6 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using TennisTurnier.Adapters.Persistence.Sqlite.Configuration;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Domain.Clubs;
+using TennisTurnier.Domain.Formats;
+using TennisTurnier.Domain.Players;
+using TennisTurnier.Domain.Tournaments;
 using TennisTurnier.Domain.Security;
 
 namespace TennisTurnier.Adapters.Persistence.Sqlite;
@@ -19,6 +22,14 @@ public sealed class TennisTurnierDbContext : DbContext
     public DbSet<Club> Clubs => Set<Club>();
 
     public DbSet<Court> Courts => Set<Court>();
+
+    public DbSet<Tournament> Tournaments => Set<Tournament>();
+
+    public DbSet<Participant> Participants => Set<Participant>();
+
+    public DbSet<Player> Players => Set<Player>();
+
+    public DbSet<FormatTemplate> FormatTemplates => Set<FormatTemplate>();
 
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
 
@@ -68,6 +79,25 @@ public sealed class TennisTurnierDbContext : DbContext
         modelBuilder.Entity<CourtBlock>()
             .HasQueryFilter(block => SeesAllClubs || Courts.Any(
                 court => court.Id == block.CourtId && VisibleClubIds.Contains(court.ClubId)));
+
+        modelBuilder.Entity<Tournament>()
+            .HasQueryFilter(tournament => SeesAllClubs || VisibleClubIds.Contains(tournament.ClubId));
+
+        modelBuilder.Entity<TournamentEntry>()
+            .HasQueryFilter(entry => SeesAllClubs || Tournaments.Any(
+                tournament => tournament.Id == entry.TournamentId && VisibleClubIds.Contains(tournament.ClubId)));
+
+        // Vorlagen ohne Verein sind die mitgelieferten Standardformate und für
+        // jeden sichtbar; eigene Vorlagen bleiben im Verein.
+        modelBuilder.Entity<FormatTemplate>()
+            .HasQueryFilter(template =>
+                SeesAllClubs
+                || template.ClubId == null
+                || VisibleClubIds.Contains(template.ClubId.Value));
+
+        // Spieler und Teilnehmer tragen bewusst keine ClubId (ADR-0008) und
+        // können daher nicht gefiltert werden. Ihr Schutz entsteht dort, wo
+        // Kontaktdaten abgebildet werden, nicht hier.
 
         UseDomainAssignedKeys(modelBuilder);
 

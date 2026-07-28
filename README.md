@@ -70,3 +70,19 @@ Die tragenden Entscheidungen samt verworfener Alternativen stehen in
   öffentliche Ansicht.
 - [ADR-0004](docs/adr/0004-club-scoped-autorisierung.md): Rollen sind an Verein oder
   Turnier gebunden, durchgesetzt per Query-Filter.
+- [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler existieren
+  vereinsübergreifend — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
+
+## Turnierformate
+
+Ein Turniermodus ist eine geordnete Folge von Phasen. „Gruppenphase mit
+anschließendem K.o." ist deshalb kein eigenes Format, sondern eine Komposition
+aus einer Round-Robin- und einer K.-o.-Phase. Ein eigener Modus entsteht als neue
+Vorlage — neue Phasenfolge, neue Parameter, kein Deployment.
+
+Mitgeliefert sind `ko-single`, `group-then-ko`, `liga-round-robin` und `swiss`.
+Sie lassen sich nicht ändern, aber kopieren; die Kopie gehört dem Verein und ist
+frei bearbeitbar.
+
+Beim Auslosen wird die Definition in das Turnier kopiert und eingefroren. Wer die
+Vorlage danach nachschärft, verändert damit kein laufendes Turnier.
