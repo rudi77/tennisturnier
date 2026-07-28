@@ -3,4 +3,10 @@
   <!-- Der Domänenkern hat bewusst weder Projekt- noch Paketreferenzen.
        Erzwungen durch TennisTurnier.Architecture.Tests. -->
 
+  <ItemGroup>
+    <!-- Für Bausteine wie die Setzlistenverteilung, die zur Fachlogik gehören,
+         aber keine Aufrufstelle außerhalb der Domäne haben. -->
+    <InternalsVisibleTo Include="TennisTurnier.Domain.Tests" />
+  </ItemGroup>
+
 </Project>
