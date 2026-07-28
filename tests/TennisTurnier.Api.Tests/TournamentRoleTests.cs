@@ -1,0 +1,253 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using TennisTurnier.Application.Clubs;
+using TennisTurnier.Application.Tournaments;
+using TennisTurnier.Domain.Formats;
+using TennisTurnier.Domain.Security;
+using TennisTurnier.Domain.Tournaments;
+
+namespace TennisTurnier.Api.Tests;
+
+/// <summary>
+/// Turnier-Endpunkte aus den Rollen heraus, die sie im Betrieb benutzen.
+///
+/// Die übrigen Turniertests laufen als <see cref="Role.SystemAdmin"/> — und der
+/// kurzschließt sowohl den Query-Filter als auch jede Rechteprüfung. Dadurch
+/// blieb unsichtbar, dass ein Turnierleiter sein eigenes Turnier gar nicht
+/// erreichte. Diese Tests gehen deshalb bewusst durch die echten Rollen.
+/// </summary>
+public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
+{
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    private readonly TennisTurnierApiFactory _factory;
+
+    public TournamentRoleTests(TennisTurnierApiFactory factory) => _factory = factory;
+
+    private async Task<HttpClient> AdminClientAsync()
+    {
+        await _factory.GrantAsync("role-tests-admin", Role.SystemAdmin, ResourceScope.Global);
+        return _factory.CreateClientAs("role-tests-admin");
+    }
+
+    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
+        return body.GetProperty("id").GetGuid();
+    }
+
+    private async Task<(Guid ClubId, Guid TournamentId)> SeedTournamentAsync(HttpClient admin)
+    {
+        var clubId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+            "/api/clubs",
+            new CreateClubRequest($"TC Rollen {Guid.NewGuid():N}", "Europe/Vienna", null),
+            Json));
+
+        var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
+            $"/api/clubs/{clubId}/format-templates", Json);
+        var templateId = templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id;
+
+        var tournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/tournaments",
+            new CreateTournamentRequest(
+                "Clubmeisterschaft", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId),
+            Json));
+
+        return (clubId, tournamentId);
+    }
+
+    [Fact]
+    public async Task Ein_Turnierleiter_ohne_Vereinsrolle_kann_sein_Turnier_fuehren()
+    {
+        // Regression: der Query-Filter kannte nur Vereinsrollen, also lief jeder
+        // Aufruf eines reinen Turnierleiters in ein 404 — auch das Auslosen,
+        // wofür er ausdrücklich berufen wurde.
+        var admin = await AdminClientAsync();
+        var (_, tournamentId) = await SeedTournamentAsync(admin);
+
+        var director = $"director-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(director, Role.TournamentDirector, ResourceScope.Tournament(tournamentId));
+        var client = _factory.CreateClientAs(director);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/tournaments/{tournamentId}")).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null)).StatusCode);
+
+        var detail = await client.GetFromJsonAsync<TournamentDetail>($"/api/tournaments/{tournamentId}", Json);
+        Assert.Equal(TournamentState.RegistrationOpen, detail!.State);
+    }
+
+    [Fact]
+    public async Task Ein_Turnierleiter_erreicht_ein_fremdes_Turnier_nicht()
+    {
+        var admin = await AdminClientAsync();
+        var (_, ownTournament) = await SeedTournamentAsync(admin);
+        var (_, foreignTournament) = await SeedTournamentAsync(admin);
+
+        var director = $"director-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(director, Role.TournamentDirector, ResourceScope.Tournament(ownTournament));
+        var client = _factory.CreateClientAs(director);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/tournaments/{ownTournament}")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/tournaments/{foreignTournament}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_Schiedsrichter_darf_das_Turnier_sehen_aber_nicht_fuehren()
+    {
+        var admin = await AdminClientAsync();
+        var (_, tournamentId) = await SeedTournamentAsync(admin);
+
+        var referee = $"referee-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(referee, Role.Referee, ResourceScope.Tournament(tournamentId));
+        var client = _factory.CreateClientAs(referee);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/tournaments/{tournamentId}")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_ClubAdmin_kann_das_Turnier_seines_Vereins_fuehren()
+    {
+        var admin = await AdminClientAsync();
+        var (clubId, tournamentId) = await SeedTournamentAsync(admin);
+
+        var clubAdmin = $"clubadmin-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(clubAdmin, Role.ClubAdmin, ResourceScope.Club(clubId));
+        var client = _factory.CreateClientAs(clubAdmin);
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_Spieler_darf_das_Turnier_seines_Vereins_sehen_aber_nicht_fuehren()
+    {
+        var admin = await AdminClientAsync();
+        var (clubId, tournamentId) = await SeedTournamentAsync(admin);
+
+        var player = $"player-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(player, Role.Player, ResourceScope.Club(clubId));
+        var client = _factory.CreateClientAs(player);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/tournaments/{tournamentId}")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Kontaktdaten_eines_unbeteiligten_Spielers_bleiben_verborgen()
+    {
+        // Regression: der Verein kam ungeprüft aus dem Query-String. Wer irgendwo
+        // ViewInternals hatte, konnte damit die Kontaktdaten jedes beliebigen
+        // Spielers lesen, indem er seinen eigenen Verein angab.
+        var admin = await AdminClientAsync();
+        var (ownClubId, _) = await SeedTournamentAsync(admin);
+
+        var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+            "/api/players",
+            new CreatePlayerRequest("Anna", $"Unbeteiligt{Guid.NewGuid():N}"[..16],
+                "geheim@example.invalid", "+43 1 234567", new DateOnly(1990, 3, 14)),
+            Json));
+
+        var clubAdmin = $"neugierig-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(clubAdmin, Role.ClubAdmin, ResourceScope.Club(ownClubId));
+
+        var response = await _factory.CreateClientAs(clubAdmin)
+            .GetAsync($"/api/players/{playerId}?clubId={ownClubId}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.DoesNotContain(
+            "geheim@example.invalid",
+            await response.Content.ReadAsStringAsync(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Kontaktdaten_eines_gemeldeten_Spielers_sind_im_ausrichtenden_Verein_sichtbar()
+    {
+        // Die Gegenprobe: ohne sie wäre die Regel oben auch dann erfüllt, wenn
+        // niemand mehr an Kontaktdaten käme.
+        var admin = await AdminClientAsync();
+        var (clubId, tournamentId) = await SeedTournamentAsync(admin);
+
+        var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+            "/api/players",
+            new CreatePlayerRequest("Eva", $"Gemeldet{Guid.NewGuid():N}"[..14],
+                "eva@example.invalid", null, null),
+            Json));
+
+        var participant = await (await admin.PostAsJsonAsync(
+            "/api/participants", new CreateParticipantRequest(playerId, null), Json))
+            .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
+
+        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
+        await admin.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/entries",
+            new EnterTournamentRequest(participant!.Id, null),
+            Json);
+
+        var clubAdmin = $"berechtigt-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(clubAdmin, Role.ClubAdmin, ResourceScope.Club(clubId));
+
+        var detail = await _factory.CreateClientAs(clubAdmin)
+            .GetFromJsonAsync<PlayerDetail>($"/api/players/{playerId}?clubId={clubId}", Json);
+
+        Assert.Equal("eva@example.invalid", detail!.Email);
+    }
+
+    [Fact]
+    public async Task Zwei_Meldungen_mit_derselben_Setzposition_werden_sofort_abgewiesen()
+    {
+        // Regression: geprüft wurde nur beim nachträglichen Setzen. Der Konflikt
+        // schlug damit erst beim Auslosen zu, also nach Meldeschluss.
+        var admin = await AdminClientAsync();
+        var (_, tournamentId) = await SeedTournamentAsync(admin);
+        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
+
+        async Task<HttpResponseMessage> EnterWithSeedOneAsync()
+        {
+            var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+                "/api/players",
+                new CreatePlayerRequest("Gesetzt", $"Nr{Guid.NewGuid():N}"[..10], null, null, null),
+                Json));
+
+            var participant = await (await admin.PostAsJsonAsync(
+                "/api/participants", new CreateParticipantRequest(playerId, null), Json))
+                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
+
+            return await admin.PostAsJsonAsync(
+                $"/api/tournaments/{tournamentId}/entries",
+                new EnterTournamentRequest(participant!.Id, Seed: 1),
+                Json);
+        }
+
+        Assert.Equal(HttpStatusCode.Created, (await EnterWithSeedOneAsync()).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await EnterWithSeedOneAsync()).StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_abgebrochenes_Turnier_laesst_sich_nicht_mehr_umschalten()
+    {
+        // Regression: SwitchToPlanning war die einzige ändernde Methode ohne
+        // Zustandsprüfung und änderte auch abgeschlossene Turniere noch.
+        var admin = await AdminClientAsync();
+        var (_, tournamentId) = await SeedTournamentAsync(admin);
+
+        await admin.PostAsync($"/api/tournaments/{tournamentId}/abandon", null);
+
+        var response = await admin.PostAsync($"/api/tournaments/{tournamentId}/scheduling/planning", null);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+}

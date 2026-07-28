@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\TennisTurnier.Application\TennisTurnier.Application.csproj" />
+    <ProjectReference Include="..\TennisTurnier.Adapters.Persistence.Sqlite\TennisTurnier.Adapters.Persistence.Sqlite.csproj" />
+    <ProjectReference Include="..\TennisTurnier.Adapters.Identity.Oidc\TennisTurnier.Adapters.Identity.Oidc.csproj" />
+    <ProjectReference Include="..\TennisTurnier.Adapters.Scheduling\TennisTurnier.Adapters.Scheduling.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+
+</Project>
