@@ -158,6 +158,32 @@ public sealed record Score
         return new Score(MatchOutcome.Bye, advancingSide, [], abandonedSet: null);
     }
 
+    /// <summary>
+    /// Baut ein bereits geprüftes Ergebnis wieder auf — ausschließlich für den
+    /// Persistenzadapter.
+    ///
+    /// Bewusst ohne erneute Prüfung. Die Regeln, gegen die geprüft wurde, stehen
+    /// im eingefrorenen Format des Turniers und sind beim Laden eines einzelnen
+    /// Matches nicht zur Hand. Sie zu erraten wäre schlimmer als sie wegzulassen:
+    /// ein Turnier mit Kurzsätzen bis 4 speicherte ein gültiges 5:4, das gegen
+    /// die geratenen Regeln eines Satzes bis 6 scheiterte — und das Match ließe
+    /// sich nicht mehr laden.
+    ///
+    /// Die Prüfung gehört dorthin, wo Daten hereinkommen, nicht dorthin, wo sie
+    /// wieder gelesen werden.
+    /// </summary>
+    public static Score Rehydrate(
+        MatchOutcome outcome,
+        int winnerSide,
+        IReadOnlyList<SetScore> completedSets,
+        SetScore? abandonedSet)
+    {
+        ArgumentNullException.ThrowIfNull(completedSets);
+        RequireSide(winnerSide);
+
+        return new Score(outcome, winnerSide, completedSets, abandonedSet);
+    }
+
     private static void RequireSide(int side)
     {
         if (side is not (1 or 2))

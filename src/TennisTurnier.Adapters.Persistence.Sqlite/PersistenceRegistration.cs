@@ -22,6 +22,8 @@ public static class PersistenceRegistration
         services.AddScoped<ITournamentRepository, TournamentRepository>();
         services.AddScoped<IFormatTemplateRepository, FormatTemplateRepository>();
         services.AddScoped<IPlayerRepository, PlayerRepository>();
+        services.AddScoped<IPhaseRepository, PhaseRepository>();
+        services.AddScoped<ICourtAssignmentRepository, CourtAssignmentRepository>();
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 

@@ -1,0 +1,417 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using TennisTurnier.Application.Clubs;
+using TennisTurnier.Application.Tournaments;
+using TennisTurnier.Domain.Clubs;
+using TennisTurnier.Domain.Formats;
+using TennisTurnier.Domain.Matches;
+using TennisTurnier.Domain.Phases;
+using TennisTurnier.Domain.Security;
+using TennisTurnier.Domain.Tournaments;
+
+namespace TennisTurnier.Api.Tests;
+
+/// <summary>
+/// Ein vollständiges K.-o.-Turnier über die API — die Abnahmebedingung für M3.
+/// </summary>
+public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiFactory>
+{
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    private readonly TennisTurnierApiFactory _factory;
+
+    public KnockoutTournamentApiTests(TennisTurnierApiFactory factory) => _factory = factory;
+
+    private async Task<HttpClient> AdminClientAsync()
+    {
+        await _factory.GrantAsync("ko-admin", Role.SystemAdmin, ResourceScope.Global);
+        return _factory.CreateClientAs("ko-admin");
+    }
+
+    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
+        return body.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Turnier mit ausgelostem Baum über die angegebene Teilnehmerzahl.</summary>
+    private async Task<(HttpClient Client, Guid ClubId, Guid TournamentId)> DrawnTournamentAsync(
+        int participants,
+        bool seedAll = false)
+    {
+        var client = await AdminClientAsync();
+
+        var clubId = await CreatedIdAsync(await client.PostAsJsonAsync(
+            "/api/clubs",
+            new CreateClubRequest($"TC KO {Guid.NewGuid():N}", "Europe/Vienna", null),
+            Json));
+
+        await client.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/courts",
+            new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor),
+            Json);
+
+        var templates = await client.GetFromJsonAsync<List<FormatTemplateSummary>>(
+            $"/api/clubs/{clubId}/format-templates", Json);
+        var templateId = templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id;
+
+        var tournamentId = await CreatedIdAsync(await client.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/tournaments",
+            new CreateTournamentRequest(
+                "Clubmeisterschaft", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId),
+            Json));
+
+        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
+
+        for (var i = 1; i <= participants; i++)
+        {
+            var playerId = await CreatedIdAsync(await client.PostAsJsonAsync(
+                "/api/players",
+                new CreatePlayerRequest($"Vorname{i:00}", $"N{Guid.NewGuid():N}"[..10], null, null, null),
+                Json));
+
+            var participant = await (await client.PostAsJsonAsync(
+                "/api/participants", new CreateParticipantRequest(playerId, null), Json))
+                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
+
+            var entryId = await CreatedIdAsync(await client.PostAsJsonAsync(
+                $"/api/tournaments/{tournamentId}/entries",
+                new EnterTournamentRequest(participant!.Id, seedAll ? i : null),
+                Json));
+
+            await client.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
+        }
+
+        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
+
+        var draw = await client.PostAsync($"/api/tournaments/{tournamentId}/draw", null);
+        Assert.Equal(HttpStatusCode.NoContent, draw.StatusCode);
+
+        return (client, clubId, tournamentId);
+    }
+
+    private static async Task<List<PhaseDetail>> PhasesAsync(HttpClient client, Guid tournamentId) =>
+        (await client.GetFromJsonAsync<List<PhaseDetail>>(
+            $"/api/tournaments/{tournamentId}/phases", Json))!;
+
+    /// <summary>
+    /// Das Finale. Die mitgelieferte Vorlage enthält ein Spiel um Platz 3, das in
+    /// derselben Runde steht — die Runde allein genügt also nicht.
+    /// </summary>
+    private static MatchDetail FinalOf(PhaseDetail phase) =>
+        phase.Matches.Single(m => m.Label == "Finale");
+
+    private static MatchDetail ThirdPlaceOf(PhaseDetail phase) =>
+        phase.Matches.Single(m => m.Label == "Spiel um Platz 3");
+
+    [Fact]
+    public async Task Die_Auslosung_erzeugt_den_vollstaendigen_Baum()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(16);
+
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+
+        // 15 Matches für 16 Teilnehmer, plus das Spiel um Platz 3 aus der Vorlage.
+        Assert.Equal(16, phase.Matches.Count);
+        Assert.Equal(8, phase.Matches.Count(m => m.Round == 1));
+        Assert.Equal(4, FinalOf(phase).Round);
+        Assert.NotNull(ThirdPlaceOf(phase));
+    }
+
+    [Fact]
+    public async Task Das_Bracket_ist_lesbar_bevor_gespielt_wurde()
+    {
+        // Grundlage der öffentlichen Vorschau aus ADR-0003: die späteren Runden
+        // nennen ihre Herkunft im Klartext, obwohl noch niemand feststeht.
+        var (client, _, tournamentId) = await DrawnTournamentAsync(8);
+
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var final = FinalOf(phase);
+
+        Assert.Equal(MatchStatus.Pending, final.Status);
+        Assert.Null(final.Side1.EntryId);
+        Assert.StartsWith("Sieger aus", final.Side1.Origin, StringComparison.Ordinal);
+
+        var firstRound = phase.Matches.First(m => m.Round == 1);
+        Assert.Equal(MatchStatus.Ready, firstRound.Status);
+        Assert.NotNull(firstRound.Side1.ParticipantName);
+    }
+
+    [Fact]
+    public async Task Freilose_entscheiden_sich_beim_Auslosen()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(5, seedAll: true);
+
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var firstRound = phase.Matches.Where(m => m.Round == 1).ToList();
+
+        Assert.Equal(4, firstRound.Count);
+        Assert.Equal(3, firstRound.Count(m => m.Score?.Outcome == MatchOutcome.Bye));
+    }
+
+    [Fact]
+    public async Task Ein_Ergebnis_bringt_den_Sieger_in_die_naechste_Runde()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var match = phase.Matches.Where(m => m.Round == 1).OrderBy(m => m.Position).First();
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/matches/{match.Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 2)]),
+            Json);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var updated = Assert.Single(await PhasesAsync(client, tournamentId));
+        var final = FinalOf(updated);
+
+        Assert.Equal(match.Side1.EntryId, final.Side1.EntryId);
+        Assert.Equal(match.Side1.ParticipantName, final.Side1.ParticipantName);
+    }
+
+    [Fact]
+    public async Task Das_erste_Ergebnis_startet_das_Turnier()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+
+        await client.PutAsJsonAsync(
+            $"/api/matches/{phase.Matches.First(m => m.Round == 1).Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 2)]),
+            Json);
+
+        var detail = await client.GetFromJsonAsync<TournamentDetail>($"/api/tournaments/{tournamentId}", Json);
+
+        Assert.Equal(TournamentState.InProgress, detail!.State);
+    }
+
+    [Fact]
+    public async Task Ein_16er_Turnier_laesst_sich_bis_zum_Finale_durchspielen()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(16);
+
+        await PlayOutAsync(client, tournamentId);
+
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        Assert.Equal(PhaseStatus.Completed, phase.Status);
+        Assert.All(phase.Matches, m => Assert.Equal(MatchStatus.Finished, m.Status));
+
+        var standings = await client.GetFromJsonAsync<StandingsDetail>(
+            $"/api/tournaments/{tournamentId}/phases/{phase.Id}/standings", Json);
+
+        Assert.Equal(16, standings!.Places.Count);
+        Assert.Equal(1, standings.Places[0].Rank);
+
+        // Der Sieger hat vier Runden gewonnen und keine verloren.
+        Assert.Equal(4, standings.Places[0].Won);
+        Assert.Equal(0, standings.Places[0].Lost);
+    }
+
+    [Fact]
+    public async Task Aufgabe_und_Nichtantreten_laufen_ueber_dieselbe_Kette()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var firstRound = phase.Matches.Where(m => m.Round == 1).OrderBy(m => m.Position).ToList();
+
+        var retirement = await client.PutAsJsonAsync(
+            $"/api/matches/{firstRound[0].Id}/result",
+            new RecordResultRequest(
+                MatchOutcome.Retirement,
+                Sets: [new SetScore(6, 4)],
+                AbandonedSet: new SetScore(2, 1),
+                AffectedSide: 2),
+            Json);
+        Assert.Equal(HttpStatusCode.NoContent, retirement.StatusCode);
+
+        var walkover = await client.PutAsJsonAsync(
+            $"/api/matches/{firstRound[1].Id}/result",
+            new RecordResultRequest(MatchOutcome.Walkover, AffectedSide: 1),
+            Json);
+        Assert.Equal(HttpStatusCode.NoContent, walkover.StatusCode);
+
+        var updated = Assert.Single(await PhasesAsync(client, tournamentId));
+        var final = FinalOf(updated);
+
+        Assert.Equal(MatchStatus.Ready, final.Status);
+        Assert.Equal(firstRound[0].Side1.EntryId, final.Side1.EntryId);
+        Assert.Equal(firstRound[1].Side2.EntryId, final.Side2.EntryId);
+    }
+
+    [Fact]
+    public async Task Eine_Ergebniskorrektur_scheitert_am_gespielten_Folgematch()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+        await PlayOutAsync(client, tournamentId);
+
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var firstRound = phase.Matches.First(m => m.Round == 1);
+
+        var response = await client.DeleteAsync($"/api/matches/{firstRound.Id}/result");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Eine_Korrektur_von_hinten_nach_vorn_ist_moeglich()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+        await PlayOutAsync(client, tournamentId);
+
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var final = FinalOf(phase);
+        var thirdPlace = ThirdPlaceOf(phase);
+        var firstRound = phase.Matches.Where(m => m.Round == 1).OrderBy(m => m.Position).First();
+
+        // Von hinten nach vorn: erst Finale und Spiel um Platz 3, dann das
+        // Halbfinale, aus dem beide ihre Teilnehmer beziehen.
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/matches/{final.Id}/result")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.DeleteAsync($"/api/matches/{thirdPlace.Id}/result")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.DeleteAsync($"/api/matches/{firstRound.Id}/result")).StatusCode);
+
+        var updated = Assert.Single(await PhasesAsync(client, tournamentId));
+        Assert.Null(updated.Matches.Single(m => m.Id == firstRound.Id).Score);
+        Assert.Null(FinalOf(updated).Side1.EntryId);
+    }
+
+    [Fact]
+    public async Task Das_Zuruecknehmen_der_Auslosung_verwirft_auch_den_Baum()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+        Assert.NotEmpty(await PhasesAsync(client, tournamentId));
+
+        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/reopen", null);
+
+        Assert.Empty(await PhasesAsync(client, tournamentId));
+    }
+
+    [Fact]
+    public async Task Ein_Match_laesst_sich_einem_Platz_zuweisen()
+    {
+        var (client, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var match = phase.Matches.First(m => m.Round == 1);
+
+        var courts = await client.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+        var courtId = courts!.Single().Id;
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/matches/{match.Id}/court",
+            new AssignCourtRequest(
+                courtId,
+                SequenceOnCourt: 1,
+                PlannedStart: null,
+                EarliestStart: new DateTimeOffset(2026, 5, 16, 9, 0, 0, TimeSpan.FromHours(2)),
+                EstimatedDuration: TimeSpan.FromMinutes(90)),
+            Json);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<AssignCourtResult>(Json);
+        Assert.NotNull(result);
+
+        var updated = Assert.Single(await PhasesAsync(client, tournamentId));
+        var assignment = updated.Matches.First(m => m.Id == match.Id).Assignment;
+
+        Assert.NotNull(assignment);
+        Assert.Equal("Platz 1", assignment.CourtName);
+        Assert.Equal(1, assignment.SequenceOnCourt);
+    }
+
+    [Fact]
+    public async Task Eine_zweite_Zuweisung_ersetzt_die_erste()
+    {
+        var (client, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var match = phase.Matches.First(m => m.Round == 1);
+
+        var courts = await client.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+        var courtId = courts!.Single().Id;
+
+        async Task AssignAsync(int sequence) =>
+            await client.PostAsJsonAsync(
+                $"/api/matches/{match.Id}/court",
+                new AssignCourtRequest(courtId, sequence, null, null, null),
+                Json);
+
+        await AssignAsync(1);
+        await AssignAsync(3);
+
+        var updated = Assert.Single(await PhasesAsync(client, tournamentId));
+
+        Assert.Equal(3, updated.Matches.First(m => m.Id == match.Id).Assignment!.SequenceOnCourt);
+    }
+
+    [Fact]
+    public async Task Ein_Schiedsrichter_darf_Ergebnisse_eintragen_aber_keine_Plaetze_vergeben()
+    {
+        var (admin, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(admin, tournamentId));
+        var match = phase.Matches.First(m => m.Round == 1);
+
+        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+
+        var referee = $"referee-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(referee, Role.Referee, ResourceScope.Tournament(tournamentId));
+        var client = _factory.CreateClientAs(referee);
+
+        var result = await client.PutAsJsonAsync(
+            $"/api/matches/{match.Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 2)]),
+            Json);
+        Assert.Equal(HttpStatusCode.NoContent, result.StatusCode);
+
+        var assignment = await client.PostAsJsonAsync(
+            $"/api/matches/{match.Id}/court",
+            new AssignCourtRequest(courts!.Single().Id, 1, null, null, null),
+            Json);
+        Assert.Equal(HttpStatusCode.NotFound, assignment.StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_unmoegliches_Satzergebnis_wird_abgewiesen()
+    {
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var match = phase.Matches.First(m => m.Round == 1);
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/matches/{match.Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 5), new SetScore(6, 2)]),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>Spielt alle offenen Matches aus; Seite 1 gewinnt jeweils.</summary>
+    private static async Task PlayOutAsync(HttpClient client, Guid tournamentId)
+    {
+        for (var guard = 0; guard < 64; guard++)
+        {
+            var phases = await PhasesAsync(client, tournamentId);
+            var next = phases
+                .SelectMany(p => p.Matches)
+                .FirstOrDefault(m => m.Status == MatchStatus.Ready);
+
+            if (next is null)
+            {
+                return;
+            }
+
+            var response = await client.PutAsJsonAsync(
+                $"/api/matches/{next.Id}/result",
+                new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 2)]),
+                Json);
+
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+
+        Assert.Fail("Das Turnier ließ sich nicht zu Ende spielen.");
+    }
+}

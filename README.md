@@ -86,3 +86,26 @@ frei bearbeitbar.
 
 Beim Auslosen wird die Definition in das Turnier kopiert und eingefroren. Wer die
 Vorlage danach nachschärft, verändert damit kein laufendes Turnier.
+
+## Der Turnierbaum
+
+Beim Auslosen entsteht der vollständige Baum — auch die späteren Runden, deren
+Teilnehmer noch niemand kennt. Möglich macht das ein Summentyp: eine Seite eines
+Matches ist entweder eine Meldung, „Sieger aus Match X", „Verlierer aus Match X",
+„Zweiter der Gruppe B", ein Freilos oder schlicht offen.
+
+Daraus folgt zweierlei. Die öffentliche Ansicht kann das Bracket zeigen, bevor
+ein Ball gespielt ist. Und der Übergang von der Gruppenphase in die Endrunde ist
+derselbe Mechanismus wie der vom Viertel- ins Halbfinale: eine Referenz wird
+aufgelöst, sobald ihr Vorgänger entschieden ist.
+
+Ein Ergebnis wird deshalb nicht nur eingetragen, sondern weitergereicht. Eine
+Korrektur geht denselben Weg zurück — allerdings nur, solange das Folgematch
+noch nicht gespielt ist. Sonst stünde in der nächsten Runde jemand, der laut
+korrigiertem Ergebnis nie hätte antreten dürfen; diese Kette muss von hinten
+aufgerollt werden.
+
+Ergebnistypen gibt es von Anfang an fünf: reguläres Ende, Aufgabe, Nichtantreten,
+Disqualifikation und Freilos. Bei einer Aufgabe wird der abgebrochene Satz
+getrennt von den gespielten geführt — seine Spiele zählen für das
+Spielverhältnis, der Satz selbst für niemanden.

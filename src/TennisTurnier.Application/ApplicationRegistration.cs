@@ -13,7 +13,9 @@ public static class ApplicationRegistration
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IClubService, ClubService>();
+        services.AddScoped<DrawBuilder>();
         services.AddScoped<ITournamentService, TournamentService>();
+        services.AddScoped<IMatchService, MatchService>();
         services.AddScoped<IPlayerService, PlayerService>();
         services.AddScoped<IFormatTemplateService, FormatTemplateService>();
 

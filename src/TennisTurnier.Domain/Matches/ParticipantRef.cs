@@ -1,3 +1,4 @@
+using System.Globalization;
 using TennisTurnier.Domain.Common;
 
 namespace TennisTurnier.Domain.Matches;
@@ -115,4 +116,54 @@ public abstract record ParticipantRef
     public static ParticipantRef ByeSlot { get; } = new Bye();
 
     public static ParticipantRef Open { get; } = new Unassigned();
+
+    /// <summary>
+    /// Kompakte Textdarstellung für die Ablage.
+    ///
+    /// Sie steht hier und nicht im Persistenzadapter, weil sie zusammen mit
+    /// <see cref="Parse"/> ein Paar bildet: eine Kodierung, deren beide Hälften
+    /// auseinanderlaufen können, ist der sichere Weg zu unlesbaren Altdaten.
+    /// Der Domänenkern bleibt dabei frei von Infrastruktur — es ist reine
+    /// Zeichenkettenarbeit.
+    /// </summary>
+    public string Encode() => this switch
+    {
+        Entry entry => $"E:{entry.EntryId:D}",
+        WinnerOf winner => $"W:{winner.MatchId:D}",
+        LoserOf loser => $"L:{loser.MatchId:D}",
+        GroupPosition position => $"G:{position.PhaseId:D}:{position.Rank}:{position.Group}",
+        Bye => "BYE",
+        _ => "OPEN",
+    };
+
+    public static ParticipantRef Parse(string encoded)
+    {
+        if (string.IsNullOrWhiteSpace(encoded))
+        {
+            throw new DomainException("Eine leere Teilnehmerreferenz lässt sich nicht lesen.");
+        }
+
+        if (encoded == "BYE")
+        {
+            return ByeSlot;
+        }
+
+        if (encoded == "OPEN")
+        {
+            return Open;
+        }
+
+        // Die Gruppe darf Doppelpunkte enthalten und steht deshalb zuletzt.
+        var parts = encoded.Split(':', 4);
+
+        return parts switch
+        {
+            ["E", var id] => Of(Guid.Parse(id)),
+            ["W", var id] => FromWinnerOf(Guid.Parse(id)),
+            ["L", var id] => FromLoserOf(Guid.Parse(id)),
+            ["G", var phaseId, var rank, var group] =>
+                FromGroupPosition(Guid.Parse(phaseId), group, int.Parse(rank, CultureInfo.InvariantCulture)),
+            _ => throw new DomainException($"Unlesbare Teilnehmerreferenz „{encoded}“."),
+        };
+    }
 }

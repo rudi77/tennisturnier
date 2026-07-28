@@ -16,6 +16,7 @@ public sealed class TournamentServiceTests
     private readonly InMemoryTournamentRepository _tournaments;
     private readonly InMemoryFormatTemplateRepository _templates = new();
     private readonly InMemoryPlayerRepository _players = new();
+    private readonly InMemoryPhaseRepository _phaseRepository = new();
     private readonly CountingUnitOfWork _unitOfWork = new();
     private readonly TournamentService _service;
     private readonly FormatTemplate _template;
@@ -23,7 +24,13 @@ public sealed class TournamentServiceTests
     public TournamentServiceTests()
     {
         _tournaments = new InMemoryTournamentRepository(_userContext);
-        _service = new TournamentService(_tournaments, _templates, _players, _unitOfWork, _userContext);
+        _service = new TournamentService(
+            _tournaments,
+            _templates,
+            _players,
+            new DrawBuilder(_phaseRepository, _players),
+            _unitOfWork,
+            _userContext);
         _template = _templates.Seed(new FormatTemplate(Guid.NewGuid(), ClubId, BuiltInFormats.Knockout));
 
         ActAsClubAdmin();
@@ -162,7 +169,12 @@ public sealed class TournamentServiceTests
         await _service.CloseRegistrationAsync(id);
 
         var withoutTemplate = new TournamentService(
-            _tournaments, new InMemoryFormatTemplateRepository(), _players, _unitOfWork, _userContext);
+            _tournaments,
+            new InMemoryFormatTemplateRepository(),
+            _players,
+            new DrawBuilder(_phaseRepository, _players),
+            _unitOfWork,
+            _userContext);
 
         await Assert.ThrowsAsync<NotFoundException>(() => withoutTemplate.GenerateDrawAsync(id));
     }

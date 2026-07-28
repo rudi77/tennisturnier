@@ -3,7 +3,10 @@ using TennisTurnier.Adapters.Persistence.Sqlite.Configuration;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
+using TennisTurnier.Domain.Matches;
+using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Players;
+using TennisTurnier.Domain.Scheduling;
 using TennisTurnier.Domain.Tournaments;
 using TennisTurnier.Domain.Security;
 
@@ -28,6 +31,12 @@ public sealed class TennisTurnierDbContext : DbContext
     public DbSet<Participant> Participants => Set<Participant>();
 
     public DbSet<Player> Players => Set<Player>();
+
+    public DbSet<Phase> Phases => Set<Phase>();
+
+    public DbSet<Match> Matches => Set<Match>();
+
+    public DbSet<CourtAssignment> CourtAssignments => Set<CourtAssignment>();
 
     public DbSet<FormatTemplate> FormatTemplates => Set<FormatTemplate>();
 
@@ -109,6 +118,18 @@ public sealed class TennisTurnierDbContext : DbContext
                 SeesAllClubs
                 || template.ClubId == null
                 || VisibleClubIds.Contains(template.ClubId.Value));
+
+        // Phasen, Matches und Platzzuweisungen hängen am Turnier und erben
+        // dessen Sichtbarkeit — beide Wege, über den Verein und über eine
+        // turniergebundene Rolle.
+        modelBuilder.Entity<Phase>()
+            .HasQueryFilter(phase => SeesAllClubs || Tournaments.Any(t => t.Id == phase.TournamentId));
+
+        modelBuilder.Entity<Match>()
+            .HasQueryFilter(match => SeesAllClubs || Tournaments.Any(t => t.Id == match.TournamentId));
+
+        modelBuilder.Entity<CourtAssignment>()
+            .HasQueryFilter(a => SeesAllClubs || Tournaments.Any(t => t.Id == a.TournamentId));
 
         // Spieler und Teilnehmer tragen bewusst keine ClubId (ADR-0008) und
         // können daher nicht gefiltert werden. Ihr Schutz entsteht dort, wo

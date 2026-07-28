@@ -10,6 +10,7 @@ public sealed class TournamentService : ITournamentService
     private readonly ITournamentRepository _tournaments;
     private readonly IFormatTemplateRepository _templates;
     private readonly IPlayerRepository _players;
+    private readonly DrawBuilder _drawBuilder;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
 
@@ -17,12 +18,14 @@ public sealed class TournamentService : ITournamentService
         ITournamentRepository tournaments,
         IFormatTemplateRepository templates,
         IPlayerRepository players,
+        DrawBuilder drawBuilder,
         IUnitOfWork unitOfWork,
         IUserContext userContext)
     {
         _tournaments = tournaments;
         _templates = templates;
         _players = players;
+        _drawBuilder = drawBuilder;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
     }
@@ -112,11 +115,27 @@ public sealed class TournamentService : ITournamentService
             ?? throw new NotFoundException("Formatvorlage", tournament.FormatTemplateId);
 
         tournament.GenerateDraw(template.Definition, template.Version);
+        await _drawBuilder.BuildAsync(tournament, cancellationToken);
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    public Task ReopenRegistrationAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
-        MutateAsync(tournamentId, t => t.ReopenRegistration(), cancellationToken);
+    /// <summary>
+    /// Nimmt die Auslosung zurück und verwirft den Draw.
+    ///
+    /// Beides gehört zusammen: bliebe der Baum stehen, stünden nach einer
+    /// Nachmeldung Matches im System, die zu einem Teilnehmerfeld gehören, das
+    /// es so nicht mehr gibt.
+    /// </summary>
+    public async Task ReopenRegistrationAsync(Guid tournamentId, CancellationToken cancellationToken = default)
+    {
+        var tournament = await LoadForManagement(tournamentId, cancellationToken);
+
+        tournament.ReopenRegistration();
+        await _drawBuilder.DiscardAsync(tournamentId, cancellationToken);
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
 
     public Task StartAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
         MutateAsync(tournamentId, t => t.Start(), cancellationToken);

@@ -1,5 +1,6 @@
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Domain.Formats;
+using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.Tournaments;
 
@@ -123,6 +124,32 @@ public sealed class InMemoryPlayerRepository : IPlayerRepository
     public void Add(Player player) => _players[player.Id] = player;
 
     public void Add(Participant participant) => _participants[participant.Id] = participant;
+}
+
+public sealed class InMemoryPhaseRepository : IPhaseRepository
+{
+    private readonly List<Phase> _phases = [];
+
+    public IReadOnlyList<Phase> All => _phases;
+
+    public Task<IReadOnlyList<Phase>> ListByTournamentAsync(
+        Guid tournamentId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Phase>>(
+            _phases.Where(p => p.TournamentId == tournamentId).OrderBy(p => p.Ordinal).ToList());
+
+    public Task<Phase?> FindByMatchAsync(Guid matchId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_phases.FirstOrDefault(p => p.Matches.Any(m => m.Id == matchId)));
+
+    public void Add(Phase phase) => _phases.Add(phase);
+
+    public void RemoveRange(IEnumerable<Phase> phases)
+    {
+        foreach (var phase in phases.ToList())
+        {
+            _phases.Remove(phase);
+        }
+    }
 }
 
 public sealed class CountingUnitOfWork : IUnitOfWork

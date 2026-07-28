@@ -39,6 +39,7 @@ app.UseUserResolution();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("Health");
 app.MapClubEndpoints();
 app.MapTournamentEndpoints();
+app.MapMatchEndpoints();
 
 // Für eine Vereinsanwendung mit einer SQLite-Datei ist das Wandern des Schemas
 // beim Start bequem. Es ist aber ein Nebeneffekt des Startens, und sobald zwei
