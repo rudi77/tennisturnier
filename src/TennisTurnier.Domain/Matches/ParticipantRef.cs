@@ -40,7 +40,13 @@ public abstract record ParticipantRef
     /// <summary>Wird zu dem, der die genannte Position in einer Gruppe belegt.</summary>
     public sealed record GroupPosition(Guid PhaseId, string Group, int Rank) : ParticipantRef
     {
-        public override string ToString() => $"{Group}{Rank}";
+        public override string ToString() => Rank switch
+        {
+            1 => $"Erster der {Group}",
+            2 => $"Zweiter der {Group}",
+            3 => $"Dritter der {Group}",
+            _ => $"{Rank}. der {Group}",
+        };
     }
 
     /// <summary>

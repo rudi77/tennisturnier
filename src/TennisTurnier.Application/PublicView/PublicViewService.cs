@@ -4,6 +4,7 @@ using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.PublicView;
+using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Security;
 using TennisTurnier.Domain.Tournaments;
 
@@ -24,6 +25,12 @@ public interface IPublicViewService
     /// <summary>
     /// Baut die Ansicht neu und gibt zurück, ob sich inhaltlich etwas geändert
     /// hat. Nur dann lohnt ein Push.
+    ///
+    /// Speichert ausdrücklich nicht: die neue Ansicht gehört in dieselbe Einheit
+    /// der Arbeit wie die Änderung, aus der sie folgt. Ein zweites Speichern
+    /// hinterher läse einen Stand, den parallele Anfragen inzwischen überholt
+    /// haben, schriebe ihn als letzter fest — und meldete dem Aufrufer obendrein
+    /// einen Konflikt für etwas, das längst gespeichert ist.
     ///
     /// Ohne Rechteprüfung: die Anwendungsfälle rufen das im Anschluss an eine
     /// bereits geprüfte Handlung, und ein Schiedsrichter darf ein Ergebnis
@@ -64,6 +71,7 @@ public sealed class PublicViewService : IPublicViewService
     private readonly IPlayerRepository _players;
     private readonly ITournamentProjectionStore _projections;
     private readonly ITournamentNotifier _notifier;
+    private readonly IPostCommitQueue _postCommit;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
     private readonly IClock _clock;
@@ -76,6 +84,7 @@ public sealed class PublicViewService : IPublicViewService
         IPlayerRepository players,
         ITournamentProjectionStore projections,
         ITournamentNotifier notifier,
+        IPostCommitQueue postCommit,
         IUnitOfWork unitOfWork,
         IUserContext userContext,
         IClock clock)
@@ -87,6 +96,7 @@ public sealed class PublicViewService : IPublicViewService
         _players = players;
         _projections = projections;
         _notifier = notifier;
+        _postCommit = postCommit;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
         _clock = clock;
@@ -106,6 +116,8 @@ public sealed class PublicViewService : IPublicViewService
 
     public async Task RebuildOnDemandAsync(Guid tournamentId, CancellationToken cancellationToken = default)
     {
+        // Der einzige Aufruf ohne umgebenden Anwendungsfall — er speichert daher
+        // selbst.
         // Erst laden, dann prüfen: ein Turnier außerhalb des Scopes soll als 404
         // enden und nicht als 403 (ADR-0004).
         var tournament = await _tournaments.FindAsync(tournamentId, cancellationToken)
@@ -116,7 +128,10 @@ public sealed class PublicViewService : IPublicViewService
             ResourceScope.Tournament(tournament.Id),
             ResourceScope.Club(tournament.ClubId));
 
-        await RebuildAsync(tournamentId, cancellationToken);
+        if (await RebuildAsync(tournamentId, cancellationToken))
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
     }
 
     public async Task<bool> RebuildAsync(Guid tournamentId, CancellationToken cancellationToken = default)
@@ -138,8 +153,7 @@ public sealed class PublicViewService : IPublicViewService
             }
 
             _projections.Remove(existing);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-            await _notifier.ProjectionChangedAsync(tournamentId, etag: string.Empty, cancellationToken);
+            Announce(tournamentId, etag: string.Empty);
 
             return true;
         }
@@ -157,11 +171,18 @@ public sealed class PublicViewService : IPublicViewService
             return false;
         }
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _notifier.ProjectionChangedAsync(tournamentId, projection.ETag, cancellationToken);
+        Announce(tournamentId, projection.ETag);
 
         return true;
     }
+
+    /// <summary>
+    /// Meldet den neuen Stand — aber erst, wenn gespeichert ist. Ginge der Push
+    /// vorher hinaus, holten sich alle Zuschauer einen Stand, den es nach einem
+    /// Rollback nie gegeben hat.
+    /// </summary>
+    private void Announce(Guid tournamentId, string etag) =>
+        _postCommit.Enqueue(ct => _notifier.ProjectionChangedAsync(tournamentId, etag, ct));
 
     private async Task<PublicTournamentView> BuildAsync(
         Tournament tournament,
@@ -177,20 +198,14 @@ public sealed class PublicViewService : IPublicViewService
         var definition = tournament.Format!.Definition;
         var standings = new Dictionary<Guid, Standings>();
 
-        var entries = tournament.AcceptedEntries
-            .Select(e => new SeededEntry(e.Id, e.Seed, names.GetValueOrDefault(e.Id, "(unbekannt)")))
-            .ToList();
-
         foreach (var phase in phases)
         {
-            var phaseDefinition = definition.Phases.FirstOrDefault(p => p.Ordinal == phase.Ordinal);
-            if (phaseDefinition is null)
+            if (PhaseOrchestrator.DefinitionOf(definition, phase) is not { } phaseDefinition)
             {
                 continue;
             }
 
-            var state = new PhaseState(
-                phase.Id, phaseDefinition, definition.MatchFormatOf(phaseDefinition), entries, phase.Matches);
+            var state = PhaseOrchestrator.StateOf(tournament, definition, phaseDefinition, phase, names);
 
             standings[phase.Id] = PhaseFormats.For(phase.Format).ComputeStandings(state);
         }

@@ -19,13 +19,42 @@ public sealed class TournamentHub : Hub
 {
     public const string ProjectionChanged = "projectionChanged";
 
+    /// <summary>
+    /// Obergrenze der Abonnements je Verbindung.
+    ///
+    /// Der Endpunkt ist ohne Anmeldung erreichbar; ohne Grenze könnte eine
+    /// einzige Verbindung beliebig viele Gruppen anlegen. Ein Zuschauer sieht
+    /// ein Turnier, ein Aushang im Vereinsheim vielleicht ein paar — deutlich
+    /// mehr braucht niemand.
+    /// </summary>
+    private const int MaxSubscriptions = 16;
+
     public static string GroupOf(Guid tournamentId) => $"tournament:{tournamentId}";
 
-    public Task Subscribe(Guid tournamentId) =>
-        Groups.AddToGroupAsync(Context.ConnectionId, GroupOf(tournamentId));
+    private HashSet<Guid> Subscriptions =>
+        Context.Items.TryGetValue(nameof(Subscriptions), out var existing) && existing is HashSet<Guid> set
+            ? set
+            : (HashSet<Guid>)(Context.Items[nameof(Subscriptions)] = new HashSet<Guid>());
 
-    public Task Unsubscribe(Guid tournamentId) =>
-        Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupOf(tournamentId));
+    public async Task Subscribe(Guid tournamentId)
+    {
+        var subscriptions = Subscriptions;
+
+        if (!subscriptions.Contains(tournamentId) && subscriptions.Count >= MaxSubscriptions)
+        {
+            throw new HubException(
+                $"Eine Verbindung kann höchstens {MaxSubscriptions} Turniere gleichzeitig verfolgen.");
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, GroupOf(tournamentId));
+        subscriptions.Add(tournamentId);
+    }
+
+    public async Task Unsubscribe(Guid tournamentId)
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupOf(tournamentId));
+        Subscriptions.Remove(tournamentId);
+    }
 }
 
 /// <summary>

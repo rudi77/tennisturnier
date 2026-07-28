@@ -121,8 +121,12 @@ public sealed class TournamentService : ITournamentService
         tournament.GenerateDraw(template.Definition, template.Version);
         await _drawBuilder.BuildAsync(tournament, cancellationToken);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        // Zwischenspeichern, damit die eben angelegten Phasen für den Aufbau der
+        // öffentlichen Ansicht abfragbar sind. Endgültig wird beides erst mit
+        // dem Abschluss der Einheit — und zwar gemeinsam.
+        await _unitOfWork.FlushAsync(cancellationToken);
         await _publicView.RebuildAsync(tournamentId, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>
@@ -139,8 +143,9 @@ public sealed class TournamentService : ITournamentService
         tournament.ReopenRegistration();
         await _drawBuilder.DiscardAsync(tournamentId, cancellationToken);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.FlushAsync(cancellationToken);
         await _publicView.RebuildAsync(tournamentId, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     public Task StartAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
@@ -171,8 +176,8 @@ public sealed class TournamentService : ITournamentService
             ?? throw new NotFoundException("Teilnehmer", request.ParticipantId);
 
         var entry = tournament.Enter(Guid.NewGuid(), request.ParticipantId, request.Seed);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
         await _publicView.RebuildAsync(tournamentId, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return entry.Id;
     }
@@ -212,13 +217,13 @@ public sealed class TournamentService : ITournamentService
     {
         var tournament = await LoadForManagement(tournamentId, cancellationToken);
         change(tournament);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
         // Jede Änderung am Turnier kann die öffentliche Ansicht betreffen — der
         // Name, die Termine, der Zustand, eine Setzposition. Statt zu erraten,
         // welche es tut, wird immer neu gebaut; ob dabei etwas herauskommt,
-        // entscheidet der Vergleich in der Projektion (ADR-0003).
+        // entscheidet der Vergleich in der Projektion (ADR-0003). Beides geht in
+        // einem Zug in die Datenbank, sonst können sie auseinanderlaufen.
         await _publicView.RebuildAsync(tournamentId, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<Tournament> Load(Guid tournamentId, CancellationToken cancellationToken) =>

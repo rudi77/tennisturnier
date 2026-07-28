@@ -66,4 +66,7 @@ public sealed class RecordingUnitOfWork : IUnitOfWork
         _clubs.RecordSave();
         return Task.CompletedTask;
     }
+
+    /// <summary>In der Attrappe sind Änderungen ohnehin sofort sichtbar.</summary>
+    public Task FlushAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

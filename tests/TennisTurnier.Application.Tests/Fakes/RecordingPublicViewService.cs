@@ -14,6 +14,19 @@ public sealed class RecordingPublicViewService : IPublicViewService
 
     public IReadOnlyList<Guid> Rebuilt => _rebuilt;
 
+    /// <summary>
+    /// Wie viele Speichervorgänge es gab, als zuletzt neu gebaut wurde.
+    ///
+    /// Damit lässt sich festhalten, dass der Neuaufbau <em>vor</em> dem
+    /// Speichern läuft und beides in einem Zug in die Datenbank geht. Liefe er
+    /// danach, läse er einen Stand, den parallele Anfragen inzwischen überholt
+    /// haben — und schriebe ihn als letzter fest (ADR-0003).
+    /// </summary>
+    public int SavesBeforeLastRebuild { get; private set; } = -1;
+
+    /// <summary>Wird von der Attrappe der Einheit der Arbeit gesetzt.</summary>
+    public Func<int>? SaveCount { get; set; }
+
     public Task<PublicTournamentSnapshot?> GetAsync(
         Guid tournamentId,
         CancellationToken cancellationToken = default) =>
@@ -22,6 +35,8 @@ public sealed class RecordingPublicViewService : IPublicViewService
     public Task<bool> RebuildAsync(Guid tournamentId, CancellationToken cancellationToken = default)
     {
         _rebuilt.Add(tournamentId);
+        SavesBeforeLastRebuild = SaveCount?.Invoke() ?? -1;
+
         return Task.FromResult(true);
     }
 

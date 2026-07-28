@@ -161,4 +161,7 @@ public sealed class CountingUnitOfWork : IUnitOfWork
         SavedChanges++;
         return Task.CompletedTask;
     }
+
+    /// <summary>In der Attrappe sind Änderungen ohnehin sofort sichtbar.</summary>
+    public Task FlushAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

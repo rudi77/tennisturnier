@@ -25,12 +25,12 @@ public sealed class DrawBuilder
     }
 
     /// <summary>
-    /// Legt die Phasen des Turniers an und erzeugt die Paarungen, die sich schon
-    /// bestimmen lassen.
+    /// Legt die Phasen des Turniers an und erzeugt ihre Paarungen.
     ///
-    /// Nur die erste Phase bekommt Paarungen: alle weiteren beziehen ihre
-    /// Teilnehmer aus einer Vorphase und werden erst gefüllt, wenn diese
-    /// abgeschlossen ist (ADR-0001).
+    /// Auch die der Folgephasen: deren Startplätze sind zunächst Gruppenplätze —
+    /// „Erster der Gruppe A" —, und genau daraus entsteht das Bracket der
+    /// Endrunde, während die Gruppen noch laufen. Aufgelöst werden sie später
+    /// mit demselben Mechanismus wie „Sieger aus Halbfinale 1" (ADR-0001).
     /// </summary>
     public async Task<IReadOnlyList<Phase>> BuildAsync(
         Tournament tournament,
@@ -53,6 +53,7 @@ public sealed class DrawBuilder
 
         var seeded = await SeedEntriesAsync(tournament, cancellationToken);
         var created = new List<Phase>(definition.Phases.Count);
+        var entriesByOrdinal = new Dictionary<int, IReadOnlyList<SeededEntry>>();
 
         foreach (var phaseDefinition in definition.Phases.OrderBy(p => p.Ordinal))
         {
@@ -63,24 +64,53 @@ public sealed class DrawBuilder
                 phaseDefinition.Format,
                 phaseDefinition.Name);
 
-            if (phaseDefinition.Ordinal == 1)
-            {
-                var format = PhaseFormats.For(phaseDefinition.Format);
-                var state = new PhaseState(
-                    phase.Id,
-                    phaseDefinition,
-                    definition.MatchFormatOf(phaseDefinition),
-                    seeded,
-                    phase.Matches);
+            var entries = StartersOf(phaseDefinition, seeded, created, definition, entriesByOrdinal);
+            entriesByOrdinal[phaseDefinition.Ordinal] = entries;
 
-                phase.AddPairings(format.GeneratePairings(state));
-            }
+            var state = new PhaseState(
+                phase.Id,
+                phaseDefinition,
+                definition.MatchFormatOf(phaseDefinition),
+                entries,
+                phase.Matches);
+
+            phase.AddPairings(PhaseFormats.For(phaseDefinition.Format).GeneratePairings(state));
 
             _phases.Add(phase);
             created.Add(phase);
         }
 
         return created;
+    }
+
+    /// <summary>
+    /// Die Startplätze einer Phase: in der ersten die Meldungen, in jeder
+    /// weiteren die Plätze, die aus der genannten Vorphase hervorgehen.
+    /// </summary>
+    private static IReadOnlyList<SeededEntry> StartersOf(
+        PhaseDefinition phaseDefinition,
+        IReadOnlyList<SeededEntry> seeded,
+        IReadOnlyList<Phase> created,
+        FormatDefinition definition,
+        IReadOnlyDictionary<int, IReadOnlyList<SeededEntry>> entriesByOrdinal)
+    {
+        if (phaseDefinition.Qualification is not { } qualification)
+        {
+            return seeded;
+        }
+
+        var source = created.FirstOrDefault(p => p.Ordinal == qualification.FromPhase)
+            ?? throw new DomainException(
+                $"Phase {phaseDefinition.Ordinal} bezieht ihre Teilnehmer aus Phase " +
+                $"{qualification.FromPhase}, die es nicht gibt.");
+
+        var sourceDefinition = definition.Phases.First(p => p.Ordinal == qualification.FromPhase);
+
+        return Qualifier.Slots(
+            qualification,
+            source.Id,
+            sourceDefinition,
+            entriesByOrdinal[qualification.FromPhase]);
     }
 
     /// <summary>

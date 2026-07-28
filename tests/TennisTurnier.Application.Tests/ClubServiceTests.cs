@@ -10,12 +10,16 @@ public sealed class ClubServiceTests
 {
     private readonly MutableUserContext _userContext = new();
     private readonly InMemoryClubRepository _clubs;
+    private readonly InMemoryTournamentRepository _tournaments;
+    private readonly RecordingPublicViewService _publicView = new();
     private readonly ClubService _service;
 
     public ClubServiceTests()
     {
         _clubs = new InMemoryClubRepository(_userContext);
-        _service = new ClubService(_clubs, new RecordingUnitOfWork(_clubs), _userContext);
+        _tournaments = new InMemoryTournamentRepository(_userContext);
+        _service = new ClubService(
+            _clubs, _tournaments, _publicView, new RecordingUnitOfWork(_clubs), _userContext);
     }
 
     private static readonly Guid UserId = Guid.NewGuid();

@@ -152,6 +152,50 @@ public sealed class Phase : Entity
     }
 
     /// <summary>
+    /// Setzt die Teilnehmer ein, die sich aus einer Vorphase qualifiziert haben.
+    ///
+    /// Derselbe Mechanismus wie beim Übergang vom Viertel- ins Halbfinale, nur
+    /// über eine Phasengrenze hinweg: eine Referenz wird aufgelöst, sobald ihr
+    /// Vorgänger feststeht (ADR-0001). Die Zuordnung kommt von außen, weil eine
+    /// Phase die Tabelle einer anderen nicht kennt.
+    ///
+    /// Gibt zurück, ob sich etwas geändert hat.
+    /// </summary>
+    public bool ResolveGroupPositions(
+        Guid sourcePhaseId,
+        IReadOnlyDictionary<(string Group, int Rank), Guid> qualified)
+    {
+        ArgumentNullException.ThrowIfNull(qualified);
+
+        var changed = false;
+
+        foreach (var match in _matches.Where(m => m.Score is null))
+        {
+            changed |= ResolveGroupPosition(match, 1, sourcePhaseId, qualified);
+            changed |= ResolveGroupPosition(match, 2, sourcePhaseId, qualified);
+        }
+
+        if (changed)
+        {
+            // Ein aufgelöster Gruppenplatz kann eine Kette auslösen: steht damit
+            // ein Freilos-Match fest, ist auch die nächste Runde entschieden.
+            ResolveDecided();
+        }
+
+        return changed;
+    }
+
+    private static bool ResolveGroupPosition(
+        Match match,
+        int side,
+        Guid sourcePhaseId,
+        IReadOnlyDictionary<(string Group, int Rank), Guid> qualified) =>
+        match.Side(side).Origin is ParticipantRef.GroupPosition position
+        && position.PhaseId == sourcePhaseId
+        && qualified.TryGetValue((position.Group, position.Rank), out var entryId)
+        && match.Resolve(side, entryId);
+
+    /// <summary>
     /// Löst alle Referenzen auf, deren Vorgänger entschieden ist.
     ///
     /// Läuft in einer Schleife, weil ein Freilos eine Kette auslösen kann: die

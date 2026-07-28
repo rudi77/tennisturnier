@@ -1,5 +1,6 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.PublicView;
 using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Security;
@@ -9,12 +10,21 @@ namespace TennisTurnier.Application.Clubs;
 public sealed class ClubService : IClubService
 {
     private readonly IClubRepository _clubs;
+    private readonly ITournamentRepository _tournaments;
+    private readonly IPublicViewService _publicView;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
 
-    public ClubService(IClubRepository clubs, IUnitOfWork unitOfWork, IUserContext userContext)
+    public ClubService(
+        IClubRepository clubs,
+        ITournamentRepository tournaments,
+        IPublicViewService publicView,
+        IUnitOfWork unitOfWork,
+        IUserContext userContext)
     {
         _clubs = clubs;
+        _tournaments = tournaments;
+        _publicView = publicView;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
     }
@@ -65,6 +75,7 @@ public sealed class ClubService : IClubService
         club.MoveTo(request.TimeZoneId);
         club.SetCity(request.City);
 
+        await RebuildPublicViewsAsync(clubId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -103,7 +114,23 @@ public sealed class ClubService : IClubService
             court.Deactivate();
         }
 
+        await RebuildPublicViewsAsync(clubId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Baut die öffentlichen Ansichten aller Turniere des Vereins neu.
+    ///
+    /// Name des Vereins und Namen der Plätze stehen in der Ansicht (ADR-0003).
+    /// Ohne diesen Schritt schickt der Aushang die Zuschauer am Turniertag auf
+    /// einen Platz, der inzwischen anders heißt.
+    /// </summary>
+    private async Task RebuildPublicViewsAsync(Guid clubId, CancellationToken cancellationToken)
+    {
+        foreach (var tournament in await _tournaments.ListByClubAsync(clubId, cancellationToken))
+        {
+            await _publicView.RebuildAsync(tournament.Id, cancellationToken);
+        }
     }
 
     public async Task<Guid> AddAvailabilityAsync(

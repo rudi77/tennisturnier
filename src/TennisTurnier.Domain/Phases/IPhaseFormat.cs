@@ -29,8 +29,36 @@ public sealed record PhaseState(
     IReadOnlyList<SeededEntry> Entries,
     IReadOnlyList<Match> Matches);
 
-/// <summary>Eine Meldung mit ihrer Setzposition, wie sie in eine Phase eingeht.</summary>
-public sealed record SeededEntry(Guid EntryId, int? Seed, string DisplayName);
+/// <summary>
+/// Ein Startplatz einer Phase mit seiner Setzposition.
+///
+/// In der ersten Phase ist das eine Meldung. In jeder weiteren ist es zunächst
+/// nur ein Platz — „Erster der Gruppe A" —, der noch niemandem gehört: das
+/// Bracket der Endrunde steht, bevor die Gruppen ausgespielt sind (ADR-0001).
+/// Deshalb trägt der Startplatz seine Herkunft mit und nicht bloß eine Id.
+/// </summary>
+public sealed record SeededEntry(Guid EntryId, int? Seed, string DisplayName)
+{
+    /// <summary>
+    /// Woher der Platz kommt. Bei einer Meldung ist das die Meldung selbst.
+    /// </summary>
+    public ParticipantRef Origin { get; init; } =
+        EntryId == Guid.Empty ? ParticipantRef.Open : ParticipantRef.Of(EntryId);
+
+    /// <summary>Steht schon fest, wer diesen Platz einnimmt?</summary>
+    public bool IsSettled => EntryId != Guid.Empty;
+
+    /// <summary>
+    /// Ein noch unbesetzter Platz, etwa der Gruppensieger einer laufenden
+    /// Vorphase.
+    /// </summary>
+    public static SeededEntry ForSlot(ParticipantRef origin, int seed, string label)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+
+        return new SeededEntry(Guid.Empty, seed, label) { Origin = origin };
+    }
+}
 
 /// <summary>Ein Platz in der Tabelle einer Phase.</summary>
 public sealed record Standing(

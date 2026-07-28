@@ -25,6 +25,7 @@ public sealed class TournamentServiceTests
     public TournamentServiceTests()
     {
         _tournaments = new InMemoryTournamentRepository(_userContext);
+        _publicView.SaveCount = () => _unitOfWork.SavedChanges;
         _service = new TournamentService(
             _tournaments,
             _templates,
@@ -216,6 +217,23 @@ public sealed class TournamentServiceTests
         await _service.ListAsync(ClubId);
 
         Assert.Equal(before, _publicView.Rebuilt.Count);
+    }
+
+    [Fact]
+    public async Task Die_oeffentliche_Ansicht_entsteht_vor_dem_Speichern()
+    {
+        // Sie gehört in dieselbe Einheit der Arbeit wie die Änderung, aus der sie
+        // folgt. Liefe sie danach als eigener Speichervorgang, läse sie einen
+        // Stand, den parallele Anfragen inzwischen überholt haben, schriebe ihn
+        // als letzter fest — und meldete dem Aufrufer obendrein einen Konflikt
+        // für etwas, das längst gespeichert ist.
+        var id = await CreateWithTwoEntriesAsync();
+
+        var savesBefore = _unitOfWork.SavedChanges;
+        await _service.CloseRegistrationAsync(id);
+
+        Assert.Equal(savesBefore, _publicView.SavesBeforeLastRebuild);
+        Assert.Equal(savesBefore + 1, _unitOfWork.SavedChanges);
     }
 
     [Fact]

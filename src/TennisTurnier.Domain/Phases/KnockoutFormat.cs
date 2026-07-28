@@ -46,8 +46,11 @@ public sealed class KnockoutFormat : IPhaseFormat
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        var byEntry = state.Entries.ToDictionary(e => e.EntryId);
-        var records = state.Entries.ToDictionary(e => e.EntryId, e => new Record(e));
+        // Nur besetzte Plätze — vor dem Ende einer Vorphase sind die Startplätze
+        // dieser Phase bloß Gruppenplätze, hinter denen noch niemand steht.
+        var settled = state.Entries.Where(e => e.IsSettled).ToList();
+        var byEntry = settled.ToDictionary(e => e.EntryId);
+        var records = settled.ToDictionary(e => e.EntryId, e => new Record(e));
 
         // Ein Freilos wird übersprungen: es wurde nicht gespielt und zählt
         // deshalb weder als Match noch als Sieg. Es halb zu zählen — als Sieg,
@@ -121,7 +124,7 @@ public sealed class KnockoutFormat : IPhaseFormat
         {
             var seedNumber = order[slot];
             slots[slot] = seedNumber <= seeded.Count
-                ? ParticipantRef.Of(seeded[seedNumber - 1].EntryId)
+                ? seeded[seedNumber - 1].Origin
                 : ParticipantRef.ByeSlot;
         }
 

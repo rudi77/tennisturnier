@@ -16,6 +16,7 @@ public static class PhaseFormats
         new Dictionary<PhaseFormatKind, IPhaseFormat>
         {
             [PhaseFormatKind.Knockout] = new KnockoutFormat(),
+            [PhaseFormatKind.RoundRobin] = new RoundRobinFormat(),
         };
 
     public static IPhaseFormat For(PhaseFormatKind kind) =>

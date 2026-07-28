@@ -123,7 +123,7 @@ public sealed class MatchService : IMatchService
         RecordResultRequest request,
         CancellationToken cancellationToken = default)
     {
-        var (tournament, phase, match) = await LoadForResultAsync(matchId, cancellationToken);
+        var (tournament, phases, phase, match) = await LoadForResultAsync(matchId, cancellationToken);
 
         RequireResultPermission(tournament);
 
@@ -136,20 +136,37 @@ public sealed class MatchService : IMatchService
             tournament.Start();
         }
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await AdvancePhasesAsync(tournament, phases, cancellationToken);
+
         await _publicView.RebuildAsync(tournament.Id, cancellationToken);
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     public async Task ClearResultAsync(Guid matchId, CancellationToken cancellationToken = default)
     {
-        var (tournament, phase, _) = await LoadForResultAsync(matchId, cancellationToken);
+        var (tournament, phases, phase, _) = await LoadForResultAsync(matchId, cancellationToken);
 
         RequireResultPermission(tournament);
         phase.ClearResult(matchId);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        // Auch nach einer Rücknahme: eine Folgephase, die daraufhin nicht mehr
+        // vollständig besetzt ist, muss ihre offenen Plätze zurückbekommen.
+        await AdvancePhasesAsync(tournament, phases, cancellationToken);
         await _publicView.RebuildAsync(tournament.Id, cancellationToken);
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Reicht abgeschlossene Phasen an die jeweils folgende weiter (ADR-0001).
+    /// </summary>
+    private async Task AdvancePhasesAsync(
+        Tournament tournament,
+        IReadOnlyList<Phase> phases,
+        CancellationToken cancellationToken) =>
+        PhaseOrchestrator.Advance(
+            tournament, phases, await NamesByEntryAsync(tournament, cancellationToken));
 
     public async Task<AssignCourtResult> AssignCourtAsync(
         Guid matchId,
@@ -158,7 +175,7 @@ public sealed class MatchService : IMatchService
     {
         // Das Match wird über die Phase geladen: es muss existieren und zu einem
         // sichtbaren Turnier gehören, bevor ihm ein Platz zugewiesen wird.
-        var (tournament, _, _) = await LoadForResultAsync(matchId, cancellationToken);
+        var (tournament, _, _, _) = await LoadForResultAsync(matchId, cancellationToken);
         RequireManagePermission(tournament);
 
         var club = await _clubs.FindAsync(tournament.ClubId, cancellationToken)
@@ -166,6 +183,15 @@ public sealed class MatchService : IMatchService
 
         var court = club.Courts.FirstOrDefault(c => c.Id == request.CourtId)
             ?? throw new NotFoundException("Platz", request.CourtId);
+
+        // Ein stillgelegter Platz taucht in der öffentlichen Platzliste nicht auf.
+        // Ein Match darauf anzusetzen hieße, es an einen Ort zu schicken, den
+        // niemand angezeigt bekommt.
+        if (!court.IsActive)
+        {
+            throw new DomainException(
+                $"Der Platz „{court.Name}“ ist stillgelegt und lässt sich nicht belegen.");
+        }
 
         var existing = await _assignments.ListByTournamentAsync(tournament.Id, cancellationToken);
 
@@ -191,14 +217,20 @@ public sealed class MatchService : IMatchService
         assignment.Replan(
             court.Id, request.SequenceOnCourt, request.PlannedStart, request.EarliestStart, duration, source);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _publicView.RebuildAsync(tournament.Id, cancellationToken);
-
+        // Erst prüfen, dann speichern: scheitert die Prüfung, sieht der Aufrufer
+        // sonst einen Fehler zu einer Zuweisung, die längst geschrieben und an
+        // die Zuschauer gemeldet ist.
         var violations = await ValidateAsync(
             tournament,
             club,
             existing.Where(a => a.Id != assignment.Id).Append(assignment).ToList(),
             cancellationToken);
+
+        // Zwischenspeichern, damit die neue Zuweisung beim Aufbau der
+        // öffentlichen Ansicht abfragbar ist.
+        await _unitOfWork.FlushAsync(cancellationToken);
+        await _publicView.RebuildAsync(tournament.Id, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new AssignCourtResult(assignment.Id, violations);
     }
@@ -212,8 +244,11 @@ public sealed class MatchService : IMatchService
         RequireManagePermission(tournament);
 
         _assignments.Remove(assignment);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _unitOfWork.FlushAsync(cancellationToken);
         await _publicView.RebuildAsync(tournament.Id, cancellationToken);
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     // --- Ergebnisaufbau ----------------------------------------------------
@@ -316,14 +351,7 @@ public sealed class MatchService : IMatchService
         Tournament tournament,
         CancellationToken cancellationToken)
     {
-        var participantIds = tournament.Entries.Select(e => e.ParticipantId).Distinct().ToList();
-        var participants = await _players.FindParticipantsAsync(participantIds, cancellationToken);
-        var nameByParticipant = participants.ToDictionary(p => p.Id, p => p.DisplayName);
-
-        var nameByEntry = tournament.Entries.ToDictionary(
-            e => e.Id,
-            e => nameByParticipant.GetValueOrDefault(e.ParticipantId, "(unbekannt)"));
-
+        var nameByEntry = await NamesByEntryAsync(tournament, cancellationToken);
         var assignments = await _assignments.ListByTournamentAsync(tournament.Id, cancellationToken);
         var club = await _clubs.FindAsync(tournament.ClubId, cancellationToken);
 
@@ -387,31 +415,49 @@ public sealed class MatchService : IMatchService
         var definition = tournament.Format?.Definition
             ?? throw new DomainException("Das Turnier hat kein eingefrorenes Format.");
 
-        var phaseDefinition = definition.Phases.First(p => p.Ordinal == phase.Ordinal);
+        var phaseDefinition = PhaseOrchestrator.DefinitionOf(definition, phase)
+            ?? throw new DomainException($"Das Format kennt keine Phase {phase.Ordinal}.");
 
-        var participantIds = tournament.Entries.Select(e => e.ParticipantId).Distinct().ToList();
-        var participants = await _players.FindParticipantsAsync(participantIds, cancellationToken);
-        var names = participants.ToDictionary(p => p.Id, p => p.DisplayName);
-
-        var entries = tournament.AcceptedEntries
-            .Select(e => new SeededEntry(e.Id, e.Seed, names.GetValueOrDefault(e.ParticipantId, "(unbekannt)")))
-            .ToList();
-
-        return new PhaseState(
-            phase.Id, phaseDefinition, definition.MatchFormatOf(phaseDefinition), entries, phase.Matches);
+        return PhaseOrchestrator.StateOf(
+            tournament,
+            definition,
+            phaseDefinition,
+            phase,
+            await NamesByEntryAsync(tournament, cancellationToken));
     }
 
-    private async Task<(Tournament Tournament, Phase Phase, Match Match)> LoadForResultAsync(
-        Guid matchId,
+    /// <summary>Der Anzeigename je Meldung.</summary>
+    private async Task<IReadOnlyDictionary<Guid, string>> NamesByEntryAsync(
+        Tournament tournament,
         CancellationToken cancellationToken)
     {
-        var phase = await _phases.FindByMatchAsync(matchId, cancellationToken)
+        var participantIds = tournament.Entries.Select(e => e.ParticipantId).Distinct().ToList();
+        var participants = await _players.FindParticipantsAsync(participantIds, cancellationToken);
+        var byParticipant = participants.ToDictionary(p => p.Id, p => p.DisplayName);
+
+        return tournament.Entries.ToDictionary(
+            entry => entry.Id,
+            entry => byParticipant.GetValueOrDefault(entry.ParticipantId, "(unbekannt)"));
+    }
+
+    /// <summary>
+    /// Lädt das Match samt <em>allen</em> Phasen seines Turniers.
+    ///
+    /// Alle, nicht nur die eigene: ein Ergebnis kann eine Phase abschließen und
+    /// damit die Startplätze der folgenden besetzen. Läge die nicht im selben
+    /// Arbeitsgang vor, bliebe der Übergang bis zum nächsten Ergebnis liegen.
+    /// </summary>
+    private async Task<(Tournament Tournament, IReadOnlyList<Phase> Phases, Phase Phase, Match Match)>
+        LoadForResultAsync(Guid matchId, CancellationToken cancellationToken)
+    {
+        var owner = await _phases.FindByMatchAsync(matchId, cancellationToken)
             ?? throw new NotFoundException("Match", matchId);
 
-        var match = phase.Matches.Single(m => m.Id == matchId);
-        var tournament = await LoadTournament(phase.TournamentId, cancellationToken);
+        var tournament = await LoadTournament(owner.TournamentId, cancellationToken);
+        var phases = await _phases.ListByTournamentAsync(owner.TournamentId, cancellationToken);
+        var phase = phases.FirstOrDefault(p => p.Id == owner.Id) ?? owner;
 
-        return (tournament, phase, match);
+        return (tournament, phases, phase, phase.Matches.Single(m => m.Id == matchId));
     }
 
     private async Task<Tournament> LoadTournament(Guid tournamentId, CancellationToken cancellationToken) =>

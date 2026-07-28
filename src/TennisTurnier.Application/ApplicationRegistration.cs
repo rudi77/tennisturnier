@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using TennisTurnier.Application.Clubs;
+using TennisTurnier.Application.Common;
+using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
 using TennisTurnier.Application.Tournaments;
 
@@ -13,6 +15,7 @@ public static class ApplicationRegistration
     /// </summary>
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
+        services.AddScoped<IPostCommitQueue, PostCommitQueue>();
         services.AddScoped<IClubService, ClubService>();
         services.AddScoped<DrawBuilder>();
         services.AddScoped<ITournamentService, TournamentService>();

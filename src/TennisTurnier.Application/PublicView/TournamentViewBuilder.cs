@@ -173,10 +173,14 @@ public static class TournamentViewBuilder
             .GroupBy(assignment => assignment.CourtId)
             .ToDictionary(group => group.Key, group => group.OrderBy(a => a.SequenceOnCourt).ToList());
 
+        // Auch ein stillgelegter Platz wird gezeigt, solange noch ein Match auf
+        // ihm steht: sonst trüge das Match einen Platznamen, den die Platzliste
+        // nicht kennt — und die Warteschlange, die am Turniertag die eigentliche
+        // Aussage ist, fehlte ganz (ADR-0002).
         return
         [
             .. club.Courts
-                .Where(court => court.IsActive)
+                .Where(court => court.IsActive || byCourt.ContainsKey(court.Id))
                 .OrderBy(court => court.Name, StringComparer.CurrentCulture)
                 .Select(court => new PublicCourtView(
                     court.Id,

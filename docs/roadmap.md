@@ -10,7 +10,7 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M2 | Tournament, Entry, Format | Turnier durchläuft seinen Zustandsautomaten | ✅ |
 | M3 | KnockoutFormat | K.O.-Turnier von der Anmeldung bis zum Finale spielbar | ✅ |
 | M4 | Öffentliche Ansicht | Live-Bracket mit ETag und SignalR-Push | ✅ |
-| M5 | RoundRobin + Phasen | Gruppenphase mit anschließendem K.O. | ⬜ |
+| M5 | RoundRobin + Phasen | Gruppenphase mit anschließendem K.O. | ✅ |
 | M6 | Auto-Scheduling | Spielplanvorschlag mit Diff und Bestätigung | ⬜ |
 | M7 | Turniertag-Queue | Betrieb ohne starres Zeitraster | ⬜ |
 | M8 | SwissFormat | Schweizer System ohne Wiederholungspaarungen | ⬜ |
@@ -31,6 +31,13 @@ bestehenden Verträge zu brechen.
   Code, nicht von Hand gepflegt.
 
 ## Bewusst offene Punkte
+
+- **Überkreuzung bei ungerader Gruppenzahl.** Bei drei oder fünf Gruppen geht die
+  Zuordnung „Gruppensieger gegen Zweiten einer anderen Gruppe" für genau eine
+  Gruppe nicht auf; ihr Zweiter tauscht deshalb den Platz mit dem folgenden. Ab
+  drei Qualifikationsrängen kann in einem ungeraden Feld dennoch eine
+  Wiederholung entstehen. Sie ganz auszuschließen hieße, die Überkreuzung an
+  anderer Stelle aufzugeben — das wäre eine Verschlechterung, keine Lösung.
 
 - **Grenze der Deklarativität.** Ein genuin neuer Paarungsalgorithmus, den keines der
   vier Formate abbildet, braucht weiterhin eine neue `IPhaseFormat`-Implementierung

@@ -101,12 +101,31 @@ anschließendem K.o." ist deshalb kein eigenes Format, sondern eine Komposition
 aus einer Round-Robin- und einer K.-o.-Phase. Ein eigener Modus entsteht als neue
 Vorlage — neue Phasenfolge, neue Parameter, kein Deployment.
 
+Umgesetzt sind K.-o.-System und Round Robin; das Schweizer System folgt in M8.
 Mitgeliefert sind `ko-single`, `group-then-ko`, `liga-round-robin` und `swiss`.
 Sie lassen sich nicht ändern, aber kopieren; die Kopie gehört dem Verein und ist
 frei bearbeitbar.
 
 Beim Auslosen wird die Definition in das Turnier kopiert und eingefroren. Wer die
 Vorlage danach nachschärft, verändert damit kein laufendes Turnier.
+
+### Von der Gruppe in die Endrunde
+
+Beim Auslosen entstehen alle Phasen — auch die Endrunde, für die noch niemand
+qualifiziert ist. Ihre Startplätze sind zunächst Gruppenplätze („Erster der
+Gruppe A"), und genau daraus steht das Bracket, während die Gruppen noch laufen.
+Ist eine Gruppenphase durch, werden die Plätze besetzt: derselbe Mechanismus wie
+der Übergang vom Viertel- ins Halbfinale, kein Sonderfall.
+
+Die Setzung der Qualifikanten ist so gewählt, dass ein Gruppensieger im ersten
+K.-o.-Match auf den Zweiten einer *anderen* Gruppe trifft — sonst spielten zwei,
+die gerade erst gegeneinander angetreten sind, sofort wieder gegeneinander.
+
+Punktgleichheit löst eine geordnete Kette auf: direkter Vergleich, Satz-,
+Spielverhältnis, Buchholz, Los. Die Reihenfolge kommt aus der Phasendefinition,
+nicht aus dem Code — sie ist eine Festlegung der Ausschreibung. Der direkte
+Vergleich zählt dabei nur die Begegnungen der Punktgleichen untereinander; bei
+einem Dreier-Ringschluss entscheidet das nächste Kriterium.
 
 ## Der Turnierbaum
 
