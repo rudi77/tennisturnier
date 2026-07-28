@@ -17,6 +17,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@(ViewData["Title"] ?? "Tennisturnier")</title>
     <link rel="stylesheet" href="~/css/app.css" asp-append-version="true" />
+    @* Die einzige Farbe außerhalb des Token-Blocks in app.css: ein Favicon kann
+       keine CSS-Variable lesen. Sie entspricht --ball und --ball-line. *@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%23d6e34a' stroke='%23b3c02f'/></svg>" />
     <script src="~/js/htmx.min.js" asp-append-version="true" defer></script>
 </head>

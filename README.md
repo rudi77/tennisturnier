@@ -110,6 +110,18 @@ Die Ergebniseingabe nimmt eine Zeile — `6:4 7:6(5)` —, weil ein Ergebnis am 
 so notiert und durchgesagt wird. Was nicht aufgeht, wird abgewiesen, bevor es die
 Domäne erreicht.
 
+### Das Aussehen austauschen
+
+Farben, Schriften und Radien stehen vollständig im `:root`-Block am Anfang von
+`src/TennisTurnier.Api/wwwroot/css/app.css` — darunter ist kein Wert mehr fest
+verdrahtet. Eine andere Gestaltung ist damit eine Änderung an rund zwanzig
+Zeilen und nicht an dreihundert. Der dunkle Modus überschreibt dieselben Namen
+in einem `prefers-color-scheme`-Block; wer einen Token hinzufügt, gehört dort
+ebenfalls hin.
+
+Einzige Ausnahme ist das Favicon im Layout: ein Data-URI kann keine
+CSS-Variable lesen. Es trägt dieselben Werte wie `--ball` und `--ball-line`.
+
 ### Anmeldung der Oberfläche
 
 Ein Browser braucht ein Cookie, die API prüft ein Bearer-Token (ADR-0007).
