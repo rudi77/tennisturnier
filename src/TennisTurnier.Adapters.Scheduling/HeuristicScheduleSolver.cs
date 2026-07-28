@@ -46,7 +46,8 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
         // Von Hand gesetzte und festgenagelte Zuweisungen sind harte Vorgaben:
         // die Turnierleitung kennt Umstände, die das System nicht kennt. Sie
         // belegen ihren Platz, bevor irgendetwas gerechnet wird.
-        foreach (var fixedAssignment in problem.Existing.Where(a => a.IsFixedForSolver && a.PlannedSlot is not null))
+        foreach (var fixedAssignment in problem.Existing.Where(a =>
+                     a.IsFixedForSolver && a.Status == AssignmentStatus.Planned && a.PlannedSlot is not null))
         {
             state.KeepFixed(fixedAssignment);
         }
@@ -188,12 +189,27 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
             var slot = assignment.PlannedSlot!.Value;
             var court = _problem.Courts.FirstOrDefault(c => c.Id == assignment.CourtId);
 
+            // Ein Platz, den es im Spielplan nicht mehr gibt — stillgelegt, seit
+            // die Zuweisung gesetzt wurde. Sie hier mitzuschleppen hieße, einen
+            // Vorschlag zu liefern, der sich nicht bestätigen lässt, weil die
+            // Übernahme genau diesen Platz nicht findet. Besser sagen, was zu tun
+            // ist.
+            if (court is null)
+            {
+                _unscheduled.Add(new UnscheduledMatch(
+                    assignment.MatchId,
+                    "Die Ansetzung steht von Hand auf einem Platz, der stillgelegt ist. " +
+                    "Entweder den Platz wieder aktivieren oder die Zuweisung aufheben."));
+
+                return;
+            }
+
             Occupy(assignment.MatchId, assignment.CourtId, slot);
 
             _assignments.Add(new ProposedAssignment(
                 assignment.MatchId,
                 assignment.CourtId,
-                court?.Name ?? "(unbekannt)",
+                court.Name,
                 assignment.SequenceOnCourt,
                 slot.Start,
                 assignment.EstimatedDuration,
@@ -279,6 +295,15 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
 
             foreach (var predecessorId in PredecessorsOf(match))
             {
+                // Ein Vorgänger, der nicht mehr anzusetzen ist, ist gespielt und
+                // steht niemandem mehr im Weg. Ihn wie einen offenen zu behandeln
+                // hieße, ab dem ersten Ergebnis die ganze Endrunde neu zu legen —
+                // und das ist der Aushang, den niemand mehr ändern will.
+                if (_problem.Matches.All(m => m.Id != predecessorId))
+                {
+                    continue;
+                }
+
                 if (!_slotByMatch.TryGetValue(predecessorId, out var predecessor)
                     || start < predecessor.End + _problem.MinimumRest)
                 {

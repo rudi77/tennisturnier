@@ -303,6 +303,57 @@ public sealed class HeuristicScheduleSolverTests
     }
 
     [Fact]
+    public void Ein_gespieltes_Match_zwingt_seine_Nachfolger_nicht_zum_Umzug()
+    {
+        // Regression: „behalten" verlangte, dass jeder Vorgänger im selben Lauf
+        // gelegt wurde. Ein gespieltes Match wird gar nicht mehr angesetzt, taucht
+        // also nie auf — ab dem ersten Ergebnis konnte damit kein Nachfolger
+        // seinen Termin behalten, und der Aushang änderte sich nach jedem
+        // eingetragenen Ergebnis.
+        var (phase, players) = Knockout(8);
+        var courts = Courts(3);
+
+        var first = _solver.Solve(Problem(phase, players, courts));
+
+        var confirmed = first.Assignments.Select(assignment =>
+        {
+            var stored = new CourtAssignment(
+                Guid.NewGuid(),
+                _tournamentId,
+                assignment.MatchId,
+                assignment.CourtId,
+                assignment.SequenceOnCourt,
+                assignment.EstimatedDuration,
+                AssignmentSource.Auto);
+
+            stored.PlanFor(assignment.PlannedStart);
+
+            return stored;
+        }).ToList();
+
+        // Das zuletzt endende Erstrundenmatch gilt als gespielt und fällt aus der
+        // Aufgabe — genau wie nach einer Ergebniseingabe.
+        var played = first.Assignments
+            .Where(a => phase.Matches.Single(m => m.Id == a.MatchId).Round == 1)
+            .MaxBy(a => a.PlannedEnd)!;
+
+        var remaining = phase.Matches.Where(match => match.Id != played.MatchId).ToList();
+
+        var problem = new SchedulingProblem(
+            remaining,
+            players,
+            courts,
+            remaining.ToDictionary(match => match.Id, _ => TimeSpan.FromMinutes(75)),
+            Rest,
+            confirmed);
+
+        var second = _solver.Solve(problem);
+
+        Assert.Equal(0, second.Diff.Moved);
+        Assert.Equal(1, second.Diff.Removed);
+    }
+
+    [Fact]
     public void Der_Diff_zaehlt_was_sich_aendert()
     {
         var (phase, players) = Knockout(8);

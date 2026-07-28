@@ -39,6 +39,11 @@ bestehenden Verträge zu brechen.
   sagen, warum sie dort liegt. Eine anschließende lokale Suche — Tauschen von
   Zuweisungen gegen Leerlauf — steht noch aus; sie fügt sich hinter demselben
   Port ein, ebenso wie CP-SAT, falls es je größere Felder gibt.
+- **Nicht bestätigte Ansetzungen bleiben stehen.** Eine Bestätigung übernimmt,
+  was in ihr steht, und räumt nur die Ansetzungen gespielter Matches ab. Eine
+  Teilbestätigung ist ausdrücklich keine Aufforderung, den Rest zu löschen —
+  wer eine Ansetzung loswerden will, hebt sie über
+  `DELETE /api/assignments/{id}` auf.
 - **Weiche Wünsche sind bislang Tiebreaks, keine Zielfunktion.** Center Court
   fürs Finale und der bisherige Platz bei gleicher Zeit entscheiden zwischen
   sonst gleichwertigen Möglichkeiten. Leerlauf zu minimieren und Runden zu

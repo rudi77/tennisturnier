@@ -345,6 +345,17 @@ public sealed class Tournament : Entity
         EndsOn = endsOn;
     }
 
+    /// <summary>
+    /// Hält fest, dass der Spielplan dieses Turniers geändert wurde.
+    ///
+    /// Die Zuweisungen sind ein eigenes Aggregat, ihr Zähler wirkt aber nur auf
+    /// einer bestehenden Zeile. Ein Spielplan, der zum ersten Mal bestätigt wird,
+    /// legt lauter neue an — zwei gleichzeitige Bestätigungen liefen beide durch
+    /// und hinterließen jedes Match doppelt in der Platzbelegung. Der Zähler des
+    /// Turniers ist die Klammer um den ganzen Plan und fängt genau das ab.
+    /// </summary>
+    public void MarkScheduleChanged() => Touch();
+
     private void Touch() => Version++;
 
     private static string ValidateName(string name) =>

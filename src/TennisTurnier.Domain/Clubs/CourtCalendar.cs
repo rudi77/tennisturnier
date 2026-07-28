@@ -22,6 +22,28 @@ public sealed class CourtCalendar
     /// Liefert die freien Fenster des Platzes innerhalb von <paramref name="range"/>,
     /// sortiert und überschneidungsfrei. Ein stillgelegter Platz liefert nichts.
     /// </summary>
+    /// <summary>
+    /// Der Zeitraum eines Turniers in der Zeitzone des Vereins, mit einem Tag
+    /// Luft nach jeder Seite.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// Die Luft ist kein Schlendrian: ein Abendspiel kann über Mitternacht
+    /// gehen, und ein Verein westlich von UTC beginnt seinen ersten Turniertag
+    /// nach UTC-Mitternacht. Vor allem aber steht die Rechnung damit an genau
+    /// einer Stelle — sonst hielte die Spielplanprüfung eine Ansetzung für
+    /// zulässig, die der Solver nie vorgeschlagen hätte, oder umgekehrt.
+    /// </remarks>
+    public TimeSlot TournamentRange(DateOnly startsOn, DateOnly endsOn) =>
+        new(LocalMidnight(startsOn.AddDays(-1)), LocalMidnight(endsOn.AddDays(2)));
+
+    private DateTimeOffset LocalMidnight(DateOnly day)
+    {
+        var local = day.ToDateTime(TimeOnly.MinValue);
+
+        return new DateTimeOffset(local, _clubTimeZone.GetUtcOffset(local));
+    }
+
     public IReadOnlyList<TimeSlot> FreeWindows(Court court, TimeSlot range)
     {
         ArgumentNullException.ThrowIfNull(court);

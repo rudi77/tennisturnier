@@ -15,9 +15,22 @@ public sealed class MatchDurationTests
     private static readonly MatchFormat Long = new(BestOf: 5, FinalSetMode.Regular, TiebreakAt: 6);
 
     [Fact]
-    public void Der_Match_Tiebreak_verkuerzt_gegenueber_drei_vollen_Saetzen()
+    public void Der_Match_Tiebreak_verkuerzt_gegenueber_einem_ausgespielten_Entscheidungssatz()
     {
-        Assert.True(MatchDuration.Estimate(ShortSets) < MatchDuration.Estimate(FullSets));
+        // Nur eine Größe unterscheidet die beiden: der Entscheidungssatz. Der
+        // Vergleich mit „Advantage" änderte zwei auf einmal und bewiese nichts
+        // über den Tiebreak.
+        var regular = new MatchFormat(BestOf: 3, FinalSetMode.Regular, TiebreakAt: 6);
+
+        Assert.True(MatchDuration.Estimate(ShortSets) < MatchDuration.Estimate(regular));
+    }
+
+    [Fact]
+    public void Ein_ausgespielter_Entscheidungssatz_dauert_laenger_als_ein_regulaerer()
+    {
+        var regular = new MatchFormat(BestOf: 3, FinalSetMode.Regular, TiebreakAt: 6);
+
+        Assert.True(MatchDuration.Estimate(regular) < MatchDuration.Estimate(FullSets));
     }
 
     [Fact]

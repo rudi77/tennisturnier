@@ -351,9 +351,7 @@ public sealed class MatchService : IMatchService
         var playersByEntry = await PlayersByEntryAsync(tournament, cancellationToken);
 
         var calendar = new CourtCalendar(club.TimeZone);
-        var range = new TimeSlot(
-            new DateTimeOffset(tournament.StartsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(-1),
-            new DateTimeOffset(tournament.EndsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(2));
+        var range = calendar.TournamentRange(tournament.StartsOn, tournament.EndsOn);
 
         var windows = club.Courts.ToDictionary(
             court => court.Id,

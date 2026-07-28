@@ -111,13 +111,9 @@ public sealed class SchedulingService : ISchedulingService
         Guid tournamentId,
         CancellationToken cancellationToken = default)
     {
-        var (tournament, _, problem, labels) = await LoadAsync(tournamentId, cancellationToken);
+        var plan = await LoadAsync(tournamentId, cancellationToken);
 
-        // Auch das bloße Rechnen ist ein Werkzeug der Turnierleitung: es liest
-        // den ganzen Spielplan und ist nicht billig.
-        RequireManagePermission(tournament);
-
-        return Describe(_solver.Solve(problem), problem, labels);
+        return Describe(_solver.Solve(plan.Problem), plan);
     }
 
     public async Task<SchedulePlanResult> ConfirmAsync(
@@ -126,24 +122,29 @@ public sealed class SchedulingService : ISchedulingService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        RequireWellFormed(request);
 
-        var (tournament, club, problem, labels) = await LoadAsync(tournamentId, cancellationToken);
+        var plan = await LoadAsync(tournamentId, cancellationToken);
+        var applied = Apply(plan, request);
 
-        RequireManagePermission(tournament);
-        RequirePlanningMode(tournament);
-
-        var applied = Apply(tournament, club, problem, request);
+        // Der Zähler des Turniers ist die Klammer um den ganzen Plan. Ohne ihn
+        // liefen zwei gleichzeitige Bestätigungen beide durch und legten jedes
+        // Match zweimal an — auf einer noch nicht existierenden Zeile wirkt kein
+        // Zähler.
+        plan.Tournament.MarkScheduleChanged();
 
         await _unitOfWork.FlushAsync(cancellationToken);
-        await _publicView.RebuildAsync(tournament.Id, cancellationToken);
+        await _publicView.RebuildAsync(plan.Tournament.Id, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Nach dem Übernehmen erneut prüfen — gegen den Stand, der jetzt
-        // tatsächlich in der Datenbank steht, nicht gegen den gerechneten.
-        var violations = new ScheduleValidator().Validate(applied, problem.ToContext());
+        // Geprüft wird der ganze Plan, nicht nur das eben Übernommene: eine
+        // Kollision entsteht zwischen zwei Ansetzungen, und die andere kann
+        // längst gespeichert sein.
+        var violations = new ScheduleValidator().Validate(
+            [.. applied.Union(Untouched(plan, applied))], plan.Problem.ToContext());
 
         return new SchedulePlanResult(
-            [.. applied.Select(assignment => Describe(assignment, problem, labels))],
+            [.. applied.Select(assignment => Describe(assignment, plan))],
             [],
             [.. violations.Select(v => new ScheduleViolationDetail(v.Constraint, v.Message, v.AssignmentId))],
             new ScheduleDiffDetail(0, 0, applied.Count, 0));
@@ -156,70 +157,174 @@ public sealed class SchedulingService : ISchedulingService
     /// Zuweisungen bleiben unangetastet — sie sind Teil der Historie des
     /// Turniertags (ADR-0002).
     /// </summary>
-    private IReadOnlyList<CourtAssignment> Apply(
-        Tournament tournament,
-        Club club,
-        SchedulingProblem problem,
-        ConfirmScheduleRequest request)
+    private IReadOnlyList<CourtAssignment> Apply(Plan plan, ConfirmScheduleRequest request)
     {
-        var byMatch = problem.Existing
-            .Where(assignment => assignment.Status == AssignmentStatus.Planned)
-            .ToDictionary(assignment => assignment.MatchId);
+        var byMatch = plan.Problem.Existing
+            .Where(assignment => !assignment.IsOver)
+            .GroupBy(assignment => assignment.MatchId)
+            .ToDictionary(group => group.Key, group => group.ToList());
 
         var applied = new List<CourtAssignment>();
 
         foreach (var confirmed in request.Assignments)
         {
-            var match = problem.Matches.FirstOrDefault(m => m.Id == confirmed.MatchId)
-                ?? throw new NotFoundException("Match", confirmed.MatchId);
-
-            var court = club.Courts.FirstOrDefault(c => c.Id == confirmed.CourtId && c.IsActive)
-                ?? throw new NotFoundException("Platz", confirmed.CourtId);
-
-            if (byMatch.TryGetValue(match.Id, out var existing))
-            {
-                // Von Hand gesetzte Ansetzungen bleiben von Hand gesetzt. Wer sie
-                // ändern will, verschiebt sie ausdrücklich — ein bestätigter
-                // Vorschlag darf sie nicht stillschweigend zu Automatik machen.
-                existing.Replan(
-                    court.Id,
-                    confirmed.SequenceOnCourt,
-                    confirmed.PlannedStart,
-                    existing.EarliestStart,
-                    confirmed.EstimatedDuration,
-                    existing.IsFixedForSolver ? existing.Source : AssignmentSource.Auto);
-
-                applied.Add(existing);
-                continue;
-            }
-
-            var created = new CourtAssignment(
-                Guid.NewGuid(),
-                tournament.Id,
-                match.Id,
-                court.Id,
-                confirmed.SequenceOnCourt,
-                confirmed.EstimatedDuration,
-                AssignmentSource.Auto);
-
-            created.PlanFor(confirmed.PlannedStart);
-
-            _assignments.Add(created);
-            applied.Add(created);
+            applied.Add(ApplyOne(plan, confirmed, byMatch.GetValueOrDefault(confirmed.MatchId, [])));
         }
+
+        RemoveOrphans(plan, byMatch);
 
         return applied;
     }
 
+    private CourtAssignment ApplyOne(
+        Plan plan,
+        ConfirmedAssignment confirmed,
+        IReadOnlyList<CourtAssignment> active)
+    {
+        var match = plan.Problem.Matches.FirstOrDefault(m => m.Id == confirmed.MatchId)
+            ?? throw MissingMatch(plan, confirmed.MatchId);
+
+        var court = plan.Club.Courts.FirstOrDefault(c => c.Id == confirmed.CourtId && c.IsActive)
+            ?? throw new NotFoundException("Platz", confirmed.CourtId);
+
+        RequireWithinTournament(plan.Tournament, confirmed);
+
+        // Ein Match, das schon aufgerufen wurde oder läuft, wird nicht mehr
+        // geplant. Eine zweite, parallele Ansetzung daneben zu legen hieße, es
+        // gleichzeitig auf zwei Plätzen anzusetzen.
+        var running = active.FirstOrDefault(assignment => assignment.Status != AssignmentStatus.Planned);
+        if (running is not null)
+        {
+            throw new DomainException(
+                $"„{plan.Labels.GetValueOrDefault(match.Id) ?? "Das Match"}“ ist bereits {running.Status} " +
+                "und lässt sich nicht mehr einplanen.");
+        }
+
+        if (active.FirstOrDefault() is { } existing)
+        {
+            // Von Hand gesetzte Ansetzungen bleiben von Hand gesetzt. Wer sie
+            // ändern will, verschiebt sie ausdrücklich — ein bestätigter
+            // Vorschlag darf sie nicht stillschweigend zu Automatik machen.
+            existing.Replan(
+                court.Id,
+                confirmed.SequenceOnCourt,
+                confirmed.PlannedStart,
+                existing.EarliestStart,
+                confirmed.EstimatedDuration,
+                existing.IsFixedForSolver ? existing.Source : AssignmentSource.Auto);
+
+            return existing;
+        }
+
+        var created = new CourtAssignment(
+            Guid.NewGuid(),
+            plan.Tournament.Id,
+            match.Id,
+            court.Id,
+            confirmed.SequenceOnCourt,
+            confirmed.EstimatedDuration,
+            AssignmentSource.Auto);
+
+        created.PlanFor(confirmed.PlannedStart);
+        _assignments.Add(created);
+
+        return created;
+    }
+
+    /// <summary>
+    /// Räumt Ansetzungen ab, deren Match inzwischen gespielt ist.
+    ///
+    /// Ohne das bliebe die Zeit des gespielten Matches für den Rest des Turniers
+    /// belegt — in der öffentlichen Warteschlange sichtbar und, schlimmer, als
+    /// stiller Kollisionspartner für alles, was danach dorthin geplant wird.
+    /// Ansetzungen, die schlicht nicht in der Bestätigung stehen, bleiben
+    /// unangetastet: eine Teilbestätigung ist keine Aufforderung, den Rest zu
+    /// löschen.
+    /// </summary>
+    private void RemoveOrphans(Plan plan, IReadOnlyDictionary<Guid, List<CourtAssignment>> byMatch)
+    {
+        foreach (var (matchId, assignments) in byMatch)
+        {
+            if (plan.Problem.Matches.Any(match => match.Id == matchId))
+            {
+                continue;
+            }
+
+            foreach (var orphan in assignments.Where(a => a.Status == AssignmentStatus.Planned))
+            {
+                _assignments.Remove(orphan);
+            }
+        }
+    }
+
+    /// <summary>Die noch gespeicherten Ansetzungen, die diese Bestätigung nicht berührt.</summary>
+    private static IEnumerable<CourtAssignment> Untouched(Plan plan, IReadOnlyList<CourtAssignment> applied) =>
+        plan.Problem.Existing.Where(existing =>
+            !existing.IsOver
+            && applied.All(assignment => assignment.Id != existing.Id)
+            && plan.Problem.Matches.Any(match => match.Id == existing.MatchId));
+
+    /// <summary>
+    /// Ein Match, das es im Turnier gibt, aber nicht mehr anzusetzen ist, ist
+    /// inzwischen gespielt: der Vorschlag ist überholt. Das ist ein Konflikt und
+    /// kein „nicht gefunden" — der Aufrufer soll neu rechnen, nicht suchen.
+    /// </summary>
+    private static Exception MissingMatch(Plan plan, Guid matchId) =>
+        plan.AllMatchIds.Contains(matchId)
+            ? new ConcurrencyConflictException(
+                new DomainException($"Das Match {matchId} ist inzwischen entschieden."))
+            : new NotFoundException("Match", matchId);
+
+    private static void RequireWellFormed(ConfirmScheduleRequest request)
+    {
+        if (request.Assignments is null)
+        {
+            throw new DomainException("Die Bestätigung nennt keine Ansetzungen.");
+        }
+
+        var duplicate = request.Assignments
+            .GroupBy(assignment => assignment.MatchId)
+            .FirstOrDefault(group => group.Count() > 1);
+
+        if (duplicate is not null)
+        {
+            throw new DomainException(
+                $"Das Match {duplicate.Key} kommt in der Bestätigung mehrfach vor. " +
+                "Ein Match steht zu einer Zeit auf genau einem Platz.");
+        }
+    }
+
+    /// <summary>
+    /// Der geplante Beginn muss im Turnierzeitraum liegen — mit einem Tag Luft
+    /// nach jeder Seite für Zeitzonen und einen Abend, der über Mitternacht
+    /// hinausgeht. Ohne diese Schranke wanderte ein vertippter Termin
+    /// unbemerkt ins Jahr 2099 und stünde dort öffentlich.
+    /// </summary>
+    private static void RequireWithinTournament(Tournament tournament, ConfirmedAssignment confirmed)
+    {
+        var from = new DateTimeOffset(tournament.StartsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(-1);
+        var until = new DateTimeOffset(tournament.EndsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(2);
+
+        if (confirmed.PlannedStart < from || confirmed.PlannedStart >= until)
+        {
+            throw new DomainException(
+                $"Der Beginn {confirmed.PlannedStart:g} liegt außerhalb des Turnierzeitraums " +
+                $"({tournament.StartsOn:d} bis {tournament.EndsOn:d}).");
+        }
+    }
+
     // --- Aufbau der Aufgabe ------------------------------------------------
 
-    private async Task<(Tournament Tournament, Club Club, SchedulingProblem Problem,
-        IReadOnlyDictionary<Guid, string?> Labels)> LoadAsync(
-        Guid tournamentId,
-        CancellationToken cancellationToken)
+    private async Task<Plan> LoadAsync(Guid tournamentId, CancellationToken cancellationToken)
     {
         var tournament = await _tournaments.FindAsync(tournamentId, cancellationToken)
             ?? throw new NotFoundException("Turnier", tournamentId);
+
+        // Vor dem Laden des ganzen Spielplans: für Unbefugte soll dieses Turnier
+        // nicht einmal seinen Zustand verraten — und das teure Laden hat für sie
+        // ohnehin keinen Zweck (ADR-0004).
+        RequireManagePermission(tournament);
+        RequirePlanningMode(tournament);
 
         var club = await _clubs.FindAsync(tournament.ClubId, cancellationToken)
             ?? throw new NotFoundException("Verein", tournament.ClubId);
@@ -251,19 +356,43 @@ public sealed class SchedulingService : ISchedulingService
             DefaultRest,
             existing);
 
-        var labels = phases
-            .SelectMany(phase => phase.Matches)
-            .ToDictionary(match => match.Id, match => match.Label);
+        var all = phases.SelectMany(phase => phase.Matches).ToList();
 
-        return (tournament, club, problem, labels);
+        return new Plan(
+            tournament,
+            club,
+            problem,
+            all.ToDictionary(match => match.Id, match => match.Label),
+            [.. all.Select(match => match.Id)]);
+    }
+
+    /// <summary>
+    /// Alles, was ein Spielplanlauf braucht — samt der Matches, die nicht mehr
+    /// angesetzt werden. Ohne sie ließe sich ein bereits gespieltes Match nicht
+    /// von einem fremden unterscheiden.
+    /// </summary>
+    private sealed record Plan(
+        Tournament Tournament,
+        Club Club,
+        SchedulingProblem Problem,
+        IReadOnlyDictionary<Guid, string?> Labels,
+        IReadOnlySet<Guid> AllMatchIds)
+    {
+        public Plan(
+            Tournament tournament,
+            Club club,
+            SchedulingProblem problem,
+            IReadOnlyDictionary<Guid, string?> labels,
+            IReadOnlyList<Guid> allMatchIds)
+            : this(tournament, club, problem, labels, allMatchIds.ToHashSet())
+        {
+        }
     }
 
     private static IEnumerable<SchedulableCourt> Courts(Club club, Tournament tournament)
     {
         var calendar = new CourtCalendar(club.TimeZone);
-        var range = new TimeSlot(
-            new DateTimeOffset(tournament.StartsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
-            new DateTimeOffset(tournament.EndsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(1));
+        var range = calendar.TournamentRange(tournament.StartsOn, tournament.EndsOn);
 
         return club.Courts
             .Where(court => court.IsActive)
@@ -299,16 +428,26 @@ public sealed class SchedulingService : ISchedulingService
 
     // --- Abbildung ---------------------------------------------------------
 
-    private static SchedulePlanResult Describe(
-        ScheduleProposal proposal,
-        SchedulingProblem problem,
-        IReadOnlyDictionary<Guid, string?> labels)
+    private static SchedulePlanResult Describe(ScheduleProposal proposal, Plan plan)
     {
+        var problem = plan.Problem;
+        var labels = plan.Labels;
+
         // Der Vorschlag wird gegen denselben Prüfer gehalten wie ein Plan von
         // Hand. Ein Solver, der seine eigenen Ergebnisse für zulässig erklärt,
         // prüft nichts.
-        var candidates = proposal.Assignments
-            .Select(assignment => Materialise(assignment, problem))
+        //
+        // Geprüft wird dabei der ganze Plan: die gespeicherten Ansetzungen, die
+        // im Vorschlag nicht vorkommen, gehören dazu. Eine Kollision entsteht
+        // zwischen zwei Ansetzungen, und ein Prüfer, der nur die halbe Eingabe
+        // sieht, findet sie nie.
+        var proposed = proposal.Assignments.Select(assignment => Materialise(assignment, problem)).ToList();
+
+        var candidates = proposed
+            .Concat(problem.Existing.Where(existing =>
+                !existing.IsOver
+                && proposed.All(assignment => assignment.MatchId != existing.MatchId)
+                && problem.Matches.Any(match => match.Id == existing.MatchId)))
             .ToList();
 
         var violations = new ScheduleValidator().Validate(candidates, problem.ToContext());
@@ -359,14 +498,11 @@ public sealed class SchedulingService : ISchedulingService
         return candidate;
     }
 
-    private static ProposedAssignmentDetail Describe(
-        CourtAssignment assignment,
-        SchedulingProblem problem,
-        IReadOnlyDictionary<Guid, string?> labels) => new(
+    private static ProposedAssignmentDetail Describe(CourtAssignment assignment, Plan plan) => new(
             assignment.MatchId,
-            labels.GetValueOrDefault(assignment.MatchId),
+            plan.Labels.GetValueOrDefault(assignment.MatchId),
             assignment.CourtId,
-            problem.Courts.FirstOrDefault(court => court.Id == assignment.CourtId)?.Name ?? "(unbekannt)",
+            plan.Problem.Courts.FirstOrDefault(court => court.Id == assignment.CourtId)?.Name ?? "(unbekannt)",
             assignment.SequenceOnCourt,
             assignment.PlannedStart ?? default,
             (assignment.PlannedStart ?? default) + assignment.EstimatedDuration,
