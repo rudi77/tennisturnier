@@ -34,10 +34,14 @@ public static class TournamentViewBuilder
             .ToDictionary(entry => entry.Id, entry => entry.Seed);
 
         var courtNames = club.Courts.ToDictionary(court => court.Id, court => court.Name);
+        // Je Match die Zuweisung, die gerade gilt. Nach einer Unterbrechung gibt
+        // es zwei: die unterbrochene als Historie und die Fortsetzung. Gezeigt
+        // wird, was läuft — sonst schickt der Aushang die Zuschauer auf den Platz
+        // von vorhin.
         var activeByMatch = assignments
             .Where(assignment => assignment.Status != AssignmentStatus.Finished)
             .GroupBy(assignment => assignment.MatchId)
-            .ToDictionary(group => group.Key, group => group.OrderBy(a => a.SequenceOnCourt).First());
+            .ToDictionary(group => group.Key, group => group.OrderBy(Liveness).ThenByDescending(a => a.Version).First());
 
         var context = new BuildContext(participantNameByEntry, seedByEntry, courtNames, activeByMatch);
 
@@ -146,6 +150,18 @@ public static class TournamentViewBuilder
         _ => "offen",
     };
 
+    /// <summary>
+    /// Wie nah eine Zuweisung am Geschehen ist: laufend vor aufgerufen vor
+    /// wartend vor unterbrochen.
+    /// </summary>
+    private static int Liveness(CourtAssignment assignment) => assignment.Status switch
+    {
+        AssignmentStatus.Running => 0,
+        AssignmentStatus.Called => 1,
+        AssignmentStatus.Planned => 2,
+        _ => 3,
+    };
+
     private static PublicStandingView Describe(Standing standing) => new(
         standing.Rank,
         standing.DisplayName,
@@ -168,10 +184,17 @@ public static class TournamentViewBuilder
         Club club,
         IReadOnlyList<CourtAssignment> assignments)
     {
+        // Was auf dem Platz steht: erst das laufende oder aufgerufene Match, dann
+        // die Wartenden in ihrer Reihenfolge. Eine unterbrochene Zuweisung wartet
+        // nicht auf diesen Platz, sondern auf ihre Fortsetzung — die kann anderswo
+        // stattfinden (ADR-0002).
         var byCourt = assignments
-            .Where(assignment => assignment.Status != AssignmentStatus.Finished)
+            .Where(assignment => assignment.Status
+                is AssignmentStatus.Called or AssignmentStatus.Running or AssignmentStatus.Planned)
             .GroupBy(assignment => assignment.CourtId)
-            .ToDictionary(group => group.Key, group => group.OrderBy(a => a.SequenceOnCourt).ToList());
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(Liveness).ThenBy(a => a.SequenceOnCourt).ToList());
 
         // Auch ein stillgelegter Platz wird gezeigt, solange noch ein Match auf
         // ihm steht: sonst trüge das Match einen Platznamen, den die Platzliste

@@ -24,6 +24,7 @@ public static class ApplicationRegistration
         services.AddScoped<IFormatTemplateService, FormatTemplateService>();
         services.AddScoped<IPublicViewService, PublicViewService>();
         services.AddScoped<ISchedulingService, SchedulingService>();
+        services.AddScoped<ICourtQueueService, CourtQueueService>();
 
         return services;
     }

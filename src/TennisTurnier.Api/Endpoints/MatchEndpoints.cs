@@ -39,6 +39,82 @@ internal static class MatchEndpoints
             CancellationToken ct) =>
             Results.Ok(await service.ConfirmAsync(tournamentId, request, ct)));
 
+        // Der Turniertag (ADR-0002): hier zählt die Reihenfolge auf dem Platz,
+        // nicht das Zeitraster. Eine feste Startzeit wäre eine Behauptung, die
+        // beim ersten langen Match zerfällt.
+        tournaments.MapGet("/courts", async (
+            Guid tournamentId,
+            ICourtQueueService service,
+            CancellationToken ct) =>
+            Results.Ok(await service.GetBoardAsync(tournamentId, ct)))
+            .WithTags("Turniertag");
+
+        tournaments.MapPost("/courts/{courtId:guid}/queue", async (
+            Guid tournamentId,
+            Guid courtId,
+            ReorderQueueRequest request,
+            ICourtQueueService service,
+            CancellationToken ct) =>
+        {
+            await service.ReorderAsync(tournamentId, courtId, request, ct);
+            return Results.NoContent();
+        }).WithTags("Turniertag");
+
+        var assignments = app.MapGroup("/api/assignments/{assignmentId:guid}").WithTags("Turniertag");
+
+        assignments.MapPost("/call", async (
+            Guid assignmentId,
+            ICourtQueueService service,
+            CancellationToken ct) =>
+        {
+            await service.CallAsync(assignmentId, ct);
+            return Results.NoContent();
+        });
+
+        assignments.MapPost("/start", async (
+            Guid assignmentId,
+            ICourtQueueService service,
+            CancellationToken ct) =>
+        {
+            await service.StartAsync(assignmentId, ct);
+            return Results.NoContent();
+        });
+
+        assignments.MapPost("/finish", async (
+            Guid assignmentId,
+            ICourtQueueService service,
+            CancellationToken ct) =>
+        {
+            await service.FinishAsync(assignmentId, ct);
+            return Results.NoContent();
+        });
+
+        assignments.MapPost("/suspend", async (
+            Guid assignmentId,
+            ICourtQueueService service,
+            CancellationToken ct) =>
+        {
+            await service.SuspendAsync(assignmentId, ct);
+            return Results.NoContent();
+        });
+
+        assignments.MapPost("/resume", async (
+            Guid assignmentId,
+            ResumeMatchRequest request,
+            ICourtQueueService service,
+            CancellationToken ct) =>
+            Results.Ok(new { id = await service.ResumeAsync(assignmentId, request, ct) }));
+
+        assignments.MapPost("/promise", async (
+            Guid assignmentId,
+            PromiseStartRequest request,
+            ICourtQueueService service,
+            CancellationToken ct) =>
+        {
+            await service.PromiseAsync(assignmentId, request, ct);
+            return Results.NoContent();
+        });
+
         var matches = app.MapGroup("/api/matches/{matchId:guid}").WithTags("Ergebnisse");
 
         matches.MapPut("/result", async (

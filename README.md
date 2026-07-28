@@ -91,6 +91,31 @@ Geprüft wird der Vorschlag vom selben `ScheduleValidator`, der auch eine
 Verschiebung von Hand beurteilt. Ein Solver, der seine eigenen Ergebnisse für
 zulässig erklärt, prüft nichts.
 
+## Turniertag
+
+`GET /api/tournaments/{id}/courts` zeigt je Platz, was gerade läuft und wer
+wartet. Am Platz wird über `POST /api/assignments/{id}/call|start|finish` und
+`suspend|resume` gearbeitet; die Reihenfolge einer Warteschlange stellt die
+Turnierleitung über `POST /api/tournaments/{id}/courts/{courtId}/queue` um.
+
+Die harte Randbedingung ist, dass die Matchdauer unbekannt ist. Deshalb ist die
+**Reihenfolge** auf dem Platz die Aussage, nicht die Uhrzeit: die Schätzungen
+der Wartenden werden nachgezogen, sobald tatsächlich etwas passiert, und die
+Warteschlange nummeriert sich lückenlos neu — „Sie sind der Dritte auf Platz 2"
+ist eine Auskunft, keine Sortierhilfe. Eine Zusage („nicht vor 14 Uhr") wird
+dabei nie unterlaufen, auch wenn der Platz früher frei wird.
+
+Aufgerufen wird nur, wer feststeht. Eingeplant ist der ganze Baum, lange bevor
+die Teilnehmer bekannt sind — am Platz wird aber kein Platzhalter ausgerufen.
+
+Eine Unterbrechung lässt die Zuweisung als Historie stehen; die Fortsetzung
+kann auf einem anderen Platz stattfinden und ist dann eine eigene Zuweisung.
+Erst beide zusammen erzählen, was an diesem Tag passiert ist — genau deshalb
+ist die Platzzuweisung eine eigene Entität (ADR-0002).
+
+Das Ergebnis wird getrennt eingetragen: der Platz ist frei, sobald die Spieler
+ihn verlassen, und nicht erst, wenn jemand Zeit hatte, den Zettel auszufüllen.
+
 ## Öffentliche Ansicht
 
 `GET /public/tournaments/{id}` liefert ohne Anmeldung Bracket, Tabellen und die

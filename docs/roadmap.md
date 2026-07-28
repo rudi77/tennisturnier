@@ -12,7 +12,7 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M4 | Öffentliche Ansicht | Live-Bracket mit ETag und SignalR-Push | ✅ |
 | M5 | RoundRobin + Phasen | Gruppenphase mit anschließendem K.O. | ✅ |
 | M6 | Auto-Scheduling | Spielplanvorschlag mit Diff und Bestätigung | ✅ |
-| M7 | Turniertag-Queue | Betrieb ohne starres Zeitraster | ⬜ |
+| M7 | Turniertag-Queue | Betrieb ohne starres Zeitraster | ✅ |
 | M8 | SwissFormat | Schweizer System ohne Wiederholungspaarungen | ⬜ |
 
 M0–M4 ergeben die erste vorführbare Version. M5–M8 bauen darauf auf, ohne die
@@ -39,6 +39,10 @@ bestehenden Verträge zu brechen.
   sagen, warum sie dort liegt. Eine anschließende lokale Suche — Tauschen von
   Zuweisungen gegen Leerlauf — steht noch aus; sie fügt sich hinter demselben
   Port ein, ebenso wie CP-SAT, falls es je größere Felder gibt.
+- **Die Uhr ist die Serveruhr.** Aufrufen, Starten und Beenden setzen den
+  Zeitpunkt aus `IClock`. Eine nachträgliche Korrektur — „das Match hat schon um
+  14:20 geendet, wir sind nur nicht dazu gekommen" — gibt es noch nicht; sie
+  wäre ein zusätzlicher Parameter an denselben Endpunkten.
 - **Nicht bestätigte Ansetzungen bleiben stehen.** Eine Bestätigung übernimmt,
   was in ihr steht, und räumt nur die Ansetzungen gespielter Matches ab. Eine
   Teilbestätigung ist ausdrücklich keine Aufforderung, den Rest zu löschen —
