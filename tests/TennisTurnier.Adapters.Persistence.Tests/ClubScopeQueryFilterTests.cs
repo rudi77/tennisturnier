@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TennisTurnier.Domain.Clubs;
+using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Security;
 
 namespace TennisTurnier.Adapters.Persistence.Tests;
@@ -23,9 +24,10 @@ public sealed class ClubScopeQueryFilterTests : IAsyncLifetime
         await using var db = _database.NewContext();
 
         var a = new Club(Guid.NewGuid(), "TC Alpha", "Europe/Vienna");
-        a.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
+        Equip(a.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor), "Nur für Verein A");
+
         var b = new Club(Guid.NewGuid(), "TC Beta", "Europe/Vienna");
-        b.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Hard, CourtLocation.Indoor);
+        Equip(b.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Hard, CourtLocation.Indoor), "Nur für Verein B");
 
         db.Clubs.AddRange(a, b);
         await db.SaveChangesAsync();
@@ -35,6 +37,23 @@ public sealed class ClubScopeQueryFilterTests : IAsyncLifetime
     }
 
     public async Task DisposeAsync() => await _database.DisposeAsync();
+
+    /// <summary>Gibt dem Platz eine Öffnungszeit und eine Sperre mit interner Notiz.</summary>
+    private static void Equip(Court court, string note)
+    {
+        court.AddAvailability(
+            Guid.NewGuid(), DayOfWeek.Saturday,
+            new TimeOnly(8, 0), new TimeOnly(22, 0),
+            new DateOnly(2026, 1, 1));
+
+        court.AddBlock(
+            Guid.NewGuid(),
+            new TimeSlot(
+                new DateTimeOffset(2026, 5, 16, 14, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2026, 5, 16, 18, 0, 0, TimeSpan.Zero)),
+            BlockReason.LeagueMatch,
+            note);
+    }
 
     private UserPrincipal AdminOf(Guid clubId) =>
         new(_adminOfA, [new RoleAssignment(Guid.NewGuid(), _adminOfA, Role.ClubAdmin, ResourceScope.Club(clubId))]);
@@ -78,6 +97,22 @@ public sealed class ClubScopeQueryFilterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Auch_Sperren_und_Oeffnungszeiten_fremder_Vereine_bleiben_verborgen()
+    {
+        // Regression: der Filter hing nur an Verein und Platz. Über die
+        // Navigation vom Verein aus war das folgenlos, eine direkte Abfrage der
+        // Kindtabelle lieferte aber die internen Notizen fremder Vereine.
+        _database.ActingAs = AdminOf(_clubA);
+        await using var db = _database.NewContext();
+
+        var notes = await db.Set<CourtBlock>().Select(b => b.Note).ToListAsync();
+        var windows = await db.Set<AvailabilityWindow>().CountAsync();
+
+        Assert.Equal(["Nur für Verein A"], notes);
+        Assert.Equal(1, windows);
+    }
+
+    [Fact]
     public async Task Ein_SystemAdmin_sieht_alle_Vereine()
     {
         var admin = Guid.NewGuid();
@@ -111,10 +146,12 @@ public sealed class ClubScopeQueryFilterTests : IAsyncLifetime
     [Fact]
     public async Task Der_Filter_wird_je_Benutzer_neu_ausgewertet()
     {
-        // EF Core legt kompilierte Abfragepläne im Cache ab. Würde der Filter die
-        // Club-Id als Konstante statt als Parameter einbauen, bekäme der zweite
-        // Benutzer die Ergebnisse des ersten — ein Datenleck, das erst unter Last
-        // auffiele.
+        // EF Core legt kompilierte Abfragepläne im Cache ab, und das Filter-Lambda
+        // schließt über den DbContext ab, der das Modell gebaut hat. Würde der
+        // Filter die Club-Id als Konstante statt als Parameter einbauen, bekäme
+        // der zweite Benutzer die Ergebnisse des ersten — ein Datenleck, das erst
+        // unter Last auffiele. Jeder Kontext hat hier seine eigene
+        // IUserContext-Instanz, genau wie jeder Request in der Anwendung.
         _database.ActingAs = AdminOf(_clubA);
         await using (var first = _database.NewContext())
         {

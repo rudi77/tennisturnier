@@ -67,7 +67,8 @@ public sealed class Court : Entity
 
     public IReadOnlyList<CourtBlock> Blocks => _blocks;
 
-    public void Rename(string name) => Name = Validate(name);
+    /// <summary>Nur über <see cref="Club.RenameCourt"/>, damit die Eindeutigkeit geprüft wird.</summary>
+    internal void Rename(string name) => Name = Validate(name);
 
     public void MarkAsCenterCourt(bool isCenterCourt) => IsCenterCourt = isCenterCourt;
 

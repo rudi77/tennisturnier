@@ -3,8 +3,8 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using TennisTurnier.Adapters.Persistence.Sqlite;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -29,19 +29,26 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     private readonly string _databasePath =
         Path.Combine(Path.GetTempPath(), $"tennisturnier-api-{Guid.NewGuid():N}.db");
 
+    private readonly Lock _migrationGate = new();
+    private bool _migrated;
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
 
-        builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(
-            new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:Default"] = $"Data Source={_databasePath}",
+        // UseSetting und nicht ConfigureAppConfiguration: Letzteres fügt die
+        // Quelle vor appsettings.json ein und würde davon überschrieben — die
+        // Tests liefen dann gegen die produktive Datenbankdatei.
+        builder.UseSetting("ConnectionStrings:Default", $"Data Source={_databasePath}");
 
-                // Ohne Authority registriert der Identity-Adapter kein
-                // JWT-Verfahren und überlässt das Feld dem Testschema.
-                ["Oidc:Authority"] = string.Empty,
-            }));
+        // Ohne Authority registriert der Identity-Adapter kein JWT-Verfahren und
+        // überlässt das Feld dem Testschema.
+        builder.UseSetting("Oidc:Authority", string.Empty);
+
+        // WebApplicationFactory baut den Host zweimal. Liefe die Migration als
+        // Nebeneffekt des Starts, rennten beide Läufe auf dieselbe Datei; hier
+        // migriert stattdessen EnsureMigrated genau einmal.
+        builder.UseSetting("Database:AutoMigrate", "false");
 
         builder.ConfigureTestServices(services =>
         {
@@ -60,6 +67,37 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         client.DefaultRequestHeaders.Add(SubjectHeader, subject);
         client.DefaultRequestHeaders.Add(IssuerHeader, TestIssuer);
         return client;
+    }
+
+    protected override void ConfigureClient(HttpClient client)
+    {
+        EnsureMigrated();
+        base.ConfigureClient(client);
+    }
+
+    /// <summary>Für Testaufbau, der die Datenbank ohne HTTP-Aufruf braucht.</summary>
+    public IServiceScope CreateMigratedScope()
+    {
+        EnsureMigrated();
+        return Services.CreateScope();
+    }
+
+    /// <summary>
+    /// Migriert genau einmal je Fabrik. Jeder Zugriff auf die Datenbank läuft
+    /// hierüber, damit die Reihenfolge der Tests keine Rolle spielt.
+    /// </summary>
+    private void EnsureMigrated()
+    {
+        lock (_migrationGate)
+        {
+            if (_migrated)
+            {
+                return;
+            }
+
+            Services.MigrateDatabaseAsync().GetAwaiter().GetResult();
+            _migrated = true;
+        }
     }
 
     protected override void Dispose(bool disposing)

@@ -196,6 +196,69 @@ public sealed class ClubApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
+    public async Task Ein_Spieler_sieht_seinen_Verein_aber_nicht_die_internen_Notizen()
+    {
+        // Wer im Verein irgendeine Rolle hat, sieht ihn — das ergibt sich aus dem
+        // Query-Filter. Die Notiz an einer Sperre gehört aber zu ViewInternals.
+        // Ohne diese Trennung wäre die Berechtigung bedeutungslos.
+        var admin = await SystemAdminClientAsync();
+        var clubId = await CreateClubAsync(admin, $"TC Notizen {Guid.NewGuid():N}");
+        var courtId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/courts",
+            new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor),
+            Json));
+
+        await admin.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/courts/{courtId}/blocks",
+            new CreateBlockRequest(
+                new DateTimeOffset(2026, 5, 16, 14, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2026, 5, 16, 18, 0, 0, TimeSpan.Zero),
+                BlockReason.Maintenance,
+                "Belag defekt, Reklamation läuft"),
+            Json);
+
+        var player = $"player-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(player, Role.Player, ResourceScope.Club(clubId));
+
+        var seenByPlayer = await _factory.CreateClientAs(player)
+            .GetFromJsonAsync<ClubDetail>($"/api/clubs/{clubId}", Json);
+        var seenByAdmin = await admin.GetFromJsonAsync<ClubDetail>($"/api/clubs/{clubId}", Json);
+
+        var blockForPlayer = Assert.Single(Assert.Single(seenByPlayer!.Courts).Blocks);
+        var blockForAdmin = Assert.Single(Assert.Single(seenByAdmin!.Courts).Blocks);
+
+        // Dass der Platz gesperrt ist und warum, darf jeder im Verein wissen.
+        Assert.Equal(BlockReason.Maintenance, blockForPlayer.Reason);
+        Assert.Null(blockForPlayer.Note);
+        Assert.Equal("Belag defekt, Reklamation läuft", blockForAdmin.Note);
+    }
+
+    [Fact]
+    public async Task Ein_Platz_darf_nicht_auf_einen_belegten_Namen_umbenannt_werden()
+    {
+        // Ohne die Prüfung im Aggregat schlüge der eindeutige Index als
+        // Datenbankfehler durch — für den Aufrufer ein 500 statt 422.
+        var admin = await SystemAdminClientAsync();
+        var clubId = await CreateClubAsync(admin, $"TC Umbenennen {Guid.NewGuid():N}");
+
+        await admin.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/courts",
+            new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor),
+            Json);
+        var secondId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/courts",
+            new CreateCourtRequest("Platz 2", CourtSurface.Clay, CourtLocation.Outdoor),
+            Json));
+
+        var response = await admin.PutAsJsonAsync(
+            $"/api/clubs/{clubId}/courts/{secondId}",
+            new UpdateCourtRequest("Platz 1", IsCenterCourt: false, IsActive: true),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Eine_fachlich_ungueltige_Eingabe_wird_zu_422()
     {
         var client = await SystemAdminClientAsync();

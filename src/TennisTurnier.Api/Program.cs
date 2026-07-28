@@ -39,20 +39,18 @@ app.UseUserResolution();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("Health");
 app.MapClubEndpoints();
 
-await MigrateAsync(app);
+// Für eine Vereinsanwendung mit einer SQLite-Datei ist das Wandern des Schemas
+// beim Start bequem. Es ist aber ein Nebeneffekt des Startens, und sobald zwei
+// Prozesse gleichzeitig starten — mehrere Instanzen, oder ein Testhost, der den
+// Host zweimal baut — überholen sie einander und einer scheitert an bereits
+// vorhandenen Tabellen. Deshalb ist es abschaltbar, und wer die Migration
+// steuern muss, ruft DatabaseMigrator selbst auf.
+if (builder.Configuration.GetValue("Database:AutoMigrate", defaultValue: true))
+{
+    await app.Services.MigrateDatabaseAsync();
+}
 
 app.Run();
-
-static async Task MigrateAsync(WebApplication app)
-{
-    // Für eine Vereinsanwendung mit einer SQLite-Datei ist das Wandern des
-    // Schemas beim Start angemessen. Sobald mehrere Instanzen laufen, gehört es
-    // in einen eigenen Schritt der Auslieferung — dann würden sie einander
-    // beim Start überholen.
-    await using var scope = app.Services.CreateAsyncScope();
-    var db = scope.ServiceProvider.GetRequiredService<TennisTurnierDbContext>();
-    await db.Database.MigrateAsync();
-}
 
 /// <summary>
 /// Sichtbar gemacht, damit <c>WebApplicationFactory&lt;Program&gt;</c> in

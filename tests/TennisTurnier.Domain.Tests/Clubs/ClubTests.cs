@@ -76,6 +76,48 @@ public sealed class ClubTests
     }
 
     [Fact]
+    public void Ein_Platz_darf_nicht_auf_einen_belegten_Namen_umbenannt_werden()
+    {
+        // Ohne diese Prüfung bliebe die Eindeutigkeit allein dem eindeutigen
+        // Index überlassen, und der Konflikt schlüge als Datenbankfehler durch
+        // — für den Aufrufer ein 500 statt einer verständlichen Absage.
+        var club = NewClub();
+        club.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
+        var second = club.AddCourt(Guid.NewGuid(), "Platz 2", CourtSurface.Clay, CourtLocation.Outdoor);
+
+        Assert.Throws<DomainException>(() => club.RenameCourt(second.Id, "platz 1"));
+    }
+
+    [Fact]
+    public void Ein_Platz_darf_auf_seinen_eigenen_Namen_umbenannt_werden()
+    {
+        // Sonst schlüge jede Aktualisierung fehl, die den Namen unverändert lässt.
+        var club = NewClub();
+        var court = club.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
+
+        club.RenameCourt(court.Id, "Platz 1");
+
+        Assert.Equal("Platz 1", court.Name);
+    }
+
+    [Fact]
+    public void Ein_Platz_laesst_sich_auf_einen_freien_Namen_umbenennen()
+    {
+        var club = NewClub();
+        var court = club.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
+
+        club.RenameCourt(court.Id, "  Center Court  ");
+
+        Assert.Equal("Center Court", court.Name);
+    }
+
+    [Fact]
+    public void Das_Umbenennen_eines_unbekannten_Platzes_schlaegt_fehl()
+    {
+        Assert.Throws<DomainException>(() => NewClub().RenameCourt(Guid.NewGuid(), "Platz 1"));
+    }
+
+    [Fact]
     public void Die_Zeitzone_laesst_sich_aufloesen()
     {
         Assert.Equal("Europe/Vienna", NewClub().TimeZone.Id);

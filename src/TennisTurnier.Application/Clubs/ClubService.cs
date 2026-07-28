@@ -50,7 +50,7 @@ public sealed class ClubService : IClubService
             club.Name,
             club.City,
             club.TimeZoneId,
-            club.Courts.Select(ToDetail).ToList());
+            club.Courts.Select(court => ToDetail(court, MaySeeInternals(clubId))).ToList());
     }
 
     public async Task UpdateAsync(
@@ -91,7 +91,7 @@ public sealed class ClubService : IClubService
         var club = await LoadForCourtManagement(clubId, cancellationToken);
         var court = CourtOf(club, courtId);
 
-        court.Rename(request.Name);
+        club.RenameCourt(courtId, request.Name);
         court.MarkAsCenterCourt(request.IsCenterCourt);
 
         if (request.IsActive)
@@ -204,11 +204,21 @@ public sealed class ClubService : IClubService
         return club;
     }
 
+    /// <summary>
+    /// Wer im Verein irgendeine Rolle hat, sieht ihn — auch ein Spieler. Die
+    /// internen Notizen an den Sperren gehören aber ausdrücklich zu
+    /// <see cref="Permission.ViewInternals"/>. Ohne diese Unterscheidung wäre
+    /// die Berechtigung bedeutungslos, weil jedes Vereinsmitglied den Grund
+    /// jeder Sperre im Klartext mitlesen könnte.
+    /// </summary>
+    private bool MaySeeInternals(Guid clubId) =>
+        User.Can(Permission.ViewInternals, ResourceScope.Club(clubId));
+
     private static Court CourtOf(Club club, Guid courtId) =>
         club.Courts.FirstOrDefault(c => c.Id == courtId)
         ?? throw new NotFoundException("Platz", courtId);
 
-    private static CourtDetail ToDetail(Court court) => new(
+    private static CourtDetail ToDetail(Court court, bool includeInternals) => new(
         court.Id,
         court.Name,
         court.Surface,
@@ -219,6 +229,11 @@ public sealed class ClubService : IClubService
             .Select(w => new AvailabilityDetail(w.Id, w.DayOfWeek, w.OpensAt, w.ClosesAt, w.ValidFrom, w.ValidUntil))
             .ToList(),
         court.Blocks
-            .Select(b => new BlockDetail(b.Id, b.Period.Start, b.Period.End, b.Reason, b.Note))
+            .Select(b => new BlockDetail(
+                b.Id,
+                b.Period.Start,
+                b.Period.End,
+                b.Reason,
+                includeInternals ? b.Note : null))
             .ToList());
 }

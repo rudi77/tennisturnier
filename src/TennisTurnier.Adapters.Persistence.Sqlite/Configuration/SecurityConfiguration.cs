@@ -44,5 +44,9 @@ public sealed class RoleAssignmentConfiguration : IEntityTypeConfiguration<RoleA
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(a => a.UserId);
+
+        // Der eindeutige Index über (UserId, Role, ScopeType, ScopeResourceId)
+        // liegt in der Migration UniqueRoleAssignment und nicht hier: EF Core
+        // kann Indizes nicht über die Spalten eines Komplextyps beschreiben.
     }
 }

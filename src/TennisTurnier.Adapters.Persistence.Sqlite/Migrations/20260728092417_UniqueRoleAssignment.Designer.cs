@@ -12,8 +12,8 @@ using TennisTurnier.Adapters.Persistence.Sqlite;
 namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
 {
     [DbContext(typeof(TennisTurnierDbContext))]
-    [Migration("20260728085955_InitialClubsAndSecurity")]
-    partial class InitialClubsAndSecurity
+    [Migration("20260728092417_UniqueRoleAssignment")]
+    partial class UniqueRoleAssignment
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,7 +24,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
             modelBuilder.Entity("TennisTurnier.Domain.Clubs.AvailabilityWindow", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<TimeOnly>("ClosesAt")
@@ -57,7 +56,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
             modelBuilder.Entity("TennisTurnier.Domain.Clubs.Club", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("City")
@@ -84,7 +82,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
             modelBuilder.Entity("TennisTurnier.Domain.Clubs.Court", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("ClubId")
@@ -122,7 +119,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
             modelBuilder.Entity("TennisTurnier.Domain.Clubs.CourtBlock", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("CourtId")
@@ -162,7 +158,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
             modelBuilder.Entity("TennisTurnier.Domain.Security.RoleAssignment", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Role")
@@ -198,7 +193,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
             modelBuilder.Entity("TennisTurnier.Domain.Security.UserAccount", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("DisplayName")

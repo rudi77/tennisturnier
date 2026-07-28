@@ -46,22 +46,45 @@ public sealed class UserDirectory : IUserDirectory
             .Where(a => a.UserId == userId)
             .ToListAsync(cancellationToken);
 
+    /// <summary>
+    /// Vergibt die Rolle, sofern sie nicht bereits besteht. Idempotent.
+    ///
+    /// Die Vorabprüfung allein genügt nicht: zwischen Lesen und Schreiben passt
+    /// eine zweite Vergabe. Den Ausschlag gibt der eindeutige Index aus der
+    /// Migration <c>UniqueRoleAssignment</c>; sein Verstoß bedeutet hier nichts
+    /// anderes, als dass jemand anderes schneller war — und damit das gewünschte
+    /// Ergebnis.
+    /// </summary>
     public async Task AssignAsync(RoleAssignment assignment, CancellationToken cancellationToken = default)
     {
-        var alreadyGranted = await _db.RoleAssignments.AnyAsync(
-            a => a.UserId == assignment.UserId
-                 && a.Role == assignment.Role
-                 && a.Scope == assignment.Scope,
-            cancellationToken);
-
-        if (alreadyGranted)
+        if (await ExistsAsync(assignment, cancellationToken))
         {
             return;
         }
 
         _db.RoleAssignments.Add(assignment);
-        await _db.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            _db.Entry(assignment).State = EntityState.Detached;
+
+            if (!await ExistsAsync(assignment, cancellationToken))
+            {
+                throw;
+            }
+        }
     }
+
+    private Task<bool> ExistsAsync(RoleAssignment assignment, CancellationToken cancellationToken) =>
+        _db.RoleAssignments.AnyAsync(
+            a => a.UserId == assignment.UserId
+                 && a.Role == assignment.Role
+                 && a.Scope == assignment.Scope,
+            cancellationToken);
 
     public async Task RevokeAsync(Guid assignmentId, CancellationToken cancellationToken = default)
     {

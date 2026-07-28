@@ -19,7 +19,7 @@ internal static class ApiFactoryExtensions
         Role role,
         ResourceScope scope)
     {
-        await using var services = factory.Services.CreateAsyncScope();
+        using var services = factory.CreateMigratedScope();
         var directory = services.ServiceProvider.GetRequiredService<IUserDirectory>();
 
         var account = await directory.EnsureAccountAsync(

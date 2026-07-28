@@ -49,14 +49,40 @@ public sealed class Club : Entity
 
     public Court AddCourt(Guid courtId, string name, CourtSurface surface, CourtLocation location)
     {
-        if (_courts.Any(c => string.Equals(c.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new DomainException($"Der Verein hat bereits einen Platz mit dem Namen „{name.Trim()}“.");
-        }
+        RequireFreeCourtName(name, exceptCourtId: null);
 
         var court = new Court(courtId, Id, name, surface, location);
         _courts.Add(court);
         return court;
+    }
+
+    /// <summary>
+    /// Das Umbenennen läuft über den Verein, weil nur er die Geschwisterplätze
+    /// kennt. Ginge es direkt am Platz, bliebe die Eindeutigkeit allein dem
+    /// eindeutigen Index überlassen — und ein belegter Name schlüge als
+    /// Datenbankfehler durch statt als fachlicher.
+    /// </summary>
+    public void RenameCourt(Guid courtId, string name)
+    {
+        var court = _courts.FirstOrDefault(c => c.Id == courtId)
+            ?? throw new DomainException($"Der Verein hat keinen Platz mit der Id {courtId}.");
+
+        RequireFreeCourtName(name, exceptCourtId: courtId);
+        court.Rename(name);
+    }
+
+    private void RequireFreeCourtName(string name, Guid? exceptCourtId)
+    {
+        var candidate = (name ?? string.Empty).Trim();
+
+        var taken = _courts.Any(c =>
+            c.Id != exceptCourtId
+            && string.Equals(c.Name, candidate, StringComparison.OrdinalIgnoreCase));
+
+        if (taken)
+        {
+            throw new DomainException($"Der Verein hat bereits einen Platz mit dem Namen „{candidate}“.");
+        }
     }
 
     private static string Validate(string name) =>

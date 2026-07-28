@@ -15,7 +15,6 @@ namespace TennisTurnier.Adapters.Persistence.Tests;
 public sealed class SqliteTestDatabase : IAsyncDisposable
 {
     private readonly string _path;
-    private readonly MutableUserContext _userContext = new();
 
     public SqliteTestDatabase()
     {
@@ -26,21 +25,24 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
     }
 
     /// <summary>Der Benutzer, als der die nächsten Abfragen laufen.</summary>
-    public UserPrincipal ActingAs
-    {
-        get => _userContext.Current;
-        set => _userContext.Current = value;
-    }
+    public UserPrincipal ActingAs { get; set; } = UserPrincipal.System;
 
-    public IUserContext UserContext => _userContext;
-
+    /// <summary>
+    /// Jeder Kontext bekommt seine <em>eigene</em> <see cref="IUserContext"/>-Instanz,
+    /// genau wie jeder Request in der Anwendung.
+    ///
+    /// Das ist kein Detail: das Filter-Lambda in <c>OnModelCreating</c> schließt
+    /// über denjenigen DbContext ab, der das Modell gebaut hat. Teilten sich die
+    /// Kontexte eine Instanz, liefe der Test daran vorbei und prüfte nur, dass
+    /// eine veränderliche Eigenschaft gelesen wird.
+    /// </summary>
     public TennisTurnierDbContext NewContext()
     {
         var options = new DbContextOptionsBuilder<TennisTurnierDbContext>()
             .UseSqlite($"Data Source={_path}")
             .Options;
 
-        return new TennisTurnierDbContext(options, _userContext);
+        return new TennisTurnierDbContext(options, new FixedUserContext(ActingAs));
     }
 
     public ValueTask DisposeAsync()
@@ -60,8 +62,10 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    private sealed class MutableUserContext : IUserContext
+    private sealed class FixedUserContext : IUserContext
     {
-        public UserPrincipal Current { get; set; } = UserPrincipal.System;
+        public FixedUserContext(UserPrincipal current) => Current = current;
+
+        public UserPrincipal Current { get; }
     }
 }

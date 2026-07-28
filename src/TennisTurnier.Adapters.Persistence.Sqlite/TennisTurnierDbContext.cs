@@ -56,6 +56,19 @@ public sealed class TennisTurnierDbContext : DbContext
         modelBuilder.Entity<Court>()
             .HasQueryFilter(court => SeesAllClubs || VisibleClubIds.Contains(court.ClubId));
 
+        // Auch die Kindtabellen brauchen den Filter. Über die Navigation vom
+        // Verein aus wären sie zwar bereits abgeschirmt, aber ADR-0004 begründet
+        // den Filter gerade damit, dass er nicht davon abhängt, auf welchem Weg
+        // jemand abfragt. Ein direktes `Set<CourtBlock>()` lieferte sonst die
+        // internen Notizen fremder Vereine.
+        modelBuilder.Entity<AvailabilityWindow>()
+            .HasQueryFilter(window => SeesAllClubs || Courts.Any(
+                court => court.Id == window.CourtId && VisibleClubIds.Contains(court.ClubId)));
+
+        modelBuilder.Entity<CourtBlock>()
+            .HasQueryFilter(block => SeesAllClubs || Courts.Any(
+                court => court.Id == block.CourtId && VisibleClubIds.Contains(court.ClubId)));
+
         UseDomainAssignedKeys(modelBuilder);
 
         base.OnModelCreating(modelBuilder);
