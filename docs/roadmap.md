@@ -9,7 +9,7 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M1 | Club, Court, Verfügbarkeit, Auth | Verein und Plätze verwaltbar, Club-Scope dicht | ✅ |
 | M2 | Tournament, Entry, Format | Turnier durchläuft seinen Zustandsautomaten | ✅ |
 | M3 | KnockoutFormat | K.O.-Turnier von der Anmeldung bis zum Finale spielbar | ✅ |
-| M4 | Öffentliche Ansicht | Live-Bracket mit ETag und SignalR-Push | ⬜ |
+| M4 | Öffentliche Ansicht | Live-Bracket mit ETag und SignalR-Push | ✅ |
 | M5 | RoundRobin + Phasen | Gruppenphase mit anschließendem K.O. | ⬜ |
 | M6 | Auto-Scheduling | Spielplanvorschlag mit Diff und Bestätigung | ⬜ |
 | M7 | Turniertag-Queue | Betrieb ohne starres Zeitraster | ⬜ |

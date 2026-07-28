@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using TennisTurnier.Application.Clubs;
+using TennisTurnier.Application.PublicView;
 using TennisTurnier.Application.Tournaments;
 
 namespace TennisTurnier.Application;
@@ -18,6 +19,7 @@ public static class ApplicationRegistration
         services.AddScoped<IMatchService, MatchService>();
         services.AddScoped<IPlayerService, PlayerService>();
         services.AddScoped<IFormatTemplateService, FormatTemplateService>();
+        services.AddScoped<IPublicViewService, PublicViewService>();
 
         return services;
     }

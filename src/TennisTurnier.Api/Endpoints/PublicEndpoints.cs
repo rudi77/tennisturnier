@@ -1,0 +1,85 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Net.Http.Headers;
+using TennisTurnier.Application.PublicView;
+
+namespace TennisTurnier.Api.Endpoints;
+
+/// <summary>
+/// Die öffentliche Ansicht (ADR-0003).
+///
+/// Ohne Anmeldung, mit ETag und einer kurzen Cache-Dauer. Die Antwort kommt
+/// vorserialisiert aus der Projektion und wird hier nicht mehr angefasst — jede
+/// Anreicherung an dieser Stelle wäre eine zweite Stelle, an der Daten
+/// öffentlich werden können, und damit eine, die niemand prüft.
+/// </summary>
+internal static class PublicEndpoints
+{
+    /// <summary>
+    /// Kurz genug, dass ein Ergebnis zeitnah ankommt, lang genug, dass ein
+    /// Aushang im Vereinsheim nicht jede Sekunde neu lädt. Wer es genauer
+    /// braucht, hört auf den SignalR-Push.
+    /// </summary>
+    private const int MaxAgeSeconds = 15;
+
+    public static IEndpointRouteBuilder MapPublicEndpoints(this IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/public/tournaments").WithTags("Öffentlich").AllowAnonymous();
+
+        group.MapGet("/{tournamentId:guid}", async (
+            Guid tournamentId,
+            HttpContext http,
+            IPublicViewService service,
+            CancellationToken ct) =>
+        {
+            var snapshot = await service.GetAsync(tournamentId, ct);
+            if (snapshot is null)
+            {
+                return Results.NotFound();
+            }
+
+            var headers = http.Response.GetTypedHeaders();
+            headers.ETag = new EntityTagHeaderValue(snapshot.ETag);
+            headers.CacheControl = new CacheControlHeaderValue
+            {
+                Public = true,
+                MaxAge = TimeSpan.FromSeconds(MaxAgeSeconds),
+            };
+            headers.LastModified = snapshot.UpdatedAt;
+
+            // Ein 304 spart bei einem Bracket mit 64 Matches den ganzen Body —
+            // und am Turniertag hängen viele Clients an derselben Ansicht.
+            return Matches(http.Request, snapshot.ETag)
+                ? Results.StatusCode(StatusCodes.Status304NotModified)
+                : Results.Text(snapshot.Json, "application/json", System.Text.Encoding.UTF8);
+        });
+
+        // Der Neuaufbau auf Anweisung — die einzige schreibende Handlung an der
+        // Ansicht, und ausdrücklich nicht öffentlich. Die Berechtigung prüft der
+        // Anwendungsfall, damit ein fremdes Turnier als 404 endet (ADR-0004).
+        app.MapPost("/api/tournaments/{tournamentId:guid}/public-view/rebuild", async (
+            Guid tournamentId,
+            IPublicViewService service,
+            CancellationToken ct) =>
+        {
+            await service.RebuildOnDemandAsync(tournamentId, ct);
+            return Results.NoContent();
+        }).WithTags("Öffentlich");
+
+        return app;
+    }
+
+    /// <summary>
+    /// Prüft <c>If-None-Match</c>. Der Stern trifft jede vorhandene Ressource;
+    /// sonst genügt ein Treffer aus der Liste. Ein schwacher Vergleich reicht
+    /// hier, weil der ETag ohnehin aus dem Inhalt gebildet wird.
+    /// </summary>
+    private static bool Matches(HttpRequest request, string etag)
+    {
+        var candidates = request.GetTypedHeaders().IfNoneMatch;
+
+        return candidates.Count > 0
+            && candidates.Any(candidate =>
+                candidate.Equals(EntityTagHeaderValue.Any)
+                || string.Equals(candidate.Tag.Value, etag, StringComparison.Ordinal));
+    }
+}

@@ -3,7 +3,9 @@ using TennisTurnier.Adapters.Identity.Oidc;
 using TennisTurnier.Adapters.Persistence.Sqlite;
 using TennisTurnier.Api;
 using TennisTurnier.Api.Endpoints;
+using TennisTurnier.Api.Realtime;
 using TennisTurnier.Application;
+using TennisTurnier.Application.Ports;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +16,10 @@ builder.Services.AddApplication();
 builder.Services.AddSqlitePersistence(
     builder.Configuration.GetConnectionString("Default") ?? "Data Source=tennisturnier.db");
 builder.Services.AddOidcIdentity(oidc);
+
+builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSignalR();
+builder.Services.AddScoped<ITournamentNotifier, SignalRTournamentNotifier>();
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -40,6 +46,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("Health"
 app.MapClubEndpoints();
 app.MapTournamentEndpoints();
 app.MapMatchEndpoints();
+app.MapPublicEndpoints();
+app.MapHub<TournamentHub>("/hubs/tournament");
 
 // Für eine Vereinsanwendung mit einer SQLite-Datei ist das Wandern des Schemas
 // beim Start bequem. Es ist aber ein Nebeneffekt des Startens, und sobald zwei

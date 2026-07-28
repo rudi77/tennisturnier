@@ -1,5 +1,6 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.PublicView;
 using TennisTurnier.Domain.Security;
 using TennisTurnier.Domain.Tournaments;
 
@@ -11,6 +12,7 @@ public sealed class TournamentService : ITournamentService
     private readonly IFormatTemplateRepository _templates;
     private readonly IPlayerRepository _players;
     private readonly DrawBuilder _drawBuilder;
+    private readonly IPublicViewService _publicView;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
 
@@ -19,6 +21,7 @@ public sealed class TournamentService : ITournamentService
         IFormatTemplateRepository templates,
         IPlayerRepository players,
         DrawBuilder drawBuilder,
+        IPublicViewService publicView,
         IUnitOfWork unitOfWork,
         IUserContext userContext)
     {
@@ -26,6 +29,7 @@ public sealed class TournamentService : ITournamentService
         _templates = templates;
         _players = players;
         _drawBuilder = drawBuilder;
+        _publicView = publicView;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
     }
@@ -118,6 +122,7 @@ public sealed class TournamentService : ITournamentService
         await _drawBuilder.BuildAsync(tournament, cancellationToken);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _publicView.RebuildAsync(tournamentId, cancellationToken);
     }
 
     /// <summary>
@@ -135,6 +140,7 @@ public sealed class TournamentService : ITournamentService
         await _drawBuilder.DiscardAsync(tournamentId, cancellationToken);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _publicView.RebuildAsync(tournamentId, cancellationToken);
     }
 
     public Task StartAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
@@ -166,6 +172,7 @@ public sealed class TournamentService : ITournamentService
 
         var entry = tournament.Enter(Guid.NewGuid(), request.ParticipantId, request.Seed);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _publicView.RebuildAsync(tournamentId, cancellationToken);
 
         return entry.Id;
     }
@@ -206,6 +213,12 @@ public sealed class TournamentService : ITournamentService
         var tournament = await LoadForManagement(tournamentId, cancellationToken);
         change(tournament);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Jede Änderung am Turnier kann die öffentliche Ansicht betreffen — der
+        // Name, die Termine, der Zustand, eine Setzposition. Statt zu erraten,
+        // welche es tut, wird immer neu gebaut; ob dabei etwas herauskommt,
+        // entscheidet der Vergleich in der Projektion (ADR-0003).
+        await _publicView.RebuildAsync(tournamentId, cancellationToken);
     }
 
     private async Task<Tournament> Load(Guid tournamentId, CancellationToken cancellationToken) =>

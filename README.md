@@ -73,6 +73,27 @@ Die tragenden Entscheidungen samt verworfener Alternativen stehen in
 - [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler existieren
   vereinsübergreifend — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
 
+## Öffentliche Ansicht
+
+`GET /public/tournaments/{id}` liefert ohne Anmeldung Bracket, Tabellen und die
+aktuelle Platzbelegung — mit `ETag` und `Cache-Control`; ein zweiter Abruf mit
+`If-None-Match` bekommt 304. Wer live zusehen will, abonniert im SignalR-Hub
+`/hubs/tournament` sein Turnier und wird bei jeder inhaltlichen Änderung
+benachrichtigt. Der Push trägt nur Turnier-Id und ETag: geholt wird die Ansicht
+über denselben Endpunkt, den auch Polling benutzt.
+
+Die Antwort kommt aus einer eigenen Projektion, nicht aus dem Schreibmodell
+(ADR-0003). Sie ist die einzige Tabelle ohne Query-Filter, und genau deshalb
+entscheidet allein
+`TennisTurnier.Application.PublicView.TournamentViewBuilder`, was öffentlich
+wird. Keine Kontaktdaten, keine Geburtsdaten, keine internen Notizen zu
+Platzsperren und keine Ids von Personen. Ein Test in
+`TennisTurnier.Api.Tests` prüft die ausgelieferte Antwort gegen eine
+Verbotsliste — sonst rutscht das erste zusätzliche Feld unbemerkt hinaus.
+
+Vor der Auslosung gibt es keine öffentliche Ansicht, und eine zurückgenommene
+Auslosung lässt sie wieder verschwinden.
+
 ## Turnierformate
 
 Ein Turniermodus ist eine geordnete Folge von Phasen. „Gruppenphase mit

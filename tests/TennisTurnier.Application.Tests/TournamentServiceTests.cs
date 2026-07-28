@@ -18,6 +18,7 @@ public sealed class TournamentServiceTests
     private readonly InMemoryPlayerRepository _players = new();
     private readonly InMemoryPhaseRepository _phaseRepository = new();
     private readonly CountingUnitOfWork _unitOfWork = new();
+    private readonly RecordingPublicViewService _publicView = new();
     private readonly TournamentService _service;
     private readonly FormatTemplate _template;
 
@@ -29,6 +30,7 @@ public sealed class TournamentServiceTests
             _templates,
             _players,
             new DrawBuilder(_phaseRepository, _players),
+            _publicView,
             _unitOfWork,
             _userContext);
         _template = _templates.Seed(new FormatTemplate(Guid.NewGuid(), ClubId, BuiltInFormats.Knockout));
@@ -173,6 +175,7 @@ public sealed class TournamentServiceTests
             new InMemoryFormatTemplateRepository(),
             _players,
             new DrawBuilder(_phaseRepository, _players),
+            _publicView,
             _unitOfWork,
             _userContext);
 
@@ -201,5 +204,34 @@ public sealed class TournamentServiceTests
         await _service.CloseRegistrationAsync(id);
 
         Assert.Equal(before + 2, _unitOfWork.SavedChanges);
+    }
+
+    [Fact]
+    public async Task Lesende_Aufrufe_bauen_die_oeffentliche_Ansicht_nicht_neu()
+    {
+        var id = await CreateWithTwoEntriesAsync();
+        var before = _publicView.Rebuilt.Count;
+
+        await _service.GetAsync(id);
+        await _service.ListAsync(ClubId);
+
+        Assert.Equal(before, _publicView.Rebuilt.Count);
+    }
+
+    [Fact]
+    public async Task Jede_schreibende_Handlung_baut_die_oeffentliche_Ansicht_neu()
+    {
+        // Der Neuaufbau hängt an jeder einzelnen Handlung, und genau darin liegt
+        // die Gefahr: der nächste Anwendungsfall vergisst ihn, und die Ansicht
+        // steht still, ohne dass irgendetwas fehlschlägt (ADR-0003).
+        var id = await CreateWithTwoEntriesAsync();
+        _ = _publicView.Rebuilt;
+
+        await _service.CloseRegistrationAsync(id);
+        await _service.GenerateDrawAsync(id);
+        await _service.ReopenRegistrationAsync(id);
+
+        Assert.All(_publicView.Rebuilt, rebuilt => Assert.Equal(id, rebuilt));
+        Assert.True(_publicView.Rebuilt.Count >= 3);
     }
 }

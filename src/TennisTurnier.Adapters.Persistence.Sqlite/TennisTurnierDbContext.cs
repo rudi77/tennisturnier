@@ -6,6 +6,7 @@ using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Players;
+using TennisTurnier.Domain.PublicView;
 using TennisTurnier.Domain.Scheduling;
 using TennisTurnier.Domain.Tournaments;
 using TennisTurnier.Domain.Security;
@@ -43,6 +44,12 @@ public sealed class TennisTurnierDbContext : DbContext
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
 
     public DbSet<RoleAssignment> RoleAssignments => Set<RoleAssignment>();
+
+    /// <summary>
+    /// Die öffentliche Projektion (ADR-0003). Bewusst ohne Query-Filter — sie
+    /// wird von Zuschauern ohne Anmeldung gelesen.
+    /// </summary>
+    public DbSet<TournamentProjection> TournamentProjections => Set<TournamentProjection>();
 
     /// <summary>
     /// Sieht der Aufrufer alle Vereine? Wird vom Query-Filter ausgewertet.
@@ -143,6 +150,10 @@ public sealed class TennisTurnierDbContext : DbContext
 
         modelBuilder.Entity<CourtAssignment>()
             .HasQueryFilter(a => SeesAllClubs || Tournaments.Any(t => t.Id == a.TournamentId));
+
+        // Die öffentliche Projektion bekommt bewusst keinen Filter: sie enthält
+        // nur, was jeder sehen darf, und wird ohne Anmeldung gelesen (ADR-0003).
+        // Diese Ausnahme ist die Begründung dafür, dass es sie überhaupt gibt.
 
         // Spieler und Teilnehmer tragen bewusst keine ClubId (ADR-0008) und
         // können daher nicht gefiltert werden. Ihr Schutz entsteht dort, wo

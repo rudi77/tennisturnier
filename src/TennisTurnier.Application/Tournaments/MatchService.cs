@@ -1,5 +1,6 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.PublicView;
 using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
@@ -54,6 +55,7 @@ public sealed class MatchService : IMatchService
     private readonly ICourtAssignmentRepository _assignments;
     private readonly IClubRepository _clubs;
     private readonly IPlayerRepository _players;
+    private readonly IPublicViewService _publicView;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
 
@@ -63,6 +65,7 @@ public sealed class MatchService : IMatchService
         ICourtAssignmentRepository assignments,
         IClubRepository clubs,
         IPlayerRepository players,
+        IPublicViewService publicView,
         IUnitOfWork unitOfWork,
         IUserContext userContext)
     {
@@ -71,6 +74,7 @@ public sealed class MatchService : IMatchService
         _assignments = assignments;
         _clubs = clubs;
         _players = players;
+        _publicView = publicView;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
     }
@@ -133,6 +137,7 @@ public sealed class MatchService : IMatchService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _publicView.RebuildAsync(tournament.Id, cancellationToken);
     }
 
     public async Task ClearResultAsync(Guid matchId, CancellationToken cancellationToken = default)
@@ -143,6 +148,7 @@ public sealed class MatchService : IMatchService
         phase.ClearResult(matchId);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _publicView.RebuildAsync(tournament.Id, cancellationToken);
     }
 
     public async Task<AssignCourtResult> AssignCourtAsync(
@@ -186,6 +192,7 @@ public sealed class MatchService : IMatchService
             court.Id, request.SequenceOnCourt, request.PlannedStart, request.EarliestStart, duration, source);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _publicView.RebuildAsync(tournament.Id, cancellationToken);
 
         var violations = await ValidateAsync(
             tournament,
@@ -206,6 +213,7 @@ public sealed class MatchService : IMatchService
 
         _assignments.Remove(assignment);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _publicView.RebuildAsync(tournament.Id, cancellationToken);
     }
 
     // --- Ergebnisaufbau ----------------------------------------------------
