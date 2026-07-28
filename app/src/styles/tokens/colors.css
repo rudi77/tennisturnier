@@ -1,0 +1,74 @@
+:root {
+  /* ---- Court chrome: the dark app shell -------------------------------- */
+  --court-950: #06152e;   /* side nav, kiosk canvas, dark panels */
+  --court-900: #001b48;   /* primary text, solid dark buttons */
+  --court-700: #003065;   /* secondary emphasis on light */
+
+  /* ---- Signal blues ---------------------------------------------------- */
+  --blue-400: #1f9ede;    /* links, proposals, informative fills */
+  --blue-100: #d7ebf7;    /* pale chips, "geplant" status */
+
+  /* ---- Ball: the single activating accent ------------------------------ */
+  --ball-400: #d8fb4f;    /* LIVE / running. One accent, used sparingly. */
+  --ball-tint: rgba(216, 251, 79, 0.10);
+
+  /* ---- Call & alarm ---------------------------------------------------- */
+  --call-400: #ff7d6d;    /* "aufgerufen" — the player must come to court */
+  --call-tint: #fff1ef;
+
+  /* ---- Data accents (never without a blue or dark host) ---------------- */
+  --accent-cyan: #20efee;
+
+  /* ---- Surfaces -------------------------------------------------------- */
+  --page: #eef1f6;
+  --surface: #ffffff;
+  --surface-muted: #f4f7fb;
+  --surface-raised: #fbfcfe;
+  --surface-inverse: var(--court-950);
+
+  /* ---- Selected & informative surfaces --------------------------------- */
+  --surface-selected: #f8fbff;   /* a picked row (CheckRow) */
+  --line-selected: #cfe3f4;
+  --surface-chosen: #f4f9ff;     /* the chosen format template */
+  --surface-info: #f2fafe;       /* solver proposal banner */
+  --surface-footer: #f8fafc;     /* modal footer */
+  --line-hairline: #f1f4f9;      /* inside-list row divider */
+
+  /* ---- Lines ----------------------------------------------------------- */
+  --line: #dce0e9;
+  --line-soft: #eef1f6;
+  --line-strong: #cfd8e6;
+  --line-on-dark: rgba(255, 255, 255, 0.10);
+
+  /* ---- Foreground ------------------------------------------------------ */
+  --fg: #001b48;
+  --fg-2: #52525b;
+  --fg-3: #8b8f99;
+  --fg-dim: #9aa3b2;          /* defeated player in a finished match */
+  --fg-on-dark: #ffffff;
+  --fg-on-dark-2: rgba(255, 255, 255, 0.58);
+  --fg-on-dark-3: rgba(255, 255, 255, 0.42);
+  --fg-on-ball: var(--court-950);
+
+  /* ---- Match & assignment status (paired fill + ink) ------------------- */
+  --status-running-bg: var(--ball-400);
+  --status-running-fg: var(--court-950);
+  --status-called-bg: var(--call-400);
+  --status-called-fg: var(--court-900);
+  --status-planned-bg: var(--blue-100);
+  --status-planned-fg: var(--court-700);
+  --status-finished-bg: #eef1f6;
+  --status-finished-fg: var(--fg-2);
+  --status-suspended-bg: #fff2d6;
+  --status-suspended-fg: #8a6412;
+
+  /* ---- Court blocks (Sperren): hatched, never a flat fill ------------- */
+  --block-hatch: repeating-linear-gradient(135deg, #e7ebf2 0 6px, #dce0e9 6px 12px);
+  --block-hatch-strong: repeating-linear-gradient(135deg, #c8cfdb 0 4px, #b8c1d0 4px 8px);
+
+  /* ---- Semantic states ------------------------------------------------- */
+  --success: #16a36a;
+  --warning: #d99c2b;
+  --danger: #e34c4c;
+  --focus-ring: var(--blue-400);
+}

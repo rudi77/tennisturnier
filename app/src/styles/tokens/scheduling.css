@@ -1,0 +1,15 @@
+:root {
+  /* The planning grid is a real unit system, not decoration.
+     Every absolutely positioned element in the Gantt — cards, court blocks,
+     the hour gutter and the background stripes — derives from this ONE value.
+     Drifting them apart draws availability at the wrong time of day. */
+  --px-per-hour: 90px;
+  --gantt-hour-line: #eef1f6;
+  --gantt-day-start: 9;   /* 09:00 — row 0 of the grid */
+  --gantt-day-hours: 12;  /* 09:00–21:00 */
+
+  /* Default duration estimates (minutes) used before a match has a history. */
+  --est-best-of-3: 75;
+  --est-final: 95;
+  --min-rest-minutes: 30;
+}

@@ -1,0 +1,4 @@
+/* Montserrat (UI/display) + Source Code Pro (numbers, IDs, times).
+   Loaded from Google Fonts. To self-host, drop .woff2 into assets/fonts/
+   and replace the @import with the @font-face rules below. */
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600&display=swap");

@@ -1,0 +1,26 @@
+:root {
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 6px;
+  --sp-4: 8px;
+  --sp-5: 10px;
+  --sp-6: 12px;
+  --sp-7: 14px;
+  --sp-8: 16px;
+  --sp-10: 20px;
+  --sp-12: 24px;
+  --sp-14: 26px;
+  --sp-16: 32px;
+  --sp-20: 40px;
+  --sp-24: 48px;
+
+  /* Layout constants lifted from the working prototype */
+  --nav-width: 212px;
+  --header-height: 62px;
+  --gutter-page: var(--sp-14);      /* 26px page padding */
+  --court-col-width: 176px;         /* matchday queue column */
+  --gantt-col-width: 138px;         /* planning-mode court column */
+  --bracket-card-width: 196px;
+  --phone-width: 392px;
+  --hit-target: 44px;               /* never smaller on court-side controls */
+}

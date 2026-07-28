@@ -1,0 +1,33 @@
+:root {
+  --font-ui: "Montserrat", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* Dense ops scale. This is an operations tool: 11–13px carries the UI,
+     and only kiosk/hero type goes large. */
+  --fs-micro: 9.5px;   /* uppercase meta above a card, seed numbers */
+  --fs-tiny: 10.5px;   /* eyebrow labels, tab bar */
+  --fs-xs: 11px;       /* times, secondary meta */
+  --fs-sm: 12px;       /* body in dense views */
+  --fs-base: 12.5px;   /* buttons, primary rows */
+  --fs-md: 13px;       /* panel titles */
+  --fs-lg: 15px;       /* section headings */
+  --fs-xl: 19px;       /* page title */
+  --fs-2xl: 24px;      /* kiosk headline */
+  --fs-clock: 34px;    /* kiosk clock */
+
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.55;
+
+  --ls-tight: -0.02em;
+  --ls-snug: -0.01em;
+  --ls-wide: 0.06em;    /* status chips */
+  --ls-wider: 0.1em;    /* uppercase eyebrows */
+  --ls-brand: 0.06em;   /* MATCHDAY wordmark */
+}

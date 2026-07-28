@@ -1,0 +1,262 @@
+import { useState } from 'react'
+import { AssignmentStatus, MatchStatus, type CourtBoard, type QueuedMatch } from '../../api/types'
+import { assignmentStatusLabel, assignmentTone } from '../../lib/labels'
+import { formatClock, timeSpanToMinutes } from '../../lib/time'
+import { StatusChip } from '../core/StatusChip'
+import { TimeLabel } from './TimeLabel'
+
+export type QueueAction = 'call' | 'start' | 'finish' | 'suspend' | 'resume' | 'result'
+
+/**
+ * Der Turniertag.
+ *
+ * Kein Zeitraster mehr: die **Reihenfolge** auf dem Platz ist die Aussage, nicht
+ * die Uhrzeit. „Sie sind der Dritte auf Platz 2" ist eine Auskunft, eine
+ * Startzeit wäre eine Behauptung, die beim ersten langen Match zerfällt.
+ */
+export function QueueBoard({
+  boards,
+  timeZone,
+  busyAssignmentId,
+  onAction,
+  onDropMatch,
+}: {
+  boards: CourtBoard[]
+  timeZone: string
+  busyAssignmentId: string | null
+  onAction: (action: QueueAction, entry: QueuedMatch) => void
+  onDropMatch: (matchId: string, courtId: string) => void
+}) {
+  const [dragMatchId, setDragMatchId] = useState<string | null>(null)
+
+  return (
+    <div style={{ overflowX: 'auto', paddingBottom: 'var(--sp-4)' }}>
+      <div style={{ display: 'flex', gap: 'var(--sp-6)', minWidth: 1180, alignItems: 'flex-start' }}>
+        {boards.map((board) => {
+          const head = board.current ?? board.queue[0] ?? null
+          const live = board.current?.status === AssignmentStatus.Running
+
+          return (
+            <div
+              key={board.courtId}
+              className={`md-queue__col${live ? ' md-queue__col--live' : ''}`}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                if (dragMatchId) onDropMatch(dragMatchId, board.courtId)
+                setDragMatchId(null)
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--sp-3)',
+                  padding: 'var(--sp-5) var(--sp-6)',
+                  borderBottom: 'var(--border)',
+                }}
+              >
+                <div style={{ fontSize: 12.5, fontWeight: 'var(--fw-bold)', whiteSpace: 'nowrap' }}>
+                  {board.courtName}
+                </div>
+                {board.isCenterCourt && (
+                  <div
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 'var(--fw-bold)',
+                      letterSpacing: 'var(--ls-wide)',
+                      color: 'var(--fg-3)',
+                    }}
+                  >
+                    CENTER
+                  </div>
+                )}
+                <StatusChip
+                  tone={head ? assignmentTone(head.status) : 'finished'}
+                  style={{ marginLeft: 'auto' }}
+                >
+                  {head ? assignmentStatusLabel[head.status] : 'frei'}
+                </StatusChip>
+              </div>
+
+              <div
+                style={{
+                  padding: 'var(--sp-5)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--sp-4)',
+                  minHeight: 120,
+                }}
+              >
+                {board.current && (
+                  <QueueCard
+                    entry={board.current}
+                    position={0}
+                    timeZone={timeZone}
+                    busy={busyAssignmentId === board.current.assignmentId}
+                    onAction={onAction}
+                    onDragStart={() => setDragMatchId(board.current?.matchId ?? null)}
+                  />
+                )}
+                {board.queue.map((entry, index) => (
+                  <QueueCard
+                    key={entry.assignmentId}
+                    entry={entry}
+                    position={board.current ? index + 1 : index}
+                    timeZone={timeZone}
+                    busy={busyAssignmentId === entry.assignmentId}
+                    onAction={onAction}
+                    onDragStart={() => setDragMatchId(entry.matchId)}
+                  />
+                ))}
+                {!board.current && board.queue.length === 0 && (
+                  <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', padding: 'var(--sp-4)' }}>
+                    Keine Zuweisung. Karten lassen sich hierher ziehen.
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function QueueCard({
+  entry,
+  position,
+  timeZone,
+  busy,
+  onAction,
+  onDragStart,
+}: {
+  entry: QueuedMatch
+  position: number
+  timeZone: string
+  busy: boolean
+  onAction: (action: QueueAction, entry: QueuedMatch) => void
+  onDragStart: () => void
+}) {
+  const running = entry.status === AssignmentStatus.Running
+  const called = entry.status === AssignmentStatus.Called
+  const suspended = entry.status === AssignmentStatus.Suspended
+  const planned = entry.status === AssignmentStatus.Planned
+
+  // Eingeplant ist der ganze Baum, lange bevor die Teilnehmer feststehen — am
+  // Platz wird aber kein Platzhalter ausgerufen.
+  const callable = planned && position === 0 && entry.matchStatus === MatchStatus.Ready
+
+  const duration = timeSpanToMinutes(entry.estimatedDuration)
+  const className = `md-queue__card${
+    running ? ' md-queue__card--running' : called ? ' md-queue__card--called' : ''
+  }`
+
+  return (
+    <div
+      className={className}
+      draggable
+      onDragStart={onDragStart}
+      style={{
+        boxShadow: position === 0 ? 'var(--shadow-sm)' : 'none',
+        opacity: position > 2 ? 0.72 : 1,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
+        <span className="md-num" style={{ fontSize: 9.5, letterSpacing: '0.04em', opacity: 0.65 }}>
+          {entry.label ?? `#${entry.sequenceOnCourt + 1}`}
+        </span>
+        {running ? (
+          <span className="md-time md-time--on-ball">
+            seit {formatClock(entry.actualStart, timeZone)}
+          </span>
+        ) : (
+          <TimeLabel
+            earliestStart={entry.earliestStart}
+            plannedStart={entry.estimatedStart}
+            timeZone={timeZone}
+            withinOpeningHours={entry.withinOpeningHours}
+          />
+        )}
+      </div>
+
+      <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)', marginTop: 6, lineHeight: 1.4 }}>
+        {entry.side1 ?? '—'}
+      </div>
+      <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)', lineHeight: 1.4 }}>
+        {entry.side2 ?? '—'}
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--sp-3)',
+          marginTop: 'var(--sp-4)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <span className="md-num" style={{ fontSize: 'var(--fs-xs)', fontWeight: 'var(--fw-semibold)' }}>
+          ≈ {duration} min
+        </span>
+        <StatusChip tone={assignmentTone(entry.status)}>
+          {assignmentStatusLabel[entry.status]}
+        </StatusChip>
+      </div>
+
+      {!entry.withinOpeningHours && (
+        <div style={{ fontSize: 10, color: 'var(--danger)', marginTop: 5, lineHeight: 1.35 }}>
+          Schätzung liegt außerhalb der Öffnungszeiten — umverteilen oder vertagen.
+        </div>
+      )}
+
+      {planned && position === 0 && entry.matchStatus !== MatchStatus.Ready && (
+        <div style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 5, lineHeight: 1.35 }}>
+          Teilnehmer stehen noch nicht fest — nicht aufrufbar.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 9, flexWrap: 'wrap' }}>
+        {callable && (
+          <Action label="Aufrufen" variant="md-btn--call" busy={busy} onClick={() => onAction('call', entry)} />
+        )}
+        {called && (
+          <Action label="Start" variant="md-btn--primary" busy={busy} onClick={() => onAction('start', entry)} />
+        )}
+        {running && (
+          <>
+            <Action label="Ergebnis" variant="md-btn--primary" busy={busy} onClick={() => onAction('result', entry)} />
+            <Action label="Platz frei" busy={busy} onClick={() => onAction('finish', entry)} />
+            <Action label="Pause" busy={busy} onClick={() => onAction('suspend', entry)} />
+          </>
+        )}
+        {suspended && (
+          <Action label="Fortsetzen" variant="md-btn--primary" busy={busy} onClick={() => onAction('resume', entry)} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Action({
+  label,
+  variant,
+  busy,
+  onClick,
+}: {
+  label: string
+  variant?: string
+  busy: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`md-btn md-btn--court${variant ? ` ${variant}` : ''}`}
+      disabled={busy}
+      onClick={onClick}
+      style={{ fontSize: 11.5, padding: '0 12px' }}
+    >
+      {label}
+    </button>
+  )
+}

@@ -1,0 +1,35 @@
+html {
+  font-family: var(--font-ui);
+  color: var(--fg);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+body { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-normal); }
+* { box-sizing: border-box; }
+a { color: var(--blue-400); text-decoration: none; }
+a:hover { color: var(--fg); }
+button { font-family: inherit; }
+input { font-family: inherit; }
+
+/* Every number in this system is Source Code Pro with tabular figures:
+   times, scores, seeds, IDs, versions, KPIs. */
+.md-num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "calt" 0;
+  white-space: nowrap;
+}
+
+/* Uppercase meta label */
+.md-eyebrow {
+  font-size: var(--fs-tiny);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+::-webkit-scrollbar { height: 10px; width: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(0, 27, 72, 0.18); border-radius: var(--radius-pill); }
+::-webkit-scrollbar-track { background: transparent; }
