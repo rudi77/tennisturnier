@@ -171,8 +171,8 @@ public sealed class Phase : Entity
 
         foreach (var match in _matches.Where(m => m.Score is null))
         {
-            changed |= ResolveGroupPosition(match, 1, sourcePhaseId, qualified);
-            changed |= ResolveGroupPosition(match, 2, sourcePhaseId, qualified);
+            changed |= SetGroupPosition(match, 1, sourcePhaseId, qualified);
+            changed |= SetGroupPosition(match, 2, sourcePhaseId, qualified);
         }
 
         if (changed)
@@ -185,15 +185,47 @@ public sealed class Phase : Entity
         return changed;
     }
 
-    private static bool ResolveGroupPosition(
+    /// <summary>
+    /// Setzt oder ersetzt die Besetzung eines Gruppenplatzes.
+    ///
+    /// Ersetzt ausdrücklich auch: wird ein Gruppenergebnis korrigiert, ändert
+    /// sich die Tabelle, und ein anderer ist qualifiziert. Bliebe hier der alte
+    /// stehen, widersprächen sich Tabelle und Baum dauerhaft — und niemand
+    /// bekäme davon eine Meldung. Steht kein Qualifikant mehr zur Verfügung,
+    /// weil die Vorphase nicht mehr abgeschlossen ist, wird der Platz wieder
+    /// geleert.
+    /// </summary>
+    private static bool SetGroupPosition(
         Match match,
         int side,
         Guid sourcePhaseId,
-        IReadOnlyDictionary<(string Group, int Rank), Guid> qualified) =>
-        match.Side(side).Origin is ParticipantRef.GroupPosition position
-        && position.PhaseId == sourcePhaseId
-        && qualified.TryGetValue((position.Group, position.Rank), out var entryId)
-        && match.Resolve(side, entryId);
+        IReadOnlyDictionary<(string Group, int Rank), Guid> qualified)
+    {
+        if (match.Side(side).Origin is not ParticipantRef.GroupPosition position
+            || position.PhaseId != sourcePhaseId)
+        {
+            return false;
+        }
+
+        var current = match.Side(side).EntryId;
+
+        if (!qualified.TryGetValue((position.Group, position.Rank), out var entryId))
+        {
+            return current is not null && match.Unresolve(side);
+        }
+
+        return current != entryId && match.Resolve(side, entryId);
+    }
+
+    /// <summary>
+    /// Wurde in dieser Phase schon ein Ergebnis eingetragen?
+    ///
+    /// Die Frage entscheidet, ob eine Vorphase noch angetastet werden darf: ein
+    /// korrigiertes Gruppenergebnis, das die Endrunde umbesetzen würde, muss von
+    /// hinten aufgerollt werden — sonst stünde dort jemand, der laut korrigierter
+    /// Tabelle nie hätte antreten dürfen.
+    /// </summary>
+    public bool HasAnyResult => _matches.Any(match => match.Score is not null);
 
     /// <summary>
     /// Löst alle Referenzen auf, deren Vorgänger entschieden ist.

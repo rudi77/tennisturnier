@@ -141,7 +141,7 @@ public static class TournamentViewBuilder
         ParticipantRef.Entry => "gesetzt",
         ParticipantRef.WinnerOf winner => $"Sieger aus {labels.GetValueOrDefault(winner.MatchId, "einem Vorspiel")}",
         ParticipantRef.LoserOf loser => $"Verlierer aus {labels.GetValueOrDefault(loser.MatchId, "einem Vorspiel")}",
-        ParticipantRef.GroupPosition group => $"{group.Rank}. der {group.Group}",
+        ParticipantRef.GroupPosition group => group.ToString(),
         ParticipantRef.Bye => "Freilos",
         _ => "offen",
     };

@@ -267,6 +267,116 @@ public sealed class GroupThenKnockoutApiTests : IClassFixture<TennisTurnierApiFa
     }
 
     [Fact]
+    public async Task Eine_zurueckgenommene_Gruppenpartie_leert_die_Endrunde_wieder()
+    {
+        // Regression: die Besetzung der Endrunde wurde nur gesetzt, nie
+        // zurückgenommen. Nach einer Rücknahme in der Gruppenphase stand die
+        // Endrunde weiter besetzt und ließ sich sogar spielen — während die
+        // Tabelle, aus der sie hervorging, wieder offen war.
+        var (client, tournamentId) = await DrawnAsync();
+        await PlayGroupsAsync(client, tournamentId);
+
+        var groups = (await PhasesAsync(client, tournamentId)).Single(p => p.Ordinal == 1);
+        var groupMatch = groups.Matches.First(m => m.Score is not null);
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.DeleteAsync($"/api/matches/{groupMatch.Id}/result")).StatusCode);
+
+        var final = (await PhasesAsync(client, tournamentId)).Single(p => p.Ordinal == 2);
+
+        Assert.All(final.Matches.Where(m => m.Round == 1), match =>
+        {
+            Assert.Null(match.Side1.EntryId);
+            Assert.Null(match.Side2.EntryId);
+            Assert.Equal(MatchStatus.Pending, match.Status);
+        });
+    }
+
+    [Fact]
+    public async Task Eine_Gruppenpartie_laesst_sich_nicht_aendern_wenn_die_Endrunde_laeuft()
+    {
+        // Regression: die Sperre gegen bereits entschiedene Folgematches sah nur
+        // die eigene Phase. Ein Gruppenergebnis ließ sich umdrehen, obwohl das
+        // Finale längst gespielt war — Tabelle und Baum widersprachen sich
+        // dauerhaft, und der Turniersieger war laut korrigierter Tabelle gar
+        // nicht qualifiziert.
+        var (client, tournamentId) = await DrawnAsync();
+        await PlayGroupsAsync(client, tournamentId);
+
+        var final = (await PhasesAsync(client, tournamentId)).Single(p => p.Ordinal == 2);
+        var quarterFinal = final.Matches.First(m => m.Status == MatchStatus.Ready);
+
+        await client.PutAsJsonAsync(
+            $"/api/matches/{quarterFinal.Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 2)]),
+            Json);
+
+        var groups = (await PhasesAsync(client, tournamentId)).Single(p => p.Ordinal == 1);
+        var groupMatch = groups.Matches.First(m => m.Score is not null);
+
+        Assert.Equal(
+            HttpStatusCode.UnprocessableEntity,
+            (await client.DeleteAsync($"/api/matches/{groupMatch.Id}/result")).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.UnprocessableEntity,
+            (await client.PutAsJsonAsync(
+                $"/api/matches/{groupMatch.Id}/result",
+                new RecordResultRequest(MatchOutcome.Normal, [new SetScore(4, 6), new SetScore(2, 6)]),
+                Json)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_korrigiertes_Gruppenergebnis_besetzt_die_Endrunde_neu()
+    {
+        // Solange die Endrunde noch nicht gespielt ist, muss eine Korrektur
+        // durchschlagen: wer nach der Korrektur Gruppensieger ist, steht auch im
+        // Viertelfinale.
+        var (client, tournamentId) = await DrawnAsync();
+        await PlayGroupsAsync(client, tournamentId);
+
+        var groups = (await PhasesAsync(client, tournamentId)).Single(p => p.Ordinal == 1);
+        var groupMatch = groups.Matches.First(m => m.Score is not null);
+
+        await client.DeleteAsync($"/api/matches/{groupMatch.Id}/result");
+
+        var flipped = groupMatch.Score!.WinnerSide == 1
+            ? new[] { new SetScore(4, 6), new SetScore(2, 6) }
+            : [new SetScore(6, 4), new SetScore(6, 2)];
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.PutAsJsonAsync(
+                $"/api/matches/{groupMatch.Id}/result",
+                new RecordResultRequest(MatchOutcome.Normal, flipped),
+                Json)).StatusCode);
+
+        var phases = await PhasesAsync(client, tournamentId);
+        var standings = await client.GetFromJsonAsync<StandingsDetail>(
+            $"/api/tournaments/{tournamentId}/phases/{phases[0].Id}/standings", Json);
+
+        var inBracket = phases[1].Matches
+            .Where(m => m.Round == 1)
+            .SelectMany(m => new[] { m.Side1.EntryId, m.Side2.EntryId })
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .Order()
+            .ToList();
+
+        // Die Endrunde ist wieder vollständig besetzt — und zwar mit genau denen,
+        // die die korrigierten Tabellen ausweisen, mit niemandem sonst.
+        var qualified = standings!.Places
+            .GroupBy(place => place.Group)
+            .SelectMany(group => group.OrderBy(place => place.Rank).Take(2))
+            .Select(place => place.EntryId)
+            .Order()
+            .ToList();
+
+        Assert.Equal(qualified, inBracket);
+    }
+
+    [Fact]
     public async Task Die_oeffentliche_Ansicht_zeigt_Gruppen_und_Endrunde()
     {
         var (client, tournamentId) = await DrawnAsync();

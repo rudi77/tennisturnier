@@ -36,10 +36,12 @@ public static class Qualifier
 
         return
         [
-            .. positions.Select((position, index) => SeededEntry.ForSlot(
-                ParticipantRef.FromGroupPosition(sourcePhaseId, position.Group, position.Rank),
-                seed: index + 1,
-                label: Label(position))),
+            .. positions.Select((position, index) =>
+            {
+                var origin = ParticipantRef.FromGroupPosition(sourcePhaseId, position.Group, position.Rank);
+
+                return SeededEntry.ForSlot(origin, seed: index + 1, label: origin.ToString());
+            }),
         ];
     }
 
@@ -133,7 +135,9 @@ public static class Qualifier
 
         if (qualification.Rule == QualificationRule.BestThirds)
         {
-            positions.AddRange(BestThirds(groups.Count, perGroup, positions.Count));
+            var candidates = groups.Count(group => group.Size > perGroup);
+
+            positions.AddRange(BestThirds(candidates, perGroup, positions.Count));
         }
 
         return positions;
@@ -180,12 +184,16 @@ public static class Qualifier
     /// der Tabellen (siehe <see cref="ResolveBestOfRank"/>).
     /// </summary>
     private static IEnumerable<(string Group, int Rank)> BestThirds(
-        int groupCount,
+        int candidates,
         int perGroup,
         int qualified)
     {
         var target = KnockoutFormat.NextPowerOfTwo(qualified);
-        var missing = Math.Min(target - qualified, groupCount);
+
+        // Begrenzt durch die Zahl der Gruppen, die diesen Rang überhaupt haben.
+        // Bei ungleich großen Gruppen entstünden sonst Plätze, für die es keinen
+        // Kandidaten gibt — und das Match dahinter bliebe für immer offen.
+        var missing = Math.Min(target - qualified, candidates);
 
         return Enumerable.Range(1, missing).Select(index => (BestOfRankGroup(index), perGroup + 1));
     }
@@ -195,9 +203,15 @@ public static class Qualifier
     /// Reihenfolge unter den Nächstplatzierten: „bester Dritter", „zweitbester
     /// Dritter".
     /// </summary>
-    internal static string BestOfRankGroup(int index) => $"beste #{index}";
+    internal static string BestOfRankGroup(int index) => index switch
+    {
+        1 => "#bester",
+        2 => "#zweitbester",
+        3 => "#drittbester",
+        _ => $"#{index}.-bester",
+    };
 
-    internal static bool IsBestOfRank(string group) => group.StartsWith("beste #", StringComparison.Ordinal);
+    internal static bool IsBestOfRank(string group) => group.StartsWith('#');
 
     /// <summary>
     /// Ordnet die Auffüllplätze eines Rangs zu: alle Teilnehmer dieses Rangs aus
@@ -238,17 +252,4 @@ public static class Qualifier
             .ToDictionary(pair => pair.Key, pair => pair.EntryId);
     }
 
-    private static string Label((string Group, int Rank) position) =>
-        IsBestOfRank(position.Group)
-            ? $"{position.Group} der {Ordinal(position.Rank)}"
-            : $"{Ordinal(position.Rank)} der {position.Group}";
-
-    private static string Ordinal(int rank) => rank switch
-    {
-        1 => "Erster",
-        2 => "Zweiter",
-        3 => "Dritter",
-        4 => "Vierter",
-        _ => $"{rank}.",
-    };
 }

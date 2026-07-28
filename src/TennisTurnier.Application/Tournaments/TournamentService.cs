@@ -176,10 +176,13 @@ public sealed class TournamentService : ITournamentService
             ?? throw new NotFoundException("Teilnehmer", request.ParticipantId);
 
         var entry = tournament.Enter(Guid.NewGuid(), request.ParticipantId, request.Seed);
+        var entryId = entry.Id;
+
+        await _unitOfWork.FlushAsync(cancellationToken);
         await _publicView.RebuildAsync(tournamentId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return entry.Id;
+        return entryId;
     }
 
     public Task AcceptAsync(Guid tournamentId, Guid entryId, CancellationToken cancellationToken = default) =>
@@ -222,6 +225,7 @@ public sealed class TournamentService : ITournamentService
         // welche es tut, wird immer neu gebaut; ob dabei etwas herauskommt,
         // entscheidet der Vergleich in der Projektion (ADR-0003). Beides geht in
         // einem Zug in die Datenbank, sonst können sie auseinanderlaufen.
+        await _unitOfWork.FlushAsync(cancellationToken);
         await _publicView.RebuildAsync(tournamentId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }

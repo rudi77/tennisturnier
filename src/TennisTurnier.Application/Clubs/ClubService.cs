@@ -89,7 +89,9 @@ public sealed class ClubService : IClubService
         var court = club.AddCourt(Guid.NewGuid(), request.Name, request.Surface, request.Location);
         court.MarkAsCenterCourt(request.IsCenterCourt);
 
+        await RebuildPublicViewsAsync(clubId, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
         return court.Id;
     }
 
@@ -127,6 +129,8 @@ public sealed class ClubService : IClubService
     /// </summary>
     private async Task RebuildPublicViewsAsync(Guid clubId, CancellationToken cancellationToken)
     {
+        await _unitOfWork.FlushAsync(cancellationToken);
+
         foreach (var tournament in await _tournaments.ListByClubAsync(clubId, cancellationToken))
         {
             await _publicView.RebuildAsync(tournament.Id, cancellationToken);

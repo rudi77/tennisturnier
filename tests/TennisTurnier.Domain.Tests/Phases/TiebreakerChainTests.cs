@@ -108,6 +108,28 @@ public sealed class TiebreakerChainTests
     }
 
     [Fact]
+    public void Nach_einer_Trennung_wird_der_direkte_Vergleich_neu_gerechnet()
+    {
+        // Regression: der Vergleichsschlüssel entstand einmal über die ganze
+        // punktgleiche Menge. Trennte ein früheres Kriterium einen heraus, wurde
+        // der direkte Vergleich der Übrigen nicht neu gerechnet — im Ringschluss
+        // stand damit der Sieger einer Begegnung hinter ihrem Verlierer.
+        //
+        // A schlägt B, B schlägt C, C schlägt A; A hat das beste Satzverhältnis.
+        // Bleiben B und C übrig, hat B gegen C gewonnen und gehört davor.
+        var a = Record(A, "A", setsWon: 4, setsLost: 2);
+        var b = Record(B, "B", setsWon: 3, setsLost: 3);
+        var c = Record(C, "C", setsWon: 3, setsLost: 3);
+
+        var order = TiebreakerChain.Order(
+            [c, b, a],
+            [Tiebreaker.SetRatio, Tiebreaker.DirectEncounter],
+            Context([(A, B), (B, C), (C, A)]));
+
+        Assert.Equal([A, B, C], order.Select(r => r.EntryId));
+    }
+
+    [Fact]
     public void Buchholz_bevorzugt_den_mit_den_staerkeren_Gegnern()
     {
         var a = Record(A, "A");

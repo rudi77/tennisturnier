@@ -40,12 +40,23 @@ public abstract record ParticipantRef
     /// <summary>Wird zu dem, der die genannte Position in einer Gruppe belegt.</summary>
     public sealed record GroupPosition(Guid PhaseId, string Group, int Rank) : ParticipantRef
     {
-        public override string ToString() => Rank switch
+        /// <summary>
+        /// „Erster der Gruppe A", „Zweiter der Tabelle" — und für einen
+        /// Auffüllplatz, dessen Gruppe vorher nicht feststeht, „bester Dritter".
+        /// Letztere tragen als Gruppe eine Reihenfolge unter Gleichplatzierten
+        /// und sind an einem führenden <c>#</c> erkennbar.
+        /// </summary>
+        public override string ToString() =>
+            Group.Length == 0 ? $"{Ordinal} der Tabelle"
+            : Group.StartsWith('#') ? $"{Group[1..]} {Ordinal}"
+            : $"{Ordinal} der {Group}";
+
+        private string Ordinal => Rank switch
         {
-            1 => $"Erster der {Group}",
-            2 => $"Zweiter der {Group}",
-            3 => $"Dritter der {Group}",
-            _ => $"{Rank}. der {Group}",
+            1 => "Erster",
+            2 => "Zweiter",
+            3 => "Dritter",
+            _ => $"{Rank}.",
         };
     }
 
@@ -109,14 +120,13 @@ public abstract record ParticipantRef
             throw new DomainException("Eine Gruppenplatzreferenz braucht eine Phase.");
         }
 
-        if (string.IsNullOrWhiteSpace(group))
-        {
-            throw new DomainException("Eine Gruppenplatzreferenz braucht eine Gruppe.");
-        }
-
+        // Ein leerer Gruppenname ist zulässig und bedeutet: die Vorphase hat nur
+        // eine Tabelle. Eine Liga mit anschließendem Halbfinale ist eine ganz
+        // normale Ausschreibung, und sie in „Gruppe A" zu zwingen hieße, eine
+        // Gruppe zu erfinden, die es nicht gibt.
         return rank < 1
             ? throw new DomainException($"Ein Gruppenplatz beginnt bei 1, war {rank}.")
-            : new GroupPosition(phaseId, group.Trim(), rank);
+            : new GroupPosition(phaseId, group?.Trim() ?? string.Empty, rank);
     }
 
     public static ParticipantRef ByeSlot { get; } = new Bye();

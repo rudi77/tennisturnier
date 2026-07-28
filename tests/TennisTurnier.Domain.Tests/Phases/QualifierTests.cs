@@ -108,8 +108,10 @@ public sealed class QualifierTests
 
         Assert.Equal(16, slots.Count);
         Assert.Equal(
-            [("beste #1", 3), ("beste #2", 3), ("beste #3", 3), ("beste #4", 3)],
+            [("#bester", 3), ("#zweitbester", 3), ("#drittbester", 3), ("#4.-bester", 3)],
             slots.Skip(12).Select(PositionOf));
+
+        Assert.Equal("bester Dritter", slots[12].DisplayName);
     }
 
     [Fact]
@@ -140,5 +142,32 @@ public sealed class QualifierTests
 
         Assert.Equal("Erster der Gruppe A", slots[0].DisplayName);
         Assert.Equal("Zweiter der Gruppe A", slots[4].DisplayName);
+    }
+
+    [Fact]
+    public void Eine_Vorphase_ohne_Gruppen_liefert_Plaetze_ihrer_Tabelle()
+    {
+        // Regression: „Liga, danach Halbfinale und Finale" ist eine ganz normale
+        // Ausschreibung. Sie scheiterte beim Auslosen, weil eine Phase mit einer
+        // einzigen Gruppe bewusst keinen Gruppennamen trägt und die
+        // Gruppenplatzreferenz einen verlangte.
+        var slots = Slots(groupCount: 1, participants: 8, n: 4);
+
+        Assert.Equal(4, slots.Count);
+        Assert.Equal([("", 1), ("", 2), ("", 3), ("", 4)], slots.Select(PositionOf));
+        Assert.Equal("Erster der Tabelle", slots[0].DisplayName);
+    }
+
+    [Fact]
+    public void Es_entstehen_nur_so_viele_Auffuellplaetze_wie_es_Kandidaten_gibt()
+    {
+        // Regression: die Auffüllplätze wurden nur an der Gruppenzahl bemessen,
+        // nicht daran, wie viele Gruppen den betreffenden Rang überhaupt haben.
+        // Bei ungleich großen Gruppen entstand ein Platz ohne möglichen
+        // Kandidaten — und das Match dahinter blieb für immer offen.
+        var slots = Slots(groupCount: 3, participants: 7, QualificationRule.BestThirds);
+
+        Assert.Equal(7, slots.Count);
+        Assert.Single(slots, slot => Qualifier.IsBestOfRank(PositionOf(slot).Group));
     }
 }

@@ -194,6 +194,12 @@ public sealed record PhaseDefinition
             case PhaseFormatKind.RoundRobin when GroupCount < 1:
                 throw new DomainException($"{path}: groupCount muss mindestens 1 sein, war {GroupCount}.");
 
+            // Die Gruppen heißen nach den Buchstaben des Alphabets. Danach hießen
+            // sie „Gruppe [" und „Gruppe \", und mehr als 26 Gruppen hat ohnehin
+            // kein Vereinsturnier.
+            case PhaseFormatKind.RoundRobin when GroupCount > 26:
+                throw new DomainException($"{path}: mehr als 26 Gruppen sind nicht vorgesehen, waren {GroupCount}.");
+
             case PhaseFormatKind.RoundRobin when Encounters is not (1 or 2):
                 throw new DomainException($"{path}: encounters muss 1 oder 2 sein, war {Encounters}.");
 

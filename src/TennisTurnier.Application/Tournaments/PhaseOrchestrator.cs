@@ -62,12 +62,14 @@ public static class PhaseOrchestrator
             // Erst wenn die Vorphase vollständig durch ist. Einen Gruppenplatz
             // vorzeitig zu besetzen hieße, eine Tabelle für endgültig zu halten,
             // in der noch gespielt wird.
-            if (!format.IsComplete(sourceState))
-            {
-                continue;
-            }
-
-            var qualified = Qualifier.Resolve(sourceState, format.ComputeStandings(sourceState));
+            //
+            // Ist sie es nicht mehr — weil ein Ergebnis zurückgenommen wurde —,
+            // werden die Plätze wieder geleert. Sie stehen zu lassen hieße, in
+            // der Endrunde weiterspielen zu lassen, während die Gruppenphase
+            // wieder offen ist.
+            var qualified = format.IsComplete(sourceState)
+                ? Qualifier.Resolve(sourceState, format.ComputeStandings(sourceState))
+                : new Dictionary<(string Group, int Rank), Guid>();
 
             changed |= phase.ResolveGroupPositions(source.Id, qualified);
         }

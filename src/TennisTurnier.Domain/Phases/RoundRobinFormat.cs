@@ -26,6 +26,8 @@ public sealed class RoundRobinFormat : IPhaseFormat
         }
 
         var groups = SplitIntoGroups(state.Entries, state.Definition.GroupCount);
+        RequirePlayableGroups(groups, state.Entries.Count, state.Definition.GroupCount);
+
         var pairings = new List<Pairing>();
 
         foreach (var (name, members) in groups)
@@ -51,7 +53,7 @@ public sealed class RoundRobinFormat : IPhaseFormat
         // dieser Phase bloß Gruppenplätze. Eine Tabelle mit Zeilen, hinter denen
         // niemand steht, wäre schlimmer als eine leere.
         var settled = state.Entries.Where(entry => entry.IsSettled).ToList();
-        var groups = SplitIntoGroups(settled, state.Definition.GroupCount);
+        var groups = GroupsFromMatches(settled, state.Matches);
         var context = BuildContext(state);
         var places = new List<Standing>();
 
@@ -65,6 +67,68 @@ public sealed class RoundRobinFormat : IPhaseFormat
         }
 
         return new Standings(places);
+    }
+
+    /// <summary>
+    /// Weist eine Auslosung zurück, bei der eine Gruppe allein bliebe.
+    ///
+    /// Sie ginge sonst wortlos durch: die betroffene Gruppe bekäme kein einziges
+    /// Match, ihre Teilnehmer schieden ohne ein Spiel aus, und die Endrunde
+    /// bekäme Plätze, die niemand einnehmen kann — das Turnier ließe sich nie
+    /// abschließen. Besser eine klare Absage vor der Auslosung als ein Turnier,
+    /// das erst am Spieltag stillsteht.
+    /// </summary>
+    private static void RequirePlayableGroups(
+        IReadOnlyList<(string Name, IReadOnlyList<SeededEntry> Members)> groups,
+        int participants,
+        int groupCount)
+    {
+        var lonely = groups.Where(group => group.Members.Count < 2).ToList();
+        if (lonely.Count == 0)
+        {
+            return;
+        }
+
+        throw new DomainException(
+            $"{groupCount} Gruppen brauchen mindestens {groupCount * 2} Teilnehmer, es sind {participants}. " +
+            $"Ohne Gegner bliebe{(lonely.Count == 1 ? "" : "n")} " +
+            $"{string.Join(", ", lonely.Select(group => group.Name.Length == 0 ? "die Gruppe" : group.Name))}.");
+    }
+
+    /// <summary>
+    /// Wer in welcher Gruppe steht — abgelesen an den Matches, nicht neu
+    /// gerechnet.
+    ///
+    /// Die Einteilung entstand einmal beim Auslosen und steht seither an jedem
+    /// Match. Sie hier erneut aus der Setzung herzuleiten hieße, sie ein zweites
+    /// Mal zu bestimmen: sobald die übergebene Menge oder ein Anzeigename
+    /// abweicht, fällt jemand in eine Gruppe, in der er nie gespielt hat — und
+    /// die Qualifikation für die Endrunde wird genau daraus abgeleitet.
+    /// </summary>
+    private static IReadOnlyList<(string Name, IReadOnlyList<SeededEntry> Members)> GroupsFromMatches(
+        IReadOnlyList<SeededEntry> entries,
+        IReadOnlyList<Match> matches)
+    {
+        var groupByEntry = new Dictionary<Guid, string>();
+
+        foreach (var match in matches)
+        {
+            foreach (var entryId in new[] { match.Side1.EntryId, match.Side2.EntryId })
+            {
+                if (entryId is { } id)
+                {
+                    groupByEntry[id] = match.Group ?? string.Empty;
+                }
+            }
+        }
+
+        return
+        [
+            .. entries
+                .GroupBy(entry => groupByEntry.GetValueOrDefault(entry.EntryId, string.Empty))
+                .OrderBy(group => group.Key, StringComparer.Ordinal)
+                .Select(group => (group.Key, (IReadOnlyList<SeededEntry>)[.. group])),
+        ];
     }
 
     // --- Gruppeneinteilung -------------------------------------------------
@@ -107,6 +171,9 @@ public sealed class RoundRobinFormat : IPhaseFormat
     /// <summary>
     /// „Gruppe A", „Gruppe B" … — bei nur einer Gruppe gibt es keinen Namen. Eine
     /// Liga in „Gruppe A" auszuweisen wäre eine Gruppe, die es nicht gibt.
+    ///
+    /// Ab der 27. Gruppe wären die Buchstaben aufgebraucht; so weit lässt es
+    /// <see cref="PhaseDefinition.Validate"/> nicht kommen.
     /// </summary>
     internal static string GroupName(int index, int groupCount) =>
         groupCount == 1 ? string.Empty : $"Gruppe {(char)('A' + index)}";

@@ -127,6 +127,13 @@ public sealed class MatchService : IMatchService
 
         RequireResultPermission(tournament);
 
+        // Ein bereits eingetragenes Ergebnis zu überschreiben ist eine Korrektur
+        // und keine Eingabe — sie kann eine Folgephase umbesetzen.
+        if (match.Score is not null)
+        {
+            RequireLaterPhasesUntouched(tournament, phases, phase);
+        }
+
         var matchFormat = MatchFormatOf(tournament, phase);
         phase.RecordResult(matchId, BuildScore(request, match, matchFormat));
 
@@ -138,6 +145,10 @@ public sealed class MatchService : IMatchService
 
         await AdvancePhasesAsync(tournament, phases, cancellationToken);
 
+        // Zwischenspeichern, bevor die öffentliche Ansicht entsteht: sie soll den
+        // Stand der Datenbank abbilden und nicht die Kopien vom Anfang des
+        // Requests, in denen die Ergebnisse paralleler Eingaben fehlen.
+        await _unitOfWork.FlushAsync(cancellationToken);
         await _publicView.RebuildAsync(tournament.Id, cancellationToken);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -148,14 +159,50 @@ public sealed class MatchService : IMatchService
         var (tournament, phases, phase, _) = await LoadForResultAsync(matchId, cancellationToken);
 
         RequireResultPermission(tournament);
+        RequireLaterPhasesUntouched(tournament, phases, phase);
+
         phase.ClearResult(matchId);
 
         // Auch nach einer Rücknahme: eine Folgephase, die daraufhin nicht mehr
         // vollständig besetzt ist, muss ihre offenen Plätze zurückbekommen.
         await AdvancePhasesAsync(tournament, phases, cancellationToken);
+
+        await _unitOfWork.FlushAsync(cancellationToken);
         await _publicView.RebuildAsync(tournament.Id, cancellationToken);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Weist eine Korrektur zurück, wenn eine Folgephase bereits gespielt hat.
+    ///
+    /// Dieselbe Regel wie innerhalb einer Phase, nur eine Ebene höher: eine Kette
+    /// wird von hinten aufgerollt. Ohne sie ließe sich ein Gruppenergebnis
+    /// umdrehen, während das Finale längst gespielt ist — Tabelle und Baum
+    /// widersprächen sich dauerhaft, und ein Turniersieger stünde fest, der laut
+    /// korrigierter Tabelle nie hätte antreten dürfen.
+    /// </summary>
+    private static void RequireLaterPhasesUntouched(
+        Tournament tournament,
+        IReadOnlyList<Phase> phases,
+        Phase phase)
+    {
+        if (tournament.Format?.Definition is not { } definition)
+        {
+            return;
+        }
+
+        var dependent = phases.FirstOrDefault(other =>
+            other.Id != phase.Id
+            && other.HasAnyResult
+            && PhaseOrchestrator.DefinitionOf(definition, other)?.Qualification?.FromPhase == phase.Ordinal);
+
+        if (dependent is not null)
+        {
+            throw new DomainException(
+                $"Das Ergebnis lässt sich nicht ändern, weil in „{dependent.Name}“ bereits gespielt wurde. " +
+                "Zuerst die Ergebnisse dieser Phase zurücknehmen.");
+        }
     }
 
     /// <summary>

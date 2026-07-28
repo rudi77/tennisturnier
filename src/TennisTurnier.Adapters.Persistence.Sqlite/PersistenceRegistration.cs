@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +10,8 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite;
 
 public static class PersistenceRegistration
 {
+    private const int BusyTimeoutSeconds = 5;
+
     /// <summary>
     /// Registriert den SQLite-Adapter. Der Aufrufer — die Composition Root —
     /// entscheidet über die Verbindungszeichenfolge; der Adapter kennt keine
@@ -18,7 +21,13 @@ public static class PersistenceRegistration
         this IServiceCollection services,
         string connectionString)
     {
-        services.AddDbContext<TennisTurnierDbContext>(options => options.UseSqlite(connectionString));
+        // Die Wartezeit auf eine belegte Datenbank ist bewusst kurz. SQLite lässt
+        // immer nur einen Schreiber zu; wartete ein zweiter die voreingestellte
+        // halbe Minute, hinge der Aufrufer, statt ein „bitte noch einmal" zu
+        // bekommen — und am Turniertag ist eine schnelle Absage mehr wert als
+        // ein Erfolg nach dreißig Sekunden.
+        services.AddDbContext<TennisTurnierDbContext>(
+            options => options.UseSqlite(connectionString, sqlite => sqlite.CommandTimeout(BusyTimeoutSeconds)));
 
         services.AddScoped<IClubRepository, ClubRepository>();
         services.AddScoped<ITournamentRepository, TournamentRepository>();
@@ -48,17 +57,28 @@ internal sealed class UnitOfWork : IUnitOfWork
     }
 
     /// <summary>
-    /// Schreibt zwischendurch, innerhalb einer Transaktion, die bis zum Abschluss
-    /// der Einheit offen bleibt. Ohne sie wäre ein Zwischenstand bereits
-    /// festgeschrieben, und ein Konflikt beim Abschluss ließe die Datenbank in
-    /// einem Zustand zurück, den niemand wollte: das Turnier ausgelost, die
-    /// öffentliche Ansicht nicht.
+    /// Schreibt zwischendurch und liest danach frisch.
+    ///
+    /// Beides gehört zusammen. Die Transaktion bleibt bis zum Abschluss der
+    /// Einheit offen — ohne sie wäre ein Zwischenstand bereits festgeschrieben,
+    /// und ein Konflikt beim Abschluss ließe die Datenbank in einem Zustand
+    /// zurück, den niemand wollte: das Turnier ausgelost, die öffentliche
+    /// Ansicht nicht.
+    ///
+    /// Und die Änderungsverfolgung wird geleert, damit alles Weitere die
+    /// Datenbank liest statt der Kopien vom Anfang des Requests. Ohne das
+    /// bekäme, wer den Turnierbaum zu Beginn geladen hat, beim erneuten Abfragen
+    /// wieder seinen eigenen alten Stand — die Ergebnisse, die inzwischen andere
+    /// eingetragen haben, blieben unsichtbar, und die daraus gebaute öffentliche
+    /// Ansicht schriebe sie still weg.
     /// </summary>
     public async Task FlushAsync(CancellationToken cancellationToken = default)
     {
         _transaction ??= await _db.Database.BeginTransactionAsync(cancellationToken);
 
         await SaveAsync(cancellationToken);
+
+        _db.ChangeTracker.Clear();
     }
 
     /// <summary>
@@ -96,5 +116,25 @@ internal sealed class UnitOfWork : IUnitOfWork
         {
             throw new ConcurrencyConflictException(exception);
         }
+        catch (DbUpdateException exception) when (IsDatabaseBusy(exception))
+        {
+            throw new ConcurrencyConflictException(exception);
+        }
     }
+
+    /// <summary>
+    /// War die Datenbank belegt?
+    ///
+    /// SQLite lässt immer nur einen Schreiber zu. Für den Aufrufer ist das
+    /// dasselbe wie ein Nebenläufigkeitskonflikt — jemand anderes war schneller,
+    /// bitte neu laden und wiederholen —, und es ist ausdrücklich kein
+    /// Serverfehler. Ohne diese Unterscheidung käme der häufigste Fall am
+    /// Turniertag als 500 beim Schiedsrichter an.
+    /// </summary>
+    private static bool IsDatabaseBusy(DbUpdateException exception) =>
+        exception.InnerException is SqliteException { SqliteErrorCode: SqliteBusy or SqliteLocked };
+
+    private const int SqliteBusy = 5;
+
+    private const int SqliteLocked = 6;
 }

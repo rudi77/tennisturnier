@@ -32,6 +32,17 @@ bestehenden Verträge zu brechen.
 
 ## Bewusst offene Punkte
 
+- **Buchholz in einer Gruppenphase.** Das Kriterium stammt aus dem Schweizer
+  System. In einer vollständig ausgespielten Gruppe ist es exakt die
+  Gesamtpunktzahl minus die eigene und damit eine Umkehrung der Tabelle. Es
+  bleibt konfigurierbar, steht aber in keiner mitgelieferten
+  Round-Robin-Vorlage; ab M8 trägt es dort etwas bei, wo nicht jeder gegen
+  jeden spielt.
+- **Kampfloser Sieg und Satzverhältnis.** Ein Nichtantreten zählt als Sieg,
+  bringt aber weder Sätze noch Spiele. Im Satzverhältnis steht ein kampfloser
+  Sieg damit schlechter da als ein erspielter. Welche Zahl dort stehen soll, ist
+  eine Regelfrage der Ausschreibung — sobald eine Vorlage sie beantwortet, wird
+  daraus ein Parameter.
 - **Überkreuzung bei ungerader Gruppenzahl.** Bei drei oder fünf Gruppen geht die
   Zuordnung „Gruppensieger gegen Zweiten einer anderen Gruppe" für genau eine
   Gruppe nicht auf; ihr Zweiter tauscht deshalb den Platz mit dem folgenden. Ab

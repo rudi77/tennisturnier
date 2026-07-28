@@ -62,9 +62,43 @@ public static class TiebreakerChain
         ArgumentNullException.ThrowIfNull(tiebreakers);
         ArgumentNullException.ThrowIfNull(context);
 
+        return Resolve(tied, tiebreakers, 0, context);
+    }
+
+    /// <summary>
+    /// Wendet ein Kriterium an und löst jede verbleibende Gleichheit mit dem
+    /// nächsten auf — jeweils nur unter denen, die noch gleichauf sind.
+    ///
+    /// Die Einschränkung ist der Kern. Trennt das Satzverhältnis einen von drei
+    /// Punktgleichen heraus, ist der direkte Vergleich der beiden übrigen eine
+    /// andere Rechnung als der über alle drei: im Ringschluss A schlägt B, B
+    /// schlägt C, C schlägt A haben alle drei die Bilanz null, zwei davon
+    /// betrachtet hat einer gewonnen. Über die ganze Menge gerechnet stünde der
+    /// Sieger dieser Begegnung hinter dem Verlierer — genau die Reihenfolge, die
+    /// niemand nachrechnen kann.
+    /// </summary>
+    private static IReadOnlyList<TableRecord> Resolve(
+        IReadOnlyList<TableRecord> tied,
+        IReadOnlyList<Tiebreaker> tiebreakers,
+        int depth,
+        TiebreakContext context)
+    {
         if (tied.Count <= 1)
         {
             return tied;
+        }
+
+        if (depth >= tiebreakers.Count)
+        {
+            // Alle Kriterien erschöpft. Ein echtes Los wäre bei jedem Abruf ein
+            // anderes — die Tabelle tanzte bei jedem Neuladen. Entschieden wird
+            // deshalb stabil nach Setzung, dann nach Name.
+            return
+            [
+                .. tied
+                    .OrderBy(record => record.Seed ?? int.MaxValue)
+                    .ThenBy(record => record.DisplayName, StringComparer.Ordinal),
+            ];
         }
 
         var members = tied.Select(record => record.EntryId).ToHashSet();
@@ -72,25 +106,11 @@ public static class TiebreakerChain
         return
         [
             .. tied
-                .OrderByDescending(record => Key(record, tiebreakers, context, members), Lexicographic)
-                // Ohne Losentscheid bleibt die Reihenfolge sonst der
-                // Aufzählungsreihenfolge überlassen und wechselte bei jedem Abruf.
-                .ThenBy(record => record.Seed ?? int.MaxValue)
-                .ThenBy(record => record.DisplayName, StringComparer.Ordinal),
+                .GroupBy(record => Value(record, tiebreakers[depth], context, members))
+                .OrderByDescending(group => group.Key)
+                .SelectMany(group => Resolve([.. group], tiebreakers, depth + 1, context)),
         ];
     }
-
-    /// <summary>
-    /// Ein Vergleichsschlüssel je Teilnehmer: ein Wert pro Kriterium, in der
-    /// Reihenfolge der Kette. Das ist derselbe Vergleich, den ein Mensch
-    /// anstellt — erst Kriterium eins, bei Gleichstand Kriterium zwei.
-    /// </summary>
-    private static IReadOnlyList<int> Key(
-        TableRecord record,
-        IReadOnlyList<Tiebreaker> tiebreakers,
-        TiebreakContext context,
-        IReadOnlySet<Guid> members) =>
-        [.. tiebreakers.Select(tiebreaker => Value(record, tiebreaker, context, members))];
 
     private static int Value(
         TableRecord record,
@@ -103,10 +123,8 @@ public static class TiebreakerChain
         Tiebreaker.GameRatio => record.GamesWon - record.GamesLost,
         Tiebreaker.Buchholz => context.Buchholz.GetValueOrDefault(record.EntryId),
 
-        // Der Losentscheid entscheidet nichts, was hier zu entscheiden wäre: er
-        // wird erst gebraucht, wenn alles andere gleich ist, und dann ordnet die
-        // stabile Nachsortierung nach Setzung und Name. Ein echtes Los wäre bei
-        // jedem Abruf ein anderes — die Tabelle würde bei jedem Neuladen tanzen.
+        // Der Losentscheid trennt niemanden: er greift erst, wenn alles andere
+        // gleich ist, und dann ordnet die stabile Nachsortierung.
         _ => 0,
     };
 
@@ -139,29 +157,5 @@ public static class TiebreakerChain
         }
 
         return balance;
-    }
-
-    private static readonly IComparer<IReadOnlyList<int>> Lexicographic = new LexicographicComparer();
-
-    private sealed class LexicographicComparer : IComparer<IReadOnlyList<int>>
-    {
-        public int Compare(IReadOnlyList<int>? x, IReadOnlyList<int>? y)
-        {
-            if (x is null || y is null)
-            {
-                return x is null && y is null ? 0 : x is null ? -1 : 1;
-            }
-
-            for (var index = 0; index < Math.Min(x.Count, y.Count); index++)
-            {
-                var comparison = x[index].CompareTo(y[index]);
-                if (comparison != 0)
-                {
-                    return comparison;
-                }
-            }
-
-            return x.Count.CompareTo(y.Count);
-        }
     }
 }

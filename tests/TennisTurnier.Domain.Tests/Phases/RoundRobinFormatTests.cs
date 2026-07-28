@@ -1,3 +1,4 @@
+using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
@@ -167,6 +168,53 @@ public sealed class RoundRobinFormatTests
         // Vierergruppe — das ist der Zweck der Schlange.
         var first = groups.Single(g => g.Members.Any(m => m.Seed == 1));
         Assert.Contains(first.Members, m => m.Seed == 8);
+    }
+
+    [Theory]
+    [InlineData(4, 4)]
+    [InlineData(5, 4)]
+    [InlineData(7, 4)]
+    [InlineData(3, 2)]
+    public void Eine_Auslosung_mit_einer_Gruppe_ohne_Gegner_wird_abgewiesen(int participants, int groupCount)
+    {
+        // Regression: die Gruppen wurden strikt nach der Definition gebildet,
+        // auch wenn dabei jemand allein blieb. Diese Gruppe bekam kein einziges
+        // Match, ihre Teilnehmer schieden ohne ein Spiel aus, die Phase galt als
+        // abgeschlossen — und die Endrunde bekam Plätze, die niemand einnehmen
+        // kann. Das Turnier ließ sich nie beenden.
+        var entries = Entries(participants);
+
+        var error = Assert.Throws<DomainException>(() => BuildPhase(entries, Definition(groupCount)));
+
+        Assert.Contains("mindestens", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Die_Gruppe_eines_Teilnehmers_kommt_aus_seinen_Matches()
+    {
+        // Regression: die Tabelle leitete die Gruppen zur Laufzeit erneut aus
+        // Setzung und Name her, statt sie an den Matches abzulesen. Wich die
+        // übergebene Menge oder ein Anzeigename ab, stand jemand in einer Gruppe,
+        // in der er nie gespielt hatte — und die Endrunde wurde daraus besetzt.
+        var entries = Entries(4);
+        var phase = BuildPhase(entries, Definition(groupCount: 2));
+
+        // Derselbe Stand, aber mit geändertem Anzeigenamen: an der Zugehörigkeit
+        // darf sich dadurch nichts ändern.
+        var renamed = entries
+            .Select((entry, index) => index == 0 ? entry with { DisplayName = "Aaron" } : entry)
+            .ToList();
+
+        var table = StandingsOf(phase, renamed, Definition(groupCount: 2)).Places;
+
+        foreach (var match in phase.Matches)
+        {
+            var side1 = table.Single(place => place.EntryId == match.Side1.EntryId);
+            var side2 = table.Single(place => place.EntryId == match.Side2.EntryId);
+
+            Assert.Equal(match.Group, side1.Group);
+            Assert.Equal(match.Group, side2.Group);
+        }
     }
 
     [Fact]
