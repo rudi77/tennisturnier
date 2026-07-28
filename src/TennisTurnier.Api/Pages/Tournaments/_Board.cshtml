@@ -1,0 +1,169 @@
+@model TennisTurnier.Api.Pages.Tournaments.MatchDayModel
+@{
+    var url = $"/Tournaments/{Model.Id}/matchday";
+
+    string Pairing(QueuedMatch match) => $"{match.Side1 ?? "?"} — {match.Side2 ?? "?"}";
+}
+
+@if (Model.Boards.Count == 0)
+{
+    <div class="card">
+        <p class="empty">Kein Platz mit Ansetzungen. Erst den Spielplan übernehmen.</p>
+    </div>
+}
+else
+{
+    <div class="grid">
+        @foreach (var board in Model.Boards)
+        {
+            <div class="court">
+                <header>
+                    <strong>
+                        @board.CourtName
+                        @if (board.IsCenterCourt)
+                        {
+                            <span class="tag live">Center</span>
+                        }
+                    </strong>
+                    <span class="muted small">@board.Queue.Count wartend</span>
+                </header>
+
+                @if (board.Current is { } current)
+                {
+                    <div class="current">
+                        <div class="row between">
+                            <span class="tag @Display.TagOf(current.Status)">@Display.Of(current.Status)</span>
+                            <span class="small muted mono">
+                                @(current.ActualStart is null
+                                    ? "aufgerufen"
+                                    : "seit " + Display.Time(current.ActualStart))
+                            </span>
+                        </div>
+                        <div style="margin:.35rem 0"><strong>@Pairing(current)</strong></div>
+                        <div class="small muted">@current.Label</div>
+
+                        <div class="row" style="margin-top:.5rem">
+                            @if (current.Status == AssignmentStatus.Called)
+                            {
+                                <form hx-post="@url?handler=Start" hx-target="#board" hx-swap="innerHTML" class="inline">
+                                    <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                    <input type="hidden" name="assignmentId" value="@current.AssignmentId" />
+                                    <button class="go small" type="submit">Anpfiff</button>
+                                </form>
+                            }
+                            @if (current.Status == AssignmentStatus.Running)
+                            {
+                                <form hx-post="@url?handler=Finish" hx-target="#board" hx-swap="innerHTML" class="inline">
+                                    <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                    <input type="hidden" name="assignmentId" value="@current.AssignmentId" />
+                                    <button class="small" type="submit">Beendet</button>
+                                </form>
+                                <form hx-post="@url?handler=Suspend" hx-target="#board" hx-swap="innerHTML" class="inline">
+                                    <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                    <input type="hidden" name="assignmentId" value="@current.AssignmentId" />
+                                    <button class="small danger" type="submit">Unterbrechen</button>
+                                </form>
+                            }
+                            @if (current.Status == AssignmentStatus.Suspended)
+                            {
+                                <form hx-post="@url?handler=Resume" hx-target="#board" hx-swap="innerHTML" class="row">
+                                    <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                    <input type="hidden" name="assignmentId" value="@current.AssignmentId" />
+                                    <select name="courtId" style="width:auto">
+                                        <option value="">gleicher Platz</option>
+                                        @foreach (var other in Model.Boards.Where(b => b.CourtId != board.CourtId))
+                                        {
+                                            <option value="@other.CourtId">@other.CourtName</option>
+                                        }
+                                    </select>
+                                    <button class="go small" type="submit">Fortsetzen</button>
+                                </form>
+                            }
+                            <a class="btn small" href="/Tournaments/@Model.Id/draw">Ergebnis</a>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="current" style="background:var(--surface-alt)">
+                        <span class="muted small">Platz frei.</span>
+                    </div>
+                }
+
+                @if (board.Queue.Count == 0)
+                {
+                    <div class="slot"><span class="muted small">Keine Warteschlange.</span></div>
+                }
+                else
+                {
+                    @foreach (var queued in board.Queue)
+                    {
+                        <div class="slot">
+                            <div class="seq">@queued.SequenceOnCourt</div>
+                            <div class="body">
+                                <div class="row between">
+                                    <span>@Pairing(queued)</span>
+                                    <span class="row">
+                                        <form hx-post="@url?handler=Move" hx-target="#board" hx-swap="innerHTML" class="inline">
+                                            <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                            <input type="hidden" name="courtId" value="@board.CourtId" />
+                                            <input type="hidden" name="assignmentId" value="@queued.AssignmentId" />
+                                            <input type="hidden" name="direction" value="-1" />
+                                            <button class="small" type="submit" title="nach vorn">↑</button>
+                                        </form>
+                                        <form hx-post="@url?handler=Move" hx-target="#board" hx-swap="innerHTML" class="inline">
+                                            <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                            <input type="hidden" name="courtId" value="@board.CourtId" />
+                                            <input type="hidden" name="assignmentId" value="@queued.AssignmentId" />
+                                            <input type="hidden" name="direction" value="1" />
+                                            <button class="small" type="submit" title="nach hinten">↓</button>
+                                        </form>
+                                    </span>
+                                </div>
+
+                                <div class="small muted">
+                                    @queued.Label
+                                    @if (queued.MatchStatus == MatchStatus.Pending)
+                                    {
+                                        <span class="tag warn">wartet auf Vorspiel</span>
+                                    }
+                                    @if (!queued.WithinOpeningHours)
+                                    {
+                                        <span class="tag bad">außerhalb der Öffnungszeit</span>
+                                    }
+                                </div>
+
+                                <div class="small muted mono">
+                                    @if (queued.EarliestStart is { } promised)
+                                    {
+                                        <span title="Zusage">nicht vor @Display.Time(promised)</span>
+                                        <span> · </span>
+                                    }
+                                    <span title="Schätzung">vsl. @Display.Time(queued.EstimatedStart)</span>
+                                    <span> · @Display.Duration(queued.EstimatedDuration)</span>
+                                </div>
+
+                                <div class="row" style="margin-top:.35rem">
+                                    @if (queued.MatchStatus != MatchStatus.Pending)
+                                    {
+                                        <form hx-post="@url?handler=Call" hx-target="#board" hx-swap="innerHTML" class="inline">
+                                            <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                            <input type="hidden" name="assignmentId" value="@queued.AssignmentId" />
+                                            <button class="primary small" type="submit">Aufrufen</button>
+                                        </form>
+                                    }
+                                    <form hx-post="@url?handler=Promise" hx-target="#board" hx-swap="innerHTML" class="row">
+                                        <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                        <input type="hidden" name="assignmentId" value="@queued.AssignmentId" />
+                                        <input name="earliestStart" type="datetime-local" style="width:auto" />
+                                        <button class="small" type="submit" title="Zusage „nicht vor“">Zusagen</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </div>
+}

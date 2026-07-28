@@ -1,0 +1,192 @@
+@model TennisTurnier.Api.Pages.Tournaments.DetailModel
+@{
+    var url = $"/Tournaments/{Model.Id}";
+    var entries = Model.Tournament.Entries;
+    var accepted = entries.Count(e => e.Status == EntryStatus.Accepted);
+    var editable = Model.EntriesEditable;
+}
+
+<div class="split">
+    <div class="card">
+        <div class="row between">
+            <h2 style="margin:0">Meldungen</h2>
+            <div class="row">
+                <span class="muted small">@accepted im Feld · @entries.Count gemeldet</span>
+                @if (editable && entries.Any(e => e.Status == EntryStatus.Applied))
+                {
+                    <form hx-post="@url?handler=AcceptAll" hx-target="#entries" hx-swap="innerHTML" class="inline">
+                        <input type="hidden" name="tournamentId" value="@Model.Id" />
+                        <button class="small" type="submit">Alle annehmen</button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        @if (editable && accepted < 2)
+        {
+            <div class="inline-note" style="margin-top:.75rem">
+                Ausgelost wird aus den angenommenen Meldungen — davon gibt es
+                @(accepted == 0 ? "noch keine" : "erst eine").
+            </div>
+        }
+
+        @if (!editable)
+        {
+            <div class="inline-note" style="margin-top:.75rem">
+                Ausgelost — Teilnehmerfeld und Format sind eingefroren. Zum Nachmelden
+                die Auslosung zurücknehmen.
+            </div>
+        }
+
+        @if (entries.Count == 0)
+        {
+            <p class="empty">Noch keine Meldung.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th class="num">Setz.</th>
+                        <th>Teilnehmer</th>
+                        <th>Status</th>
+                        @if (editable)
+                        {
+                            <th></th>
+                        }
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var entry in entries
+                        .OrderBy(e => e.Seed ?? int.MaxValue)
+                        .ThenBy(e => e.ParticipantName, StringComparer.CurrentCulture))
+                    {
+                        <tr>
+                            <td class="num">
+                                @if (editable)
+                                {
+                                    <form hx-post="@url?handler=Seed" hx-target="#entries" hx-swap="innerHTML" class="inline">
+                                        <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                        <input type="hidden" name="entryId" value="@entry.Id" />
+                                        <input name="seed" value="@entry.Seed" inputmode="numeric"
+                                               style="width:3.5rem; text-align:right" title="Setzung — leer für ungesetzt" />
+                                    </form>
+                                }
+                                else
+                                {
+                                    @(entry.Seed?.ToString() ?? "–")
+                                }
+                            </td>
+                            <td>@entry.ParticipantName</td>
+                            <td><span class="tag @Display.TagOf(entry.Status)">@Display.Of(entry.Status)</span></td>
+                            @if (editable)
+                            {
+                                <td class="actions">
+                                    @if (entry.Status != EntryStatus.Accepted)
+                                    {
+                                        <form hx-post="@url?handler=Accept" hx-target="#entries" hx-swap="innerHTML" class="inline">
+                                            <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                            <input type="hidden" name="entryId" value="@entry.Id" />
+                                            <button class="small" type="submit">annehmen</button>
+                                        </form>
+                                    }
+                                    @if (entry.Status != EntryStatus.WaitingList)
+                                    {
+                                        <form hx-post="@url?handler=WaitingList" hx-target="#entries" hx-swap="innerHTML" class="inline">
+                                            <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                            <input type="hidden" name="entryId" value="@entry.Id" />
+                                            <button class="small" type="submit">Warteliste</button>
+                                        </form>
+                                    }
+                                    @if (entry.Status != EntryStatus.Withdrawn)
+                                    {
+                                        <form hx-post="@url?handler=Withdraw" hx-target="#entries" hx-swap="innerHTML" class="inline">
+                                            <input type="hidden" name="tournamentId" value="@Model.Id" />
+                                            <input type="hidden" name="entryId" value="@entry.Id" />
+                                            <button class="small danger" type="submit">zurückziehen</button>
+                                        </form>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div>
+        @if (editable)
+        {
+            <div class="card">
+                <h2>Melden</h2>
+                <p class="small muted" style="margin-top:-.4rem">
+                    Spieler suchen, auswählen — für ein Doppel zusätzlich einen Partner.
+                </p>
+
+                <form hx-post="@url?handler=Enter" hx-target="#entries" hx-swap="innerHTML">
+                    <input type="hidden" name="tournamentId" value="@Model.Id" />
+
+                    <div class="field">
+                        <label for="q">Suche</label>
+                        <input id="q" name="q" autocomplete="off" placeholder="Nachname"
+                               hx-get="@url?handler=Search"
+                               hx-trigger="input changed delay:300ms, search"
+                               hx-target="#player-hits"
+                               hx-swap="innerHTML" />
+                    </div>
+
+                    <div id="player-hits">
+                        <partial name="_PlayerHits" model="Model" />
+                    </div>
+
+                    <div class="fields" style="margin-top:.6rem">
+                        <div class="field">
+                            <label for="seed">Setzung</label>
+                            <input id="seed" name="seed" inputmode="numeric" placeholder="optional" />
+                        </div>
+                        <div class="field">
+                            <button class="primary" type="submit">Melden</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Spieler anlegen</h3>
+                <form hx-post="@url?handler=CreatePlayer" hx-target="#player-hits" hx-swap="innerHTML"
+                      hx-on::after-request="if(event.detail.successful) this.reset()">
+                    <input type="hidden" name="tournamentId" value="@Model.Id" />
+                    <div class="fields">
+                        <div class="field">
+                            <label>Vorname</label>
+                            <input name="firstName" required autocomplete="off" />
+                        </div>
+                        <div class="field">
+                            <label>Nachname</label>
+                            <input name="lastName" required autocomplete="off" />
+                        </div>
+                    </div>
+                    <div class="fields" style="margin-top:.5rem">
+                        <div class="field">
+                            <label>E-Mail</label>
+                            <input name="email" type="email" autocomplete="off" />
+                        </div>
+                        <div class="field">
+                            <label>Telefon</label>
+                            <input name="phone" autocomplete="off" />
+                        </div>
+                        <div class="field">
+                            <label>Geburtsdatum</label>
+                            <input name="dateOfBirth" type="date" />
+                        </div>
+                    </div>
+                    <button type="submit" style="margin-top:.6rem">Anlegen</button>
+                    <span class="spinner">…</span>
+                </form>
+            </div>
+        }
+    </div>
+</div>

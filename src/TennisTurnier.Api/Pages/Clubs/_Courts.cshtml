@@ -1,0 +1,233 @@
+@model TennisTurnier.Api.Pages.Clubs.DetailModel
+@{
+    var today = DateOnly.FromDateTime(DateTime.Today);
+    var url = $"/Clubs/{Model.ClubId}";
+}
+
+<div class="card">
+    <div class="row between">
+        <h2 style="margin:0">Plätze</h2>
+        <span class="muted small">@Model.Club.Courts.Count angelegt</span>
+    </div>
+</div>
+
+<div class="grid">
+    @foreach (var court in Model.Club.Courts)
+    {
+        <div class="card">
+            <div class="row between">
+                <h3 style="margin:0">
+                    @court.Name
+                    @if (court.IsCenterCourt)
+                    {
+                        <span class="tag live">Center Court</span>
+                    }
+                    @if (!court.IsActive)
+                    {
+                        <span class="tag bad">Stillgelegt</span>
+                    }
+                </h3>
+                <span class="muted small">@Display.Of(court.Surface) · @Display.Of(court.Location)</span>
+            </div>
+
+            <form hx-post="@url?handler=UpdateCourt" hx-target="#courts" hx-swap="innerHTML" style="margin:.6rem 0">
+                <input type="hidden" name="clubId" value="@Model.ClubId" />
+                <input type="hidden" name="courtId" value="@court.Id" />
+                <div class="fields">
+                    <div class="field">
+                        <label>Name</label>
+                        <input name="name" value="@court.Name" required autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <label>Center Court</label>
+                        <select name="isCenterCourt">
+                            <option value="false" selected="@(!court.IsCenterCourt)">nein</option>
+                            <option value="true" selected="@court.IsCenterCourt">ja</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Aktiv</label>
+                        <select name="isActive">
+                            <option value="true" selected="@court.IsActive">ja</option>
+                            <option value="false" selected="@(!court.IsActive)">nein</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <button type="submit" class="small">Übernehmen</button>
+                    </div>
+                </div>
+            </form>
+
+            <h3 style="margin-top:.9rem">Öffnungszeiten</h3>
+            @if (court.Availability.Count == 0)
+            {
+                <p class="small muted">Keine — der Platz steht dem Spielplan nicht zur Verfügung.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <tbody>
+                        @foreach (var window in court.Availability.OrderBy(a => a.DayOfWeek).ThenBy(a => a.OpensAt))
+                        {
+                            <tr>
+                                <td>@Display.Of(window.DayOfWeek)</td>
+                                <td class="mono small">@window.OpensAt.ToString("HH:mm")–@window.ClosesAt.ToString("HH:mm")</td>
+                                <td class="small muted">
+                                    ab @Display.Date(window.ValidFrom)@(window.ValidUntil is { } until ? " bis " + Display.Date(until) : "")
+                                </td>
+                                <td class="actions">
+                                    <form hx-post="@url?handler=RemoveAvailability" hx-target="#courts" hx-swap="innerHTML" class="inline">
+                                        <input type="hidden" name="clubId" value="@Model.ClubId" />
+                                        <input type="hidden" name="courtId" value="@court.Id" />
+                                        <input type="hidden" name="windowId" value="@window.Id" />
+                                        <button class="link small" type="submit">entfernen</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <form hx-post="@url?handler=AddAvailability" hx-target="#courts" hx-swap="innerHTML" style="margin-top:.5rem">
+                <input type="hidden" name="clubId" value="@Model.ClubId" />
+                <input type="hidden" name="courtId" value="@court.Id" />
+                <div class="fields">
+                    <div class="field">
+                        <label>Tag</label>
+                        <select name="dayOfWeek">
+                            @foreach (var day in new[]
+                            {
+                                DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday,
+                                DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday,
+                            })
+                            {
+                                <option value="@day">@Display.Of(day)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Von</label>
+                        <input name="opensAt" type="time" value="08:00" required />
+                    </div>
+                    <div class="field">
+                        <label>Bis</label>
+                        <input name="closesAt" type="time" value="21:00" required />
+                    </div>
+                    <div class="field">
+                        <label>Gültig ab</label>
+                        <input name="validFrom" type="date" value="@today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="field">
+                        <button type="submit" class="small">Hinzufügen</button>
+                    </div>
+                </div>
+            </form>
+
+            <h3 style="margin-top:.9rem">Sperren</h3>
+            @if (court.Blocks.Count == 0)
+            {
+                <p class="small muted">Keine.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <tbody>
+                        @foreach (var block in court.Blocks.OrderBy(b => b.From))
+                        {
+                            <tr>
+                                <td class="mono small">@Display.DateTime(block.From) – @Display.DateTime(block.To)</td>
+                                <td><span class="tag warn">@Display.Of(block.Reason)</span></td>
+                                <td class="small muted">@block.Note</td>
+                                <td class="actions">
+                                    <form hx-post="@url?handler=RemoveBlock" hx-target="#courts" hx-swap="innerHTML" class="inline">
+                                        <input type="hidden" name="clubId" value="@Model.ClubId" />
+                                        <input type="hidden" name="courtId" value="@court.Id" />
+                                        <input type="hidden" name="blockId" value="@block.Id" />
+                                        <button class="link small" type="submit">entfernen</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <form hx-post="@url?handler=AddBlock" hx-target="#courts" hx-swap="innerHTML" style="margin-top:.5rem">
+                <input type="hidden" name="clubId" value="@Model.ClubId" />
+                <input type="hidden" name="courtId" value="@court.Id" />
+                <div class="fields">
+                    <div class="field">
+                        <label>Von</label>
+                        <input name="from" type="datetime-local" required />
+                    </div>
+                    <div class="field">
+                        <label>Bis</label>
+                        <input name="to" type="datetime-local" required />
+                    </div>
+                    <div class="field">
+                        <label>Grund</label>
+                        <select name="reason">
+                            @foreach (var reason in Enum.GetValues<BlockReason>())
+                            {
+                                <option value="@reason">@Display.Of(reason)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Notiz</label>
+                        <input name="note" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <button type="submit" class="small">Sperren</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    }
+
+    <div class="card">
+        <h3>Platz anlegen</h3>
+        <form hx-post="@url?handler=AddCourt" hx-target="#courts" hx-swap="innerHTML"
+              hx-on::after-request="if(event.detail.successful) this.reset()">
+            <input type="hidden" name="clubId" value="@Model.ClubId" />
+            <div class="field">
+                <label for="n-name">Name</label>
+                <input id="n-name" name="name" required autocomplete="off" placeholder="Platz 1" />
+            </div>
+            <div class="fields">
+                <div class="field">
+                    <label>Belag</label>
+                    <select name="surface">
+                        @foreach (var surface in Enum.GetValues<CourtSurface>())
+                        {
+                            <option value="@surface">@Display.Of(surface)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Lage</label>
+                    <select name="location">
+                        @foreach (var location in Enum.GetValues<CourtLocation>())
+                        {
+                            <option value="@location">@Display.Of(location)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Center Court</label>
+                    <select name="isCenterCourt">
+                        <option value="false">nein</option>
+                        <option value="true">ja</option>
+                    </select>
+                </div>
+            </div>
+            <button class="primary" type="submit" style="margin-top:.6rem">Anlegen</button>
+            <span class="spinner">…</span>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,11 @@
+@page "/Tournaments/{tournamentId:guid}/draw"
+@model TennisTurnier.Api.Pages.Tournaments.DrawModel
+@{
+    ViewData["Title"] = $"{Model.Tournament.Name} — Bracket";
+}
+
+<partial name="_Nav" model="Model.Nav" />
+
+<div id="phases">
+    <partial name="_Phases" model="Model" />
+</div>

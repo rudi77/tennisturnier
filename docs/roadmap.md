@@ -14,9 +14,12 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M6 | Auto-Scheduling | Spielplanvorschlag mit Diff und Bestätigung | ✅ |
 | M7 | Turniertag-Queue | Betrieb ohne starres Zeitraster | ✅ |
 | M8 | SwissFormat | Schweizer System ohne Wiederholungspaarungen | ✅ |
+| M9 | Oberfläche | Turnier bedienbar ohne HTTP-Werkzeug, Aushang im Browser | ✅ |
 
 M0–M4 ergeben die erste vorführbare Version. M5–M8 bauen darauf auf, ohne die
-bestehenden Verträge zu brechen.
+bestehenden Verträge zu brechen. M9 setzt eine serverseitig gerenderte Oberfläche
+davor (ADR-0009); sie hat kein eigenes Datenmodell, sondern ruft dieselben
+Anwendungsfälle wie die API.
 
 ## Bewusst nicht gebaut
 
@@ -31,6 +34,21 @@ bestehenden Verträge zu brechen.
   Code, nicht von Hand gepflegt.
 
 ## Bewusst offene Punkte
+
+- **Die Oberfläche hat noch keine Anmeldung gegen den Identity Provider.** Ein
+  Browser braucht ein Cookie, die API prüft ein Bearer-Token (ADR-0007). Solange
+  kein Aussteller konfiguriert ist, stellt `/Login` das Cookie gegen einen Namen
+  aus; mit Aussteller verschwindet die Seite, und der Authorization-Code-Flow,
+  der an ihre Stelle gehört, fehlt noch. Bis dahin ist die Oberfläche nur ohne
+  konfigurierten Identity Provider benutzbar.
+- **Die Rollenvergabe hat keine Oberfläche.** Sie hat auch keinen Endpunkt
+  (ADR-0007); die Entwicklungsanmeldung macht deshalb den ersten Benutzer zum
+  Systemadministrator. Wer Rollen fein vergeben will, tut das derzeit über
+  `IUserDirectory`.
+- **Formatvorlagen lassen sich nicht in der Oberfläche bearbeiten.** Angelegt
+  wird ein Turnier aus einer vorhandenen Vorlage. Eine Definition zu schreiben
+  oder zu kopieren geht über `…/format-templates` — ein Editor dafür wäre eine
+  eigene Ansicht mit einer eigenen Prüfung im Formular.
 
 - **Der Solver optimiert nicht, er legt.** `HeuristicScheduleSolver` arbeitet
   eine Prioritätenliste nach kritischer Pfadtiefe ab und nimmt je Match den

@@ -1,0 +1,127 @@
+@model TennisTurnier.Api.Pages.Tournaments.ScheduleModel
+@{
+    var plan = Model.Plan;
+}
+
+@if (plan is null)
+{
+    <div class="card">
+        <p class="empty">Noch nichts gerechnet.</p>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="row between">
+            <h2 style="margin:0">@(Model.Confirmed ? "Übernommen" : "Vorschlag")</h2>
+            <div class="row">
+                <span class="tag">@plan.Diff.Unchanged unverändert</span>
+                <span class="tag ok">@plan.Diff.Added neu</span>
+                <span class="tag warn">@plan.Diff.Moved verschoben</span>
+                <span class="tag bad">@plan.Diff.Removed entfallen</span>
+            </div>
+        </div>
+
+        @if (Model.Confirmed)
+        {
+            <div class="inline-note" style="margin-top:.75rem; background:var(--court-weak); color:var(--court)">
+                Der Plan steht. Er ist jetzt auch in der Live-Ansicht sichtbar.
+            </div>
+        }
+
+        @if (plan.Violations.Count > 0)
+        {
+            <div class="inline-note bad" style="margin-top:.75rem">
+                <strong>Verstöße gegen harte Bedingungen — sie blockieren nicht, sollen aber gesehen werden:</strong>
+                <ul style="margin:.4rem 0 0; padding-left:1.1rem">
+                    @foreach (var violation in plan.Violations)
+                    {
+                        <li>@Display.Of(violation.Constraint): @violation.Message</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (plan.Assignments.Count == 0)
+        {
+            <p class="empty">Keine Ansetzung berechnet — fehlen Plätze, Öffnungszeiten oder spielbereite Matches?</p>
+        }
+        else
+        {
+            <form hx-post="/Tournaments/@Model.Id/schedule?handler=Confirm" hx-target="#plan" hx-swap="innerHTML">
+                <input type="hidden" name="tournamentId" value="@Model.Id" />
+
+                <div class="table-wrap" style="margin-top:.75rem">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Match</th>
+                            <th>Platz</th>
+                            <th class="num">Nr.</th>
+                            <th>Beginn</th>
+                            <th>Dauer</th>
+                            <th>Änderung</th>
+                            <th>Begründung</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var assignment in plan.Assignments
+                            .OrderBy(a => a.CourtName, StringComparer.CurrentCulture)
+                            .ThenBy(a => a.SequenceOnCourt))
+                        {
+                            <tr>
+                                <td>@(assignment.Label ?? assignment.MatchId.ToString()[..8])</td>
+                                <td>@assignment.CourtName</td>
+                                <td class="num">@assignment.SequenceOnCourt</td>
+                                <td class="mono small">@Display.DateTime(assignment.PlannedStart)</td>
+                                <td class="mono small">@Display.Duration(assignment.EstimatedDuration)</td>
+                                <td>
+                                    <span class="tag @(assignment.Change == ProposalChange.Added ? "ok" : assignment.Change == ProposalChange.Moved ? "warn" : "")">
+                                        @Display.Of(assignment.Change)
+                                    </span>
+                                </td>
+                                <td class="small muted">
+                                    @assignment.Reason
+                                    @* Die Rückgabe des Vorschlags steht in der Zeile selbst: außerhalb
+                                       einer Zelle hebt der HTML-Parser sie aus der Tabelle heraus. *@
+                                    <input type="hidden" name="matchId" value="@assignment.MatchId" />
+                                    <input type="hidden" name="courtId" value="@assignment.CourtId" />
+                                    <input type="hidden" name="sequenceOnCourt" value="@assignment.SequenceOnCourt" />
+                                    <input type="hidden" name="plannedStart" value="@assignment.PlannedStart.ToString("o")" />
+                                    <input type="hidden" name="estimatedDuration" value="@assignment.EstimatedDuration.ToString("c")" />
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (!Model.Confirmed)
+                {
+                    <div class="row" style="margin-top:.75rem">
+                        <button class="go" type="submit">Plan übernehmen</button>
+                        <span class="spinner">…</span>
+                    </div>
+                }
+            </form>
+        }
+
+        @if (plan.Unscheduled.Count > 0)
+        {
+            <h3 style="margin-top:1rem">Ohne Platz geblieben</h3>
+            <div class="table-wrap">
+                <table>
+                    <tbody>
+                    @foreach (var unscheduled in plan.Unscheduled)
+                    {
+                        <tr>
+                            <td>@(unscheduled.Label ?? unscheduled.MatchId.ToString()[..8])</td>
+                            <td class="small muted">@unscheduled.Reason</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}

@@ -1,0 +1,29 @@
+@page "/Tournaments/{tournamentId:guid}/matchday"
+@model TennisTurnier.Api.Pages.Tournaments.MatchDayModel
+@{
+    ViewData["Title"] = $"{Model.Tournament.Name} — Turniertag";
+}
+
+<partial name="_Nav" model="Model.Nav" />
+
+@if (Model.Tournament.SchedulingMode == SchedulingMode.Planning)
+{
+    <div class="card">
+        <div class="inline-note">
+            Das Turnier steht noch im Planungsmodus. Umstellen unter
+            <a href="/Tournaments/@Model.Id">Meldungen → Ablauf</a>; erst dann werden aus
+            geplanten Uhrzeiten Warteschlangen.
+        </div>
+    </div>
+}
+
+@* Das Brett fragt selbst nach: an einem Turniertag sitzen mehrere Leute mit
+   demselben Bildschirm vor sich, und ein Aufruf des Nachbarplatzes soll ohne
+   Neuladen ankommen. *@
+<div id="board"
+     hx-get="/Tournaments/@Model.Id/matchday?handler=Board"
+     hx-vals='{"tournamentId": "@Model.Id"}'
+     hx-trigger="every 15s"
+     hx-swap="innerHTML">
+    <partial name="_Board" model="Model" />
+</div>

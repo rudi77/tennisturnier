@@ -1,0 +1,92 @@
+@model TennisTurnier.Api.Pages.Clubs.DetailModel
+@{
+    var today = DateOnly.FromDateTime(DateTime.Today);
+}
+
+<div class="split">
+    <div class="card">
+        <h2>Turniere</h2>
+
+        @if (Model.Tournaments.Count == 0)
+        {
+            <p class="empty">Noch kein Turnier in diesem Verein.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Turnier</th>
+                        <th>Zeitraum</th>
+                        <th>Zustand</th>
+                        <th class="num">Feld</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var tournament in Model.Tournaments)
+                    {
+                        <tr>
+                            <td><a href="/Tournaments/@tournament.Id">@tournament.Name</a></td>
+                            <td class="mono small">
+                                @Display.Date(tournament.StartsOn)@(tournament.EndsOn == tournament.StartsOn ? "" : " – " + Display.Date(tournament.EndsOn))
+                            </td>
+                            <td>
+                                <span class="tag @Display.TagOf(tournament.State)">@Display.Of(tournament.State)</span>
+                            </td>
+                            <td class="num">@tournament.AcceptedEntries</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="card">
+        <h2>Turnier anlegen</h2>
+
+        @if (Model.Formats.Count == 0)
+        {
+            <p class="empty">Keine Formatvorlage vorhanden.</p>
+        }
+        else
+        {
+            <form hx-post="/Clubs/@Model.ClubId?handler=CreateTournament"
+                  hx-target="#tournaments"
+                  hx-swap="innerHTML"
+                  hx-on::after-request="if(event.detail.successful) this.reset()">
+                <input type="hidden" name="clubId" value="@Model.ClubId" />
+
+                <div class="field">
+                    <label for="t-name">Name</label>
+                    <input id="t-name" name="name" required autocomplete="off" />
+                </div>
+
+                <div class="fields">
+                    <div class="field">
+                        <label for="t-from">Beginn</label>
+                        <input id="t-from" name="startsOn" type="date" value="@today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="field">
+                        <label for="t-to">Ende</label>
+                        <input id="t-to" name="endsOn" type="date" value="@today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                </div>
+
+                <div class="field" style="margin-top:.6rem">
+                    <label for="t-format">Format</label>
+                    <select id="t-format" name="formatTemplateId" required>
+                        @foreach (var format in Model.Formats)
+                        {
+                            <option value="@format.Id">@format.Name (@string.Join(" → ", format.Phases))</option>
+                        }
+                    </select>
+                </div>
+
+                <button class="primary" type="submit">Anlegen</button>
+                <span class="spinner">…</span>
+            </form>
+        }
+    </div>
+</div>

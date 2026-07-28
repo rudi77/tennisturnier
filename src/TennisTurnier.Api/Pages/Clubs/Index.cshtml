@@ -1,0 +1,34 @@
+@page
+@model TennisTurnier.Api.Pages.Clubs.IndexModel
+@{
+    ViewData["Title"] = "Vereine";
+}
+
+<h1>Vereine</h1>
+<p class="sub">Plätze, Öffnungszeiten und Turniere gehören jeweils einem Verein.</p>
+
+<div class="split">
+    <div id="club-list">
+        <partial name="_ClubList" model="Model" />
+    </div>
+
+    <div class="card">
+        <h2>Verein anlegen</h2>
+        <form hx-post="/Clubs?handler=Create" hx-target="#club-list" hx-swap="innerHTML" hx-on::after-request="if(event.detail.successful) this.reset()">
+            <div class="field">
+                <label for="c-name">Name</label>
+                <input id="c-name" name="name" required autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="c-city">Ort</label>
+                <input id="c-city" name="city" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="c-tz">Zeitzone</label>
+                <input id="c-tz" name="timeZoneId" value="Europe/Berlin" required autocomplete="off" />
+            </div>
+            <button class="primary" type="submit">Anlegen</button>
+            <span class="spinner">…</span>
+        </form>
+    </div>
+</div>

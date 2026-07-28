@@ -1,0 +1,113 @@
+@model TennisTurnier.Api.Pages.Tournaments.DrawModel
+
+@if (Model.Phases.Count == 0)
+{
+    <div class="card">
+        <p class="empty">
+            Noch nicht ausgelost — es gibt kein Bracket. Die Auslosung steht unter
+            <a href="/Tournaments/@Model.Id">Meldungen</a>.
+        </p>
+    </div>
+}
+
+@foreach (var phase in Model.Phases.OrderBy(p => p.Ordinal))
+{
+    var kind = Model.FormatOf(phase);
+    var standings = Model.Standings.TryGetValue(phase.Id, out var found) ? found.Places : [];
+
+    <div class="row between" style="margin: 1.25rem 0 .5rem">
+        <h2 style="margin:0">@phase.Name</h2>
+        <span class="tag">@Display.Of(phase.Status) · @Display.Of(kind)</span>
+    </div>
+
+    @if (standings.Count > 0)
+    {
+        <div class="card">
+            <h3>@(kind == PhaseFormatKind.Knockout ? "Platzierung" : "Tabelle")</h3>
+            @foreach (var group in standings.GroupBy(s => s.Group).OrderBy(g => g.Key, StringComparer.Ordinal))
+            {
+                @if (group.Key is { } name)
+                {
+                    <h3 style="margin-top:.75rem">Gruppe @name</h3>
+                }
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th class="num">#</th>
+                            <th>Teilnehmer</th>
+                            <th class="num">Sp</th>
+                            <th class="num">S</th>
+                            <th class="num">N</th>
+                            <th class="num">Pkt</th>
+                            <th class="num">Sätze</th>
+                            <th class="num">Spiele</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var place in group.OrderBy(s => s.Rank))
+                        {
+                            <tr>
+                                <td class="num">@place.Rank</td>
+                                <td>@place.DisplayName</td>
+                                <td class="num">@place.Played</td>
+                                <td class="num">@place.Won</td>
+                                <td class="num">@place.Lost</td>
+                                <td class="num"><strong>@place.Points</strong></td>
+                                <td class="num mono">@place.SetsWon:@place.SetsLost</td>
+                                <td class="num mono">@place.GamesWon:@place.GamesLost</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    @if (phase.Matches.Count == 0)
+    {
+        <div class="card">
+            <p class="empty">Noch keine Paarungen — sie entstehen, sobald die Vorphase entschieden ist.</p>
+        </div>
+    }
+    else if (kind == PhaseFormatKind.Knockout)
+    {
+        <div class="rounds">
+            @foreach (var round in phase.Matches.GroupBy(m => m.Round).OrderBy(g => g.Key))
+            {
+                <div class="round">
+                    <h3>Runde @round.Key</h3>
+                    <div class="stack">
+                        @foreach (var match in round.OrderBy(m => m.Position))
+                        {
+                            <partial name="_Match" model="new MatchView(Model, match)" />
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="grid">
+            @foreach (var group in phase.Matches
+                .GroupBy(m => m.Group)
+                .OrderBy(g => g.Key, StringComparer.Ordinal))
+            {
+                <div>
+                    @if (group.Key is { } name)
+                    {
+                        <h3>Gruppe @name</h3>
+                    }
+                    <div class="stack">
+                        @foreach (var match in group.OrderBy(m => m.Round).ThenBy(m => m.Position))
+                        {
+                            <partial name="_Match" model="new MatchView(Model, match)" />
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}

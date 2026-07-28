@@ -21,13 +21,20 @@ SessionStart-Hook (`.claude/hooks/setup.sh`) Installation und Restore automatisc
 ### Anwendung starten
 
 ```bash
-docker compose up -d keycloak          # lokaler Identity Provider mit Test-Realm
 dotnet run --project src/TennisTurnier.Api
 ```
 
 Die Datenbank ist eine SQLite-Datei, die beim Start angelegt und migriert wird.
-Ohne Keycloak startet die Anwendung ebenfalls — dann sind nur die öffentlichen
-Endpunkte erreichbar.
+Die Oberfläche liegt unter `/`, die Anmeldung unter `/Login` — ohne
+konfigurierten Identity Provider genügt dort ein Name (siehe
+[Oberfläche](#oberfläche)).
+
+Mit Identity Provider:
+
+```bash
+docker compose up -d keycloak          # lokaler Identity Provider mit Test-Realm
+dotnet run --project src/TennisTurnier.Api
+```
 
 Ein Token für die Testbenutzer (`systemadmin`, `clubadmin`, `referee`;
 Passwort jeweils gleich dem Benutzernamen):
@@ -53,7 +60,7 @@ src/TennisTurnier.Application                   → Domain (Ports + Anwendungsf�
 src/TennisTurnier.Adapters.Persistence.Sqlite   → Application (EF Core)
 src/TennisTurnier.Adapters.Identity.Oidc        → Application (Keycloak / Entra ID)
 src/TennisTurnier.Adapters.Scheduling           → Application (Spielplan-Solver)
-src/TennisTurnier.Api                           → alle (Composition Root, Minimal API)
+src/TennisTurnier.Api                           → alle (Composition Root, Minimal API + Oberfläche)
 ```
 
 Die Abhängigkeitsrichtung wird nicht per Konvention gepflegt, sondern in
@@ -72,6 +79,48 @@ Die tragenden Entscheidungen samt verworfener Alternativen stehen in
   Turnier gebunden, durchgesetzt per Query-Filter.
 - [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler existieren
   vereinsübergreifend — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
+- [ADR-0009](docs/adr/0009-serverseitige-oberflaeche-mit-htmx.md): die Oberfläche
+  wird serverseitig gerendert und liegt im API-Projekt — kein zweiter Zustand,
+  kein zweites Deployment.
+
+## Oberfläche
+
+Serverseitig gerendertes HTML mit htmx, im selben Prozess wie die API
+(ADR-0009). Kein Build-Werkzeug, kein Paketmanager fürs Frontend: htmx liegt als
+eine Datei unter `src/TennisTurnier.Api/wwwroot/js`, das Stylesheet daneben.
+
+| Seite | Zweck |
+|---|---|
+| `/` | alle Turniere der Vereine, für die man berechtigt ist |
+| `/Clubs`, `/Clubs/{id}` | Vereine, Plätze, Öffnungszeiten, Sperren, Turnier anlegen |
+| `/Tournaments/{id}` | Stammdaten, Zustandsübergänge, Meldeliste, Setzung |
+| `/Tournaments/{id}/draw` | Bracket, Tabellen, Ergebniseingabe und -korrektur |
+| `/Tournaments/{id}/schedule` | Spielplanvorschlag mit Begründung und Diff, Übernahme |
+| `/Tournaments/{id}/matchday` | Platzbrett: aufrufen, anpfeifen, beenden, unterbrechen, umsortieren |
+| `/live/{id}` | der öffentliche Aushang, ohne Anmeldung |
+
+Eine Handlung geht als Formular an den Server; die Antwort ist der neu
+gerenderte Abschnitt, den sie verändert hat. Ein fachlicher Fehler kommt mit 422
+zurück und landet als Meldung am unteren Bildschirmrand — der angezeigte Stand
+bleibt der, den der Server tatsächlich hat. Platzbrett und Aushang fragen alle
+15 Sekunden nach; das ist dieselbe Spanne, die die öffentliche Antwort als
+`max-age` trägt.
+
+Die Ergebniseingabe nimmt eine Zeile — `6:4 7:6(5)` —, weil ein Ergebnis am Platz
+so notiert und durchgesagt wird. Was nicht aufgeht, wird abgewiesen, bevor es die
+Domäne erreicht.
+
+### Anmeldung der Oberfläche
+
+Ein Browser braucht ein Cookie, die API prüft ein Bearer-Token (ADR-0007).
+Solange `Oidc:Authority` leer ist, stellt `/Login` das Cookie gegen einen Namen
+aus und macht den ersten Benutzer zum Systemadministrator — sonst stünde man vor
+einer leeren Datenbank, in der niemand einen Verein anlegen darf.
+
+Mit konfiguriertem Aussteller verschwindet diese Seite ersatzlos. Der
+Authorization-Code-Flow gegen den Identity Provider steht noch aus; bis dahin ist
+die Oberfläche mit konfiguriertem Aussteller nicht benutzbar, die API dagegen
+schon.
 
 ## Spielplan
 

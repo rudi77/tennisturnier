@@ -1,0 +1,73 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Übersicht";
+}
+
+<h1>Turniere</h1>
+<p class="sub">Alle Turniere der Vereine, für die du berechtigt bist.</p>
+
+@if (User.Identity?.IsAuthenticated != true)
+{
+    <div class="card">
+        <p>Zum Verwalten von Turnieren bitte <a href="/Login">anmelden</a>.</p>
+        <p class="small muted">
+            Die Live-Ansicht eines laufenden Turniers ist ohne Anmeldung erreichbar:
+            <span class="mono">/live/&lt;Turnier-Id&gt;</span>
+        </p>
+    </div>
+}
+else if (Model.Clubs.Count == 0)
+{
+    <div class="card">
+        <p>Noch kein Verein angelegt.</p>
+        <a class="btn primary" href="/Clubs">Verein anlegen</a>
+    </div>
+}
+else if (Model.Tournaments.Count == 0)
+{
+    <div class="card">
+        <p>Noch kein Turnier angelegt.</p>
+        <a class="btn primary" href="/Clubs">Zu den Vereinen</a>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Turnier</th>
+                    <th>Verein</th>
+                    <th>Zeitraum</th>
+                    <th>Zustand</th>
+                    <th>Modus</th>
+                    <th class="num">Feld</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var (club, tournament) in Model.Tournaments)
+                {
+                    <tr>
+                        <td>
+                            <a href="/Tournaments/@tournament.Id">@tournament.Name</a>
+                        </td>
+                        <td class="muted">@club.Name</td>
+                        <td class="mono small">
+                            @Display.Date(tournament.StartsOn)@(tournament.EndsOn == tournament.StartsOn ? "" : " – " + Display.Date(tournament.EndsOn))
+                        </td>
+                        <td><span class="tag @Display.TagOf(tournament.State)">@Display.Of(tournament.State)</span></td>
+                        <td class="small muted">@Display.Of(tournament.SchedulingMode)</td>
+                        <td class="num">@tournament.AcceptedEntries</td>
+                        <td class="actions">
+                            <a class="btn small" href="/live/@tournament.Id">Live</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

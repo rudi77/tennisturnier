@@ -1,0 +1,86 @@
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    // Einmal am Wurzelelement: htmx vererbt hx-headers an alles darunter, damit
+    // kein Formular den Token einzeln mitführen muss.
+    var antiforgery = Antiforgery.GetAndStoreTokens(ViewContext.HttpContext).RequestToken;
+
+    var page = ViewContext.RouteData.Values["page"] as string ?? string.Empty;
+    var user = User.Identity?.IsAuthenticated == true ? User.Identity!.Name : null;
+
+    string Active(string prefix) =>
+        page.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? "active" : string.Empty;
+}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(ViewData["Title"] ?? "Tennisturnier")</title>
+    <link rel="stylesheet" href="~/css/app.css" asp-append-version="true" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%23d6e34a' stroke='%23b3c02f'/></svg>" />
+    <script src="~/js/htmx.min.js" asp-append-version="true" defer></script>
+</head>
+<body hx-headers='{"RequestVerificationToken": "@antiforgery"}'>
+<header class="top">
+    <div class="inner">
+        <a class="brand" href="/"><span class="ball"></span> Tennisturnier</a>
+        <nav>
+            <a class="@Active("/Index")" href="/">Übersicht</a>
+            @if (user is not null)
+            {
+                <a class="@Active("/Clubs")" href="/Clubs">Vereine</a>
+                <span class="muted small">@user</span>
+                <form method="post" action="/Login?handler=Logout" class="inline">
+                    <button class="small" type="submit">Abmelden</button>
+                </form>
+            }
+            else
+            {
+                <a class="btn small primary" href="/Login">Anmelden</a>
+            }
+        </nav>
+    </div>
+</header>
+
+<main>
+    @RenderBody()
+</main>
+
+<footer class="bottom">
+    Tennisturnier — Vereinsturniere planen, spielen, aushängen.
+</footer>
+
+@* Ein einziges Ziel für Rückmeldungen. Jede htmx-Antwort kann es per
+   hx-swap-oob füllen, ohne dass die Seite dafür ein eigenes Feld vorsieht. *@
+<div id="toast"></div>
+
+<script>
+    // Ein fachlicher Fehler kommt mit 4xx zurück. htmx tauscht darauf nichts
+    // ein — der Rumpf trägt aber genau die Meldung, die der Benutzer sehen
+    // soll. Deshalb wird sie hier von Hand in den Toast gehoben.
+    document.body.addEventListener('htmx:beforeSwap', function (event) {
+        if (event.detail.xhr.status >= 400 && event.detail.xhr.status < 500) {
+            event.detail.shouldSwap = true;
+            event.detail.isError = false;
+            event.detail.target = document.getElementById('toast');
+        }
+    });
+
+    // Meldungen verschwinden von selbst; eine, die stehen bleibt, wird beim
+    // nächsten Blick für den aktuellen Stand gehalten.
+    document.body.addEventListener('htmx:afterSwap', function (event) {
+        if (event.detail.target.id !== 'toast' || !event.detail.target.innerHTML.trim()) {
+            return;
+        }
+
+        const shown = event.detail.target.innerHTML;
+        setTimeout(function () {
+            const toast = document.getElementById('toast');
+            if (toast && toast.innerHTML === shown) {
+                toast.innerHTML = '';
+            }
+        }, 6000);
+    });
+</script>
+</body>
+</html>

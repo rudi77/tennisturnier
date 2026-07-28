@@ -1,0 +1,112 @@
+@model TennisTurnier.Api.Web.MatchView
+@{
+    var match = Model.Match;
+    var url = $"/Tournaments/{Model.Page.Id}/draw";
+    var score = match.Score;
+
+    string SideClass(int side) =>
+        score is not null && score.WinnerSide == side ? "side winner" : "side";
+
+    string Name(MatchSideDetail side) => side.ParticipantName ?? side.Origin;
+}
+
+<div class="match">
+    <div class="label">
+        <span>@(match.Label ?? $"Runde {match.Round} · {match.Position}")</span>
+        <span>
+            @if (match.Assignment is { } assignment)
+            {
+                <span class="tag @Display.TagOf(assignment.Status)">@assignment.CourtName</span>
+            }
+            else if (match.Status == MatchStatus.Ready)
+            {
+                <span class="tag">@Display.Of(match.Status)</span>
+            }
+        </span>
+    </div>
+
+    <div class="@(match.Side1.ParticipantName is null ? "side pending" : SideClass(1))">
+        <span>@Name(match.Side1)</span>
+        <span class="score">@(score is null ? "" : string.Join(" ", score.CompletedSets.Select(s => s.Games1)))</span>
+    </div>
+    <div class="@(match.Side2.ParticipantName is null ? "side pending" : SideClass(2))">
+        <span>@Name(match.Side2)</span>
+        <span class="score">@(score is null ? "" : string.Join(" ", score.CompletedSets.Select(s => s.Games2)))</span>
+    </div>
+
+    @if (score is not null)
+    {
+        <div class="small muted" style="margin-top:.3rem">
+            @score.Display
+            @if (score.Outcome != MatchOutcome.Normal)
+            {
+                <span class="tag warn">@Display.Of(score.Outcome)</span>
+            }
+        </div>
+    }
+
+    @if (match.Status != MatchStatus.Pending)
+    {
+        <details style="margin-top:.4rem">
+            <summary class="small muted" style="cursor:pointer">
+                @(score is null ? "Ergebnis eintragen" : "Ergebnis korrigieren")
+            </summary>
+
+            <form hx-post="@url?handler=Result" hx-target="#phases" hx-swap="innerHTML" style="margin-top:.5rem">
+                <input type="hidden" name="tournamentId" value="@Model.Page.Id" />
+                <input type="hidden" name="matchId" value="@match.Id" />
+
+                <div class="field">
+                    <label>Sätze</label>
+                    <input name="sets" placeholder="6:4 7:6(5)" autocomplete="off"
+                           value="@(score is null ? "" : string.Join(" ", score.CompletedSets.Select(s => s.ToString().Replace(" ", "", StringComparison.Ordinal))))" />
+                </div>
+
+                <div class="fields">
+                    <div class="field">
+                        <label>Ausgang</label>
+                        <select name="outcome">
+                            @foreach (var outcome in Enum.GetValues<MatchOutcome>())
+                            {
+                                <option value="@outcome" selected="@(score?.Outcome == outcome)">@Display.Of(outcome)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Betrifft</label>
+                        <select name="affectedSide">
+                            <option value="">–</option>
+                            <option value="1">@Name(match.Side1)</option>
+                            <option value="2">@Name(match.Side2)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="field" style="margin-top:.5rem">
+                    <label>Abgebrochener Satz</label>
+                    <input name="abandonedSet" placeholder="2:1" autocomplete="off"
+                           value="@(score?.AbandonedSet?.ToString().Replace(" ", "", StringComparison.Ordinal))" />
+                </div>
+
+                <div class="row" style="margin-top:.5rem">
+                    <button class="primary small" type="submit">Eintragen</button>
+                    <span class="spinner">…</span>
+                </div>
+            </form>
+
+            @if (score is not null)
+            {
+                <form hx-post="@url?handler=Clear" hx-target="#phases" hx-swap="innerHTML" style="margin-top:.4rem">
+                    <input type="hidden" name="tournamentId" value="@Model.Page.Id" />
+                    <input type="hidden" name="matchId" value="@match.Id" />
+                    <button class="link small danger" type="submit">Ergebnis löschen</button>
+                </form>
+            }
+
+            <p class="small muted" style="margin:.5rem 0 0">
+                „Betrifft" nur bei Aufgabe, Nichtantreten oder Disqualifikation —
+                gemeint ist die Seite, die aufgibt beziehungsweise nicht antritt.
+            </p>
+        </details>
+    }
+</div>

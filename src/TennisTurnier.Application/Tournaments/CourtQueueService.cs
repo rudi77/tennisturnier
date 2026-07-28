@@ -95,6 +95,14 @@ public sealed class CourtQueueService : ICourtQueueService
         var matches = await _assignments.ListMatchesAsync(tournamentId, cancellationToken);
         var names = await NamesByEntryAsync(tournament, cancellationToken);
 
+        // Je Phase benannt: „Viertelfinale 2" ist innerhalb einer Phase
+        // eindeutig, über alle Phasen hinweg nicht.
+        var labels = matches
+            .GroupBy(m => m.PhaseId)
+            .SelectMany(phase => MatchLabels.For(
+                phase.OrderBy(m => m.Round).ThenBy(m => m.Position).ToList()))
+            .ToDictionary(entry => entry.Key, entry => entry.Value);
+
         var calendar = new CourtCalendar(club.TimeZone);
         var range = calendar.TournamentRange(tournament.StartsOn, tournament.EndsOn);
 
@@ -104,7 +112,7 @@ public sealed class CourtQueueService : ICourtQueueService
                 .Where(court => court.IsActive || assignments.Any(a => a.CourtId == court.Id && !a.IsOver))
                 .OrderBy(court => court.Name, StringComparer.CurrentCulture)
                 .Select(court => Board(
-                    court, assignments, matches, names, calendar.FreeWindows(court, range))),
+                    court, assignments, matches, names, labels, calendar.FreeWindows(court, range))),
         ];
     }
 
@@ -372,6 +380,7 @@ public sealed class CourtQueueService : ICourtQueueService
         IReadOnlyList<CourtAssignment> assignments,
         IReadOnlyList<Match> matches,
         IReadOnlyDictionary<Guid, string> names,
+        IReadOnlyDictionary<Guid, string> labels,
         IReadOnlyList<TimeSlot> openingHours)
     {
         var onCourt = assignments.Where(a => a.CourtId == court.Id).ToList();
@@ -398,14 +407,15 @@ public sealed class CourtQueueService : ICourtQueueService
             court.Id,
             court.Name,
             court.IsCenterCourt,
-            current is null ? null : Describe(current, matches, names, openingHours),
-            [.. queue.Select(a => Describe(a, matches, names, openingHours))]);
+            current is null ? null : Describe(current, matches, names, labels, openingHours),
+            [.. queue.Select(a => Describe(a, matches, names, labels, openingHours))]);
     }
 
     private static QueuedMatch Describe(
         CourtAssignment assignment,
         IReadOnlyList<Match> matches,
         IReadOnlyDictionary<Guid, string> names,
+        IReadOnlyDictionary<Guid, string> labels,
         IReadOnlyList<TimeSlot> openingHours)
     {
         var match = matches.FirstOrDefault(m => m.Id == assignment.MatchId);
@@ -414,8 +424,8 @@ public sealed class CourtQueueService : ICourtQueueService
             assignment.Id,
             assignment.MatchId,
             match?.Label,
-            NameOf(match?.Side1, names),
-            NameOf(match?.Side2, names),
+            NameOf(match?.Side1, names, labels),
+            NameOf(match?.Side2, names, labels),
             assignment.SequenceOnCourt,
             assignment.Status,
             match?.Status ?? MatchStatus.Pending,
@@ -435,8 +445,13 @@ public sealed class CourtQueueService : ICourtQueueService
         assignment.PlannedSlot is not { } slot
         || openingHours.Any(window => window.Start <= slot.Start && slot.End <= window.End);
 
-    private static string? NameOf(MatchSide? side, IReadOnlyDictionary<Guid, string> names) =>
-        side?.EntryId is { } entryId ? names.GetValueOrDefault(entryId) : side?.Origin.ToString();
+    private static string? NameOf(
+        MatchSide? side,
+        IReadOnlyDictionary<Guid, string> names,
+        IReadOnlyDictionary<Guid, string> labels) =>
+        side?.EntryId is { } entryId
+            ? names.GetValueOrDefault(entryId)
+            : side is null ? null : MatchLabels.Describe(side.Origin, labels);
 
     private async Task<IReadOnlyDictionary<Guid, string>> NamesByEntryAsync(
         Tournament tournament,

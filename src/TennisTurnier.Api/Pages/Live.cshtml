@@ -1,0 +1,15 @@
+@page "/live/{tournamentId:guid}"
+@model LiveModel
+@{
+    ViewData["Title"] = Model.Tournament?.Name ?? "Live";
+}
+
+@* Dieselben 15 Sekunden wie die Cache-Dauer der öffentlichen Antwort: schneller
+   zu fragen bringt nichts, langsamer verschenkt Aktualität. *@
+<div id="live"
+     hx-get="/live/@Model.Id?handler=Content"
+     hx-vals='{"tournamentId": "@Model.Id"}'
+     hx-trigger="every 15s"
+     hx-swap="innerHTML">
+    <partial name="_Live" model="Model" />
+</div>

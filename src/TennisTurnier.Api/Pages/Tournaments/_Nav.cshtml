@@ -1,0 +1,27 @@
+@model TennisTurnier.Api.Web.TournamentNav
+
+<div class="row between" style="margin-bottom:1rem">
+    <div>
+        <h1 style="margin-bottom:.2rem">@Model.Tournament.Name</h1>
+        <p class="sub" style="margin:0">
+            <span class="tag @Display.TagOf(Model.Tournament.State)">@Display.Of(Model.Tournament.State)</span>
+            <span class="tag">@Display.Of(Model.Tournament.SchedulingMode)</span>
+            <span class="mono small">
+                @Display.Date(Model.Tournament.StartsOn)@(Model.Tournament.EndsOn == Model.Tournament.StartsOn ? "" : " – " + Display.Date(Model.Tournament.EndsOn))
+            </span>
+        </p>
+    </div>
+    <div class="row">
+        <a class="btn" href="/Clubs/@Model.Tournament.ClubId">Verein</a>
+        <a class="btn" href="/live/@Model.Tournament.Id">Live-Ansicht</a>
+    </div>
+</div>
+
+<nav class="row" style="margin-bottom:1.25rem; border-bottom:1px solid var(--line); padding-bottom:.5rem">
+    @foreach (var (label, suffix) in TennisTurnier.Api.Web.TournamentNav.Tabs)
+    {
+        var href = $"/Tournaments/{Model.Tournament.Id}{suffix}";
+        var active = string.Equals(Model.Active, suffix, StringComparison.Ordinal) ? "active" : string.Empty;
+        <a class="btn small @active" href="@href">@label</a>
+    }
+</nav>

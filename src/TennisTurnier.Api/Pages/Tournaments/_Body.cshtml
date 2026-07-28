@@ -1,0 +1,76 @@
+@model TennisTurnier.Api.Pages.Tournaments.DetailModel
+@{
+    var url = $"/Tournaments/{Model.Id}";
+    var phases = Model.Tournament.Format?.Definition.Phases;
+}
+
+<partial name="_Nav" model="Model.Nav" />
+
+<div class="split">
+    <div class="card">
+        <h2>Stammdaten</h2>
+        <form hx-post="@url?handler=Update" hx-target="#body" hx-swap="innerHTML">
+            <input type="hidden" name="tournamentId" value="@Model.Id" />
+            <div class="field">
+                <label for="t-name">Name</label>
+                <input id="t-name" name="name" value="@Model.Tournament.Name" required autocomplete="off" />
+            </div>
+            <div class="fields">
+                <div class="field">
+                    <label for="t-from">Beginn</label>
+                    <input id="t-from" name="startsOn" type="date" value="@Model.Tournament.StartsOn.ToString("yyyy-MM-dd")" required />
+                </div>
+                <div class="field">
+                    <label for="t-to">Ende</label>
+                    <input id="t-to" name="endsOn" type="date" value="@Model.Tournament.EndsOn.ToString("yyyy-MM-dd")" required />
+                </div>
+                <div class="field">
+                    <button type="submit">Übernehmen</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Ablauf</h2>
+
+        @if (Model.Transitions.Count == 0)
+        {
+            <p class="small muted">Keine Handlung offen — das Turnier ist @Display.Of(Model.Tournament.State).</p>
+        }
+        else
+        {
+            <div class="stack">
+                @foreach (var (handler, label, style) in Model.Transitions)
+                {
+                    <form hx-post="@url?handler=Transition" hx-target="#body" hx-swap="innerHTML">
+                        <input type="hidden" name="tournamentId" value="@Model.Id" />
+                        <input type="hidden" name="transition" value="@handler" />
+                        <button class="@style" type="submit" style="width:100%">@label</button>
+                    </form>
+                }
+            </div>
+        }
+
+        <h3 style="margin-top:1rem">Format</h3>
+        @if (phases is null)
+        {
+            <p class="small muted">
+                Wird bei der Auslosung aus der Vorlage eingefroren.
+            </p>
+        }
+        else
+        {
+            <ol class="small" style="margin:0; padding-left:1.1rem">
+                @foreach (var phase in phases)
+                {
+                    <li>@(phase.Name ?? $"Phase {phase.Ordinal}") — @Display.Of(phase.Format)</li>
+                }
+            </ol>
+        }
+    </div>
+</div>
+
+<div id="entries">
+    <partial name="_Entries" model="Model" />
+</div>

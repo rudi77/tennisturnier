@@ -92,16 +92,21 @@ public sealed class MatchService : IMatchService
 
         return phases
             .OrderBy(p => p.Ordinal)
-            .Select(p => new PhaseDetail(
-                p.Id,
-                p.Ordinal,
-                p.Name,
-                p.Status,
-                p.Matches
-                    .OrderBy(m => m.Round)
-                    .ThenBy(m => m.Position)
-                    .Select(m => Describe(m, context))
-                    .ToList()))
+            .Select(phase =>
+            {
+                var matches = phase.Matches.OrderBy(m => m.Round).ThenBy(m => m.Position).ToList();
+
+                // Die Namen gelten je Phase: „Viertelfinale 2" ist innerhalb
+                // einer Phase eindeutig, über alle Phasen hinweg nicht.
+                var labels = MatchLabels.For(matches);
+
+                return new PhaseDetail(
+                    phase.Id,
+                    phase.Ordinal,
+                    phase.Name,
+                    phase.Status,
+                    matches.Select(m => Describe(m, context, labels)).ToList());
+            })
             .ToList();
     }
 
@@ -454,24 +459,30 @@ public sealed class MatchService : IMatchService
             club?.Courts.ToDictionary(c => c.Id, c => c.Name) ?? []);
     }
 
-    private static MatchDetail Describe(Match match, DescribeContext context) => new(
+    private static MatchDetail Describe(
+        Match match,
+        DescribeContext context,
+        IReadOnlyDictionary<Guid, string> labels) => new(
         match.Id,
         match.PhaseId,
         match.Round,
         match.Position,
         match.Label,
         match.Group,
-        Describe(match.Side1, context),
-        Describe(match.Side2, context),
+        Describe(match.Side1, context, labels),
+        Describe(match.Side2, context, labels),
         match.Status,
         Describe(match.Score),
         Describe(context.AssignmentByMatch.GetValueOrDefault(match.Id), context),
         match.Version);
 
-    private static MatchSideDetail Describe(MatchSide side, DescribeContext context) => new(
+    private static MatchSideDetail Describe(
+        MatchSide side,
+        DescribeContext context,
+        IReadOnlyDictionary<Guid, string> labels) => new(
         side.EntryId,
         side.EntryId is { } id ? context.ParticipantNameByEntry.GetValueOrDefault(id) : null,
-        side.Origin.ToString());
+        MatchLabels.Describe(side.Origin, labels));
 
     private static ScoreDetail? Describe(Score? score) =>
         score is null

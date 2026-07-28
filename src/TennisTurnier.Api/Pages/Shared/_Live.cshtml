@@ -1,0 +1,209 @@
+@model TennisTurnier.Api.Pages.LiveModel
+@{
+    var view = Model.Tournament;
+}
+
+@if (view is null)
+{
+    <div class="card">
+        <p class="empty">
+            Für dieses Turnier gibt es noch nichts zu zeigen — die Ansicht entsteht
+            mit der Auslosung.
+        </p>
+    </div>
+}
+else
+{
+    <div class="row between" style="margin-bottom:1rem">
+        <div>
+            <h1 style="margin-bottom:.2rem">@view.Name</h1>
+            <p class="sub" style="margin:0">
+                @view.ClubName ·
+                <span class="mono">@Display.Date(view.StartsOn)@(view.EndsOn == view.StartsOn ? "" : " – " + Display.Date(view.EndsOn))</span>
+                <span class="tag @Display.TagOf(view.State)">@Display.Of(view.State)</span>
+            </p>
+        </div>
+        <span class="muted small">Stand @Display.Time(Model.UpdatedAt)</span>
+    </div>
+
+    @if (view.Courts.Count > 0)
+    {
+        <h2>Auf den Plätzen</h2>
+        <div class="grid" style="margin-bottom:1.5rem">
+            @foreach (var court in view.Courts)
+            {
+                var matches = view.Phases
+                    .SelectMany(p => p.Matches)
+                    .ToDictionary(m => m.Id);
+
+                <div class="court">
+                    <header><strong>@court.Name</strong></header>
+                    @if (court.Queue.Count == 0)
+                    {
+                        <div class="slot"><span class="muted small">Nichts angesetzt.</span></div>
+                    }
+                    else
+                    {
+                        @foreach (var slot in court.Queue.OrderBy(s => s.SequenceOnCourt))
+                        {
+                            var match = matches.GetValueOrDefault(slot.MatchId);
+                            var running = slot.Status is AssignmentStatus.Running or AssignmentStatus.Called;
+
+                            <div class="slot">
+                                @* Die laufende Partie trägt ihre alte Nummer aus dem Plan weiter
+                                   und stünde dann neben einem wartenden Match mit derselben. Auf
+                                   dem Aushang zählt ohnehin nur, was gerade läuft. *@
+                                <div class="seq">@(running ? "▶" : slot.SequenceOnCourt.ToString())</div>
+                                <div class="body">
+                                    <div class="row between">
+                                        <span>
+                                            @(match is null
+                                                ? "–"
+                                                : $"{match.Side1.Name ?? match.Side1.Origin} — {match.Side2.Name ?? match.Side2.Origin}")
+                                        </span>
+                                        <span class="tag @Display.TagOf(slot.Status)">@Display.Of(slot.Status)</span>
+                                    </div>
+                                    <div class="small muted mono">
+                                        @if (slot.EarliestStart is { } promised)
+                                        {
+                                            <span>nicht vor @Display.Time(promised)</span>
+                                        }
+                                        else if (slot.PlannedStart is { } planned)
+                                        {
+                                            <span>vsl. @Display.Time(planned)</span>
+                                        }
+                                        @if (match?.Label is { } label)
+                                        {
+                                            <span> · @label</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @foreach (var phase in view.Phases.OrderBy(p => p.Ordinal))
+    {
+        <div class="row between" style="margin: 1.25rem 0 .5rem">
+            <h2 style="margin:0">@phase.Name</h2>
+            <span class="tag">@Display.Of(phase.Status)</span>
+        </div>
+
+        @if (phase.Standings.Count > 0)
+        {
+            <div class="card">
+                @foreach (var group in phase.Standings.GroupBy(s => s.Group).OrderBy(g => g.Key, StringComparer.Ordinal))
+                {
+                    @if (group.Key is { } name)
+                    {
+                        <h3>Gruppe @name</h3>
+                    }
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                            <tr>
+                                <th class="num">#</th>
+                                <th>Teilnehmer</th>
+                                <th class="num">Sp</th>
+                                <th class="num">S</th>
+                                <th class="num">N</th>
+                                <th class="num">Pkt</th>
+                                <th class="num">Sätze</th>
+                                <th class="num">Spiele</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var place in group.OrderBy(s => s.Rank))
+                            {
+                                <tr>
+                                    <td class="num">@place.Rank</td>
+                                    <td>@place.Name</td>
+                                    <td class="num">@place.Played</td>
+                                    <td class="num">@place.Won</td>
+                                    <td class="num">@place.Lost</td>
+                                    <td class="num"><strong>@place.Points</strong></td>
+                                    <td class="num mono">@place.SetsWon:@place.SetsLost</td>
+                                    <td class="num mono">@place.GamesWon:@place.GamesLost</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (phase.Matches.Count > 0)
+        {
+            <div class="rounds">
+                @foreach (var round in phase.Matches
+                    .GroupBy(m => (m.Group, m.Round))
+                    .OrderBy(g => g.Key.Group, StringComparer.Ordinal)
+                    .ThenBy(g => g.Key.Round))
+                {
+                    <div class="round">
+                        <h3>
+                            @(round.Key.Group is { } group ? $"Gruppe {group} · " : "")Runde @round.Key.Round
+                        </h3>
+                        <div class="stack">
+                            @foreach (var match in round.OrderBy(m => m.Position))
+                            {
+                                <div class="match">
+                                    <div class="label">
+                                        <span>@(match.Label ?? $"#{match.Position}")</span>
+                                        <span>
+                                            @if (match.CourtName is { } court)
+                                            {
+                                                <span class="tag @(match.AssignmentStatus is { } status ? Display.TagOf(status) : "")">@court</span>
+                                            }
+                                        </span>
+                                    </div>
+
+                                    @foreach (var (side, number) in new[] { (match.Side1, 1), (match.Side2, 2) })
+                                    {
+                                        var classes = side.Name is null
+                                            ? "side pending"
+                                            : match.WinnerSide == number ? "side winner" : "side";
+
+                                        <div class="@classes">
+                                            <span>
+                                                @(side.Name ?? side.Origin)
+                                                @if (side.Seed is { } seed)
+                                                {
+                                                    <span class="seed">(@seed)</span>
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+
+                                    @if (match.Score is { } score)
+                                    {
+                                        <div class="small muted" style="margin-top:.3rem">
+                                            @score
+                                            @if (match.Outcome is { } outcome && outcome != MatchOutcome.Normal)
+                                            {
+                                                <span class="tag warn">@Display.Of(outcome)</span>
+                                            }
+                                        </div>
+                                    }
+                                    else if (match.EarliestStart is { } earliest)
+                                    {
+                                        <div class="small muted mono" style="margin-top:.3rem">nicht vor @Display.Time(earliest)</div>
+                                    }
+                                    else if (match.PlannedStart is { } planned)
+                                    {
+                                        <div class="small muted mono" style="margin-top:.3rem">vsl. @Display.Time(planned)</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+}

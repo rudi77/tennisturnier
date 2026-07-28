@@ -5,6 +5,7 @@ using TennisTurnier.Adapters.Scheduling;
 using TennisTurnier.Api;
 using TennisTurnier.Api.Endpoints;
 using TennisTurnier.Api.Realtime;
+using TennisTurnier.Api.Web;
 using TennisTurnier.Application;
 using TennisTurnier.Application.Ports;
 
@@ -19,9 +20,23 @@ builder.Services.AddSqlitePersistence(
 builder.Services.AddOidcIdentity(oidc);
 builder.Services.AddHeuristicScheduling();
 
+// Die Weboberfläche braucht ein Cookie, kein Bearer-Token. Solange kein
+// Aussteller konfiguriert ist, stellt die Entwicklungsanmeldung eines aus;
+// danach gilt ausschließlich der Identity Provider (siehe DevAuthentication).
+if (!oidc.IsConfigured)
+{
+    builder.Services.AddDevAuthentication();
+}
+
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<ITournamentNotifier, SignalRTournamentNotifier>();
+
+builder.Services.AddRazorPages();
+
+// htmx schickt kein verstecktes Formularfeld mit, sondern einen Header. Der
+// Name steht hier und im Layout — an einer dritten Stelle taucht er nicht auf.
+builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -37,6 +52,9 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseStaticFiles();
+
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -44,6 +62,7 @@ app.UseAuthorization();
 // auf, auf denen der Query-Filter aus ADR-0004 arbeitet.
 app.UseUserResolution();
 
+app.MapRazorPages();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("Health");
 app.MapClubEndpoints();
 app.MapTournamentEndpoints();

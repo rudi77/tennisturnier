@@ -1,0 +1,34 @@
+@model TennisTurnier.Api.Pages.Clubs.IndexModel
+
+<div class="card">
+    @if (Model.Clubs.Count == 0)
+    {
+        <p class="empty">Noch kein Verein angelegt.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Verein</th>
+                    <th>Ort</th>
+                    <th>Zeitzone</th>
+                    <th class="num">Plätze</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var club in Model.Clubs)
+                {
+                    <tr>
+                        <td><a href="/Clubs/@club.Id">@club.Name</a></td>
+                        <td class="muted">@(club.City ?? "–")</td>
+                        <td class="mono small muted">@club.TimeZoneId</td>
+                        <td class="num">@club.CourtCount</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

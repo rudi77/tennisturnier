@@ -1,0 +1,37 @@
+@model TennisTurnier.Api.Pages.Tournaments.DetailModel
+
+@if (Model.Hits.Count == 0)
+{
+    <p class="small muted" style="margin:.3rem 0">Kein Treffer — mindestens zwei Buchstaben eingeben.</p>
+}
+else
+{
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>Spieler</th>
+                <th class="num">Spieler 1</th>
+                <th class="num">Partner</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var player in Model.Hits)
+            {
+                <tr>
+                    <td>@player.DisplayName</td>
+                    <td class="num">
+                        <input type="radio" name="firstPlayerId" value="@player.Id" required style="width:auto" />
+                    </td>
+                    <td class="num">
+                        <input type="radio" name="secondPlayerId" value="@player.Id" style="width:auto" />
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <p class="small muted" style="margin:.3rem 0">
+        Partner nur beim Doppel wählen.
+    </p>
+}

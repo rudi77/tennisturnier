@@ -1,0 +1,36 @@
+@page "/Tournaments/{tournamentId:guid}/schedule"
+@model TennisTurnier.Api.Pages.Tournaments.ScheduleModel
+@{
+    ViewData["Title"] = $"{Model.Tournament.Name} — Spielplan";
+}
+
+<partial name="_Nav" model="Model.Nav" />
+
+<div class="card">
+    <div class="row between">
+        <div>
+            <h2 style="margin:0">Spielplan</h2>
+            <p class="small muted" style="margin:.25rem 0 0">
+                Rechnen und Übernehmen sind zwei Schritte. Der Vorschlag ändert nichts,
+                bis er bestätigt wird.
+            </p>
+        </div>
+        <form hx-post="/Tournaments/@Model.Id/schedule?handler=Propose" hx-target="#plan" hx-swap="innerHTML">
+            <input type="hidden" name="tournamentId" value="@Model.Id" />
+            <button class="primary" type="submit">Vorschlag rechnen</button>
+            <span class="spinner">rechnet…</span>
+        </form>
+    </div>
+
+    @if (Model.Tournament.SchedulingMode == SchedulingMode.MatchDay)
+    {
+        <div class="inline-note" style="margin-top:.75rem">
+            Das Turnier läuft im Turniertagbetrieb. Dort zählt die Reihenfolge auf dem
+            Platz — geplante Uhrzeiten sind nur noch Schätzungen.
+        </div>
+    }
+</div>
+
+<div id="plan">
+    <partial name="_Plan" model="Model" />
+</div>

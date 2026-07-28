@@ -15,6 +15,7 @@ noch einmal von vorn beginnt.
 | [0006](0006-sqlite-als-startdatenbank.md) | SQLite als Startdatenbank, PostgreSQL als Zielbild | Accepted |
 | [0007](0007-externer-identity-provider.md) | Externer Identity Provider, Rollen bleiben in der Anwendung | Accepted |
 | [0008](0008-spielerstammdaten.md) | Spieler existieren vereinsübergreifend | Accepted |
+| [0009](0009-serverseitige-oberflaeche-mit-htmx.md) | Serverseitige Oberfläche mit htmx, im API-Projekt | Accepted |
 
 ## Status
 

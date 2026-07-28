@@ -1,0 +1,11 @@
+@page "/Tournaments/{tournamentId:guid}"
+@model TennisTurnier.Api.Pages.Tournaments.DetailModel
+@{
+    ViewData["Title"] = Model.Tournament.Name;
+}
+
+@* Der Kopf steckt mit im Tauschbereich: ein Zustandsübergang ändert die
+   Zustandsmarke und die möglichen Handlungen im selben Zug. *@
+<div id="body">
+    <partial name="_Body" model="Model" />
+</div>

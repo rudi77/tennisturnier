@@ -1,0 +1,23 @@
+@page "/Clubs/{clubId:guid}"
+@model TennisTurnier.Api.Pages.Clubs.DetailModel
+@{
+    ViewData["Title"] = Model.Club.Name;
+}
+
+<div class="row between">
+    <div>
+        <h1>@Model.Club.Name</h1>
+        <p class="sub">
+            @(Model.Club.City ?? "ohne Ortsangabe") · <span class="mono">@Model.Club.TimeZoneId</span>
+        </p>
+    </div>
+    <a class="btn" href="/Clubs">Alle Vereine</a>
+</div>
+
+<div id="tournaments">
+    <partial name="_Tournaments" model="Model" />
+</div>
+
+<div id="courts">
+    <partial name="_Courts" model="Model" />
+</div>

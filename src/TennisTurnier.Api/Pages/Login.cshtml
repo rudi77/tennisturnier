@@ -1,0 +1,32 @@
+@page
+@model LoginModel
+@{
+    ViewData["Title"] = "Anmelden";
+}
+
+<div style="max-width: 420px; margin: 3rem auto;">
+    <h1>Anmelden</h1>
+    <p class="sub">Entwicklungsanmeldung — es genügt ein Name.</p>
+
+    <div class="card">
+        @if (Model.Error is not null)
+        {
+            <div class="inline-note bad">@Model.Error</div>
+        }
+
+        <form method="post">
+            <div class="field">
+                <label for="name">Name</label>
+                <input id="name" name="Name" value="@Model.Name" autofocus autocomplete="off" />
+            </div>
+            <button class="primary" type="submit">Anmelden</button>
+        </form>
+    </div>
+
+    <p class="small muted">
+        Ein neues Konto ohne Rollenzuweisung wird Systemadministrator, damit der
+        erste Verein überhaupt angelegt werden kann. Sobald unter
+        <span class="mono">Oidc:Authority</span> ein Aussteller eingetragen ist,
+        entfällt diese Seite.
+    </p>
+</div>
