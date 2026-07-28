@@ -94,9 +94,17 @@ zulässig erklärt, prüft nichts.
 ## Turniertag
 
 `GET /api/tournaments/{id}/courts` zeigt je Platz, was gerade läuft und wer
-wartet. Am Platz wird über `POST /api/assignments/{id}/call|start|finish` und
-`suspend|resume` gearbeitet; die Reihenfolge einer Warteschlange stellt die
-Turnierleitung über `POST /api/tournaments/{id}/courts/{courtId}/queue` um.
+wartet. Am Platz wird über `POST /api/assignments/{id}/call|start|finish|suspend`
+gearbeitet — das darf auch der Schiedsrichter, er steht dort. Disponiert wird
+getrennt davon: die Reihenfolge einer Warteschlange über
+`POST /api/tournaments/{id}/courts/{courtId}/queue`, eine Zusage über
+`…/assignments/{id}/promise`, die Fortsetzung einer unterbrochenen Partie über
+`…/resume`. Diese drei verschieben alles dahinter und gehören deshalb der
+Turnierleitung, nicht der Ergebniseingabe.
+
+Der ganze Tagesbetrieb setzt den Turniertagmodus voraus — auch das Umstellen und
+das Zusagen, die im Planungsmodus nur den gerechneten Spielplan zerstören
+würden, ohne inhaltlich etwas zu ändern.
 
 Die harte Randbedingung ist, dass die Matchdauer unbekannt ist. Deshalb ist die
 **Reihenfolge** auf dem Platz die Aussage, nicht die Uhrzeit: die Schätzungen
@@ -105,13 +113,23 @@ Warteschlange nummeriert sich lückenlos neu — „Sie sind der Dritte auf Plat
 ist eine Auskunft, keine Sortierhilfe. Eine Zusage („nicht vor 14 Uhr") wird
 dabei nie unterlaufen, auch wenn der Platz früher frei wird.
 
+Weil jedes überzogene Match die Warteschlange nach hinten schiebt, steht das
+Finale irgendwann rechnerisch um halb zwei nachts. Das ist keine Fehlfunktion,
+sondern eine Auskunft, die die Turnierleitung braucht: jedes wartende Match
+trägt `withinOpeningHours`, sobald seine Schätzung nicht mehr in die
+Öffnungszeiten des Platzes passt.
+
 Aufgerufen wird nur, wer feststeht. Eingeplant ist der ganze Baum, lange bevor
 die Teilnehmer bekannt sind — am Platz wird aber kein Platzhalter ausgerufen.
+Umgekehrt wird nicht jedes Match am Platz aufgerufen: ein Nichtantreten wird
+eingetragen, ohne dass jemand hingeht, und gibt den Platz sofort frei.
 
 Eine Unterbrechung lässt die Zuweisung als Historie stehen; die Fortsetzung
 kann auf einem anderen Platz stattfinden und ist dann eine eigene Zuweisung.
 Erst beide zusammen erzählen, was an diesem Tag passiert ist — genau deshalb
-ist die Platzzuweisung eine eigene Entität (ADR-0002).
+ist die Platzzuweisung eine eigene Entität (ADR-0002). Die alte Zuweisung wird
+dabei ausdrücklich abgeschlossen: bliebe sie unterbrochen, ließe sie sich ein
+zweites Mal fortsetzen, und dieselbe Partie liefe auf zwei Plätzen.
 
 Das Ergebnis wird getrennt eingetragen: der Platz ist frei, sobald die Spieler
 ihn verlassen, und nicht erst, wenn jemand Zeit hatte, den Zettel auszufüllen.

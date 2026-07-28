@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using TennisTurnier.Adapters.Persistence.Sqlite;
+using TennisTurnier.Application.Ports;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -57,8 +58,20 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
                 .AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>(
                     HeaderAuthenticationHandler.SchemeName,
                     _ => { });
+
+            services.AddSingleton<IClock>(Clock);
         });
     }
+
+    /// <summary>
+    /// Die Uhr, auf die sich der Turniertag bezieht.
+    ///
+    /// Ohne sie liegt jedes Testturnier in der Vergangenheit der Systemuhr, und
+    /// alles, was „ab jetzt" rechnet, springt in die Gegenwart. Eine Zusage für
+    /// 14 Uhr des Turniertags wäre dann längst verstrichen — und ein Test, der
+    /// prüft, dass sie nicht unterlaufen wird, bewiese nichts.
+    /// </summary>
+    public MutableClock Clock { get; } = new();
 
     /// <summary>Ein Client, der als der angegebene Benutzer auftritt.</summary>
     public HttpClient CreateClientAs(string subject)
@@ -156,4 +169,12 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName)));
         }
     }
+}
+
+/// <summary>Eine Uhr, die der Test stellt.</summary>
+public sealed class MutableClock : IClock
+{
+    public DateTimeOffset Now { get; set; } = new(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2));
+
+    public void Advance(TimeSpan by) => Now += by;
 }

@@ -58,6 +58,7 @@ public sealed class MatchService : IMatchService
     private readonly IPublicViewService _publicView;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
+    private readonly IClock _clock;
 
     public MatchService(
         ITournamentRepository tournaments,
@@ -67,7 +68,8 @@ public sealed class MatchService : IMatchService
         IPlayerRepository players,
         IPublicViewService publicView,
         IUnitOfWork unitOfWork,
-        IUserContext userContext)
+        IUserContext userContext,
+        IClock clock)
     {
         _tournaments = tournaments;
         _phases = phases;
@@ -77,6 +79,7 @@ public sealed class MatchService : IMatchService
         _publicView = publicView;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
+        _clock = clock;
     }
 
     public async Task<IReadOnlyList<PhaseDetail>> GetPhasesAsync(
@@ -143,6 +146,7 @@ public sealed class MatchService : IMatchService
             tournament.Start();
         }
 
+        await ReleaseQueueAsync(tournament.Id, matchId, cancellationToken);
         await AdvancePhasesAsync(tournament, phases, cancellationToken);
 
         // Zwischenspeichern, bevor die öffentliche Ansicht entsteht: sie soll den
@@ -152,6 +156,47 @@ public sealed class MatchService : IMatchService
         await _publicView.RebuildAsync(tournament.Id, cancellationToken);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Gibt den Platz frei, den ein entschiedenes Match noch belegt.
+    ///
+    /// Nicht jedes Match wird am Platz aufgerufen: ein Nichtantreten wird
+    /// eingetragen, ohne dass jemand hingeht. Bliebe die Zuweisung stehen,
+    /// behielte sie ihre Nummer in der Warteschlange, blockierte anderthalb
+    /// Stunden für alles dahinter und stünde öffentlich als wartendes Match —
+    /// und wäre über den Turniertag nicht mehr loszuwerden, weil sich weder
+    /// aufrufen noch beenden lässt, was schon entschieden ist.
+    ///
+    /// Aufgerufene, laufende und unterbrochene Zuweisungen bleiben unangetastet:
+    /// sie gehören dem Tagesbetrieb, und ihre Historie ist der Grund, warum die
+    /// Zuweisung eine eigene Entität ist (ADR-0002).
+    /// </summary>
+    private async Task ReleaseQueueAsync(
+        Guid tournamentId,
+        Guid matchId,
+        CancellationToken cancellationToken)
+    {
+        var all = await _assignments.ListByTournamentAsync(tournamentId, cancellationToken);
+        var waiting = all
+            .Where(a => a.MatchId == matchId && a.Status == AssignmentStatus.Planned)
+            .ToList();
+
+        foreach (var assignment in waiting)
+        {
+            _assignments.Remove(assignment);
+        }
+
+        // Die betroffenen Plätze rücken nach: sonst bliebe eine Lücke in der
+        // Nummerierung, und die wird am Platz vorgelesen.
+        foreach (var courtId in waiting.Select(a => a.CourtId).Distinct())
+        {
+            var onCourt = all
+                .Where(a => a.CourtId == courtId && !waiting.Contains(a))
+                .ToList();
+
+            CourtQueue.Reflow(onCourt, CourtQueue.FreeFrom(onCourt, _clock.Now), _clock.Now);
+        }
     }
 
     public async Task ClearResultAsync(Guid matchId, CancellationToken cancellationToken = default)

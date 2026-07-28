@@ -356,6 +356,27 @@ public sealed class Tournament : Entity
     /// </summary>
     public void MarkScheduleChanged() => Touch();
 
+    /// <summary>
+    /// Weist einen Zeitpunkt zurück, der nicht im Turnierzeitraum liegt.
+    ///
+    /// Ein Tag Luft nach jeder Seite: ein Abendspiel kann über Mitternacht
+    /// gehen, und die Zeitzone des Vereins verschiebt die Grenzen. Ohne diese
+    /// Schranke wandert ein vertippter Termin unbemerkt ins Jahr 2099 — und
+    /// steht dort öffentlich, weil die Warteschlange alles dahinter mitzieht.
+    /// </summary>
+    public void RequireScheduledWithin(DateTimeOffset when)
+    {
+        var from = new DateTimeOffset(StartsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(-1);
+        var until = new DateTimeOffset(EndsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(2);
+
+        if (when < from || when >= until)
+        {
+            throw new DomainException(
+                $"Der Zeitpunkt {when:g} liegt außerhalb des Turnierzeitraums " +
+                $"({StartsOn:d} bis {EndsOn:d}).");
+        }
+    }
+
     private void Touch() => Version++;
 
     private static string ValidateName(string name) =>

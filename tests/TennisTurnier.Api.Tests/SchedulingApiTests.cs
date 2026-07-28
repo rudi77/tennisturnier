@@ -360,6 +360,10 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
         // Sie blieb als Platzhalter im Spielplan stehen — in der öffentlichen
         // Warteschlange sichtbar und als stiller Kollisionspartner für alles,
         // was danach dorthin geplant wird.
+        //
+        // Seit M7 gibt die Ergebniseingabe den Platz sofort frei; hier bleibt zu
+        // prüfen, dass danach nichts mehr übrig ist, das ein Spielplanlauf
+        // abräumen müsste.
         var (admin, _, tournamentId) = await DrawnAsync(participants: 8);
         await admin.PostAsJsonAsync(
             $"/api/tournaments/{tournamentId}/schedule/confirm",
@@ -375,7 +379,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
             Json);
 
         var again = await ProposeAsync(admin, tournamentId);
-        Assert.True(again.Diff.Removed >= 1);
+        Assert.Equal(0, again.Diff.Removed);
 
         await admin.PostAsJsonAsync(
             $"/api/tournaments/{tournamentId}/schedule/confirm", From(again), Json);

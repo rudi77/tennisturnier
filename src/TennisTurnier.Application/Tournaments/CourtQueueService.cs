@@ -95,12 +95,16 @@ public sealed class CourtQueueService : ICourtQueueService
         var matches = await _assignments.ListMatchesAsync(tournamentId, cancellationToken);
         var names = await NamesByEntryAsync(tournament, cancellationToken);
 
+        var calendar = new CourtCalendar(club.TimeZone);
+        var range = calendar.TournamentRange(tournament.StartsOn, tournament.EndsOn);
+
         return
         [
             .. club.Courts
                 .Where(court => court.IsActive || assignments.Any(a => a.CourtId == court.Id && !a.IsOver))
                 .OrderBy(court => court.Name, StringComparer.CurrentCulture)
-                .Select(court => Board(court, assignments, matches, names)),
+                .Select(court => Board(
+                    court, assignments, matches, names, calendar.FreeWindows(court, range))),
         ];
     }
 
@@ -128,11 +132,16 @@ public sealed class CourtQueueService : ICourtQueueService
 
         var (tournament, club, assignment) = await LoadForDayAsync(assignmentId, cancellationToken);
 
+        // Auf welchem Platz weitergespielt wird, entscheidet die Turnierleitung.
+        RequireManagePermission(tournament);
+
         if (assignment.Status != AssignmentStatus.Suspended)
         {
             throw new DomainException(
                 $"Fortgesetzt wird eine unterbrochene Partie; diese ist {assignment.Status}.");
         }
+
+        await RequireReadyAsync(assignment, cancellationToken);
 
         var resumed = assignment;
 
@@ -141,9 +150,13 @@ public sealed class CourtQueueService : ICourtQueueService
             var court = club.Courts.FirstOrDefault(c => c.Id == courtId && c.IsActive)
                 ?? throw new NotFoundException("Platz", courtId);
 
-            // Die unterbrochene Zuweisung bleibt stehen. Erst beide zusammen
-            // erzählen, was an diesem Tag passiert ist — deshalb ist die
-            // Zuweisung eine eigene Entität mit Historie (ADR-0002).
+            // Die unterbrochene Zuweisung wird abgeschlossen und bleibt als
+            // Historie stehen — erst beide zusammen erzählen, was an diesem Tag
+            // passiert ist (ADR-0002). Abgeschlossen ausdrücklich: bliebe sie
+            // unterbrochen, ließe sie sich ein zweites Mal fortsetzen, und das
+            // Match liefe auf zwei Plätzen gleichzeitig.
+            assignment.Finish(_clock.Now);
+
             resumed = new CourtAssignment(
                 Guid.NewGuid(),
                 tournament.Id,
@@ -157,6 +170,14 @@ public sealed class CourtQueueService : ICourtQueueService
         }
 
         resumed.Start(_clock.Now);
+
+        // Beide Plätze nachziehen: der alte ist frei geworden, der neue ist belegt.
+        await ReflowCourtAsync(tournament.Id, assignment.CourtId, cancellationToken);
+
+        if (resumed.CourtId != assignment.CourtId)
+        {
+            await ReflowCourtAsync(tournament.Id, resumed.CourtId, cancellationToken);
+        }
 
         await SaveAsync(tournament, cancellationToken);
 
@@ -179,6 +200,10 @@ public sealed class CourtQueueService : ICourtQueueService
         var tournament = await LoadTournamentAsync(tournamentId, cancellationToken);
         RequireManagePermission(tournament);
 
+        // Auch das Umstellen rechnet ab „jetzt" — im Planungsmodus zerstörte es
+        // den gerechneten Spielplan, ohne inhaltlich etwas zu ändern.
+        RequireMatchDay(tournament);
+
         var assignments = await _assignments.ListByTournamentAsync(tournamentId, cancellationToken);
         var onCourt = assignments.Where(a => a.CourtId == courtId).ToList();
 
@@ -200,13 +225,18 @@ public sealed class CourtQueueService : ICourtQueueService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var (tournament, _, assignment) = await LoadForDayAsync(assignmentId, cancellationToken, requireMatchDay: false);
+        var (tournament, _, assignment) = await LoadForDayAsync(assignmentId, cancellationToken);
+
+        // Eine Zusage verschiebt alles dahinter — das ist eine Dispositions-
+        // entscheidung und keine Ergebniseingabe.
+        RequireManagePermission(tournament);
 
         if (assignment.IsOver)
         {
             throw new DomainException("Einer beendeten Zuweisung lässt sich nichts mehr zusagen.");
         }
 
+        tournament.RequireScheduledWithin(request.EarliestStart);
         assignment.PromiseNotBefore(request.EarliestStart);
 
         await ReflowCourtAsync(tournament.Id, assignment.CourtId, cancellationToken);
@@ -285,8 +315,7 @@ public sealed class CourtQueueService : ICourtQueueService
 
     private async Task<(Tournament Tournament, Club Club, CourtAssignment Assignment)> LoadForDayAsync(
         Guid assignmentId,
-        CancellationToken cancellationToken,
-        bool requireMatchDay = true)
+        CancellationToken cancellationToken)
     {
         var assignment = await _assignments.FindAsync(assignmentId, cancellationToken)
             ?? throw new NotFoundException("Platzzuweisung", assignmentId);
@@ -299,10 +328,7 @@ public sealed class CourtQueueService : ICourtQueueService
             ResourceScope.Tournament(tournament.Id),
             ResourceScope.Club(tournament.ClubId));
 
-        if (requireMatchDay)
-        {
-            RequireMatchDay(tournament);
-        }
+        RequireMatchDay(tournament);
 
         return (tournament, await LoadClubAsync(tournament, cancellationToken), assignment);
     }
@@ -345,27 +371,42 @@ public sealed class CourtQueueService : ICourtQueueService
         Court court,
         IReadOnlyList<CourtAssignment> assignments,
         IReadOnlyList<Match> matches,
-        IReadOnlyDictionary<Guid, string> names)
+        IReadOnlyDictionary<Guid, string> names,
+        IReadOnlyList<TimeSlot> openingHours)
     {
         var onCourt = assignments.Where(a => a.CourtId == court.Id).ToList();
 
+        // Das laufende Match zuerst. Ein eben aufgerufenes daneben ist der
+        // Normalfall — die Spieler sind auf dem Weg —, es ist aber nicht das,
+        // was auf dem Platz steht.
         var current = onCourt
             .Where(a => a.Status is AssignmentStatus.Called or AssignmentStatus.Running)
-            .OrderBy(a => a.Status)
+            .OrderBy(CourtQueue.Liveness)
             .FirstOrDefault();
+
+        // Und alles Übrige, das noch ansteht, in der Warteschlange — auch das
+        // schon Aufgerufene. Verschwände es hier, ließe es sich über die
+        // Platzübersicht nicht mehr erreichen.
+        var queue = onCourt
+            .Where(a => a.Id != current?.Id
+                && a.Status is AssignmentStatus.Called or AssignmentStatus.Planned)
+            .OrderBy(CourtQueue.Liveness)
+            .ThenBy(a => a.SequenceOnCourt)
+            .ToList();
 
         return new CourtBoard(
             court.Id,
             court.Name,
             court.IsCenterCourt,
-            current is null ? null : Describe(current, matches, names),
-            [.. CourtQueue.Waiting(onCourt).Select(a => Describe(a, matches, names))]);
+            current is null ? null : Describe(current, matches, names, openingHours),
+            [.. queue.Select(a => Describe(a, matches, names, openingHours))]);
     }
 
     private static QueuedMatch Describe(
         CourtAssignment assignment,
         IReadOnlyList<Match> matches,
-        IReadOnlyDictionary<Guid, string> names)
+        IReadOnlyDictionary<Guid, string> names,
+        IReadOnlyList<TimeSlot> openingHours)
     {
         var match = matches.FirstOrDefault(m => m.Id == assignment.MatchId);
 
@@ -382,8 +423,17 @@ public sealed class CourtQueueService : ICourtQueueService
             assignment.PlannedStart,
             assignment.ActualStart,
             assignment.EstimatedDuration,
+            FitsOpeningHours(assignment, openingHours),
             assignment.Version);
     }
+
+    /// <summary>
+    /// Passt das geschätzte Zeitfenster vollständig in eine Öffnungszeit? Ohne
+    /// Schätzung gibt es nichts zu beurteilen — dann gilt es als in Ordnung.
+    /// </summary>
+    private static bool FitsOpeningHours(CourtAssignment assignment, IReadOnlyList<TimeSlot> openingHours) =>
+        assignment.PlannedSlot is not { } slot
+        || openingHours.Any(window => window.Start <= slot.Start && slot.End <= window.End);
 
     private static string? NameOf(MatchSide? side, IReadOnlyDictionary<Guid, string> names) =>
         side?.EntryId is { } entryId ? names.GetValueOrDefault(entryId) : side?.Origin.ToString();

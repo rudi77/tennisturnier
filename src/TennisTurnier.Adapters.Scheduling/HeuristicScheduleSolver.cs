@@ -46,8 +46,13 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
         // Von Hand gesetzte und festgenagelte Zuweisungen sind harte Vorgaben:
         // die Turnierleitung kennt Umstände, die das System nicht kennt. Sie
         // belegen ihren Platz, bevor irgendetwas gerechnet wird.
+        // Was schon am Platz steht, belegt ihn — unabhängig davon, wer es
+        // gesetzt hat. Ohne das plante der Solver ein zweites Match auf die Zeit
+        // eines gerade laufenden.
         foreach (var fixedAssignment in problem.Existing.Where(a =>
-                     a.IsFixedForSolver && a.Status == AssignmentStatus.Planned && a.PlannedSlot is not null))
+                     a.PlannedSlot is not null
+                     && (a.Status is AssignmentStatus.Called or AssignmentStatus.Running
+                         || (a.IsFixedForSolver && a.Status == AssignmentStatus.Planned))))
         {
             state.KeepFixed(fixedAssignment);
         }
@@ -214,9 +219,11 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
                 slot.Start,
                 assignment.EstimatedDuration,
                 ProposalChange.Unchanged,
-                assignment.Source == AssignmentSource.Pinned
-                    ? "Festgenagelt — der Solver ändert daran nichts."
-                    : "Von Hand gesetzt und deshalb unangetastet."));
+                assignment.Status is AssignmentStatus.Called or AssignmentStatus.Running
+                    ? "Steht bereits am Platz."
+                    : assignment.Source == AssignmentSource.Pinned
+                        ? "Festgenagelt — der Solver ändert daran nichts."
+                        : "Von Hand gesetzt und deshalb unangetastet."));
         }
 
         public void Place(Match match)

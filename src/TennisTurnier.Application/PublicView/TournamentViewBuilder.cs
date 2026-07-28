@@ -41,7 +41,7 @@ public static class TournamentViewBuilder
         var activeByMatch = assignments
             .Where(assignment => assignment.Status != AssignmentStatus.Finished)
             .GroupBy(assignment => assignment.MatchId)
-            .ToDictionary(group => group.Key, group => group.OrderBy(Liveness).ThenByDescending(a => a.Version).First());
+            .ToDictionary(group => group.Key, group => group.OrderBy(CourtQueue.Liveness).ThenByDescending(a => a.Version).First());
 
         var context = new BuildContext(participantNameByEntry, seedByEntry, courtNames, activeByMatch);
 
@@ -150,18 +150,6 @@ public static class TournamentViewBuilder
         _ => "offen",
     };
 
-    /// <summary>
-    /// Wie nah eine Zuweisung am Geschehen ist: laufend vor aufgerufen vor
-    /// wartend vor unterbrochen.
-    /// </summary>
-    private static int Liveness(CourtAssignment assignment) => assignment.Status switch
-    {
-        AssignmentStatus.Running => 0,
-        AssignmentStatus.Called => 1,
-        AssignmentStatus.Planned => 2,
-        _ => 3,
-    };
-
     private static PublicStandingView Describe(Standing standing) => new(
         standing.Rank,
         standing.DisplayName,
@@ -194,7 +182,7 @@ public static class TournamentViewBuilder
             .GroupBy(assignment => assignment.CourtId)
             .ToDictionary(
                 group => group.Key,
-                group => group.OrderBy(Liveness).ThenBy(a => a.SequenceOnCourt).ToList());
+                group => group.OrderBy(CourtQueue.Liveness).ThenBy(a => a.SequenceOnCourt).ToList());
 
         // Auch ein stillgelegter Platz wird gezeigt, solange noch ein Match auf
         // ihm steht: sonst trüge das Match einen Platznamen, den die Platzliste

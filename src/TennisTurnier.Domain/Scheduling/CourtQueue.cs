@@ -141,6 +141,29 @@ public static class CourtQueue
         }
     }
 
+    /// <summary>
+    /// Wie nah eine Zuweisung am Geschehen ist: laufend vor aufgerufen vor
+    /// wartend vor unterbrochen vor beendet.
+    ///
+    /// Eine Rangfolge und nicht die Reihenfolge des Aufzählungstyps: dort steht
+    /// <c>Called</c> vor <c>Running</c>, und wer danach sortiert, hält das eben
+    /// aufgerufene nächste Match für das laufende — das laufende verschwindet
+    /// dann aus der Platzübersicht und lässt sich nicht mehr beenden.
+    /// </summary>
+    public static int Liveness(CourtAssignment assignment)
+    {
+        ArgumentNullException.ThrowIfNull(assignment);
+
+        return assignment.Status switch
+        {
+            AssignmentStatus.Running => 0,
+            AssignmentStatus.Called => 1,
+            AssignmentStatus.Planned => 2,
+            AssignmentStatus.Suspended => 3,
+            _ => 4,
+        };
+    }
+
     private static DateTimeOffset Later(DateTimeOffset left, DateTimeOffset right) =>
         left > right ? left : right;
 }

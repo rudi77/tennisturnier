@@ -48,6 +48,13 @@ bestehenden Verträge zu brechen.
   Teilbestätigung ist ausdrücklich keine Aufforderung, den Rest zu löschen —
   wer eine Ansetzung loswerden will, hebt sie über
   `DELETE /api/assignments/{id}` auf.
+- **Die Öffnungszeit ist am Turniertag eine Auskunft, keine Schranke.** Der
+  Solver setzt nur in freie Fenster an; die Warteschlange wandert aber mit jedem
+  überzogenen Match nach hinten und irgendwann darüber hinaus. Sie dort
+  abzuschneiden hieße, wartende Matches stillschweigend fallen zu lassen —
+  stattdessen trägt jedes wartende Match `withinOpeningHours`, und die
+  Turnierleitung verteilt um oder vertagt. Ein Vorschlag, *wie* umzuverteilen
+  wäre, steht noch aus.
 - **Weiche Wünsche sind bislang Tiebreaks, keine Zielfunktion.** Center Court
   fürs Finale und der bisherige Platz bei gleicher Zeit entscheiden zwischen
   sonst gleichwertigen Möglichkeiten. Leerlauf zu minimieren und Runden zu

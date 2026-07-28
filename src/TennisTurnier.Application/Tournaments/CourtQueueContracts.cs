@@ -40,6 +40,17 @@ public sealed record QueuedMatch(
     DateTimeOffset? EstimatedStart,
     DateTimeOffset? ActualStart,
     TimeSpan EstimatedDuration,
+
+    /// <summary>
+    /// Passt die Schätzung noch in die Öffnungszeiten des Platzes?
+    ///
+    /// Am Turniertag verschiebt jedes überzogene Match die Warteschlange nach
+    /// hinten, und irgendwann steht das Finale rechnerisch um halb zwei nachts.
+    /// Das ist keine Fehlfunktion, sondern eine Auskunft, die die Turnierleitung
+    /// braucht — sie muss dann Plätze umverteilen oder auf den nächsten Tag
+    /// vertagen.
+    /// </summary>
+    bool WithinOpeningHours,
     int Version);
 
 /// <summary>Die neue Reihenfolge der wartenden Zuweisungen eines Platzes.</summary>

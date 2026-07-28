@@ -271,8 +271,8 @@ public sealed class SchedulingService : ISchedulingService
     /// </summary>
     private static Exception MissingMatch(Plan plan, Guid matchId) =>
         plan.AllMatchIds.Contains(matchId)
-            ? new ConcurrencyConflictException(
-                new DomainException($"Das Match {matchId} ist inzwischen entschieden."))
+            ? new ConcurrencyConflictException(new DomainException(
+                $"Das Match {matchId} ist nicht mehr zu planen — es ist entschieden oder bereits am Platz."))
             : new NotFoundException("Match", matchId);
 
     private static void RequireWellFormed(ConfirmScheduleRequest request)
@@ -337,9 +337,19 @@ public sealed class SchedulingService : ISchedulingService
 
         // Beendete Matches brauchen keinen Platz mehr. Sie mitzuplanen hieße,
         // Zeit für etwas zu reservieren, das schon gespielt ist.
+        //
+        // Und was am Platz bereits aufgerufen wurde, läuft oder unterbrochen ist,
+        // gehört dem Tagesbetrieb. Es anzubieten hieße, einen Vorschlag zu
+        // liefern, den die Bestätigung anschließend geschlossen ablehnt.
+        var atCourt = existing
+            .Where(a => a.Status is AssignmentStatus.Called or AssignmentStatus.Running
+                or AssignmentStatus.Suspended)
+            .Select(a => a.MatchId)
+            .ToHashSet();
+
         var matches = phases
             .SelectMany(phase => phase.Matches.Select(match => (Phase: phase, Match: match)))
-            .Where(pair => pair.Match.Status != MatchStatus.Finished)
+            .Where(pair => pair.Match.Status != MatchStatus.Finished && !atCourt.Contains(pair.Match.Id))
             .ToList();
 
         var durations = matches.ToDictionary(
