@@ -183,8 +183,13 @@ public sealed class Tournament : Entity
         Touch();
     }
 
+    /// <summary>
+    /// Zurück in den Planungsmodus. Anders als der Wechsel zum Turniertag setzt
+    /// das keine Auslosung voraus — der Planungsmodus ist der Ausgangszustand.
+    /// </summary>
     public void SwitchToPlanning()
     {
+        RequireNotFinished();
         SchedulingMode = SchedulingMode.Planning;
         Touch();
     }
@@ -199,6 +204,15 @@ public sealed class Tournament : Entity
         {
             throw new DomainException("Dieser Teilnehmer ist bereits gemeldet.");
         }
+
+        // Auch beim Melden prüfen, nicht erst beim nachträglichen Setzen: sonst
+        // schlägt der Konflikt erst bei der Auslosung zu, also nach Meldeschluss,
+        // wenn er sich nur noch durch Nacharbeit an fremden Meldungen lösen lässt.
+        //
+        // Die Prüfung läuft vor dem Hinzufügen. Andernfalls bliebe die abgewiesene
+        // Meldung im Aggregat zurück — der Aufrufer sähe einen Fehler und hätte
+        // trotzdem eine halbe Änderung.
+        RequireSeedIsFree(seed);
 
         var entry = new TournamentEntry(entryId, Id, participantId, seed);
         _entries.Add(entry);
@@ -289,6 +303,20 @@ public sealed class Tournament : Entity
         if (State is TournamentState.Completed or TournamentState.Abandoned)
         {
             throw new DomainException($"Ein Turnier im Zustand {State} lässt sich nicht mehr ändern.");
+        }
+    }
+
+    private void RequireSeedIsFree(int? seed)
+    {
+        if (seed is null)
+        {
+            return;
+        }
+
+        var taken = _entries.Any(e => e.Status != EntryStatus.Withdrawn && e.Seed == seed);
+        if (taken)
+        {
+            throw new DomainException($"Die Setzposition {seed} ist bereits vergeben.");
         }
     }
 

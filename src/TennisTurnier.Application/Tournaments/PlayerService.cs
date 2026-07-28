@@ -65,10 +65,20 @@ public sealed class PlayerService : IPlayerService
         var player = await _players.FindAsync(playerId, cancellationToken)
             ?? throw new NotFoundException("Spieler", playerId);
 
-        // Spieler fallen nicht unter den Query-Filter (ADR-0008). Der Schutz
-        // muss deshalb hier entstehen, und zwar gebunden an einen Verein: wer
-        // dort Interna sehen darf, darf auch die Kontaktdaten sehen.
+        // Spieler fallen nicht unter den Query-Filter (ADR-0008), der Schutz muss
+        // hier entstehen — und er braucht zwei Bedingungen, nicht eine.
+        //
+        // Die Berechtigung allein genügt nicht: der Verein kommt aus dem Aufruf
+        // und hat für sich genommen keinen Bezug zum abgefragten Spieler. Wer
+        // irgendwo ViewInternals hat, könnte sonst die Kontaktdaten jedes
+        // beliebigen Spielers lesen, indem er seinen eigenen Verein angibt.
+        // Deshalb muss der Spieler diesem Verein auch tatsächlich bekannt sein.
         _userContext.Current.Require(Permission.ViewInternals, ResourceScope.Club(clubId));
+
+        if (!await _players.IsKnownInClubAsync(playerId, clubId, cancellationToken))
+        {
+            throw new NotFoundException("Spieler", playerId);
+        }
 
         return new PlayerDetail(
             player.Id,

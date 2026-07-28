@@ -278,6 +278,54 @@ public sealed class TournamentStateMachineTests
     }
 
     [Fact]
+    public void Ein_abgeschlossenes_Turnier_laesst_sich_nicht_mehr_in_die_Planung_zurueckschalten()
+    {
+        // Regression: SwitchToPlanning war die einzige ändernde Methode ohne
+        // Zustandsprüfung — sie änderte auch abgeschlossene und abgebrochene
+        // Turniere noch, während jede andere Operation dort abweist.
+        var tournament = ReadyForDraw();
+        Draw(tournament);
+        tournament.Start();
+        tournament.Complete();
+
+        Assert.Throws<DomainException>(tournament.SwitchToPlanning);
+    }
+
+    [Fact]
+    public void Ein_abgebrochenes_Turnier_laesst_sich_nicht_mehr_umschalten()
+    {
+        var tournament = ReadyForDraw();
+        tournament.Abandon();
+
+        Assert.Throws<DomainException>(tournament.SwitchToPlanning);
+    }
+
+    [Fact]
+    public void Zwei_Meldungen_mit_derselben_Setzposition_werden_sofort_abgewiesen()
+    {
+        // Regression: geprüft wurde nur in SetSeed. Beim Melden kamen beide durch
+        // und der Konflikt schlug erst beim Auslosen zu — nach Meldeschluss,
+        // wenn er sich nur noch durch Nacharbeit an fremden Meldungen löst.
+        var tournament = NewTournament();
+        tournament.OpenRegistration();
+        tournament.Enter(Guid.NewGuid(), Guid.NewGuid(), seed: 1);
+
+        Assert.Throws<DomainException>(() => tournament.Enter(Guid.NewGuid(), Guid.NewGuid(), seed: 1));
+    }
+
+    [Fact]
+    public void Eine_abgewiesene_Meldung_hinterlaesst_keine_Spur()
+    {
+        var tournament = NewTournament();
+        tournament.OpenRegistration();
+        tournament.Enter(Guid.NewGuid(), Guid.NewGuid(), seed: 1);
+
+        Assert.Throws<DomainException>(() => tournament.Enter(Guid.NewGuid(), Guid.NewGuid(), seed: 1));
+
+        Assert.Single(tournament.Entries);
+    }
+
+    [Fact]
     public void Der_Wechsel_zurueck_in_die_Planung_ist_moeglich()
     {
         var tournament = ReadyForDraw();

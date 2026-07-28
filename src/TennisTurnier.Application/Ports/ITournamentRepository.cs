@@ -49,6 +49,18 @@ public interface IPlayerRepository
         IReadOnlyCollection<Guid> participantIds,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Ist der Spieler für ein Turnier dieses Vereins gemeldet?
+    ///
+    /// Die Frage entscheidet, wer seine Kontaktdaten sehen darf. Ohne sie wäre
+    /// die Berechtigungsprüfung wertlos: der Verein käme vom Aufrufer und hätte
+    /// keinerlei Bezug zum abgefragten Spieler (ADR-0008).
+    /// </summary>
+    Task<bool> IsKnownInClubAsync(
+        Guid playerId,
+        Guid clubId,
+        CancellationToken cancellationToken = default);
+
     void Add(Player player);
 
     void Add(Participant participant);

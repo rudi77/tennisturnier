@@ -46,6 +46,12 @@ public sealed class TennisTurnierDbContext : DbContext
 
     private IReadOnlyCollection<Guid> VisibleClubIds => _userContext.Current.ClubIds;
 
+    /// <summary>
+    /// Turniere, zu denen der Aufrufer eine turniergebundene Rolle hat. Ohne sie
+    /// sähe ein Turnierleiter ohne Vereinsrolle sein eigenes Turnier nicht.
+    /// </summary>
+    private IReadOnlyCollection<Guid> VisibleTournamentIds => _userContext.Current.TournamentIds;
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // Gilt für jede Zeitangabe im Modell — siehe UtcDateTimeOffsetConverter.
@@ -80,12 +86,21 @@ public sealed class TennisTurnierDbContext : DbContext
             .HasQueryFilter(block => SeesAllClubs || Courts.Any(
                 court => court.Id == block.CourtId && VisibleClubIds.Contains(court.ClubId)));
 
+        // Zwei Wege führen zu einem Turnier: über den ausrichtenden Verein oder
+        // über eine turniergebundene Rolle. Beide gehören in den Filter, sonst
+        // ist die Rolle TournamentDirector wirkungslos.
         modelBuilder.Entity<Tournament>()
-            .HasQueryFilter(tournament => SeesAllClubs || VisibleClubIds.Contains(tournament.ClubId));
+            .HasQueryFilter(tournament =>
+                SeesAllClubs
+                || VisibleClubIds.Contains(tournament.ClubId)
+                || VisibleTournamentIds.Contains(tournament.Id));
 
         modelBuilder.Entity<TournamentEntry>()
-            .HasQueryFilter(entry => SeesAllClubs || Tournaments.Any(
-                tournament => tournament.Id == entry.TournamentId && VisibleClubIds.Contains(tournament.ClubId)));
+            .HasQueryFilter(entry =>
+                SeesAllClubs
+                || VisibleTournamentIds.Contains(entry.TournamentId)
+                || Tournaments.Any(tournament =>
+                    tournament.Id == entry.TournamentId && VisibleClubIds.Contains(tournament.ClubId)));
 
         // Vorlagen ohne Verein sind die mitgelieferten Standardformate und für
         // jeden sichtbar; eigene Vorlagen bleiben im Verein.

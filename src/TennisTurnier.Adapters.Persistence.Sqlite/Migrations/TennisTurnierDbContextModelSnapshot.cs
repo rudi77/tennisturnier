@@ -166,6 +166,7 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                         .HasColumnName("Definition");
 
                     b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -370,14 +371,9 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                     b.Property<Guid>("TournamentId")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("TournamentId1")
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ParticipantId");
-
-                    b.HasIndex("TournamentId1");
 
                     b.HasIndex("TournamentId", "ParticipantId");
 
@@ -442,10 +438,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                         .HasForeignKey("TournamentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("TennisTurnier.Domain.Tournaments.Tournament", null)
-                        .WithMany("AcceptedEntries")
-                        .HasForeignKey("TournamentId1");
                 });
 
             modelBuilder.Entity("TennisTurnier.Domain.Clubs.Club", b =>
@@ -462,8 +454,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
 
             modelBuilder.Entity("TennisTurnier.Domain.Tournaments.Tournament", b =>
                 {
-                    b.Navigation("AcceptedEntries");
-
                     b.Navigation("Entries");
                 });
 #pragma warning restore 612, 618

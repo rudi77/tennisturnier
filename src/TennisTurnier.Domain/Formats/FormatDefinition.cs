@@ -112,7 +112,10 @@ public sealed record Qualification(
                 $"{path}: qualification.from muss auf eine frühere Phase zeigen, war {FromPhase} bei Phase {ownOrdinal}.");
         }
 
-        if (Rule == QualificationRule.TopNPerGroup && N < 1)
+        // BestThirds wertet N ebenso aus. Nur TopNPerGroup zu prüfen hieße, eine
+        // Definition mit negativem N durchzulassen — und sie würde beim Auslosen
+        // unverändert eingefroren.
+        if (Rule is QualificationRule.TopNPerGroup or QualificationRule.BestThirds && N < 1)
         {
             throw new DomainException($"{path}: qualification.n muss mindestens 1 sein, war {N}.");
         }
@@ -174,6 +177,12 @@ public sealed record PhaseDefinition
 
         Qualification?.Validate(path, Ordinal);
         MatchFormat?.Validate(path);
+
+        if (Scoring is null)
+        {
+            throw new DomainException($"{path}: das Punktesystem fehlt.");
+        }
+
         ValidateFormatSpecifics(path);
         ValidateTiebreakers(path);
     }
@@ -198,7 +207,7 @@ public sealed record PhaseDefinition
 
     private void ValidateTiebreakers(string path)
     {
-        if (Tiebreakers.Count == 0)
+        if (Tiebreakers is null || Tiebreakers.Count == 0)
         {
             throw new DomainException($"{path}: ohne Tiebreaker bliebe Punktgleichheit unauflösbar.");
         }
@@ -255,9 +264,17 @@ public sealed record FormatDefinition
             throw new DomainException("Eine Formatdefinition braucht einen Namen.");
         }
 
-        if (Phases.Count == 0)
+        // Der Null-Test ist trotz nicht-nullbarer Annotation nötig: eine von Hand
+        // geschriebene Definition mit "phases": null landet hier als null, und
+        // ein Absturz wäre eine 500 statt einer verständlichen Absage.
+        if (Phases is null || Phases.Count == 0)
         {
             throw new DomainException("Eine Formatdefinition braucht mindestens eine Phase.");
+        }
+
+        if (Phases.Any(phase => phase is null))
+        {
+            throw new DomainException("Eine Formatdefinition enthält eine leere Phase.");
         }
 
         var ordinals = Phases.Select(p => p.Ordinal).ToList();
@@ -265,6 +282,11 @@ public sealed record FormatDefinition
         {
             throw new DomainException(
                 $"Die Phasen müssen lückenlos mit 1 beginnend nummeriert sein, waren [{string.Join(", ", ordinals)}].");
+        }
+
+        if (MatchFormat is null)
+        {
+            throw new DomainException("Eine Formatdefinition braucht ein Matchformat.");
         }
 
         MatchFormat.Validate("matchFormat");

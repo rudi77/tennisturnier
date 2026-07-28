@@ -46,6 +46,13 @@ public sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournamen
             .UsePropertyAccessMode(PropertyAccessMode.Field)
             .AutoInclude();
 
+        // AcceptedEntries ist eine berechnete Sicht auf Entries, keine eigene
+        // Beziehung. Ohne dieses Ignorieren erkennt EF Core sie als zweite
+        // Sammelnavigation und legt eine Schattenspalte TournamentId1 samt Index
+        // an — ein Fremdschlüssel, der einem abgeleiteten Status folgt und beim
+        // Rückzug wieder genullt wird.
+        builder.Ignore(t => t.AcceptedEntries);
+
         builder.HasIndex(t => t.ClubId);
         builder.HasIndex(t => new { t.ClubId, t.StartsOn });
     }
@@ -125,7 +132,12 @@ public sealed class FormatTemplateConfiguration : IEntityTypeConfiguration<Forma
         builder.HasKey(t => t.Id);
 
         builder.Property(t => t.ClubId);
-        builder.Property(t => t.Version).IsRequired();
+
+        // Wie beim Turnier: ohne Token gingen zwei gleichzeitige Bearbeitungen
+        // derselben Vorlage beide durch, schrieben dieselbe neue Version und
+        // eine Änderung wäre stillschweigend verloren. Ein Turnier, das mit
+        // dieser Version einfriert, wiese dann einen Stand aus, den es nie gab.
+        builder.Property(t => t.Version).IsRequired().IsConcurrencyToken();
 
         builder.Property(t => t.Definition)
             .HasColumnName("Definition")

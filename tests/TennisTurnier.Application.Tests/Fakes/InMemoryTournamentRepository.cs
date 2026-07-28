@@ -36,9 +36,14 @@ public sealed class InMemoryTournamentRepository : ITournamentRepository
     {
         var user = _userContext.Current;
 
+        // Muss dem echten Query-Filter entsprechen — beide Wege zum Turnier,
+        // über den Verein und über eine turniergebundene Rolle. Ein Fake, der
+        // nur den Vereinsweg kennt, würde melden, dass ein Anwendungsfall
+        // funktioniert, den die Datenbank abweist.
         return user.IsSystemAdmin
             ? _tournaments.Values
-            : _tournaments.Values.Where(t => user.ClubIds.Contains(t.ClubId));
+            : _tournaments.Values.Where(t =>
+                user.ClubIds.Contains(t.ClubId) || user.TournamentIds.Contains(t.Id));
     }
 }
 
@@ -105,6 +110,15 @@ public sealed class InMemoryPlayerRepository : IPlayerRepository
         CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Participant>>(
             _participants.Values.Where(p => participantIds.Contains(p.Id)).ToList());
+
+    /// <summary>Welche Spieler in welchem Verein bekannt sind, wird im Test gesetzt.</summary>
+    public HashSet<(Guid PlayerId, Guid ClubId)> KnownInClub { get; } = [];
+
+    public Task<bool> IsKnownInClubAsync(
+        Guid playerId,
+        Guid clubId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(KnownInClub.Contains((playerId, clubId)));
 
     public void Add(Player player) => _players[player.Id] = player;
 

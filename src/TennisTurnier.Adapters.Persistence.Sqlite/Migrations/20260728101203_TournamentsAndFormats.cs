@@ -88,8 +88,7 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                     TournamentId = table.Column<Guid>(type: "TEXT", nullable: false),
                     ParticipantId = table.Column<Guid>(type: "TEXT", nullable: false),
                     Seed = table.Column<int>(type: "INTEGER", nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
-                    TournamentId1 = table.Column<Guid>(type: "TEXT", nullable: true)
+                    Status = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -106,11 +105,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                         principalTable: "Tournaments",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_TournamentEntries_Tournaments_TournamentId1",
-                        column: x => x.TournamentId1,
-                        principalTable: "Tournaments",
-                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateIndex(
@@ -127,11 +121,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                 name: "IX_TournamentEntries_ParticipantId",
                 table: "TournamentEntries",
                 column: "ParticipantId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TournamentEntries_TournamentId1",
-                table: "TournamentEntries",
-                column: "TournamentId1");
 
             migrationBuilder.CreateIndex(
                 name: "IX_TournamentEntries_TournamentId_ParticipantId",

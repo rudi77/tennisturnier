@@ -57,9 +57,20 @@ public sealed class UserPrincipal
     /// Query-Filters — ein SystemAdmin wird dort über <see cref="IsSystemAdmin"/>
     /// behandelt, nicht über diese Liste.
     /// </summary>
-    public IReadOnlyCollection<Guid> ClubIds =>
+    public IReadOnlyCollection<Guid> ClubIds => ScopedTo(ScopeType.Club);
+
+    /// <summary>
+    /// Die Turniere, für die der Benutzer eine turniergebundene Rolle hat.
+    ///
+    /// Ohne diese Liste bliebe ein Turnierleiter oder Schiedsrichter, der keiner
+    /// Vereinsrolle hat, für den Query-Filter unsichtbar — sein eigenes Turnier
+    /// käme als „nicht gefunden" zurück, obwohl er genau dafür berufen wurde.
+    /// </summary>
+    public IReadOnlyCollection<Guid> TournamentIds => ScopedTo(ScopeType.Tournament);
+
+    private IReadOnlyCollection<Guid> ScopedTo(ScopeType type) =>
         Assignments
-            .Where(a => a.Scope.Type == ScopeType.Club && a.Scope.ResourceId is not null)
+            .Where(a => a.Scope.Type == type && a.Scope.ResourceId is not null)
             .Select(a => a.Scope.ResourceId!.Value)
             .Distinct()
             .ToList();

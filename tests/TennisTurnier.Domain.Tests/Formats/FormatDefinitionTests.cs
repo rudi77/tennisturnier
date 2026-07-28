@@ -211,6 +211,52 @@ public sealed class FormatDefinitionTests
         Assert.Throws<DomainException>(definition.Validate);
     }
 
+    [Theory]
+    [InlineData(QualificationRule.TopNPerGroup)]
+    [InlineData(QualificationRule.BestThirds)]
+    public void Eine_Qualifikantenzahl_unter_eins_wird_abgewiesen(QualificationRule rule)
+    {
+        // Regression: geprüft wurde nur TopNPerGroup. Eine Definition mit
+        // BestThirds und negativem N bestand die Prüfung, ließ sich speichern
+        // und wurde beim Auslosen unverändert eingefroren.
+        var definition = WithPhases(
+            Knockout(1),
+            Knockout(2, new Qualification(1, rule, N: -5)));
+
+        Assert.Throws<DomainException>(definition.Validate);
+    }
+
+    [Fact]
+    public void Eine_Definition_ohne_Phasenliste_wird_abgewiesen_statt_abzustuerzen()
+    {
+        // Kann aus einer von Hand geschriebenen Definition mit "phases": null
+        // entstehen. Ein Absturz wäre eine 500 statt einer verständlichen Absage.
+        var definition = BuiltInFormats.Knockout with { Phases = null! };
+
+        Assert.Throws<DomainException>(definition.Validate);
+    }
+
+    [Fact]
+    public void Eine_Definition_ohne_Matchformat_wird_abgewiesen_statt_abzustuerzen()
+    {
+        var definition = BuiltInFormats.Knockout with { MatchFormat = null! };
+
+        Assert.Throws<DomainException>(definition.Validate);
+    }
+
+    [Fact]
+    public void Eine_Phase_ohne_Tiebreakerliste_wird_abgewiesen_statt_abzustuerzen()
+    {
+        var definition = WithPhases(new PhaseDefinition
+        {
+            Ordinal = 1,
+            Format = PhaseFormatKind.RoundRobin,
+            Tiebreakers = null!,
+        });
+
+        Assert.Throws<DomainException>(definition.Validate);
+    }
+
     [Fact]
     public void Ein_eigener_Modus_entsteht_ohne_neuen_Code()
     {
