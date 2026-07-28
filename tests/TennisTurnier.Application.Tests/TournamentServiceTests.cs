@@ -154,13 +154,51 @@ public sealed class TournamentServiceTests
         await _service.CreateAsync(ClubId, NewRequest(_template.Id));
 
         var otherClub = Guid.NewGuid();
+        var otherTemplate = _templates.Seed(
+            new FormatTemplate(Guid.NewGuid(), otherClub, BuiltInFormats.Knockout));
+
         ActAs(
             new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(ClubId)),
             new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(otherClub)));
-        await _service.CreateAsync(otherClub, NewRequest(_template.Id));
+
+        // Mit der eigenen Vorlage des anderen Vereins: eine fremde nähme er nicht
+        // an, und das ist Gegenstand eines eigenen Tests.
+        await _service.CreateAsync(otherClub, NewRequest(otherTemplate.Id));
 
         Assert.Single(await _service.ListAsync(ClubId));
         Assert.Single(await _service.ListAsync(otherClub));
+    }
+
+    /// <summary>
+    /// Sichtbar heißt nicht verwendbar.
+    ///
+    /// Wer zwei Vereine verwaltet, sieht die Vorlagen beider. Nähme das Turnier
+    /// des einen die Vorlage des anderen, hinge sein Format bis zur Auslosung an
+    /// einer Definition, die jemand aus einem fremden Verein noch ändern kann —
+    /// und die Änderung fröre mit der Auslosung ein.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Turnier_nimmt_keine_Vorlage_eines_fremden_Vereins()
+    {
+        var otherClub = Guid.NewGuid();
+        ActAs(
+            new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(ClubId)),
+            new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(otherClub)));
+
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => _service.CreateAsync(otherClub, NewRequest(_template.Id)));
+    }
+
+    [Fact]
+    public async Task Eine_mitgelieferte_Vorlage_steht_jedem_Verein_offen()
+    {
+        var builtIn = _templates.Seed(new FormatTemplate(Guid.NewGuid(), null, BuiltInFormats.League));
+
+        var otherClub = Guid.NewGuid();
+        ActAs(
+            new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(otherClub)));
+
+        Assert.NotEqual(Guid.Empty, await _service.CreateAsync(otherClub, NewRequest(builtIn.Id)));
     }
 
     [Fact]

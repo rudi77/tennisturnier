@@ -419,6 +419,34 @@ public sealed class KnockoutFormatTests
         Assert.Equal(thirdPlace.LoserEntryId, standings.Places[3].EntryId);
     }
 
+    /// <summary>
+    /// Wer in derselben Runde ausscheidet, ist gleichrangig — und wird auch so
+    /// ausgewiesen.
+    ///
+    /// Ohne Spiel um Platz 3 hat zwischen den beiden Halbfinalverlierern nichts
+    /// stattgefunden, was sie trennt. Sie durchzunummerieren erfände einen
+    /// dritten und einen vierten Platz, den das Turnier nicht ausgespielt hat —
+    /// und an Platzierungen hängen Pokale und Ranglistenpunkte.
+    /// </summary>
+    [Fact]
+    public void Ohne_Spiel_um_Platz_3_teilen_sich_die_Halbfinalverlierer_den_Rang()
+    {
+        var entries = Entries(8, seededCount: 8);
+        var phase = BuildPhase(entries);
+        PlayOut(phase, entries);
+
+        var places = _format.ComputeStandings(StateOf(phase, entries)).Places;
+
+        Assert.Equal(1, places[0].Rank);
+        Assert.Equal(2, places[1].Rank);
+
+        // Zwei geteilte Dritte, danach vier geteilte Fünfte — kein vierter und
+        // kein sechster Platz.
+        Assert.Equal([3, 3], places.Skip(2).Take(2).Select(p => p.Rank));
+        Assert.Equal([5, 5, 5, 5], places.Skip(4).Take(4).Select(p => p.Rank));
+        Assert.DoesNotContain(places, place => place.Rank is 4 or 6 or 7 or 8);
+    }
+
     [Fact]
     public void Ein_Freilos_zaehlt_in_keiner_Statistik()
     {

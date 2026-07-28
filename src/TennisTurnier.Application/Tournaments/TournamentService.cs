@@ -46,6 +46,15 @@ public sealed class TournamentService : ITournamentService
         var template = await _templates.FindAsync(request.FormatTemplateId, cancellationToken)
             ?? throw new NotFoundException("Formatvorlage", request.FormatTemplateId);
 
+        // Sichtbar heißt nicht verwendbar. Wer zwei Vereine verwaltet, sieht die
+        // Vorlagen beider — nähme das Turnier des einen die Vorlage des anderen,
+        // hinge sein eingefrorenes Format an einer Definition, die jemand aus
+        // einem fremden Verein bis zur Auslosung noch ändern kann.
+        if (!template.IsBuiltIn && template.ClubId != clubId)
+        {
+            throw new NotFoundException("Formatvorlage", request.FormatTemplateId);
+        }
+
         var tournament = new Tournament(
             Guid.NewGuid(), clubId, request.Name, request.StartsOn, request.EndsOn, template.Id);
 

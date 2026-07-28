@@ -65,16 +65,29 @@ public sealed class KnockoutFormat : IPhaseFormat
         var thirdPlace = state.Matches.FirstOrDefault(m => m.Label == ThirdPlaceLabel);
         var maxRound = state.Matches.Count == 0 ? 0 : state.Matches.Max(m => m.Round);
 
-        var ordered = records.Values
-            .OrderBy(r => PlacementRank(r, final, thirdPlace, maxRound))
-            .ThenByDescending(r => r.EliminatedInRound)
-            .ThenBy(r => byEntry[r.Entry.EntryId].Seed ?? int.MaxValue)
+        var groups = records.Values
+            .GroupBy(r => PlacementRank(r, final, thirdPlace, maxRound))
+            .OrderBy(group => group.Key)
             .ToList();
 
-        var places = new List<Standing>(ordered.Count);
-        for (var index = 0; index < ordered.Count; index++)
+        var places = new List<Standing>(records.Count);
+        var rank = 1;
+
+        foreach (var group in groups)
         {
-            places.Add(ordered[index].ToStanding(index + 1));
+            // Alle einer Platzierungsgruppe bekommen denselben Rang, und der
+            // nächste Rang setzt hinter der ganzen Gruppe an — geteilter dritter
+            // Platz, danach der fünfte. Die Setzung ordnet innerhalb der Gruppe
+            // nur die Ausgabe, sie entscheidet nichts: im K.-o.-System hat
+            // niemand gegen den anderen gespielt, und ein vierter Platz, den es
+            // nicht gibt, wäre eine Erfindung mit Pokalfolgen.
+            var members = group
+                .OrderBy(r => byEntry[r.Entry.EntryId].Seed ?? int.MaxValue)
+                .ThenBy(r => r.Entry.DisplayName, StringComparer.Ordinal)
+                .ToList();
+
+            places.AddRange(members.Select(record => record.ToStanding(rank)));
+            rank += members.Count;
         }
 
         return new Standings(places);

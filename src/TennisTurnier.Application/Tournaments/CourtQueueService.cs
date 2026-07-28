@@ -111,11 +111,15 @@ public sealed class CourtQueueService : ICourtQueueService
     // --- Tagesbetrieb ------------------------------------------------------
 
     public Task CallAsync(Guid assignmentId, CancellationToken cancellationToken = default) =>
-        OnMatchDayAsync(assignmentId, assignment => assignment.Call(), cancellationToken, requireReady: true);
+        OnMatchDayAsync(
+            assignmentId, assignment => assignment.Call(), cancellationToken, requireCourtFree: true);
 
     public Task StartAsync(Guid assignmentId, CancellationToken cancellationToken = default) =>
         OnMatchDayAsync(
-            assignmentId, assignment => assignment.Start(_clock.Now), cancellationToken, requireReady: true);
+            assignmentId,
+            assignment => assignment.Start(_clock.Now),
+            cancellationToken,
+            requireCourtFree: true);
 
     public Task FinishAsync(Guid assignmentId, CancellationToken cancellationToken = default) =>
         OnMatchDayAsync(assignmentId, assignment => assignment.Finish(_clock.Now), cancellationToken);
@@ -249,13 +253,15 @@ public sealed class CourtQueueService : ICourtQueueService
         Guid assignmentId,
         Action<CourtAssignment> change,
         CancellationToken cancellationToken,
-        bool requireReady = false)
+        bool requireCourtFree = false)
     {
         var (tournament, _, assignment) = await LoadForDayAsync(assignmentId, cancellationToken);
 
-        if (requireReady)
+        if (requireCourtFree)
         {
             await RequireReadyAsync(assignment, cancellationToken);
+            await RequireCourtFreeAsync(assignment, cancellationToken);
+            RequirePromiseKept(assignment);
         }
 
         change(assignment);
@@ -291,6 +297,52 @@ public sealed class CourtQueueService : ICourtQueueService
         if (match.Status == MatchStatus.Finished)
         {
             throw new DomainException("Dieses Match ist bereits entschieden.");
+        }
+    }
+
+    /// <summary>
+    /// Auf einem Platz wird ein Match gespielt, nicht zwei.
+    ///
+    /// Die Warteschlange sagt, wer als Nächstes drankommt; sie hindert aber
+    /// niemanden daran, ein wartendes Match unmittelbar aufzurufen. Ohne diese
+    /// Prüfung stünden zwei Zuweisungen desselben Platzes auf <c>Running</c>, die
+    /// Platzübersicht zeigte nur eine davon als die laufende, und die andere wäre
+    /// weder sichtbar noch zu beenden — die Historie des Platzes behauptete
+    /// dauerhaft zwei gleichzeitige Partien.
+    /// </summary>
+    private async Task RequireCourtFreeAsync(CourtAssignment assignment, CancellationToken cancellationToken)
+    {
+        var onCourt = await _assignments.ListByTournamentAsync(assignment.TournamentId, cancellationToken);
+
+        var occupying = onCourt.FirstOrDefault(other =>
+            other.Id != assignment.Id
+            && other.CourtId == assignment.CourtId
+            && other.Status is AssignmentStatus.Called or AssignmentStatus.Running);
+
+        if (occupying is not null)
+        {
+            throw new DomainException(
+                "Auf diesem Platz steht bereits eine Partie. Sie zuerst beenden oder unterbrechen.");
+        }
+    }
+
+    /// <summary>
+    /// Eine Zusage gilt auch beim Aufruf.
+    ///
+    /// „Nicht vor 14 Uhr" ist das Einzige, worauf sich ein Spieler verlassen kann
+    /// (ADR-0002). Die Warteschlange zieht ihre Schätzungen entsprechend nach —
+    /// wer die Zuweisung aber unmittelbar aufruft, ginge daran vorbei, und der
+    /// Spieler, der sich auf die Zusage verlassen hat, ist nicht da. Soll früher
+    /// begonnen werden, wird zuerst die Zusage geändert; das ist eine Entscheidung
+    /// und keine Nebenwirkung.
+    /// </summary>
+    private void RequirePromiseKept(CourtAssignment assignment)
+    {
+        if (assignment.EarliestStart is { } promised && _clock.Now < promised)
+        {
+            throw new DomainException(
+                $"Diesem Match wurde „nicht vor {promised:t}“ zugesagt. Für einen früheren Aufruf " +
+                "zuerst die Zusage ändern.");
         }
     }
 

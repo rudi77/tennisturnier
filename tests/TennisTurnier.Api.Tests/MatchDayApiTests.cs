@@ -598,6 +598,64 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
             (await client.PostAsync($"/api/assignments/{first.AssignmentId}/{action}", null)).StatusCode);
     }
 
+    /// <summary>
+    /// Auf einem Platz wird ein Match gespielt, nicht zwei.
+    ///
+    /// Die Warteschlange sagt, wer als Nächstes drankommt, hindert aber niemanden
+    /// daran, ein wartendes Match unmittelbar aufzurufen. Ohne Prüfung stünden
+    /// zwei Zuweisungen desselben Platzes auf „läuft", die Platzübersicht zeigte
+    /// nur eine davon, und die andere wäre weder sichtbar noch zu beenden.
+    /// </summary>
+    [Theory]
+    [InlineData("call")]
+    [InlineData("start")]
+    public async Task Auf_einem_belegten_Platz_beginnt_keine_zweite_Partie(string action)
+    {
+        var (admin, _, tournamentId) = await MatchDayAsync();
+        var queue = (await BoardAsync(admin, tournamentId))[0].Queue;
+
+        await admin.PostAsync($"/api/assignments/{queue[0].AssignmentId}/start", null);
+
+        var response = await admin.PostAsync($"/api/assignments/{queue[1].AssignmentId}/{action}", null);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        // Und die laufende Partie steht unverändert als die des Platzes.
+        var board = await BoardAsync(admin, tournamentId);
+        Assert.Equal(queue[0].AssignmentId, board[0].Current!.AssignmentId);
+        Assert.Equal(AssignmentStatus.Running, board[0].Current!.Status);
+    }
+
+    /// <summary>
+    /// Eine Zusage gilt auch beim Aufruf. „Nicht vor 14 Uhr" ist das Einzige,
+    /// worauf sich ein Spieler verlassen kann — wer die Zuweisung unmittelbar
+    /// aufruft, ginge daran vorbei, und der Spieler, der sich darauf verlassen
+    /// hat, ist nicht da.
+    /// </summary>
+    [Fact]
+    public async Task Vor_der_zugesagten_Zeit_wird_nicht_aufgerufen()
+    {
+        var (admin, _, tournamentId) = await MatchDayAsync();
+        var waiting = (await BoardAsync(admin, tournamentId))[0].Queue[0];
+
+        var promised = _factory.Clock.Now.AddHours(6);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await admin.PostAsJsonAsync(
+                $"/api/assignments/{waiting.AssignmentId}/promise",
+                new PromiseStartRequest(promised),
+                Json)).StatusCode);
+
+        var tooEarly = await admin.PostAsync($"/api/assignments/{waiting.AssignmentId}/call", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, tooEarly.StatusCode);
+
+        // Zur zugesagten Zeit geht es.
+        _factory.Clock.Now = promised;
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await admin.PostAsync($"/api/assignments/{waiting.AssignmentId}/call", null)).StatusCode);
+    }
+
     [Fact]
     public async Task Ein_Schiedsrichter_disponiert_nicht()
     {

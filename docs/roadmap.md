@@ -102,6 +102,15 @@ bestehenden Verträge zu brechen.
   Wiederholung entstehen. Sie ganz auszuschließen hieße, die Überkreuzung an
   anderer Stelle aufzugeben — das wäre eine Verschlechterung, keine Lösung.
 
+- **Es gibt keinen Weg, Rollen zu vergeben.** `RoleAssignment` ist modelliert,
+  der Query-Filter aus ADR-0004 arbeitet darauf, und die Tests setzen Rollen über
+  `IUserDirectory.AssignAsync` — einen Endpunkt dafür gibt es nicht. Auf einer
+  frischen Datenbank hat damit niemand eine Rolle, und weil das Anlegen des
+  ersten Vereins `ManageClubs` verlangt, kommt eine neue Instanz ohne Eingriff in
+  die SQLite-Datei nicht in Gang. Es fehlt beides: die Rollenverwaltung als
+  Anwendungsfall und ein abgesicherter Weg für den ersten Systemadministrator.
+  Beides ist eine Festlegung — wer darf wem welche Rolle geben, und woran
+  erkennt die erste Instanz ihren Eigentümer.
 - **Grenze der Deklarativität.** Ein genuin neuer Paarungsalgorithmus, den keines der
   vier Formate abbildet, braucht weiterhin eine neue `IPhaseFormat`-Implementierung
   und ein Deployment (siehe ADR-0001).

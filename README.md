@@ -119,8 +119,12 @@ sondern eine Auskunft, die die Turnierleitung braucht: jedes wartende Match
 trägt `withinOpeningHours`, sobald seine Schätzung nicht mehr in die
 Öffnungszeiten des Platzes passt.
 
-Aufgerufen wird nur, wer feststeht. Eingeplant ist der ganze Baum, lange bevor
-die Teilnehmer bekannt sind — am Platz wird aber kein Platzhalter ausgerufen.
+Aufgerufen wird nur, wer feststeht, nur auf einen freien Platz und nicht vor
+einer Zusage. Eingeplant ist der ganze Baum, lange bevor die Teilnehmer bekannt
+sind — am Platz wird aber kein Platzhalter ausgerufen; auf einem Platz wird ein
+Match gespielt, nicht zwei; und ein früherer Aufruf als zugesagt setzt voraus,
+dass zuerst die Zusage geändert wird. Das ist eine Entscheidung, keine
+Nebenwirkung.
 Umgekehrt wird nicht jedes Match am Platz aufgerufen: ein Nichtantreten wird
 eingetragen, ohne dass jemand hingeht, und gibt den Platz sofort frei.
 
@@ -169,6 +173,11 @@ frei bearbeitbar.
 
 Beim Auslosen wird die Definition in das Turnier kopiert und eingefroren. Wer die
 Vorlage danach nachschärft, verändert damit kein laufendes Turnier.
+
+Ein Turnier nimmt nur die mitgelieferten Vorlagen und die seines eigenen
+Vereins. Sichtbar heißt nicht verwendbar: wer zwei Vereine verwaltet, sieht die
+Vorlagen beider, und ein Turnier des einen hinge sonst bis zur Auslosung an
+einer Definition, die jemand aus dem anderen noch ändern kann.
 
 ### Von der Gruppe in die Endrunde
 
@@ -255,6 +264,12 @@ Korrektur geht denselben Weg zurück — allerdings nur, solange das Folgematch
 noch nicht gespielt ist. Sonst stünde in der nächsten Runde jemand, der laut
 korrigiertem Ergebnis nie hätte antreten dürfen; diese Kette muss von hinten
 aufgerollt werden.
+
+Eine Endplatzierung im K.-o.-System weist geteilte Ränge aus: ohne Spiel um
+Platz 3 gibt es zwei Dritte und danach vier Fünfte. Wer in derselben Runde
+ausscheidet, hat nicht gegeneinander gespielt — ihn durchzunummerieren erfände
+Plätze, die das Turnier nicht ausgespielt hat, und an Platzierungen hängen
+Pokale.
 
 Ergebnistypen gibt es von Anfang an fünf: reguläres Ende, Aufgabe, Nichtantreten,
 Disqualifikation und Freilos. Bei einer Aufgabe wird der abgebrochene Satz
