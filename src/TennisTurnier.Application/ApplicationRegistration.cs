@@ -23,6 +23,7 @@ public static class ApplicationRegistration
         services.AddScoped<IPlayerService, PlayerService>();
         services.AddScoped<IFormatTemplateService, FormatTemplateService>();
         services.AddScoped<IPublicViewService, PublicViewService>();
+        services.AddScoped<ISchedulingService, SchedulingService>();
 
         return services;
     }

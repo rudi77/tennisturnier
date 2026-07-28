@@ -73,6 +73,24 @@ Die tragenden Entscheidungen samt verworfener Alternativen stehen in
 - [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler existieren
   vereinsübergreifend — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
 
+## Spielplan
+
+Im Planungsmodus rechnet `POST /api/tournaments/{id}/schedule/proposal` einen
+Vorschlag, ohne etwas zu verändern; erst `…/schedule/confirm` trägt ihn ein.
+Diese Trennung ist Absicht (ADR-0002): ein Solverlauf, der den Plan still
+überschreibt, ist der Grund, aus dem Turnierleitungen die Automatik abschalten.
+
+Der Vorschlag nennt zu jeder Ansetzung, was sie bindet — „frühestmöglich nach
+dem Vorspiel, das um 14:30 endet, zuzüglich 30 Minuten Pause" — und dazu einen
+Diff: wie viele Ansetzungen bleiben, entstehen, sich verschieben. Von Hand
+gesetzte und festgenagelte Zuweisungen gehen als harte Vorgabe in den nächsten
+Lauf, und was zulässig bleiben kann, bleibt stehen: eine Verschiebung von Hand
+bewegt nur das, was im Baum daran hängt oder ihr im Weg liegt.
+
+Geprüft wird der Vorschlag vom selben `ScheduleValidator`, der auch eine
+Verschiebung von Hand beurteilt. Ein Solver, der seine eigenen Ergebnisse für
+zulässig erklärt, prüft nichts.
+
 ## Öffentliche Ansicht
 
 `GET /public/tournaments/{id}` liefert ohne Anmeldung Bracket, Tabellen und die

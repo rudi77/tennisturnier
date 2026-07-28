@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TennisTurnier.Adapters.Identity.Oidc;
 using TennisTurnier.Adapters.Persistence.Sqlite;
+using TennisTurnier.Adapters.Scheduling;
 using TennisTurnier.Api;
 using TennisTurnier.Api.Endpoints;
 using TennisTurnier.Api.Realtime;
@@ -16,6 +17,7 @@ builder.Services.AddApplication();
 builder.Services.AddSqlitePersistence(
     builder.Configuration.GetConnectionString("Default") ?? "Data Source=tennisturnier.db");
 builder.Services.AddOidcIdentity(oidc);
+builder.Services.AddHeuristicScheduling();
 
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSignalR();

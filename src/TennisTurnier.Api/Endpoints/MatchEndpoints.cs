@@ -21,6 +21,24 @@ internal static class MatchEndpoints
             CancellationToken ct) =>
             Results.Ok(await service.GetStandingsAsync(tournamentId, phaseId, ct)));
 
+        // Der Spielplan (ADR-0002): rechnen und übernehmen sind zwei Schritte.
+        // Ein Solverlauf, der den Plan still überschreibt, ist genau das, was
+        // Turnierleitungen dazu bringt, die Automatik abzuschalten.
+        var schedule = tournaments.MapGroup("/schedule").WithTags("Spielplan");
+
+        schedule.MapPost("/proposal", async (
+            Guid tournamentId,
+            ISchedulingService service,
+            CancellationToken ct) =>
+            Results.Ok(await service.ProposeAsync(tournamentId, ct)));
+
+        schedule.MapPost("/confirm", async (
+            Guid tournamentId,
+            ConfirmScheduleRequest request,
+            ISchedulingService service,
+            CancellationToken ct) =>
+            Results.Ok(await service.ConfirmAsync(tournamentId, request, ct)));
+
         var matches = app.MapGroup("/api/matches/{matchId:guid}").WithTags("Ergebnisse");
 
         matches.MapPut("/result", async (

@@ -11,7 +11,7 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M3 | KnockoutFormat | K.O.-Turnier von der Anmeldung bis zum Finale spielbar | ✅ |
 | M4 | Öffentliche Ansicht | Live-Bracket mit ETag und SignalR-Push | ✅ |
 | M5 | RoundRobin + Phasen | Gruppenphase mit anschließendem K.O. | ✅ |
-| M6 | Auto-Scheduling | Spielplanvorschlag mit Diff und Bestätigung | ⬜ |
+| M6 | Auto-Scheduling | Spielplanvorschlag mit Diff und Bestätigung | ✅ |
 | M7 | Turniertag-Queue | Betrieb ohne starres Zeitraster | ⬜ |
 | M8 | SwissFormat | Schweizer System ohne Wiederholungspaarungen | ⬜ |
 
@@ -31,6 +31,18 @@ bestehenden Verträge zu brechen.
   Code, nicht von Hand gepflegt.
 
 ## Bewusst offene Punkte
+
+- **Der Solver optimiert nicht, er legt.** `HeuristicScheduleSolver` arbeitet
+  eine Prioritätenliste nach kritischer Pfadtiefe ab und nimmt je Match den
+  frühesten zulässigen Platz. Für Vereinsturniere reicht das, und es hat die
+  Eigenschaft, auf die es ankommt: zu jeder Ansetzung lässt sich in einem Satz
+  sagen, warum sie dort liegt. Eine anschließende lokale Suche — Tauschen von
+  Zuweisungen gegen Leerlauf — steht noch aus; sie fügt sich hinter demselben
+  Port ein, ebenso wie CP-SAT, falls es je größere Felder gibt.
+- **Weiche Wünsche sind bislang Tiebreaks, keine Zielfunktion.** Center Court
+  fürs Finale und der bisherige Platz bei gleicher Zeit entscheiden zwischen
+  sonst gleichwertigen Möglichkeiten. Leerlauf zu minimieren und Runden zu
+  bündeln setzt eine Bewertung voraus — und damit die lokale Suche oben.
 
 - **Buchholz in einer Gruppenphase.** Das Kriterium stammt aus dem Schweizer
   System. In einer vollständig ausgespielten Gruppe ist es exakt die

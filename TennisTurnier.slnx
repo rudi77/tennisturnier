@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TennisTurnier.Adapters.Persistence.Tests/TennisTurnier.Adapters.Persistence.Tests.csproj" />
+    <Project Path="tests/TennisTurnier.Adapters.Scheduling.Tests/TennisTurnier.Adapters.Scheduling.Tests.csproj" />
     <Project Path="tests/TennisTurnier.Api.Tests/TennisTurnier.Api.Tests.csproj" />
     <Project Path="tests/TennisTurnier.Application.Tests/TennisTurnier.Application.Tests.csproj" />
     <Project Path="tests/TennisTurnier.Architecture.Tests/TennisTurnier.Architecture.Tests.csproj" />
