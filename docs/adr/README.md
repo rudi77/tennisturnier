@@ -14,6 +14,7 @@ noch einmal von vorn beginnt.
 | [0005](0005-hexagonale-architektur.md) | Hexagonale Architektur mit erzwungenen Fitnessfunktionen | Accepted |
 | [0006](0006-sqlite-als-startdatenbank.md) | SQLite als Startdatenbank, PostgreSQL als Zielbild | Accepted |
 | [0007](0007-externer-identity-provider.md) | Externer Identity Provider, Rollen bleiben in der Anwendung | Accepted |
+| [0008](0008-spielerstammdaten.md) | Spieler existieren vereinsübergreifend | Accepted |
 
 ## Status
 

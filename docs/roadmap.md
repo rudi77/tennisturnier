@@ -6,7 +6,7 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | | Milestone | Ergebnis | Status |
 |---|---|---|---|
 | M0 | Fundament | Solution, Fitnessfunktionen, ADRs, CI | ✅ |
-| M1 | Club, Court, Verfügbarkeit, Auth | Verein und Plätze verwaltbar, Club-Scope dicht | ⬜ |
+| M1 | Club, Court, Verfügbarkeit, Auth | Verein und Plätze verwaltbar, Club-Scope dicht | ✅ |
 | M2 | Tournament, Entry, Format | Turnier durchläuft seinen Zustandsautomaten | ⬜ |
 | M3 | KnockoutFormat | K.O.-Turnier von der Anmeldung bis zum Finale spielbar | ⬜ |
 | M4 | Öffentliche Ansicht | Live-Bracket mit ETag und SignalR-Push | ⬜ |
@@ -25,6 +25,6 @@ bestehenden Verträge zu brechen.
   und ein Deployment (siehe ADR-0001).
 - **Trostrunde.** `SingleEliminationConsolationFormat` ist nicht eingeplant und fügt
   sich als fünftes `IPhaseFormat` ein.
-- **Spielerstammdaten.** Ob ein Spieler vereinsübergreifend existiert oder je Verein,
-  wird in M2 entschieden. Tendenz: global mit Vereinszugehörigkeit als Beziehung,
-  sonst ist ein Gastspieler nicht abbildbar.
+- ~~**Spielerstammdaten.**~~ Entschieden in [ADR-0008](adr/0008-spielerstammdaten.md):
+  global, mit Vereinszugehörigkeit als Beziehung. Der Preis — der Query-Filter
+  greift bei Spielern nicht — ist dort benannt.

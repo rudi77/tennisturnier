@@ -11,8 +11,4 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
 
-  <ItemGroup>
-    <InternalsVisibleTo Include="TennisTurnier.Api.Tests" />
-  </ItemGroup>
-
 </Project>

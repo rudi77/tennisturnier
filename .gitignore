@@ -439,3 +439,6 @@ FodyWeavers.xsd
 # Lokale Konfiguration mit Geheimnissen (Authority, Client Secrets)
 appsettings.Local.json
 appsettings.*.Local.json
+
+# Von `dotnet ef` beim Entwurfszeit-Zugriff angelegt
+design-time.db

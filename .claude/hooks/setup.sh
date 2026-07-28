@@ -39,7 +39,8 @@ export DOTNET_NOLOGO=1
 
 cd "$(dirname "$0")/../.." || exit 0
 
-log "Stelle NuGet-Pakete wieder her ..."
+log "Stelle NuGet-Pakete und lokale Werkzeuge wieder her ..."
+dotnet tool restore >/dev/null 2>&1
 if dotnet restore >/dev/null 2>&1; then
     log "Restore abgeschlossen. 'dotnet build' und 'dotnet test' sind einsatzbereit."
 else

@@ -10,12 +10,36 @@ korrigierbarer Spielplan sowie eine öffentliche Live-Ansicht.
 
 ```bash
 dotnet restore
+dotnet tool restore
 dotnet build
 dotnet test
 ```
 
 Voraussetzung ist das .NET 10 SDK. In Claude-Code-Web-Sessions erledigt der
 SessionStart-Hook (`.claude/hooks/setup.sh`) Installation und Restore automatisch.
+
+### Anwendung starten
+
+```bash
+docker compose up -d keycloak          # lokaler Identity Provider mit Test-Realm
+dotnet run --project src/TennisTurnier.Api
+```
+
+Die Datenbank ist eine SQLite-Datei, die beim Start angelegt und migriert wird.
+Ohne Keycloak startet die Anwendung ebenfalls — dann sind nur die öffentlichen
+Endpunkte erreichbar.
+
+Ein Token für die Testbenutzer (`systemadmin`, `clubadmin`, `referee`;
+Passwort jeweils gleich dem Benutzernamen):
+
+```bash
+curl -s -X POST http://localhost:8080/realms/tennisturnier/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=tennisturnier-api \
+  -d username=systemadmin -d password=systemadmin | jq -r .access_token
+```
+
+Die Rollen selbst vergibt die Anwendung, nicht Keycloak (siehe ADR-0007) — ein
+frisch angemeldeter Benutzer hat zunächst keine.
 
 ## Architektur
 

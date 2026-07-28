@@ -48,3 +48,10 @@ dotnet_diagnostic.CS8625.severity = error
 [tests/**/*.cs]
 # Testnamen dürfen Unterstriche und Umlaute tragen: Test_liest_sich_wie_ein_Satz
 dotnet_diagnostic.CA1707.severity = none
+
+[**/Migrations/*.cs]
+# Von `dotnet ef migrations add` erzeugt. Diese Dateien werden nicht von Hand
+# gepflegt, also dürfen Stilregeln sie auch nicht blockieren.
+generated_code = true
+dotnet_diagnostic.IDE0161.severity = none
+dotnet_analyzer_diagnostic.severity = none

@@ -1,0 +1,20 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    container_name: tennisturnier-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # Nur für die lokale Entwicklung. In Produktion tritt Entra ID an diese
+      # Stelle, und der Unterschied ist reine Konfiguration (ADR-0007).
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./deploy/keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\nhost: localhost\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20

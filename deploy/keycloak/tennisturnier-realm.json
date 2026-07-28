@@ -1,0 +1,59 @@
+{
+  "realm": "tennisturnier",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "accessTokenLifespan": 3600,
+  "clients": [
+    {
+      "clientId": "tennisturnier-api",
+      "name": "Tennisturnier API",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:5000/*"],
+      "webOrigins": ["http://localhost:5000"],
+      "protocolMappers": [
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "tennisturnier-api",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "systemadmin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "systemadmin@example.invalid",
+      "firstName": "System",
+      "lastName": "Administrator",
+      "credentials": [{ "type": "password", "value": "systemadmin", "temporary": false }]
+    },
+    {
+      "username": "clubadmin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "clubadmin@example.invalid",
+      "firstName": "Vereins",
+      "lastName": "Administrator",
+      "credentials": [{ "type": "password", "value": "clubadmin", "temporary": false }]
+    },
+    {
+      "username": "referee",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "referee@example.invalid",
+      "firstName": "Schieds",
+      "lastName": "Richter",
+      "credentials": [{ "type": "password", "value": "referee", "temporary": false }]
+    }
+  ]
+}

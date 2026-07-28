@@ -74,6 +74,20 @@ public sealed class HexagonalArchitectureTests
     }
 
     [Fact]
+    public void Der_Ports_Namensraum_ist_nicht_leer()
+    {
+        // Ohne diese Zusicherung liefen die beiden Regeln darunter ins Leere,
+        // sobald der Namensraum umbenannt oder verschoben wird — und meldeten
+        // dabei weiterhin Erfolg.
+        var ports = Types.InAssembly(Application)
+            .That().ResideInNamespace("TennisTurnier.Application.Ports")
+            .GetTypes()
+            .ToList();
+
+        Assert.NotEmpty(ports);
+    }
+
+    [Fact]
     public void Ports_sind_ausschliesslich_Interfaces()
     {
         var result = Types.InAssembly(Application)
