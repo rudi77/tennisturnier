@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\TennisTurnier.Domain\TennisTurnier.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Nur Abstraktionen: die Anwendungsschicht darf DI beschreiben,
+         aber keine Infrastruktur (EF Core, ASP.NET Core) kennen. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+</Project>

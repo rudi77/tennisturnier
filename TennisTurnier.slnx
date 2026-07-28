@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TennisTurnier.Adapters.Identity.Oidc/TennisTurnier.Adapters.Identity.Oidc.csproj" />
+    <Project Path="src/TennisTurnier.Adapters.Persistence.Sqlite/TennisTurnier.Adapters.Persistence.Sqlite.csproj" />
+    <Project Path="src/TennisTurnier.Adapters.Scheduling/TennisTurnier.Adapters.Scheduling.csproj" />
+    <Project Path="src/TennisTurnier.Api/TennisTurnier.Api.csproj" />
+    <Project Path="src/TennisTurnier.Application/TennisTurnier.Application.csproj" />
+    <Project Path="src/TennisTurnier.Domain/TennisTurnier.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TennisTurnier.Adapters.Persistence.Tests/TennisTurnier.Adapters.Persistence.Tests.csproj" />
+    <Project Path="tests/TennisTurnier.Api.Tests/TennisTurnier.Api.Tests.csproj" />
+    <Project Path="tests/TennisTurnier.Application.Tests/TennisTurnier.Application.Tests.csproj" />
+    <Project Path="tests/TennisTurnier.Architecture.Tests/TennisTurnier.Architecture.Tests.csproj" />
+    <Project Path="tests/TennisTurnier.Domain.Tests/TennisTurnier.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

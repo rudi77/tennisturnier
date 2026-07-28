@@ -427,3 +427,15 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+## Projektspezifisch
+# Lokale SQLite-Datenbanken
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Lokale Konfiguration mit Geheimnissen (Authority, Client Secrets)
+appsettings.Local.json
+appsettings.*.Local.json
