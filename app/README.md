@@ -90,7 +90,7 @@ src/
                 endpoints.ts (Endpunkte 1:1) · realtime.ts (SignalR)
   auth/         oidc.ts · AuthProvider.tsx · LoginScreen.tsx
   components/   core/ · layout/ · tournament/
-  screens/      BoardScreen · DrawScreen · WizardScreen · PublicScreen
+  screens/      BoardScreen · DrawScreen · ClubScreen · WizardScreen · PublicScreen
   hooks/        useResource · useToast · usePublicView
   lib/          time.ts (Zeitzone, TimeSpan) · labels.ts (deutsche Beschriftungen)
   styles/       tokens/ (unverändert aus dem Design System) · app.css
@@ -154,9 +154,27 @@ weiterkommt.
 
 Bewusst nicht, weil es dafür keine Vorlage im Entwurf gab: Gruppentabellen mit
 Tiebreaker-Kette (`…/phases/{id}/standings` ist im Client vorhanden, aber
-unbenutzt), Schweizer System als eigener Screen, Teilnehmerliste mit Seeds und
-Warteliste, Club-Administration (Plätze, Öffnungszeiten, Sperren anlegen). Die
-Endpunkte dafür stehen; es fehlt die Gestaltung.
+unbenutzt), Schweizer System als eigener Screen. Die Endpunkte dafür stehen; es
+fehlt die Gestaltung.
+
+**Nachgereicht**, weil eine frische Installation sonst nicht bis zum ersten
+Turnier kommt — beides hatte im Entwurf keine Vorlage, beides fehlt trotzdem
+nicht *optional*:
+
+- `ClubScreen` — Verein anlegen, Plätze anlegen, Öffnungszeiten setzen. Das
+  Turnier hängt am Verein, und der Spielplan entsteht aus den Öffnungszeiten
+  seiner Plätze. Ohne Verein kein Turnier, ohne Zeitfenster kein Spielplan.
+  Weiterhin ohne Oberfläche: Sperren (Training, Liga, Wetter), Plätze umbenennen
+  und deaktivieren, Öffnungszeiten wieder entfernen.
+- `DrawPreparation` (im `DrawScreen`, solange kein Draw steht) — Meldung öffnen,
+  Teilnehmer melden, Meldeschluss, auslosen. Die Endpunkte dafür lagen in
+  `endpoints.ts`, aber kein Screen rief sie auf: ein angelegtes Turnier blieb im
+  Zustand `Draft` stehen, und der Turniertag antwortete zu Recht mit „setzt eine
+  Auslosung voraus", ohne den Weg dorthin zu zeigen. Eine Meldung wird gleich
+  angenommen — die Warteliste, wegen der die Domäne beides trennt, hat noch
+  keine Oberfläche, und eine stumm nicht im Feld stehende Meldung wäre die
+  schlechtere Überraschung. Ebenfalls offen: Setzpositionen und Doppel
+  (`participants` mit zwei Spielern).
 
 ---
 

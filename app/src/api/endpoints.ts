@@ -13,6 +13,8 @@ import type {
   ClubSummary,
   ConfirmedAssignment,
   CourtBoard,
+  CourtLocation,
+  CourtSurface,
   FormatDefinition,
   FormatTemplateDetail,
   FormatTemplateSummary,
@@ -34,6 +36,40 @@ import type {
 export const clubs = {
   list: () => http.get<ClubSummary[]>('/api/clubs'),
   get: (clubId: string) => http.get<ClubDetail>(`/api/clubs/${clubId}`),
+
+  // Anlegen darf nur ein SystemAdmin (Permission.ManageClubs im globalen
+  // Scope). Für jeden anderen antwortet die API mit 404, nicht mit 403 —
+  // ADR-0004 lässt einen Fehler nicht verraten, was es zu sehen gäbe.
+  create: (body: { name: string; timeZoneId: string; city: string | null }) =>
+    http.post<{ id: string }>('/api/clubs', body),
+
+  addCourt: (
+    clubId: string,
+    body: {
+      name: string
+      surface: CourtSurface
+      location: CourtLocation
+      isCenterCourt: boolean
+    },
+  ) => http.post<{ id: string }>(`/api/clubs/${clubId}/courts`, body),
+
+  // Öffnungszeiten hängen am Platz, nicht am Turnier: der Platz gehört dem
+  // Verein, ein Turnier belegt nur Fenster darin.
+  addAvailability: (
+    clubId: string,
+    courtId: string,
+    body: {
+      dayOfWeek: number
+      opensAt: string
+      closesAt: string
+      validFrom: string
+      validUntil: string | null
+    },
+  ) => http.post<{ id: string }>(`/api/clubs/${clubId}/courts/${courtId}/availability`, body),
+
+  removeAvailability: (clubId: string, courtId: string, windowId: string) =>
+    http.del<void>(`/api/clubs/${clubId}/courts/${courtId}/availability/${windowId}`),
+
   freeWindows: (clubId: string, courtId: string, from: string, to: string) =>
     http.get<FreeWindow[]>(
       `/api/clubs/${clubId}/courts/${courtId}/free-windows` +
@@ -100,8 +136,21 @@ export const players = {
     phone: string | null
     dateOfBirth: string | null
   }) => http.post<{ id: string }>('/api/players', body),
-  createParticipant: (firstPlayerId: string, secondPlayerId: string | null = null) =>
-    http.post<ParticipantSummary>('/api/participants', { firstPlayerId, secondPlayerId }),
+  /**
+   * Der Teilnehmer ist die spielende Einheit: ein Spieler im Einzel, zwei im
+   * Doppel. Der Teamname ist optional und ersetzt die Spielernamen nicht — die
+   * API stellt ihn ihnen voran. Im Einzel wird er mit 422 abgewiesen.
+   */
+  createParticipant: (
+    firstPlayerId: string,
+    secondPlayerId: string | null = null,
+    teamName: string | null = null,
+  ) =>
+    http.post<ParticipantSummary>('/api/participants', {
+      firstPlayerId,
+      secondPlayerId,
+      teamName,
+    }),
 }
 
 // --- Bracket ----------------------------------------------------------------

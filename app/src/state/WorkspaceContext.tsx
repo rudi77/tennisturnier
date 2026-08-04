@@ -20,6 +20,14 @@ export interface Workspace {
   selectTournament: (tournamentId: string) => void
   /** Lädt Turnier und Verein neu — nach jedem Zustandsübergang nötig. */
   reloadTournament: () => Promise<void>
+  /**
+   * Lädt Vereinsliste und den geladenen Verein neu.
+   *
+   * Getrennt von `reloadTournament`, weil Plätze und Öffnungszeiten sich ändern,
+   * ohne dass ein Turnier davon weiß — der Spielplan merkt es erst beim
+   * nächsten Lösen.
+   */
+  reloadClubs: () => Promise<void>
   loading: boolean
 }
 

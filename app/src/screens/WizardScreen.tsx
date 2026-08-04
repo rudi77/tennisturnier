@@ -142,7 +142,10 @@ export function WizardScreen() {
       <>
         <PageHeader title="Turnier anlegen" tag="wizard" subtitle="Kein Verein geladen" />
         <section className="md-section">
-          <Empty title="Kein Verein" hint="Ohne Verein gibt es keine Plätze und keine Vorlagen." />
+          <Empty
+            title="Kein Verein"
+            hint={'Ohne Verein gibt es keine Plätze und keine Vorlagen. Unter „Verein“ lässt sich einer anlegen — das ist der erste Schritt.'}
+          />
         </section>
       </>
     )

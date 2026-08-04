@@ -10,6 +10,7 @@ import { clubs as clubApi, tournaments as tournamentApi } from './api/endpoints'
 import { useResource } from './hooks/useResource'
 import type { ClubDetail, TournamentDetail } from './api/types'
 import { BoardScreen } from './screens/BoardScreen'
+import { ClubScreen } from './screens/ClubScreen'
 import { DrawScreen } from './screens/DrawScreen'
 import { WizardScreen } from './screens/WizardScreen'
 import { PublicScreen } from './screens/PublicScreen'
@@ -87,6 +88,10 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
     await Promise.all([tournament.reload(), tournamentList.reload()])
   }, [tournament, tournamentList])
 
+  const reloadClubs = useCallback(async () => {
+    await Promise.all([clubList.reload(), club.reload()])
+  }, [clubList, club])
+
   const selectClub = useCallback((next: string) => {
     setClubId(next)
     setTournamentId(null)
@@ -102,9 +107,10 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
       selectClub,
       selectTournament: setTournamentId,
       reloadTournament,
+      reloadClubs,
       loading: clubList.loading || club.loading || tournament.loading,
     }),
-    [clubList.data, clubList.loading, club.data, club.loading, tournamentList.data, tournament.data, tournament.loading, selectClub, reloadTournament],
+    [clubList.data, clubList.loading, club.data, club.loading, tournamentList.data, tournament.data, tournament.loading, selectClub, reloadTournament, reloadClubs],
   )
 
   const navigate = (next: ScreenId) => {
@@ -144,6 +150,8 @@ function Screen({ screen, publicOnly }: { screen: ScreenId; publicOnly: boolean 
       return <BoardScreen />
     case 'draw':
       return <DrawScreen />
+    case 'club':
+      return <ClubScreen />
     case 'create':
       return <WizardScreen />
     case 'public':

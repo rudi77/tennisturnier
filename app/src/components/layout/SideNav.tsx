@@ -3,13 +3,16 @@ import { MatchdayMark } from '../core/MatchdayMark'
 import { displayName, initials } from '../../auth/oidc'
 import type { ClubDetail } from '../../api/types'
 
-export type ScreenId = 'board' | 'draw' | 'create' | 'public'
+export type ScreenId = 'board' | 'draw' | 'create' | 'club' | 'public'
 
+// „Verein" steht vor „Turnier anlegen", weil es davor kommt: ohne Verein gibt
+// es keine Plätze, ohne Plätze keinen Spielplan.
 const ITEMS: { id: ScreenId; label: string; tag: string }[] = [
   { id: 'board', label: 'Spielplan', tag: '01' },
   { id: 'draw', label: 'Draw & Bracket', tag: '02' },
-  { id: 'create', label: 'Turnier anlegen', tag: '03' },
-  { id: 'public', label: 'Live-Ansicht', tag: '04' },
+  { id: 'club', label: 'Verein', tag: '03' },
+  { id: 'create', label: 'Turnier anlegen', tag: '04' },
+  { id: 'public', label: 'Live-Ansicht', tag: '05' },
 ]
 
 export function SideNav({

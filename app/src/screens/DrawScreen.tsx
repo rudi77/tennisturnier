@@ -3,6 +3,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { TournamentPicker } from '../components/layout/TournamentPicker'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { BracketMatch } from '../components/tournament/BracketMatch'
+import { DrawPreparation } from '../components/tournament/DrawPreparation'
 import { ResultEditor } from '../components/tournament/ResultEditor'
 import { useResource } from '../hooks/useResource'
 import { useWorkspace } from '../state/WorkspaceContext'
@@ -70,7 +71,7 @@ function toRounds(phase: PhaseDetail | null): Round[] {
 }
 
 export function DrawScreen() {
-  const { tournament, timeZone } = useWorkspace()
+  const { tournament, timeZone, reloadTournament } = useWorkspace()
   const [style, setStyle] = useState<BracketStyle>('tree')
   const [phaseId, setPhaseId] = useState<string | null>(null)
   const [editing, setEditing] = useState<MatchDetail | null>(null)
@@ -131,10 +132,10 @@ export function DrawScreen() {
         {!tournament ? (
           <Empty title="Kein Turnier ausgewählt" />
         ) : beforeDraw ? (
-          <Empty
-            title="Noch kein Draw"
-            hint="Der Draw entsteht beim Übergang nach DrawGenerated und friert Teilnehmerliste und Format ein. Eine Nachmeldung danach erfordert ReopenRegistration() und verwirft ihn."
-          />
+          // Nicht nur der Befund „kein Draw", sondern der Weg dorthin: Meldung
+          // öffnen, Teilnehmer melden, Meldeschluss, auslosen. Ohne ihn bleibt
+          // ein frisch angelegtes Turnier im Entwurf stehen.
+          <DrawPreparation tournament={tournament} onChanged={reloadTournament} />
         ) : phases.error ? (
           <ErrorBlock error={phases.error} onRetry={() => void phases.reload()} />
         ) : phases.loading && !phases.data ? (
