@@ -472,7 +472,8 @@ public sealed class MatchService : IMatchService
     private sealed record DescribeContext(
         IReadOnlyDictionary<Guid, string> ParticipantNameByEntry,
         IReadOnlyDictionary<Guid, CourtAssignment> AssignmentByMatch,
-        IReadOnlyDictionary<Guid, string> CourtNames);
+        IReadOnlyDictionary<Guid, string> CourtNames,
+        IReadOnlyDictionary<Guid, string> MatchLabels);
 
     private async Task<DescribeContext> DescribeAsync(
         Tournament tournament,
@@ -482,13 +483,19 @@ public sealed class MatchService : IMatchService
         var assignments = await _assignments.ListByTournamentAsync(tournament.Id, cancellationToken);
         var club = await _clubs.FindAsync(tournament.ClubId, cancellationToken);
 
+        // Über alle Phasen hinweg: eine Herkunft darf auf ein Match einer
+        // früheren Phase zeigen — der Qualifikant kommt aus der Gruppenphase.
+        var phases = await _phases.ListByTournamentAsync(tournament.Id, cancellationToken);
+        var matches = phases.SelectMany(phase => phase.Matches).ToList();
+
         return new DescribeContext(
             nameByEntry,
             assignments
                 .Where(a => !a.IsOver)
                 .GroupBy(a => a.MatchId)
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.Version).First()),
-            club?.Courts.ToDictionary(c => c.Id, c => c.Name) ?? []);
+            club?.Courts.ToDictionary(c => c.Id, c => c.Name) ?? [],
+            MatchOrigins.LabelsOf(matches));
     }
 
     private static MatchDetail Describe(Match match, DescribeContext context) => new(
@@ -508,7 +515,7 @@ public sealed class MatchService : IMatchService
     private static MatchSideDetail Describe(MatchSide side, DescribeContext context) => new(
         side.EntryId,
         side.EntryId is { } id ? context.ParticipantNameByEntry.GetValueOrDefault(id) : null,
-        side.Origin.ToString());
+        MatchOrigins.Describe(side.Origin, context.MatchLabels));
 
     private static ScoreDetail? Describe(Score? score) =>
         score is null

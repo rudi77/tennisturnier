@@ -1,3 +1,4 @@
+using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
@@ -87,25 +88,13 @@ public static class TournamentViewBuilder
     /// <summary>
     /// Ein sprechender Name je Match, für die Herkunftsangabe der Folgerunden.
     ///
-    /// Ohne ihn stünde in der Ansicht „Sieger aus 8f3c…" — technisch richtig und
-    /// für einen Zuschauer wertlos. Das Bracket vor dem ersten Ball lesbar zu
-    /// machen ist der Sinn der ganzen Konstruktion (ADR-0001).
+    /// Die Regel steht in <see cref="MatchOrigins"/>, weil die Ansicht der
+    /// Turnierleitung dieselbe braucht — eine zweite Fassung hier hatte zur
+    /// Folge, dass die öffentliche Ansicht lesbar war und die interne Kennungen
+    /// zeigte.
     /// </summary>
-    private static Dictionary<Guid, string> MatchLabels(IReadOnlyList<Match> matches)
-    {
-        var byLabel = matches
-            .Where(m => m.Label is not null)
-            .GroupBy(m => m.Label!)
-            .ToDictionary(g => g.Key, g => g.OrderBy(m => m.Position).ToList());
-
-        return matches.ToDictionary(
-            match => match.Id,
-            match => match.Label is { } label
-                ? byLabel[label].Count > 1
-                    ? $"{label} {byLabel[label].IndexOf(match) + 1}"
-                    : label
-                : $"Runde {match.Round}, Match {match.Position}");
-    }
+    private static Dictionary<Guid, string> MatchLabels(IReadOnlyList<Match> matches) =>
+        MatchOrigins.LabelsOf(matches);
 
     private static PublicMatchView Describe(
         Match match,
@@ -140,15 +129,8 @@ public static class TournamentViewBuilder
             side.EntryId is { } seeded ? context.SeedByEntry.GetValueOrDefault(seeded) : null,
             Describe(side.Origin, labels));
 
-    private static string Describe(ParticipantRef origin, IReadOnlyDictionary<Guid, string> labels) => origin switch
-    {
-        ParticipantRef.Entry => "gesetzt",
-        ParticipantRef.WinnerOf winner => $"Sieger aus {labels.GetValueOrDefault(winner.MatchId, "einem Vorspiel")}",
-        ParticipantRef.LoserOf loser => $"Verlierer aus {labels.GetValueOrDefault(loser.MatchId, "einem Vorspiel")}",
-        ParticipantRef.GroupPosition group => group.ToString(),
-        ParticipantRef.Bye => "Freilos",
-        _ => "offen",
-    };
+    private static string Describe(ParticipantRef origin, IReadOnlyDictionary<Guid, string> labels) =>
+        MatchOrigins.Describe(origin, labels);
 
     private static PublicStandingView Describe(Standing standing) => new(
         standing.Rank,

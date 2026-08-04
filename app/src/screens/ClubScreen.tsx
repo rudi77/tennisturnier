@@ -68,8 +68,12 @@ export function ClubScreen() {
           )}
 
           <CreateClubPanel
-            onCreated={async (name) => {
+            onCreated={async (clubId, name) => {
               await reloadClubs()
+              // Gleich hineinwechseln: wer einen Verein anlegt, will als
+              // Nächstes seine Plätze anlegen. Ohne das bliebe die Kopfzeile auf
+              // dem vorigen Verein stehen, und die Plätze landeten dort.
+              selectClub(clubId)
               show(`Verein angelegt · ${name} — als Nächstes Plätze anlegen`)
             }}
             onError={showError}
@@ -78,6 +82,11 @@ export function ClubScreen() {
           {club && (
             <>
               <AddCourtPanel
+                // Beim Vereinswechsel neu aufsetzen: der vorgeschlagene Name
+                // wird beim ersten Rendern gebildet und bliebe sonst auf dem
+                // Stand des vorigen Vereins stehen — „Platz 3" für einen Verein
+                // ohne einen einzigen Platz.
+                key={club.id}
                 clubId={club.id}
                 nextNumber={club.courts.length + 1}
                 onCreated={async (name) => {
@@ -171,7 +180,7 @@ function CreateClubPanel({
   onCreated,
   onError,
 }: {
-  onCreated: (name: string) => Promise<void>
+  onCreated: (clubId: string, name: string) => Promise<void>
   onError: (cause: unknown, context?: string) => void
 }) {
   const [name, setName] = useState('')
@@ -189,15 +198,15 @@ function CreateClubPanel({
 
     setSaving(true)
     try {
-      await clubApi.create({
+      const created = await clubApi.create({
         name: name.trim(),
         timeZoneId: timeZoneId.trim(),
         city: city.trim() || null,
       })
-      const created = name.trim()
+      const createdName = name.trim()
       setName('')
       setCity('')
-      await onCreated(created)
+      await onCreated(created.id, createdName)
     } catch (cause) {
       onError(cause, 'Verein anlegen')
     } finally {

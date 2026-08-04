@@ -158,6 +158,22 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
         // um Platz 3 — die eingebaute Vorlage führt ThirdPlaceMatch.
         Assert.Equal(4, phases!.Single().Matches.Count);
 
+        // Die Herkunft steht im Klartext, nicht als Kennung. Sie stand hier
+        // einmal als rohe Guid — die öffentliche Projektion löste sie auf, die
+        // Ansicht der Turnierleitung nicht, obwohl der Vertrag beides zusagt.
+        var hauptfeld = phases!.Single();
+        var finale = hauptfeld.Matches.Single(match => match.Label == "Finale");
+
+        Assert.Equal("Sieger aus Halbfinale 1", finale.Side1.Origin);
+        Assert.Equal("Sieger aus Halbfinale 2", finale.Side2.Origin);
+        Assert.All(
+            hauptfeld.Matches,
+            match => Assert.All(
+                new[] { match.Side1.Origin, match.Side2.Origin },
+                origin => Assert.False(
+                    Guid.TryParse(origin.Split(' ').Last(), out _),
+                    $"Die Herkunft „{origin}“ endet auf einer Kennung statt auf einem Namen.")));
+
         // --- BoardScreen: Spielplan rechnen und übernehmen --------------------
         var proposalResponse = await admin.PostAsync(
             $"/api/tournaments/{tournamentId}/schedule/proposal", null);

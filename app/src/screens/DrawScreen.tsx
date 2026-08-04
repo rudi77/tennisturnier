@@ -32,25 +32,20 @@ interface Round {
 }
 
 /**
- * Rundennamen aus der Bracketgröße.
+ * Der Name einer Runde.
  *
- * Die API nummeriert Runden nur; „Halbfinale" ist eine Anzeigefrage und hängt
- * daran, wie viele Matches die Runde hat — bei einem 32er-Feld ist Runde 3 das
- * Viertelfinale, bei einem 8er-Feld das Finale.
+ * Er kommt aus den Etiketten der Matches, nicht aus ihrer Anzahl. Die Anzahl
+ * war die naheliegende Regel und ist falsch, sobald eine Runde gemischt ist:
+ * Finale und Spiel um Platz 3 liegen in derselben Runde, womit die Zählung zwei
+ * ergibt und „Halbfinale" behauptet — für die letzte Runde eines Turniers.
+ *
+ * Kommen in einer Runde mehrere Etiketten vor, werden sie genannt; ohne
+ * Etiketten — etwa in einer Gruppenphase — bleibt die Nummer.
  */
-function roundLabel(matchCount: number, index: number): string {
-  switch (matchCount) {
-    case 1:
-      return 'Finale'
-    case 2:
-      return 'Halbfinale'
-    case 4:
-      return 'Viertelfinale'
-    case 8:
-      return 'Achtelfinale'
-    default:
-      return `Runde ${index + 1}`
-  }
+function roundLabel(matches: MatchDetail[], index: number): string {
+  const labels = [...new Set(matches.map((match) => match.label).filter(Boolean))] as string[]
+
+  return labels.length > 0 ? labels.join(' · ') : `Runde ${index + 1}`
 }
 
 function toRounds(phase: PhaseDetail | null): Round[] {
@@ -65,7 +60,7 @@ function toRounds(phase: PhaseDetail | null): Round[] {
     .sort((a, b) => a[0] - b[0])
     .map(([round, matches], index) => ({
       index: round,
-      label: roundLabel(matches.length, index),
+      label: roundLabel(matches, index),
       matches: matches.sort((a, b) => a.position - b.position),
     }))
 }
@@ -135,7 +130,16 @@ export function DrawScreen() {
           // Nicht nur der Befund „kein Draw", sondern der Weg dorthin: Meldung
           // öffnen, Teilnehmer melden, Meldeschluss, auslosen. Ohne ihn bleibt
           // ein frisch angelegtes Turnier im Entwurf stehen.
-          <DrawPreparation tournament={tournament} onChanged={reloadTournament} />
+          <DrawPreparation
+            tournament={tournament}
+            onChanged={async () => {
+              // Auch das Bracket neu laden, nicht nur das Turnier: die
+              // Auslosung erzeugt die Matches, und ohne diesen Aufruf zeigte der
+              // Screen unmittelbar danach „Keine Matches in dieser Phase" — der
+              // Draw war da, nur nicht geholt.
+              await Promise.all([reloadTournament(), phases.reload()])
+            }}
+          />
         ) : phases.error ? (
           <ErrorBlock error={phases.error} onRetry={() => void phases.reload()} />
         ) : phases.loading && !phases.data ? (
