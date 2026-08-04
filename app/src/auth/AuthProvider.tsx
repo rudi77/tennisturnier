@@ -9,7 +9,13 @@ import {
   type ReactNode,
 } from 'react'
 import type { User } from 'oidc-client-ts'
-import { clearCallbackParams, isAuthConfigured, isRedirectCallback, userManager } from './oidc'
+import {
+  clearCallbackParams,
+  completeSignin,
+  isAuthConfigured,
+  isRedirectCallback,
+  userManager,
+} from './oidc'
 import { setTokenProvider } from '../api/client'
 
 interface AuthState {
@@ -50,7 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const load = async () => {
       try {
         if (isRedirectCallback()) {
-          const signedIn = await manager.signinRedirectCallback()
+          // Der Tausch läuft über completeSignin und nicht direkt über den
+          // Manager: der zweite Lauf unter <StrictMode> bekommt so dieselbe
+          // Zusage statt eines zweiten Einlöseversuchs.
+          const signedIn = await completeSignin(manager)
           clearCallbackParams()
           if (cancelled) return
           setUser(signedIn)

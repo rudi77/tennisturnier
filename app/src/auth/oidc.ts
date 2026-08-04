@@ -46,6 +46,31 @@ export function isRedirectCallback(): boolean {
   return params.has('code') || params.has('error')
 }
 
+/**
+ * Der Tausch des Autorisierungscodes gegen ein Token — genau einmal, egal wie
+ * oft er angefordert wird.
+ *
+ * `<StrictMode>` führt in der Entwicklung jeden Effekt doppelt aus. Ohne diese
+ * Sperre schickt der zweite Lauf denselben Code ein zweites Mal an den IdP, und
+ * der weist ihn zu Recht ab — ein Code ist einmal einlösbar. Sichtbar wurde das
+ * als „Code not valid" neben einem 400 auf `/token`: die Anmeldung war da
+ * bereits geglückt, nur fiel ihr Ergebnis dem zweiten Lauf zum Opfer.
+ *
+ * Die Sperre steht im Modul und nicht in der Komponente, weil sie genau das
+ * überdauern muss, was das Problem verursacht: das erneute Einhängen.
+ *
+ * Ein Fehlschlag bleibt hier stehen und wird nicht erneut versucht. Das ist
+ * richtig so — ein verbrauchter oder abgelaufener Code wird beim zweiten Anlauf
+ * nicht gültiger. Der Weg zurück führt über `signinRedirect`, und der lädt die
+ * Seite neu; damit ist auch diese Zusage wieder frisch.
+ */
+let pendingExchange: Promise<User> | null = null
+
+export function completeSignin(manager: UserManager): Promise<User> {
+  pendingExchange ??= manager.signinRedirectCallback()
+  return pendingExchange
+}
+
 /** Entfernt code/state aus der Adresszeile, damit ein Neuladen nicht scheitert. */
 export function clearCallbackParams(): void {
   window.history.replaceState({}, document.title, window.location.pathname)
