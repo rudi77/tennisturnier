@@ -25,13 +25,32 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
 {
     public const string SubjectHeader = "X-Test-Subject";
     public const string IssuerHeader = "X-Test-Issuer";
+    public const string EmailHeader = "X-Test-Email";
     public const string TestIssuer = "https://test.local/realms/tennisturnier";
 
     private readonly string _databasePath =
         Path.Combine(Path.GetTempPath(), $"tennisturnier-api-{Guid.NewGuid():N}.db");
 
+    private readonly IReadOnlyList<string> _bootstrapSystemAdmins;
+
     private readonly Lock _migrationGate = new();
     private bool _migrated;
+
+    public TennisTurnierApiFactory()
+        : this([])
+    {
+    }
+
+    /// <summary>
+    /// Fabrik mit vorab konfigurierten Systemadministratoren. Ein Test, der das
+    /// braucht, baut sie selbst und entsorgt sie — als Klassenfixture bekäme
+    /// jeder andere Test die Einstellung mit.
+    ///
+    /// Bewusst nicht öffentlich: xUnit lässt für eine Klassenfixture genau einen
+    /// öffentlichen Konstruktor zu, und das muss der parameterlose bleiben.
+    /// </summary>
+    internal TennisTurnierApiFactory(IReadOnlyList<string> bootstrapSystemAdmins) =>
+        _bootstrapSystemAdmins = bootstrapSystemAdmins;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -50,6 +69,11 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         // Nebeneffekt des Starts, rennten beide Läufe auf dieselbe Datei; hier
         // migriert stattdessen EnsureMigrated genau einmal.
         builder.UseSetting("Database:AutoMigrate", "false");
+
+        for (var i = 0; i < _bootstrapSystemAdmins.Count; i++)
+        {
+            builder.UseSetting($"Security:BootstrapSystemAdmins:{i}", _bootstrapSystemAdmins[i]);
+        }
 
         builder.ConfigureTestServices(services =>
         {
@@ -74,11 +98,17 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     public MutableClock Clock { get; } = new();
 
     /// <summary>Ein Client, der als der angegebene Benutzer auftritt.</summary>
-    public HttpClient CreateClientAs(string subject)
+    public HttpClient CreateClientAs(string subject, string? email = null)
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Add(SubjectHeader, subject);
         client.DefaultRequestHeaders.Add(IssuerHeader, TestIssuer);
+
+        if (email is not null)
+        {
+            client.DefaultRequestHeaders.Add(EmailHeader, email);
+        }
+
         return client;
     }
 
@@ -157,13 +187,21 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
                 ? value[0]!
                 : TestIssuer;
 
-            var identity = new ClaimsIdentity(
-                [
-                    new Claim("sub", subject[0]!, ClaimValueTypes.String, issuer),
-                    new Claim("iss", issuer, ClaimValueTypes.String, issuer),
-                    new Claim("name", subject[0]!, ClaimValueTypes.String, issuer),
-                ],
-                SchemeName);
+            var claims = new List<Claim>
+            {
+                new("sub", subject[0]!, ClaimValueTypes.String, issuer),
+                new("iss", issuer, ClaimValueTypes.String, issuer),
+                new("name", subject[0]!, ClaimValueTypes.String, issuer),
+            };
+
+            // Optional, weil das echte Token sie auch nicht garantiert: nicht
+            // jeder Aussteller legt eine E-Mail hinein.
+            if (Request.Headers.TryGetValue(EmailHeader, out var email) && email.Count > 0)
+            {
+                claims.Add(new Claim("email", email[0]!, ClaimValueTypes.String, issuer));
+            }
+
+            var identity = new ClaimsIdentity(claims, SchemeName);
 
             var principal = new ClaimsPrincipal(identity);
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName)));

@@ -7,13 +7,16 @@ using TennisTurnier.Api.Endpoints;
 using TennisTurnier.Api.Realtime;
 using TennisTurnier.Application;
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Composition Root: die einzige Stelle, an der die Adapter verdrahtet werden.
 var oidc = builder.Configuration.GetSection(OidcOptions.SectionName).Get<OidcOptions>() ?? new OidcOptions();
+var security = builder.Configuration.GetSection(BootstrapAdminOptions.SectionName).Get<BootstrapAdminOptions>()
+               ?? new BootstrapAdminOptions();
 
-builder.Services.AddApplication();
+builder.Services.AddApplication(security);
 builder.Services.AddSqlitePersistence(
     builder.Configuration.GetConnectionString("Default") ?? "Data Source=tennisturnier.db");
 builder.Services.AddOidcIdentity(oidc);

@@ -33,5 +33,18 @@ mit Audit-Spur.
 **Negativ.** Ein neuer Benutzer existiert erst nach seiner ersten Anmeldung in der
 lokalen Tabelle. Eine Einladung „mach Person X zum ClubAdmin", bevor sie sich je
 angemeldet hat, braucht deshalb eine Vorab-Zuweisung per E-Mail-Adresse, die beim
-ersten Login eingelöst wird. Das ist bewusst noch nicht gebaut und beim ersten Bedarf
-nachzuziehen.
+ersten Login eingelöst wird. Für Vereinsrollen ist das weiterhin nicht gebaut und beim
+ersten Bedarf nachzuziehen.
+
+**Der erste Administrator** ist ein Sonderfall davon, der sich nicht aufschieben
+ließ: Rollen vergibt, wer eine Rolle hat, und nach einer frischen Migration hat
+niemand eine. `Security:BootstrapSystemAdmins` nennt E-Mail-Adressen oder
+Subject-IDs, die bei ihrer nächsten Anmeldung die globale Rolle `SystemAdmin`
+bekommen — eingelöst in der Benutzerauflösung, weil das Konto vorher nicht
+existiert. Die Konfiguration ist der einzige Kanal, der außerhalb der Datenbank
+liegt und deshalb vor der ersten Anmeldung gefüllt sein kann.
+
+Bewusst eng gehalten: nur `SystemAdmin`, nur global, und die Vergabe erscheint als
+Warnung im Protokoll. Der Eintrag gehört geleert, sobald der erste Administrator
+steht — sonst entsteht neben der Rollentabelle eine zweite, stille Quelle für
+Berechtigungen, und genau die zu vermeiden ist der Zweck dieser Entscheidung.

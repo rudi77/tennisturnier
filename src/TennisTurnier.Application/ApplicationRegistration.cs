@@ -3,6 +3,7 @@ using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
+using TennisTurnier.Application.Security;
 using TennisTurnier.Application.Tournaments;
 
 namespace TennisTurnier.Application;
@@ -13,8 +14,19 @@ public static class ApplicationRegistration
     /// Registriert die Anwendungsfälle. Die Driven Ports kommen aus den Adaptern —
     /// diese Schicht kennt keine Implementierung davon.
     /// </summary>
-    public static IServiceCollection AddApplication(this IServiceCollection services)
+    /// <param name="bootstrapAdmins">
+    /// Die vorab konfigurierten Systemadministratoren. Gebunden wird im
+    /// Composition Root, damit diese Schicht keine Konfigurationsquelle kennen
+    /// muss. Ohne Angabe gibt es keine — dann bleibt es bei den Rollen aus der
+    /// Datenbank.
+    /// </param>
+    public static IServiceCollection AddApplication(
+        this IServiceCollection services,
+        BootstrapAdminOptions? bootstrapAdmins = null)
     {
+        services.AddSingleton(bootstrapAdmins ?? new BootstrapAdminOptions());
+        services.AddScoped<SystemAdminBootstrap>();
+
         services.AddScoped<IPostCommitQueue, PostCommitQueue>();
         services.AddScoped<IClubService, ClubService>();
         services.AddScoped<DrawBuilder>();
