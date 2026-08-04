@@ -102,10 +102,18 @@ public sealed class PlayerService : IPlayerService
         {
             var second = await LoadPlayer(secondId, cancellationToken);
             participant = Participant.Team(
-                Guid.NewGuid(), first.Id, second.Id, $"{first.DisplayName} / {second.DisplayName}");
+                Guid.NewGuid(), first.Id, second.Id, TeamDisplayName(request.TeamName, first, second));
         }
         else
         {
+            if (!string.IsNullOrWhiteSpace(request.TeamName))
+            {
+                // Nicht stillschweigend verwerfen: wer einen Teamnamen schickt,
+                // meinte ein Doppel und hat den zweiten Spieler vergessen. Ein
+                // ignorierter Name fiele erst im Spielplan auf.
+                throw new DomainException("Ein Teamname setzt zwei Spieler voraus.");
+            }
+
             participant = Participant.Single(Guid.NewGuid(), first.Id, first.DisplayName);
         }
 
@@ -113,6 +121,25 @@ public sealed class PlayerService : IPlayerService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new ParticipantSummary(participant.Id, participant.DisplayName, participant.PlayerIds);
+    }
+
+    /// <summary>
+    /// Der Anzeigename eines Doppels.
+    ///
+    /// Die Zusammensetzung liegt hier und nicht beim Aufrufer: <c>DisplayName</c>
+    /// wird beim Melden festgeschrieben und taucht danach in Bracket, Tabellen
+    /// und öffentlicher Ansicht auf. Gäbe jeder Client den Namen frei vor,
+    /// stünde in einem Turnier „Netzroller“ und im nächsten „Müller / Berger“ —
+    /// und wer nur den Teamnamen schickte, hätte einen Spielplan, aus dem nicht
+    /// hervorgeht, wer spielt.
+    /// </summary>
+    private static string TeamDisplayName(string? teamName, Player first, Player second)
+    {
+        var players = $"{first.DisplayName} / {second.DisplayName}";
+
+        return string.IsNullOrWhiteSpace(teamName)
+            ? players
+            : $"{teamName.Trim()} · {players}";
     }
 
     private async Task<Player> LoadPlayer(Guid playerId, CancellationToken cancellationToken) =>

@@ -42,6 +42,30 @@ public sealed class ParticipantTests
     }
 
     [Fact]
+    public void Ein_zu_langer_Anzeigename_wird_abgewiesen()
+    {
+        // SQLite setzt die Längenangabe der Spalte nicht durch (ADR-0006). Ohne
+        // diese Prüfung ginge ein überlanger Teamname hier still durch und
+        // scheiterte erst auf einer Datenbank, die es genauer nimmt.
+        var zuLang = new string('x', 201);
+
+        var fehler = Assert.Throws<DomainException>(
+            () => Participant.Single(Guid.NewGuid(), Guid.NewGuid(), zuLang));
+
+        Assert.Contains("200", fehler.Message);
+    }
+
+    [Fact]
+    public void Genau_die_Hoechstlaenge_ist_noch_erlaubt()
+    {
+        var gerade_noch = new string('x', 200);
+
+        var participant = Participant.Single(Guid.NewGuid(), Guid.NewGuid(), gerade_noch);
+
+        Assert.Equal(gerade_noch, participant.DisplayName);
+    }
+
+    [Fact]
     public void Ein_Einzelteilnehmer_braucht_einen_Spieler()
     {
         Assert.Throws<DomainException>(() => Participant.Single(Guid.NewGuid(), Guid.Empty, "Müller, Anna"));

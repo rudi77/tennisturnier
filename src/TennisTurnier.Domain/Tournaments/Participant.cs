@@ -69,8 +69,26 @@ public sealed class Participant : Entity
     /// </summary>
     public bool SharesPlayerWith(Participant other) => _playerIds.Intersect(other._playerIds).Any();
 
-    private static string Validate(string displayName) =>
-        string.IsNullOrWhiteSpace(displayName)
-            ? throw new DomainException("Ein Teilnehmer braucht einen Anzeigenamen.")
-            : displayName.Trim();
+    /// <summary>
+    /// Die Obergrenze deckt sich mit der Spalte in
+    /// <c>TournamentConfiguration</c>. Sie steht hier, weil SQLite Längenangaben
+    /// nicht durchsetzt: ein zu langer Name ginge dort still durch und fiele erst
+    /// auf einer Datenbank auf, die es genauer nimmt (ADR-0006).
+    /// </summary>
+    private const int MaxDisplayNameLength = 200;
+
+    private static string Validate(string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            throw new DomainException("Ein Teilnehmer braucht einen Anzeigenamen.");
+        }
+
+        var trimmed = displayName.Trim();
+
+        return trimmed.Length <= MaxDisplayNameLength
+            ? trimmed
+            : throw new DomainException(
+                $"Der Anzeigename darf höchstens {MaxDisplayNameLength} Zeichen haben, war {trimmed.Length}.");
+    }
 }

@@ -80,7 +80,18 @@ public sealed record PlayerDetail(
 /// <summary>
 /// Ein Teilnehmer entsteht aus einem Spieler (Einzel) oder zweien (Doppel).
 /// </summary>
-public sealed record CreateParticipantRequest(Guid FirstPlayerId, Guid? SecondPlayerId);
+/// <summary>
+/// Ein Teilnehmer: ein Spieler im Einzel, zwei im Doppel.
+/// </summary>
+/// <param name="TeamName">
+/// Der Name, unter dem ein Doppel antritt — „Die Netzroller". Er ersetzt die
+/// Spielernamen nicht, sondern steht ihnen voran: im Spielplan muss ablesbar
+/// bleiben, wer tatsächlich auf dem Platz steht. Im Einzel abgewiesen.
+/// </param>
+public sealed record CreateParticipantRequest(
+    Guid FirstPlayerId,
+    Guid? SecondPlayerId,
+    string? TeamName = null);
 
 public sealed record ParticipantSummary(Guid Id, string DisplayName, IReadOnlyList<Guid> PlayerIds);
 
