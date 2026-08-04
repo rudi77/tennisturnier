@@ -206,6 +206,25 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
             $"/api/tournaments/{tournamentId}", Json);
         Assert.Equal(SchedulingMode.MatchDay, amTurniertag!.SchedulingMode);
 
+        // Auch die Karten am Platz nennen die Herkunft in Worten. Sie kommen aus
+        // einem eigenen Dienst und hatten deshalb ihre eigene Fassung derselben
+        // Frage — mit ihrer eigenen Kennung darin.
+        var board = await admin.GetFromJsonAsync<List<CourtBoard>>(
+            $"/api/tournaments/{tournamentId}/courts", Json);
+
+        var wartend = board!
+            .SelectMany(court => court.Queue.Concat(court.Current is null ? [] : [court.Current]))
+            .SelectMany(queued => new[] { queued.Side1, queued.Side2 })
+            .Where(name => name is not null)
+            .ToList();
+
+        Assert.NotEmpty(wartend);
+        Assert.All(
+            wartend,
+            name => Assert.False(
+                Guid.TryParse(name!.Split(' ').Last(), out _),
+                $"Auf der Platzkarte steht „{name}“ statt eines Namens."));
+
         // --- Turniertag: ein Match aufrufen, starten, beenden -----------------
         var spielbar = (await admin.GetFromJsonAsync<List<PhaseDetail>>(
                 $"/api/tournaments/{tournamentId}/phases", Json))!

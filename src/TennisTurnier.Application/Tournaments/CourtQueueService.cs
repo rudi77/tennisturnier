@@ -104,7 +104,12 @@ public sealed class CourtQueueService : ICourtQueueService
                 .Where(court => court.IsActive || assignments.Any(a => a.CourtId == court.Id && !a.IsOver))
                 .OrderBy(court => court.Name, StringComparer.CurrentCulture)
                 .Select(court => Board(
-                    court, assignments, matches, names, calendar.FreeWindows(court, range))),
+                    court,
+                    assignments,
+                    matches,
+                    names,
+                    MatchOrigins.LabelsOf(matches),
+                    calendar.FreeWindows(court, range))),
         ];
     }
 
@@ -424,6 +429,7 @@ public sealed class CourtQueueService : ICourtQueueService
         IReadOnlyList<CourtAssignment> assignments,
         IReadOnlyList<Match> matches,
         IReadOnlyDictionary<Guid, string> names,
+        IReadOnlyDictionary<Guid, string> labels,
         IReadOnlyList<TimeSlot> openingHours)
     {
         var onCourt = assignments.Where(a => a.CourtId == court.Id).ToList();
@@ -450,14 +456,15 @@ public sealed class CourtQueueService : ICourtQueueService
             court.Id,
             court.Name,
             court.IsCenterCourt,
-            current is null ? null : Describe(current, matches, names, openingHours),
-            [.. queue.Select(a => Describe(a, matches, names, openingHours))]);
+            current is null ? null : Describe(current, matches, names, labels, openingHours),
+            [.. queue.Select(a => Describe(a, matches, names, labels, openingHours))]);
     }
 
     private static QueuedMatch Describe(
         CourtAssignment assignment,
         IReadOnlyList<Match> matches,
         IReadOnlyDictionary<Guid, string> names,
+        IReadOnlyDictionary<Guid, string> labels,
         IReadOnlyList<TimeSlot> openingHours)
     {
         var match = matches.FirstOrDefault(m => m.Id == assignment.MatchId);
@@ -466,8 +473,8 @@ public sealed class CourtQueueService : ICourtQueueService
             assignment.Id,
             assignment.MatchId,
             match?.Label,
-            NameOf(match?.Side1, names),
-            NameOf(match?.Side2, names),
+            NameOf(match?.Side1, names, labels),
+            NameOf(match?.Side2, names, labels),
             assignment.SequenceOnCourt,
             assignment.Status,
             match?.Status ?? MatchStatus.Pending,
@@ -487,8 +494,20 @@ public sealed class CourtQueueService : ICourtQueueService
         assignment.PlannedSlot is not { } slot
         || openingHours.Any(window => window.Start <= slot.Start && slot.End <= window.End);
 
-    private static string? NameOf(MatchSide? side, IReadOnlyDictionary<Guid, string> names) =>
-        side?.EntryId is { } entryId ? names.GetValueOrDefault(entryId) : side?.Origin.ToString();
+    /// <summary>
+    /// Der Name auf der Karte — oder, solange niemand feststeht, die Herkunft in
+    /// Worten. „Sieger aus Halbfinale 1" und nicht die Kennung des Vorspiels:
+    /// die Karte hängt am Turniertag an der Platzwand.
+    /// </summary>
+    private static string? NameOf(
+        MatchSide? side,
+        IReadOnlyDictionary<Guid, string> names,
+        IReadOnlyDictionary<Guid, string> labels) =>
+        side is null
+            ? null
+            : side.EntryId is { } entryId
+                ? names.GetValueOrDefault(entryId)
+                : MatchOrigins.Describe(side.Origin, labels);
 
     private async Task<IReadOnlyDictionary<Guid, string>> NamesByEntryAsync(
         Tournament tournament,
