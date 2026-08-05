@@ -250,6 +250,51 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
+    public async Task Ein_zu_frueher_Meldeschluss_ist_keine_Sackgasse()
+    {
+        // Der Fall eines frischen Turniers: eine Meldung, Meldeschluss zu früh
+        // gesetzt. Auslosen geht nicht — dafür fehlt die zweite Meldung — und
+        // ohne den Weg zurück käme das Turnier nie wieder in Gang.
+        var (leitung, tournamentId) = await SeedTournamentAsync();
+        await leitung.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
+
+        var playerId = await TurnierAufbau.CreatedIdAsync(await leitung.PostAsJsonAsync(
+            "/api/players",
+            new CreatePlayerRequest("Anna", $"Allein{Guid.NewGuid():N}"[..12], null, null, null),
+            Json));
+
+        var participant = await (await leitung.PostAsJsonAsync(
+            "/api/participants", new CreateParticipantRequest(playerId, null), Json))
+            .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
+
+        var entryId = await TurnierAufbau.CreatedIdAsync(await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/entries",
+            new EnterTournamentRequest(participant!.Id, null),
+            Json));
+
+        await leitung.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
+        await leitung.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
+
+        Assert.Equal(
+            HttpStatusCode.UnprocessableEntity,
+            (await leitung.PostAsync($"/api/tournaments/{tournamentId}/draw", null)).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await leitung.PostAsync(
+                $"/api/tournaments/{tournamentId}/registration/reopen", null)).StatusCode);
+
+        var detail = await leitung.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+
+        Assert.Equal(TournamentState.RegistrationOpen, detail!.State);
+
+        // Die bestehende Meldung steht noch: zurückgenommen wurde der
+        // Meldeschluss, nicht das Feld.
+        Assert.Equal(entryId, Assert.Single(detail.Entries).Id);
+    }
+
+    [Fact]
     public async Task Ein_abgebrochenes_Turnier_laesst_sich_nicht_mehr_umschalten()
     {
         // Regression: SwitchToPlanning war die einzige ändernde Methode ohne

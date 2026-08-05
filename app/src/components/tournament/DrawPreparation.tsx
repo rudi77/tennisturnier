@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from 'react'
 import { players as playerApi, tournaments as tournamentApi } from '../../api/endpoints'
 import {
+  Discipline,
   EntryStatus,
   TournamentState,
   type PlayerSummary,
   type TournamentDetail,
 } from '../../api/types'
-import { entryStatusLabel, tournamentStateLabel } from '../../lib/labels'
+import { disciplineLabel, entryStatusLabel, tournamentStateLabel } from '../../lib/labels'
 import { useResource } from '../../hooks/useResource'
 import { useToast } from '../../hooks/useToast'
 
@@ -80,16 +81,17 @@ export function DrawPreparation({
               </button>
             )}
 
+            {/*
+              Der Meldeschluss ist ausdrücklich nicht an das Feld gebunden. Hier
+              stand einmal dieselbe Sperre wie beim Auslosen — und damit kam ein
+              Turnier mit einer Meldung keinen Schritt weiter, obwohl die Domäne
+              den Schritt erlaubt. Wer zu früh schließt, öffnet wieder.
+            */}
             {tournament.state === TournamentState.RegistrationOpen && (
               <button
                 type="button"
                 className="md-btn md-btn--primary"
-                disabled={busy || accepted.length < 2}
-                title={
-                  accepted.length < 2
-                    ? 'Die Auslosung braucht mindestens zwei angenommene Meldungen.'
-                    : undefined
-                }
+                disabled={busy}
                 onClick={() =>
                   void run(
                     'Meldung schließen',
@@ -108,6 +110,11 @@ export function DrawPreparation({
                   type="button"
                   className="md-btn md-btn--accent"
                   disabled={busy || accepted.length < 2}
+                  title={
+                    accepted.length < 2
+                      ? 'Die Auslosung braucht mindestens zwei angenommene Meldungen.'
+                      : undefined
+                  }
                   onClick={() =>
                     void run(
                       'Auslosen',
@@ -125,7 +132,7 @@ export function DrawPreparation({
                   onClick={() =>
                     void run(
                       'Meldung wieder öffnen',
-                      () => tournamentApi.openRegistration(tournament.id),
+                      () => tournamentApi.reopenRegistration(tournament.id),
                       'Meldung wieder offen',
                     )
                   }
@@ -136,11 +143,11 @@ export function DrawPreparation({
             )}
           </div>
 
-          {accepted.length < 2 && tournament.state !== TournamentState.Draft && (
+          {accepted.length < 2 && tournament.state === TournamentState.RegistrationClosed && (
             <div className="md-hint" style={{ marginTop: 'var(--sp-6)' }}>
               Die Auslosung verlangt mindestens zwei <em>angenommene</em> Meldungen — derzeit{' '}
               <span className="md-num">{accepted.length}</span>. Eine bloß gemeldete Teilnahme steht
-              nicht im Feld.
+              nicht im Feld. „Zurück zur Meldung" öffnet sie wieder.
             </div>
           )}
         </Panel>
@@ -160,7 +167,11 @@ export function DrawPreparation({
 
       <div style={{ flex: 1, minWidth: 340 }}>
         {tournament.state === TournamentState.RegistrationOpen ? (
-          <AddEntryPanel tournamentId={tournament.id} onAdded={onChanged} />
+          <AddEntryPanel
+            tournamentId={tournament.id}
+            discipline={tournament.discipline}
+            onAdded={onChanged}
+          />
         ) : (
           <Panel
             title="Teilnehmer melden"
@@ -284,24 +295,33 @@ function EntryList({
 
 // --- Melden -----------------------------------------------------------------
 
-type Discipline = 'single' | 'double'
-
+/**
+ * Meldet einen Teilnehmer, den die Turnierleitung selbst erfasst.
+ *
+ * Ob ein Partner dazugehört, entscheidet die **Ausschreibung** und nicht dieses
+ * Formular. Hier stand einmal eine freie Umschaltung Einzel/Doppel — aus der
+ * Zeit, in der ein Turnier seine Disziplin gar nicht kannte und der erste
+ * Melder sie festlegte. Seit sie am Turnier steht, weist die Domäne eine
+ * unpassende Meldung ab; eine Auswahl anzubieten hieße, eine Schaltfläche zu
+ * zeigen, die nichts als einen 422 auslösen kann.
+ */
 function AddEntryPanel({
   tournamentId,
+  discipline,
   onAdded,
 }: {
   tournamentId: string
+  discipline: Discipline
   onAdded: () => Promise<void>
 }) {
   const { show, showError } = useToast()
 
-  const [discipline, setDiscipline] = useState<Discipline>('single')
   const [first, setFirst] = useState<PlayerSummary | null>(null)
   const [second, setSecond] = useState<PlayerSummary | null>(null)
   const [teamName, setTeamName] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const isDouble = discipline === 'double'
+  const isDouble = discipline !== Discipline.Singles
   const ready = first != null && (!isDouble || second != null)
 
   /**
@@ -350,29 +370,14 @@ function AddEntryPanel({
 
   return (
     <Panel
-      title="Teilnehmer melden"
-      hint="Ein Spieler wird zum Teilnehmer, und der Teilnehmer meldet. Im Doppel trägt derselbe Teilnehmer zwei Spieler — deshalb gilt jede Ruhezeitregel für beide Partner."
+      title={`Teilnehmer melden · ${disciplineLabel[discipline]}`}
+      hint={
+        isDouble
+          ? 'Die Ausschreibung nennt ein Doppel, also gehören zwei Spieler zu einer Meldung. Derselbe Teilnehmer trägt beide — deshalb gilt jede Ruhezeitregel für beide Partner.'
+          : 'Ein Spieler wird zum Teilnehmer, und der Teilnehmer meldet. Die Ausschreibung nennt ein Einzel; eine Meldung zu zweit weist die Domäne ab.'
+      }
     >
       <div style={{ display: 'grid', gap: 'var(--sp-8)' }}>
-        <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="md-seg"
-            aria-pressed={!isDouble}
-            onClick={() => setDiscipline('single')}
-          >
-            Einzel
-          </button>
-          <button
-            type="button"
-            className="md-seg"
-            aria-pressed={isDouble}
-            onClick={() => setDiscipline('double')}
-          >
-            Doppel
-          </button>
-        </div>
-
         <PlayerSlot
           label={isDouble ? 'Spieler 1' : 'Spieler'}
           value={first}
@@ -418,6 +423,18 @@ function AddEntryPanel({
           >
             {busy ? 'Wird gemeldet …' : isDouble ? 'Doppel melden' : 'Melden'}
           </button>
+
+          {/*
+            Eine gesperrte Schaltfläche ohne Grund ist eine Sackgasse: sie sagt
+            „geht nicht" und verschweigt, was fehlt.
+          */}
+          {!ready && (
+            <div className="md-hint" style={{ marginTop: 'var(--sp-4)' }}>
+              {first == null
+                ? 'Zuerst einen Spieler suchen oder unten neu anlegen.'
+                : 'Für ein Doppel fehlt noch der zweite Spieler.'}
+            </div>
+          )}
         </div>
       </div>
     </Panel>

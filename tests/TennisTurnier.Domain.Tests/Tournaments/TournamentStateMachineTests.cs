@@ -224,6 +224,46 @@ public sealed class TournamentStateMachineTests
     }
 
     [Fact]
+    public void Ein_zu_frueher_Meldeschluss_laesst_sich_zuruecknehmen()
+    {
+        // Sonst wäre er eine Sackgasse: mit weniger als zwei angenommenen
+        // Meldungen ginge das Auslosen nicht, und zurück ginge es auch nicht.
+        // Genau der Fall tritt ein, wenn jemand ein frisches Turnier ausprobiert.
+        var tournament = NewTournament();
+        tournament.OpenRegistration();
+
+        var entry = tournament.Enter(Guid.NewGuid(), Guid.NewGuid());
+        tournament.Accept(entry.Id);
+        tournament.CloseRegistration();
+
+        Assert.Throws<DomainException>(() => tournament.GenerateDraw(BuiltInFormats.Knockout, 1));
+
+        tournament.ReopenRegistration();
+
+        Assert.Equal(TournamentState.RegistrationOpen, tournament.State);
+
+        // Und die bestehende Meldung steht noch — zurückgenommen wurde der
+        // Meldeschluss, nicht das Feld.
+        Assert.Equal(entry.Id, Assert.Single(tournament.Entries).Id);
+        tournament.Enter(Guid.NewGuid(), Guid.NewGuid());
+    }
+
+    [Fact]
+    public void Aus_dem_Entwurf_gibt_es_nichts_zurueckzunehmen()
+    {
+        Assert.Throws<DomainException>(NewTournament().ReopenRegistration);
+    }
+
+    [Fact]
+    public void Bei_offener_Meldung_gibt_es_nichts_zurueckzunehmen()
+    {
+        var tournament = NewTournament();
+        tournament.OpenRegistration();
+
+        Assert.Throws<DomainException>(tournament.ReopenRegistration);
+    }
+
+    [Fact]
     public void Ein_laufendes_Turnier_laesst_sich_nicht_mehr_zurueckdrehen()
     {
         var tournament = ReadyForDraw();

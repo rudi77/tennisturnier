@@ -306,15 +306,33 @@ public sealed class Tournament : Entity
     }
 
     /// <summary>
-    /// Nimmt die Auslosung zurück, um nachzumelden. Ausdrücklich und mit Verlust
-    /// des Draws — ein stilles Nachrücken in ein ausgelostes Feld gibt es nicht.
+    /// Öffnet die Meldung wieder.
+    ///
+    /// Zwei Ausgangspunkte, und der Unterschied zwischen ihnen ist der Preis:
+    ///
+    ///  - Aus <see cref="TournamentState.RegistrationClosed"/> kostet es nichts.
+    ///    Es ist schlicht ein zurückgenommener Meldeschluss, und es muss ihn
+    ///    geben: sonst wäre ein zu früh geschlossenes Turnier mit weniger als
+    ///    zwei Meldungen eine Sackgasse — auslosen ginge nicht, zurück auch
+    ///    nicht.
+    ///  - Aus <see cref="TournamentState.DrawGenerated"/> kostet es den Draw.
+    ///    Ausdrücklich und mit Verlust — ein stilles Nachrücken in ein
+    ///    ausgelostes Feld gibt es nicht.
     /// </summary>
     public void ReopenRegistration()
     {
-        Require(TournamentState.DrawGenerated);
+        if (State is not (TournamentState.DrawGenerated or TournamentState.RegistrationClosed))
+        {
+            throw new DomainException(
+                "Die Meldung lässt sich nur aus dem Meldeschluss oder nach der Auslosung wieder " +
+                $"öffnen, das Turnier war im Zustand {State}.");
+        }
 
+        // Nur im ausgelosten Fall gesetzt; im anderen ist es ohnehin leer.
         Format = null;
-        TransitionTo(TournamentState.RegistrationOpen, TournamentState.DrawGenerated);
+
+        State = TournamentState.RegistrationOpen;
+        Touch();
     }
 
     public void Start() => TransitionTo(TournamentState.InProgress, TournamentState.DrawGenerated);
