@@ -13,7 +13,22 @@ public sealed class NotFoundException : Exception
         Id = id;
     }
 
+    /// <summary>
+    /// Ohne Kennung in der Meldung.
+    ///
+    /// Für den Anmeldelink: sein Token steht in der Adresszeile und würde über
+    /// die Fehlermeldung in <c>ProblemDetails</c> landen — und damit in jedem
+    /// Protokoll, das Antworten mitschreibt. Es ist der Schlüssel zum Melden und
+    /// gehört in keine Antwort, auch nicht in eine ablehnende.
+    /// </summary>
+    public NotFoundException(string resource)
+        : base($"{resource} wurde nicht gefunden.")
+    {
+        Resource = resource;
+    }
+
     public string Resource { get; }
 
+    /// <summary>Leer, wenn die Ressource nicht über eine Kennung angefragt wurde.</summary>
     public Guid Id { get; }
 }

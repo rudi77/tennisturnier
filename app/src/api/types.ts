@@ -283,6 +283,88 @@ export interface EntryDetail {
   status: EntryStatus
 }
 
+/** Woher eine Meldung stammt. */
+export const EntryOrigin = { Organiser: 0, SelfService: 1 } as const
+export type EntryOrigin = (typeof EntryOrigin)[keyof typeof EntryOrigin]
+
+/**
+ * Eine Meldung in der Meldungsverwaltung.
+ *
+ * `contacts` und `confirmationCode` bleiben leer beziehungsweise null, wenn der
+ * Aufrufer kein `ViewInternals` hat — das entscheidet das Backend, nicht diese
+ * Seite.
+ */
+export interface EntryOverview {
+  id: string
+  participantId: string
+  participantName: string
+  seed: number | null
+  status: EntryStatus
+  origin: EntryOrigin
+  registeredAt: string
+  confirmationCode: string | null
+  contacts: EntryContact[]
+}
+
+export interface EntryContact {
+  playerId: string
+  displayName: string
+  email: string | null
+  phone: string | null
+}
+
+/**
+ * Der Anmeldelink samt Bedingungen und Zählstand — nur für die Turnierleitung.
+ * Das Token ist der Schlüssel zum Melden.
+ */
+export interface RegistrationDetail {
+  token: string
+  capacity: number | null
+  deadline: string | null
+  applied: number
+  accepted: number
+  waitingList: number
+}
+
+// ---------------------------------------------------------------------------
+// Öffentliche Selbstmeldung
+// ---------------------------------------------------------------------------
+
+/**
+ * Was ein Melder ohne Konto zu sehen bekommt — absichtlich karg. Keine
+ * Teilnehmerliste, keine Namen: sonst wäre der Anmeldelink ein Weg an der
+ * öffentlichen Projektion vorbei (ADR-0003).
+ */
+export interface PublicRegistrationView {
+  tournamentName: string
+  venueName: string
+  city: string | null
+  startsOn: string
+  endsOn: string
+  discipline: Discipline
+  needsPartner: boolean
+  isOpen: boolean
+  /** null heißt unbegrenzt, 0 heißt: die nächste Meldung landet auf der Warteliste. */
+  freeSlots: number | null
+  deadline: string | null
+}
+
+export interface SelfRegistrationRequest {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string | null
+  partnerFirstName: string | null
+  partnerLastName: string | null
+  partnerEmail: string | null
+  teamName: string | null
+}
+
+export interface SelfRegistrationResult {
+  confirmationCode: string
+  status: EntryStatus
+}
+
 /**
  * FormatDefinition geht laut TournamentContracts.cs unverändert über die
  * Schnittstelle — sie *ist* das Austauschformat aus ADR-0001, und eine

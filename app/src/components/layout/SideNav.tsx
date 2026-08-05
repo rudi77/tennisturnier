@@ -3,16 +3,19 @@ import { MatchdayMark } from '../core/MatchdayMark'
 import { displayName, initials } from '../../auth/oidc'
 import type { TournamentDetail } from '../../api/types'
 
-export type ScreenId = 'tournaments' | 'board' | 'draw' | 'create' | 'public'
+export type ScreenId = 'tournaments' | 'entries' | 'board' | 'draw' | 'create' | 'public'
 
 // „Meine Turniere" steht voran, weil es der Einstieg ist: hier stand einmal ein
-// Verein, den jemand anlegen musste, bevor irgendetwas ging.
+// Verein, den jemand anlegen musste, bevor irgendetwas ging. „Meldungen" steht
+// vor dem Draw, weil sie ihm vorausgehen — seit der Selbstmeldung kommen sie
+// herein, ohne dass jemand sie erfasst.
 const ITEMS: { id: ScreenId; label: string; tag: string }[] = [
   { id: 'tournaments', label: 'Meine Turniere', tag: '01' },
-  { id: 'draw', label: 'Draw & Bracket', tag: '02' },
-  { id: 'board', label: 'Spielplan', tag: '03' },
-  { id: 'create', label: 'Turnier anlegen', tag: '04' },
-  { id: 'public', label: 'Live-Ansicht', tag: '05' },
+  { id: 'entries', label: 'Meldungen', tag: '02' },
+  { id: 'draw', label: 'Draw & Bracket', tag: '03' },
+  { id: 'board', label: 'Spielplan', tag: '04' },
+  { id: 'create', label: 'Turnier anlegen', tag: '05' },
+  { id: 'public', label: 'Live-Ansicht', tag: '06' },
 ]
 
 export function SideNav({

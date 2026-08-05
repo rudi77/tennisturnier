@@ -124,6 +124,33 @@ public sealed record EntryDetail(
     EntryStatus Status);
 
 /// <summary>
+/// Eine Meldung in der Meldungsverwaltung — mit allem, was die Turnierleitung
+/// braucht, um über sie zu entscheiden.
+/// </summary>
+/// <param name="Contacts">
+/// Leer ohne <c>ViewInternals</c>. Kontaktdaten sind der Teil, der niemals
+/// öffentlich wird (ADR-0003/0008); wer nur Ergebnisse einträgt, braucht sie
+/// nicht.
+/// </param>
+/// <param name="ConfirmationCode">
+/// Ebenfalls nur mit <c>ViewInternals</c>. Er ist der Weg eines Melders ohne
+/// Konto zu seiner Meldung — die Turnierleitung braucht ihn, wenn jemand anruft
+/// und ihn verlegt hat.
+/// </param>
+public sealed record EntryOverview(
+    Guid Id,
+    Guid ParticipantId,
+    string ParticipantName,
+    int? Seed,
+    EntryStatus Status,
+    EntryOrigin Origin,
+    DateTimeOffset RegisteredAt,
+    string? ConfirmationCode,
+    IReadOnlyList<EntryContact> Contacts);
+
+public sealed record EntryContact(Guid PlayerId, string DisplayName, string? Email, string? Phone);
+
+/// <summary>
 /// Meldung eines bestehenden Teilnehmers. Der Teilnehmer — Einzelspieler oder
 /// Doppel — wird zuvor über die Spielerverwaltung angelegt.
 /// </summary>

@@ -15,6 +15,21 @@ public interface ITournamentRepository
     /// <summary>Die Turniere des Aufrufers — der Einstieg in die Oberfläche.</summary>
     Task<IReadOnlyList<Tournament>> ListForCallerAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Das Turnier zu einem Anmeldetoken — die einzige Abfrage, die am
+    /// Query-Filter vorbeigeht.
+    ///
+    /// Sie muss es: der anonyme Melder hat keine Rolle an irgendeinem Turnier,
+    /// der Filter blendet ihm alles aus. Der Token <em>ist</em> hier die
+    /// Autorisierung, so wie bei der öffentlichen Projektion die Turnier-Id.
+    /// Das ist die ausdrückliche, einzige Ausnahme, und sie liegt an genau
+    /// dieser Stelle — kein zweiter Aufruf im anonymen Pfad geht über den
+    /// normalen Repositoryweg (ADR-0004).
+    /// </summary>
+    Task<Tournament?> FindByRegistrationTokenAsync(
+        string token,
+        CancellationToken cancellationToken = default);
+
     void Add(Tournament tournament);
 }
 
@@ -44,6 +59,21 @@ public interface IPlayerRepository
     Task<Player?> FindAsync(Guid playerId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Player>> SearchAsync(string term, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Der Spieler mit genau diesem Namen und dieser E-Mail, sofern es ihn gibt.
+    ///
+    /// Der Weg der Selbstmeldung: ohne ihn legte derselbe Mensch bei jedem
+    /// Turnier einen neuen Spieler an, und die Zusammenführung wäre danach
+    /// Handarbeit. Die Erkennung ist bewusst streng — Namensgleichheit allein
+    /// führte zwei verschiedene Menschen zusammen, und das wäre der teurere
+    /// Fehler (Risiko 6).
+    /// </summary>
+    Task<Player?> FindByNameAndEmailAsync(
+        string firstName,
+        string lastName,
+        string email,
+        CancellationToken cancellationToken = default);
 
     Task<Participant?> FindParticipantAsync(Guid participantId, CancellationToken cancellationToken = default);
 

@@ -31,7 +31,15 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     private readonly string _databasePath =
         Path.Combine(Path.GetTempPath(), $"tennisturnier-api-{Guid.NewGuid():N}.db");
 
+    /// <summary>
+    /// Praktisch aus: ein Testlauf stellt in Sekunden mehr Anfragen an die
+    /// anonymen Meldeendpunkte als ein Turnierwochenende. Wer die Schranke
+    /// selbst prüfen will, baut eine eigene Fabrik mit einer kleinen Zahl.
+    /// </summary>
+    private const int Unbegrenzt = 100_000;
+
     private readonly IReadOnlyList<string> _bootstrapSystemAdmins;
+    private readonly int _publicRegistrationLimit;
 
     private readonly Lock _migrationGate = new();
     private bool _migrated;
@@ -42,15 +50,20 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Fabrik mit vorab konfigurierten Systemadministratoren. Ein Test, der das
-    /// braucht, baut sie selbst und entsorgt sie — als Klassenfixture bekäme
-    /// jeder andere Test die Einstellung mit.
+    /// Fabrik mit vorab konfigurierten Systemadministratoren oder einer eigenen
+    /// Ratenbegrenzung. Ein Test, der das braucht, baut sie selbst und entsorgt
+    /// sie — als Klassenfixture bekäme jeder andere Test die Einstellung mit.
     ///
     /// Bewusst nicht öffentlich: xUnit lässt für eine Klassenfixture genau einen
     /// öffentlichen Konstruktor zu, und das muss der parameterlose bleiben.
     /// </summary>
-    internal TennisTurnierApiFactory(IReadOnlyList<string> bootstrapSystemAdmins) =>
+    internal TennisTurnierApiFactory(
+        IReadOnlyList<string> bootstrapSystemAdmins,
+        int publicRegistrationLimit = Unbegrenzt)
+    {
         _bootstrapSystemAdmins = bootstrapSystemAdmins;
+        _publicRegistrationLimit = publicRegistrationLimit;
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -69,6 +82,10 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         // Nebeneffekt des Starts, rennten beide Läufe auf dieselbe Datei; hier
         // migriert stattdessen EnsureMigrated genau einmal.
         builder.UseSetting("Database:AutoMigrate", "false");
+
+        builder.UseSetting(
+            "Security:PublicRegistrationRequestsPerWindow",
+            _publicRegistrationLimit.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         for (var i = 0; i < _bootstrapSystemAdmins.Count; i++)
         {

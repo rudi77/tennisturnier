@@ -14,6 +14,7 @@ import type {
   CourtLocation,
   CourtSurface,
   Discipline,
+  EntryOverview,
   FormatDefinition,
   FormatTemplateDetail,
   FormatTemplateSummary,
@@ -22,8 +23,12 @@ import type {
   ParticipantSummary,
   PhaseDetail,
   PlayerSummary,
+  PublicRegistrationView,
   PublicTournamentView,
+  RegistrationDetail,
   SchedulePlanResult,
+  SelfRegistrationRequest,
+  SelfRegistrationResult,
   SetScore,
   StandingsDetail,
   TournamentDetail,
@@ -125,8 +130,45 @@ export const tournaments = {
     http.post<{ id: string }>(`/api/tournaments/${id}/entries`, body),
   accept: (id: string, entryId: string) =>
     http.post<void>(`/api/tournaments/${id}/entries/${entryId}/accept`),
+  moveToWaitingList: (id: string, entryId: string) =>
+    http.post<void>(`/api/tournaments/${id}/entries/${entryId}/waiting-list`),
+  withdraw: (id: string, entryId: string) =>
+    http.post<void>(`/api/tournaments/${id}/entries/${entryId}/withdraw`),
   setSeed: (id: string, entryId: string, seed: number | null) =>
     http.put<void>(`/api/tournaments/${id}/entries/${entryId}/seed`, { seed }),
+
+  /** Die Meldungen zur Verwaltung — mit Kontaktdaten, wenn der Aufrufer sie sehen darf. */
+  entries: (id: string) => http.get<EntryOverview[]>(`/api/tournaments/${id}/entries`),
+
+  // --- Anmeldelink ---
+
+  registration: (id: string) => http.get<RegistrationDetail>(`/api/tournaments/${id}/registration`),
+
+  configureRegistration: (
+    id: string,
+    body: { capacity: number | null; deadline: string | null },
+  ) => http.put<void>(`/api/tournaments/${id}/registration`, body),
+
+  /** Neues Token; das alte ist damit sofort wertlos — jeder ausgehängte Zettel ist Makulatur. */
+  rotateRegistrationLink: (id: string) =>
+    http.post<void>(`/api/tournaments/${id}/registration/link/rotate`),
+}
+
+// --- Öffentliche Selbstmeldung ----------------------------------------------
+
+/**
+ * Der anonyme Meldeweg.
+ *
+ * Ohne Token im Header und ohne Anmeldung: autorisiert ist er allein durch das
+ * Token im Pfad. Ein mitgeschicktes Zugangstoken würde nur suggerieren, die
+ * Antwort hinge davon ab.
+ */
+export const publicRegistration = {
+  get: (token: string) =>
+    http.get<PublicRegistrationView>(`/public/registrations/${encodeURIComponent(token)}`),
+
+  submit: (token: string, body: SelfRegistrationRequest) =>
+    http.post<SelfRegistrationResult>(`/public/registrations/${encodeURIComponent(token)}`, body),
 }
 
 // --- Formatvorlagen ---------------------------------------------------------

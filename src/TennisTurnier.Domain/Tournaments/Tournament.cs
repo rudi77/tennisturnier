@@ -361,7 +361,12 @@ public sealed class Tournament : Entity
 
     // --- Meldungen --------------------------------------------------------
 
-    public TournamentEntry Enter(Guid entryId, Guid participantId, int? seed = null)
+    public TournamentEntry Enter(
+        Guid entryId,
+        Guid participantId,
+        int? seed = null,
+        EntryOrigin origin = EntryOrigin.Organiser,
+        DateTimeOffset? registeredAt = null)
     {
         RequireRegistrationOpen();
 
@@ -379,12 +384,30 @@ public sealed class Tournament : Entity
         // trotzdem eine halbe Änderung.
         RequireSeedIsFree(seed);
 
-        var entry = new TournamentEntry(entryId, Id, participantId, seed);
+        var entry = new TournamentEntry(entryId, Id, participantId, seed, origin, registeredAt);
         _entries.Add(entry);
         Touch();
 
         return entry;
     }
+
+    /// <summary>
+    /// Die Meldung eines Teilnehmers, sofern sie nicht zurückgezogen wurde.
+    ///
+    /// Der Weg der Idempotenz: dieselbe Person, die ein zweites Mal auf
+    /// „Absenden" drückt, bekommt keine zweite Meldung, sondern dieselbe samt
+    /// ihrem Bestätigungscode zurück.
+    /// </summary>
+    public TournamentEntry? ActiveEntryOf(Guid participantId) =>
+        _entries.FirstOrDefault(e => e.ParticipantId == participantId && e.Status != EntryStatus.Withdrawn);
+
+    /// <summary>
+    /// Die Zahl der Meldungen, die für die Kapazität zählen: alles, was nicht
+    /// zurückgezogen und nicht schon auf der Warteliste ist. Die Warteliste
+    /// zählt nicht mit — sie ist ja gerade das, was entsteht, wenn voll ist.
+    /// </summary>
+    public int CountAgainstCapacity() =>
+        _entries.Count(e => e.Status is EntryStatus.Applied or EntryStatus.Accepted);
 
     public void Accept(Guid entryId)
     {

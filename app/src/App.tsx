@@ -8,12 +8,17 @@ import { ErrorBlock, Loading } from './components/layout/StateBlock'
 import { WorkspaceContext, type Workspace } from './state/WorkspaceContext'
 import { me as meApi, tournaments as tournamentApi } from './api/endpoints'
 import { useResource } from './hooks/useResource'
+import { useRoute } from './hooks/useRoute'
 import type { TournamentDetail } from './api/types'
 import { BoardScreen } from './screens/BoardScreen'
 import { DrawScreen } from './screens/DrawScreen'
+import { EntriesScreen } from './screens/EntriesScreen'
+import { RegistrationScreen } from './screens/RegistrationScreen'
 import { TournamentsScreen } from './screens/TournamentsScreen'
 import { WizardScreen } from './screens/WizardScreen'
 import { PublicScreen } from './screens/PublicScreen'
+
+const SCREENS: ScreenId[] = ['tournaments', 'draw', 'entries', 'board', 'create', 'public']
 
 export function App() {
   return (
@@ -28,13 +33,21 @@ export function App() {
 
 function Root() {
   const { status, configured } = useAuth()
+  const { registrationToken } = useRoute()
   const [publicOnly, setPublicOnly] = useState(false)
+
+  // Der Anmeldelink steht vor der Anmeldemaske — und vor der Ladeanzeige. Wer
+  // über einen Aushang hierherkommt, soll kein Konto brauchen; genau das war
+  // der Zweck des Links, und eine Anmeldemaske davor nähme ihn zurück.
+  if (registrationToken) {
+    return <RegistrationScreen token={registrationToken} />
+  }
 
   if (status === 'loading') {
     return <Loading label="Anmeldung wird geprüft …" />
   }
 
-  // Die öffentliche Ansicht ist der einzige Teil ohne Anmeldung — sie steht
+  // Die öffentliche Ansicht ist der andere Teil ohne Anmeldung — sie steht
   // deshalb auch ohne konfigurierte Authority offen.
   if (status === 'anonymous' && !publicOnly) {
     return <LoginScreen onPublicView={() => setPublicOnly(true)} />
@@ -45,11 +58,15 @@ function Root() {
 
 function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPublic: () => void }) {
   const { user, logout } = useAuth()
+  const route = useRoute()
 
   // Der Einstieg ist die Turnierliste und nicht mehr der Spielplan: wer sich
   // anmeldet, hat vielleicht noch gar kein Turnier — und legt hier eines an.
-  const [screen, setScreen] = useState<ScreenId>(publicOnly ? 'public' : 'tournaments')
-  const [tournamentId, setTournamentId] = useState<string | null>(null)
+  const screen: ScreenId = publicOnly
+    ? 'public'
+    : (SCREENS.find((id) => id === route.screen) ?? 'tournaments')
+
+  const tournamentId = route.tournamentId
 
   // Ohne Anmeldung gibt es keine Turnierliste — /api ist geschützt. Dann bleibt
   // nur die öffentliche Ansicht, die ihre Turnier-Id aus der Adresszeile nimmt.
@@ -57,11 +74,13 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
 
   const tournamentList = useResource(() => tournamentApi.listMine(), [], { enabled: !publicOnly })
 
+  const { navigate } = route
+
   useEffect(() => {
-    if (!tournamentList.data) return
+    if (publicOnly || !tournamentList.data) return
     const stillThere = tournamentList.data.some((t) => t.id === tournamentId)
-    if (!stillThere) setTournamentId(tournamentList.data[0]?.id ?? null)
-  }, [tournamentList.data, tournamentId])
+    if (!stillThere) navigate({ tournamentId: tournamentList.data[0]?.id ?? null })
+  }, [publicOnly, tournamentList.data, tournamentId, navigate])
 
   const tournament = useResource<TournamentDetail>(
     () => tournamentApi.get(tournamentId as string),
@@ -73,9 +92,10 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
     await Promise.all([tournament.reload(), tournamentList.reload()])
   }, [tournament, tournamentList])
 
-  const selectTournament = useCallback((next: string) => {
-    setTournamentId(next)
-  }, [])
+  const selectTournament = useCallback(
+    (next: string) => navigate({ tournamentId: next }),
+    [navigate],
+  )
 
   const workspace = useMemo<Workspace>(
     () => ({
@@ -101,12 +121,12 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
     ],
   )
 
-  const navigate = (next: ScreenId) => {
+  const goTo = (next: ScreenId) => {
     if (publicOnly && next !== 'public') {
       onExitPublic()
       return
     }
-    setScreen(next)
+    navigate({ screen: next })
   }
 
   return (
@@ -114,7 +134,7 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
       <div className="md-app">
         <SideNav
           screen={screen}
-          onNavigate={navigate}
+          onNavigate={goTo}
           tournament={tournament.data}
           user={user}
           onLogout={logout}
@@ -123,7 +143,7 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
           {tournamentList.error && !publicOnly ? (
             <ErrorBlock error={tournamentList.error} onRetry={() => void tournamentList.reload()} />
           ) : (
-            <Screen screen={screen} publicOnly={publicOnly} onNavigate={navigate} />
+            <Screen screen={screen} publicOnly={publicOnly} onNavigate={goTo} />
           )}
         </main>
       </div>
@@ -144,12 +164,14 @@ function Screen({
   switch (screen) {
     case 'tournaments':
       return <TournamentsScreen onCreate={() => onNavigate('create')} onOpen={() => onNavigate('draw')} />
+    case 'entries':
+      return <EntriesScreen />
     case 'board':
       return <BoardScreen />
     case 'draw':
       return <DrawScreen />
     case 'create':
-      return <WizardScreen onCreated={() => onNavigate('draw')} />
+      return <WizardScreen onCreated={() => onNavigate('entries')} />
     case 'public':
       return <PublicScreen />
   }

@@ -30,6 +30,12 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
         "email", "mail", "phone", "telefon", "birth", "geburt", "dateOfBirth",
         "contact", "kontakt", "note", "notiz", "address", "adresse",
         "playerId", "participantId", "entryId", "userId",
+
+        // Seit der Selbstmeldung: das Anmeldetoken ist der Schlüssel zum
+        // Melden, der Bestätigungscode der Weg eines Melders zu seiner Meldung.
+        // Beide dürfen in einer Antwort, die jeder abrufen kann, nicht
+        // vorkommen — auch nicht als Feldname.
+        "token", "registration", "anmeldung", "confirmation", "bestaetigung",
     ];
 
     private readonly TennisTurnierApiFactory _factory;
@@ -93,6 +99,22 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.DoesNotContain("example.invalid", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("+43 1 2345678", body, StringComparison.Ordinal);
         Assert.DoesNotContain("1990-03-14", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Der_konkrete_Anmeldetoken_steht_nicht_darin()
+    {
+        // Die Feldnamen oben ließen sich umbenennen. Dies ist die Gegenprobe auf
+        // den Wert: der Token dieses Turniers, wörtlich gesucht.
+        var (admin, tournamentId) = await DrawnTournamentAsync();
+
+        var link = await admin.GetFromJsonAsync<RegistrationDetail>(
+            $"/api/tournaments/{tournamentId}/registration", Json);
+
+        var body = await Spectator().GetStringAsync($"/public/tournaments/{tournamentId}");
+
+        Assert.False(string.IsNullOrWhiteSpace(link!.Token));
+        Assert.DoesNotContain(link.Token, body, StringComparison.Ordinal);
     }
 
     [Fact]

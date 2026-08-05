@@ -28,6 +28,21 @@ public sealed class TournamentRepository : ITournamentRepository
             .OrderByDescending(t => t.StartsOn)
             .ToListAsync(cancellationToken);
 
+    /// <summary>
+    /// Der Tokenweg — und das einzige <c>IgnoreQueryFilters</c> auf Turnieren.
+    ///
+    /// Der Melder ist anonym; der Filter blendet ihm jedes Turnier aus. Der
+    /// Token ist hier die Autorisierung, und er geht gegen die indizierte,
+    /// eindeutige Spalte. Wer eine zweite solche Abfrage hinzufügt, hebt die
+    /// Grenze auf, die ADR-0004 zieht.
+    /// </summary>
+    public Task<Tournament?> FindByRegistrationTokenAsync(
+        string token,
+        CancellationToken cancellationToken = default) =>
+        _db.Tournaments
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Registration.Token == token, cancellationToken);
+
     public void Add(Tournament tournament) => _db.Tournaments.Add(tournament);
 }
 
@@ -84,6 +99,35 @@ public sealed class PlayerRepository : IPlayerRepository
             .ThenBy(p => p.FirstName)
             .Take(limit)
             .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Namensgleichheit und E-Mail-Gleichheit, beides ohne Rücksicht auf
+    /// Groß-/Kleinschreibung.
+    ///
+    /// Der Vergleich läuft über <c>EF.Functions.Like</c> ohne Platzhalter statt
+    /// über <c>ToLower</c>: LIKE ist in SQLite für ASCII von Haus aus
+    /// unempfindlich gegen Groß-/Kleinschreibung und bleibt indexfähig, während
+    /// eine Funktion auf der Spalte jeden Index unbrauchbar machte. Die Menge
+    /// ist am Ende klein genug, dass der Restvergleich im Speicher nichts
+    /// kostet — und er ist der einzige, der auch außerhalb von ASCII stimmt.
+    /// </summary>
+    public async Task<Player?> FindByNameAndEmailAsync(
+        string firstName,
+        string lastName,
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        var candidates = await _db.Players
+            .Where(p => EF.Functions.Like(p.LastName, Escape(lastName), EscapeCharacter))
+            .Take(50)
+            .ToListAsync(cancellationToken);
+
+        return candidates.FirstOrDefault(p =>
+            string.Equals(p.FirstName, firstName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(p.LastName, lastName, StringComparison.OrdinalIgnoreCase)
+            && p.Contact.Email is { } stored
+            && string.Equals(stored, email, StringComparison.OrdinalIgnoreCase));
     }
 
     public Task<Participant?> FindParticipantAsync(

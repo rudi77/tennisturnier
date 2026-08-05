@@ -132,8 +132,12 @@ public sealed class PlayerService : IPlayerService
     /// stünde in einem Turnier „Netzroller“ und im nächsten „Müller / Berger“ —
     /// und wer nur den Teamnamen schickte, hätte einen Spielplan, aus dem nicht
     /// hervorgeht, wer spielt.
+    ///
+    /// Bleibt hier und wird von beiden Wegen benutzt — von der Turnierleitung
+    /// und von der Selbstmeldung. Zwei Fassungen wären zwei Schreibweisen
+    /// desselben Doppels in derselben Tabelle.
     /// </summary>
-    private static string TeamDisplayName(string? teamName, Player first, Player second)
+    internal static string TeamDisplayName(string? teamName, Player first, Player second)
     {
         var players = $"{first.DisplayName} / {second.DisplayName}";
 

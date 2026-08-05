@@ -30,6 +30,17 @@ public sealed class InMemoryTournamentRepository : ITournamentRepository
     public Task<IReadOnlyList<Tournament>> ListForCallerAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Tournament>>([.. Visible()]);
 
+    /// <summary>
+    /// Der Tokenweg. Ausdrücklich ohne <see cref="Visible"/>: der Melder ist
+    /// anonym, und der Token ist hier die Autorisierung. Ein Fake, der auch das
+    /// filterte, meldete den Anwendungsfall als undurchführbar, obwohl die
+    /// Datenbank ihn zulässt.
+    /// </summary>
+    public Task<Tournament?> FindByRegistrationTokenAsync(
+        string token,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_tournaments.Values.FirstOrDefault(t => t.Registration.Token == token));
+
     public void Add(Tournament tournament) => _tournaments[tournament.Id] = tournament;
 
     private IEnumerable<Tournament> Visible()
@@ -108,6 +119,17 @@ public sealed class InMemoryPlayerRepository : IPlayerRepository
                             || p.FirstName.Contains(term, StringComparison.OrdinalIgnoreCase))
                 .Take(limit)
                 .ToList());
+
+    public Task<Player?> FindByNameAndEmailAsync(
+        string firstName,
+        string lastName,
+        string email,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_players.Values.FirstOrDefault(p =>
+            string.Equals(p.FirstName, firstName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(p.LastName, lastName, StringComparison.OrdinalIgnoreCase)
+            && p.Contact.Email is { } stored
+            && string.Equals(stored, email, StringComparison.OrdinalIgnoreCase)));
 
     public Task<Participant?> FindParticipantAsync(
         Guid participantId,

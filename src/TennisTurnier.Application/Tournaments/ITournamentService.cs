@@ -85,7 +85,36 @@ public interface ITournamentService
 
     Task SwitchToPlanningAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
+    // --- Anmeldelink ---
+
+    /// <summary>
+    /// Der Anmeldelink samt Bedingungen und Zählstand. Nur für die
+    /// Turnierleitung: das Token ist der Schlüssel zum Melden.
+    /// </summary>
+    Task<RegistrationDetail> GetRegistrationAsync(
+        Guid tournamentId,
+        CancellationToken cancellationToken = default);
+
+    Task ConfigureRegistrationAsync(
+        Guid tournamentId,
+        ConfigureRegistrationRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Neues Token; das alte ist damit sofort wertlos. Der Notausgang, wenn der
+    /// Link dort gelandet ist, wo er nicht hingehört.
+    /// </summary>
+    Task RotateRegistrationLinkAsync(Guid tournamentId, CancellationToken cancellationToken = default);
+
     // --- Meldungen ---
+
+    /// <summary>
+    /// Die Meldungen zur Verwaltung. Kontaktdaten und Bestätigungscodes stehen
+    /// nur darin, wenn der Aufrufer <c>ViewInternals</c> hat.
+    /// </summary>
+    Task<IReadOnlyList<EntryOverview>> ListEntriesAsync(
+        Guid tournamentId,
+        CancellationToken cancellationToken = default);
 
     Task<Guid> EnterAsync(
         Guid tournamentId,

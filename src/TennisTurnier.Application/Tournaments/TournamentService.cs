@@ -2,6 +2,7 @@ using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
 using TennisTurnier.Domain.Common;
+using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.Security;
 using TennisTurnier.Domain.Tournaments;
 
@@ -390,7 +391,106 @@ public sealed class TournamentService : ITournamentService
     public Task SwitchToPlanningAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
         MutateAsync(tournamentId, t => t.SwitchToPlanning(), cancellationToken);
 
+    // --- Anmeldelink ------------------------------------------------------
+
+    public async Task<RegistrationDetail> GetRegistrationAsync(
+        Guid tournamentId,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await LoadForManagement(tournamentId, cancellationToken);
+
+        return new RegistrationDetail(
+            tournament.Registration.Token,
+            tournament.Registration.Capacity,
+            tournament.Registration.Deadline,
+            tournament.Entries.Count(e => e.Status == EntryStatus.Applied),
+            tournament.Entries.Count(e => e.Status == EntryStatus.Accepted),
+            tournament.Entries.Count(e => e.Status == EntryStatus.WaitingList));
+    }
+
+    public Task ConfigureRegistrationAsync(
+        Guid tournamentId,
+        ConfigureRegistrationRequest request,
+        CancellationToken cancellationToken = default) =>
+        MutateAsync(
+            tournamentId,
+            t => t.ConfigureRegistration(request.Capacity, request.Deadline),
+            cancellationToken);
+
+    public Task RotateRegistrationLinkAsync(
+        Guid tournamentId,
+        CancellationToken cancellationToken = default) =>
+        MutateAsync(tournamentId, t => t.RotateRegistrationLink(), cancellationToken);
+
     // --- Meldungen --------------------------------------------------------
+
+    /// <summary>
+    /// Die Meldungen zur Verwaltung.
+    ///
+    /// Kontaktdaten und Bestätigungscodes hängen an <c>ViewInternals</c> und
+    /// werden andernfalls gar nicht erst geladen: ein Feld, das leer bleibt,
+    /// weil es später ausgeblendet wird, ist eine Zeile Code davon entfernt,
+    /// doch ausgeliefert zu werden.
+    /// </summary>
+    public async Task<IReadOnlyList<EntryOverview>> ListEntriesAsync(
+        Guid tournamentId,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await Load(tournamentId, cancellationToken);
+        User.Require(Permission.ManageTournament, ResourceScope.Tournament(tournamentId));
+
+        var maySeeInternals = User.Can(Permission.ViewInternals, ResourceScope.Tournament(tournamentId));
+
+        var participants = await _players.FindParticipantsAsync(
+            [.. tournament.Entries.Select(e => e.ParticipantId)], cancellationToken);
+
+        var byId = participants.ToDictionary(p => p.Id);
+
+        var contactsByParticipant = maySeeInternals
+            ? await ContactsAsync(participants, cancellationToken)
+            : [];
+
+        return
+        [
+            .. tournament.Entries
+                .OrderBy(e => e.RegisteredAt)
+                .Select(entry => new EntryOverview(
+                    entry.Id,
+                    entry.ParticipantId,
+                    byId.TryGetValue(entry.ParticipantId, out var p) ? p.DisplayName : "(unbekannt)",
+                    entry.Seed,
+                    entry.Status,
+                    entry.Origin,
+                    entry.RegisteredAt,
+                    maySeeInternals ? entry.ConfirmationCode : null,
+                    contactsByParticipant.GetValueOrDefault(entry.ParticipantId, [])))
+        ];
+    }
+
+    private async Task<Dictionary<Guid, IReadOnlyList<EntryContact>>> ContactsAsync(
+        IReadOnlyList<Participant> participants,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<Guid, IReadOnlyList<EntryContact>>();
+
+        foreach (var participant in participants)
+        {
+            var contacts = new List<EntryContact>();
+
+            foreach (var playerId in participant.PlayerIds)
+            {
+                if (await _players.FindAsync(playerId, cancellationToken) is { } player)
+                {
+                    contacts.Add(new EntryContact(
+                        player.Id, player.DisplayName, player.Contact.Email, player.Contact.Phone));
+                }
+            }
+
+            result[participant.Id] = contacts;
+        }
+
+        return result;
+    }
 
     public async Task<Guid> EnterAsync(
         Guid tournamentId,

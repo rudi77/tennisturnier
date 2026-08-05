@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
+using TennisTurnier.Application.Registration;
 using TennisTurnier.Application.Security;
 using TennisTurnier.Application.Tournaments;
 
@@ -37,6 +38,7 @@ public static class ApplicationRegistration
         services.AddScoped<IPublicViewService, PublicViewService>();
         services.AddScoped<ISchedulingService, SchedulingService>();
         services.AddScoped<ICourtQueueService, CourtQueueService>();
+        services.AddScoped<IRegistrationService, RegistrationService>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using TennisTurnier.Application.Registration;
 using TennisTurnier.Application.Security;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
@@ -132,58 +133,87 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
         Assert.Equal(2, mitPlaetzen!.Courts.Count);
         Assert.All(mitPlaetzen.Courts, court => Assert.Equal(2, court.Windows.Count));
 
-        // --- DrawPreparation: Meldung öffnen ----------------------------------
+        // --- EntriesScreen: Meldung öffnen und den Link holen -----------------
         AssertOk(
             await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null),
             "Meldung öffnen");
 
-        // --- DrawPreparation: vier Doppel melden ------------------------------
-        foreach (var team in new[] { "Die Netzroller", "Grundlinie Süd", "Volleyfreunde", "Rückhand Royal" })
+        var link = await admin.GetFromJsonAsync<RegistrationDetail>(
+            $"/api/tournaments/{tournamentId}/registration", Json);
+
+        Assert.False(string.IsNullOrWhiteSpace(link!.Token));
+
+        // --- Vier Doppel melden sich selbst, ohne Konto -----------------------
+        // Jedes über einen eigenen anonymen Client — so, wie vier Menschen auf
+        // vier Telefonen denselben Aushang abfotografieren.
+        var teams = new[] { "Die Netzroller", "Grundlinie Süd", "Volleyfreunde", "Rückhand Royal" };
+        var codes = new List<string>();
+
+        foreach (var team in teams)
         {
-            var first = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                "/api/players",
-                new CreatePlayerRequest("Anna", $"A{Guid.NewGuid():N}"[..10], null, null, null),
-                Json));
+            var melder = _factory.CreateClient();
+            var meldung = new SelfRegistrationRequest(
+                "Anna",
+                $"A{Guid.NewGuid():N}"[..10],
+                $"anna.{Guid.NewGuid():N}"[..14] + "@example.invalid",
+                "+43 1 2345678",
+                "Eva",
+                $"B{Guid.NewGuid():N}"[..10],
+                $"eva.{Guid.NewGuid():N}"[..13] + "@example.invalid",
+                team);
 
-            var second = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                "/api/players",
-                new CreatePlayerRequest("Eva", $"B{Guid.NewGuid():N}"[..10], null, null, null),
-                Json));
+            var response = await melder.PostAsJsonAsync(
+                $"/public/registrations/{link.Token}", meldung, Json);
+            AssertOk(response, $"Selbstmeldung ({team})");
 
-            var participant = await (await admin.PostAsJsonAsync(
-                "/api/participants", new CreateParticipantRequest(first, second, team), Json))
-                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
+            var result = await response.Content.ReadFromJsonAsync<SelfRegistrationResult>(Json);
+            codes.Add(result!.ConfirmationCode);
 
-            Assert.StartsWith(team, participant!.DisplayName, StringComparison.Ordinal);
-            Assert.Equal(2, participant.PlayerIds.Count);
+            // Der erste schickt zweimal — der Doppelklick auf „Absenden" ist der
+            // häufigste Fall, und er darf keine zweite Meldung anlegen.
+            if (team == teams[0])
+            {
+                var again = await melder.PostAsJsonAsync(
+                    $"/public/registrations/{link.Token}", meldung, Json);
+                AssertOk(again, "Zweites Absenden");
 
-            var entryId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(participant.Id, null),
-                Json));
-
-            AssertOk(
-                await admin.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null),
-                $"Meldung annehmen ({team})");
+                Assert.Equal(
+                    result.ConfirmationCode,
+                    (await again.Content.ReadFromJsonAsync<SelfRegistrationResult>(Json))!.ConfirmationCode);
+            }
         }
 
         // Ein Einzelner passt hier nicht hinein. Das fiel früher erst auf, wenn
         // überhaupt — die Ausschreibung kannte ihre eigene Disziplin nicht.
-        var einzelspieler = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            "/api/players",
-            new CreatePlayerRequest("Lisa", $"C{Guid.NewGuid():N}"[..10], null, null, null),
-            Json));
+        var alleine = await _factory.CreateClient().PostAsJsonAsync(
+            $"/public/registrations/{link.Token}",
+            new SelfRegistrationRequest(
+                "Lisa", $"C{Guid.NewGuid():N}"[..10], "lisa@example.invalid", null, null, null, null, null),
+            Json);
 
-        var alleine = await (await admin.PostAsJsonAsync(
-            "/api/participants", new CreateParticipantRequest(einzelspieler, null), Json))
-            .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, alleine.StatusCode);
 
-        Assert.Equal(
-            HttpStatusCode.UnprocessableEntity,
-            (await admin.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(alleine!.Id, null),
-                Json)).StatusCode);
+        // --- EntriesScreen: vier Meldungen, alle annehmen ---------------------
+        var entries = await admin.GetFromJsonAsync<List<EntryOverview>>(
+            $"/api/tournaments/{tournamentId}/entries", Json);
+
+        Assert.Equal(4, entries!.Count);
+        Assert.All(entries, entry => Assert.Equal(EntryStatus.Applied, entry.Status));
+        Assert.All(entries, entry => Assert.Equal(EntryOrigin.SelfService, entry.Origin));
+        Assert.Equal(codes.Distinct().Order(), entries.Select(e => e.ConfirmationCode!).Order());
+
+        foreach (var entry in entries)
+        {
+            Assert.StartsWith(
+                teams.Single(team => entry.ParticipantName.StartsWith(team, StringComparison.Ordinal)),
+                entry.ParticipantName,
+                StringComparison.Ordinal);
+
+            AssertOk(
+                await admin.PostAsync(
+                    $"/api/tournaments/{tournamentId}/entries/{entry.Id}/accept", null),
+                $"Meldung annehmen ({entry.ParticipantName})");
+        }
 
         // --- DrawPreparation: Meldeschluss und Auslosung ----------------------
         AssertOk(
@@ -300,10 +330,16 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
         Assert.Equal("InProgress", sicht.GetProperty("state").GetString());
         Assert.Equal("TC Maria Alm", sicht.GetProperty("venueName").GetString());
 
-        // Die Adresse steht nicht darin: die öffentliche Sicht trägt den Namen
-        // der Anlage, weil Zuschauer wissen müssen, wohin sie fahren — mehr
-        // gehört ihr nicht (ADR-0003).
+        // Was nicht darin steht, ist die eigentliche Aussage: die Adresse nicht
+        // — die öffentliche Sicht trägt den Namen der Anlage, weil Zuschauer
+        // wissen müssen, wohin sie fahren, und mehr gehört ihr nicht. Der
+        // Anmeldetoken nicht, weil er der Schlüssel zum Melden ist. Und keine
+        // E-Mail-Adresse, obwohl hier vier Menschen ohne Konto ihre hinterlassen
+        // haben (ADR-0003).
         var roh = await oeffentlich.Content.ReadAsStringAsync();
         Assert.DoesNotContain("Am Gemeindeberg", roh, StringComparison.Ordinal);
+        Assert.DoesNotContain(link.Token, roh, StringComparison.Ordinal);
+        Assert.DoesNotContain("example.invalid", roh, StringComparison.OrdinalIgnoreCase);
+        Assert.All(codes, code => Assert.DoesNotContain(code, roh, StringComparison.Ordinal));
     }
 }
