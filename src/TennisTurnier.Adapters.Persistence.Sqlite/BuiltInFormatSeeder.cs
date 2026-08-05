@@ -23,7 +23,7 @@ public static class BuiltInFormatSeeder
 
         var existing = await db.FormatTemplates
             .IgnoreQueryFilters()
-            .Where(t => t.ClubId == null)
+            .Where(t => t.OwnerUserId == null)
             .Select(t => t.Id)
             .ToListAsync(cancellationToken);
 
@@ -39,7 +39,7 @@ public static class BuiltInFormatSeeder
 
         foreach (var candidate in missing)
         {
-            db.FormatTemplates.Add(new FormatTemplate(candidate.Id, clubId: null, candidate.Definition));
+            db.FormatTemplates.Add(new FormatTemplate(candidate.Id, ownerUserId: null, candidate.Definition));
         }
 
         await db.SaveChangesAsync(cancellationToken);

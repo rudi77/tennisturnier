@@ -1,7 +1,6 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
@@ -78,7 +77,6 @@ public sealed class SchedulingService : ISchedulingService
     private readonly ITournamentRepository _tournaments;
     private readonly IPhaseRepository _phases;
     private readonly ICourtAssignmentRepository _assignments;
-    private readonly IClubRepository _clubs;
     private readonly IPlayerRepository _players;
     private readonly IScheduleSolver _solver;
     private readonly IPublicViewService _publicView;
@@ -89,7 +87,6 @@ public sealed class SchedulingService : ISchedulingService
         ITournamentRepository tournaments,
         IPhaseRepository phases,
         ICourtAssignmentRepository assignments,
-        IClubRepository clubs,
         IPlayerRepository players,
         IScheduleSolver solver,
         IPublicViewService publicView,
@@ -99,7 +96,6 @@ public sealed class SchedulingService : ISchedulingService
         _tournaments = tournaments;
         _phases = phases;
         _assignments = assignments;
-        _clubs = clubs;
         _players = players;
         _solver = solver;
         _publicView = publicView;
@@ -184,7 +180,7 @@ public sealed class SchedulingService : ISchedulingService
         var match = plan.Problem.Matches.FirstOrDefault(m => m.Id == confirmed.MatchId)
             ?? throw MissingMatch(plan, confirmed.MatchId);
 
-        var court = plan.Club.Courts.FirstOrDefault(c => c.Id == confirmed.CourtId && c.IsActive)
+        var court = plan.Tournament.Courts.FirstOrDefault(c => c.Id == confirmed.CourtId && c.IsActive)
             ?? throw new NotFoundException("Platz", confirmed.CourtId);
 
         RequireWithinTournament(plan.Tournament, confirmed);
@@ -326,8 +322,10 @@ public sealed class SchedulingService : ISchedulingService
         RequireManagePermission(tournament);
         RequirePlanningMode(tournament);
 
-        var club = await _clubs.FindAsync(tournament.ClubId, cancellationToken)
-            ?? throw new NotFoundException("Verein", tournament.ClubId);
+        // Ohne Platzzeiten gäbe es nichts, worin ein Spielplan liegen könnte.
+        // Der Vorschlag käme leer zurück, jedes Match stünde als „nicht
+        // angesetzt", und nirgends stünde, warum.
+        tournament.RequireCourtTimesRecorded();
 
         var definition = tournament.Format?.Definition
             ?? throw new DomainException("Ein Spielplan setzt eine Auslosung voraus.");
@@ -361,7 +359,7 @@ public sealed class SchedulingService : ISchedulingService
         var problem = new SchedulingProblem(
             [.. matches.Select(pair => pair.Match)],
             await PlayersByEntryAsync(tournament, cancellationToken),
-            [.. Courts(club, tournament)],
+            [.. Courts(tournament)],
             durations,
             DefaultRest,
             existing);
@@ -370,7 +368,6 @@ public sealed class SchedulingService : ISchedulingService
 
         return new Plan(
             tournament,
-            club,
             problem,
             all.ToDictionary(match => match.Id, match => match.Label),
             [.. all.Select(match => match.Id)]);
@@ -383,31 +380,35 @@ public sealed class SchedulingService : ISchedulingService
     /// </summary>
     private sealed record Plan(
         Tournament Tournament,
-        Club Club,
         SchedulingProblem Problem,
         IReadOnlyDictionary<Guid, string?> Labels,
         IReadOnlySet<Guid> AllMatchIds)
     {
         public Plan(
             Tournament tournament,
-            Club club,
             SchedulingProblem problem,
             IReadOnlyDictionary<Guid, string?> labels,
             IReadOnlyList<Guid> allMatchIds)
-            : this(tournament, club, problem, labels, allMatchIds.ToHashSet())
+            : this(tournament, problem, labels, allMatchIds.ToHashSet())
         {
         }
     }
 
-    private static IEnumerable<SchedulableCourt> Courts(Club club, Tournament tournament)
+    /// <summary>
+    /// Die Plätze des Turniers mit ihren freien Fenstern.
+    ///
+    /// Wo früher Öffnungszeiten minus Sperren zu rechnen waren, steht jetzt die
+    /// Liste der Zeiten, die tatsächlich reserviert sind — es gibt nichts mehr
+    /// abzuziehen.
+    /// </summary>
+    private static IEnumerable<SchedulableCourt> Courts(Tournament tournament)
     {
-        var calendar = new CourtCalendar(club.TimeZone);
-        var range = calendar.TournamentRange(tournament.StartsOn, tournament.EndsOn);
+        var range = tournament.Period();
 
-        return club.Courts
+        return tournament.Courts
             .Where(court => court.IsActive)
             .Select(court => new SchedulableCourt(
-                court.Id, court.Name, court.IsCenterCourt, calendar.FreeWindows(court, range)));
+                court.Id, court.Name, court.IsCenterCourt, court.FreeWindows(range)));
     }
 
     private static MatchFormat MatchFormatOf(FormatDefinition definition, Phase phase)

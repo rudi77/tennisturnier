@@ -38,7 +38,7 @@ import { dateKey, minutesToTimeSpan, timeSpanToMinutes, toDateOnly } from '../li
  * setzt kein lokales Flag.
  */
 export function BoardScreen() {
-  const { tournament, club, timeZone, reloadTournament } = useWorkspace()
+  const { tournament, timeZone, reloadTournament } = useWorkspace()
   const { show, showError } = useToast()
 
   const [proposal, setProposal] = useState<SchedulePlanResult | null>(null)
@@ -299,7 +299,7 @@ export function BoardScreen() {
         tag={tournament ? tournament.id.slice(0, 8) : 'kein Turnier'}
         subtitle={
           tournament
-            ? `${tournament.name} · ${club?.courts.length ?? 0} Plätze · ${timeZone}`
+            ? `${tournament.name} · ${tournament.courts.length} Plätze · ${timeZone}`
             : 'Kein Turnier ausgewählt'
         }
         kpis={kpis}
@@ -434,7 +434,7 @@ export function BoardScreen() {
               )
             ) : (
               <GanttBoard
-                courts={club?.courts ?? []}
+                courts={tournament?.courts ?? []}
                 scheduled={scheduledToday}
                 day={activeDay}
                 timeZone={timeZone}

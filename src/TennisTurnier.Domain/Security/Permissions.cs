@@ -16,6 +16,15 @@ public static class Permissions
         {
             [Role.SystemAdmin] = All,
 
+            // Mehr nicht: was der Veranstalter anlegt, führt er als
+            // Turnierleiter seines eigenen Turniers — die Rolle bekommt er beim
+            // Anlegen. Stünde ManageTournament hier, gälte es global und damit
+            // für jedes fremde Turnier.
+            [Role.Organizer] = new HashSet<Permission>
+            {
+                Permission.CreateTournament,
+            },
+
             [Role.TournamentDirector] = new HashSet<Permission>
             {
                 Permission.ManageTournament,

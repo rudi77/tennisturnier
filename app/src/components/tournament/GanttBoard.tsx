@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import {
   AssignmentStatus,
-  type BlockDetail,
   type CourtDetail,
   type MatchDetail,
 } from '../../api/types'
-import { blockReasonLabel, courtMeta, sideName } from '../../lib/labels'
+import { courtMeta, sideName } from '../../lib/labels'
 import { dateKey, formatClock, minutesOfDay, timeSpanToMinutes } from '../../lib/time'
 import { TimeLabel } from './TimeLabel'
 
@@ -27,7 +26,7 @@ function topFor(minutes: number): number {
 /**
  * Der Spielplan im Planungsmodus.
  *
- * Alles, was hier absolut positioniert wird — Karten, Sperren, die Stundenspalte
+ * Alles, was hier absolut positioniert wird — Karten, geschlossene Zeiten, die Stundenspalte
  * und die Hintergrundstreifen —, leitet sich aus derselben Zahl ab. Driften sie
  * auseinander, zeichnet das Raster Verfügbarkeit zur falschen Tageszeit.
  *
@@ -44,7 +43,7 @@ export function GanttBoard({
 }: {
   courts: CourtDetail[]
   scheduled: ScheduledMatch[]
-  /** "yyyy-MM-dd" — nur Sperren und Karten dieses Tages werden gezeichnet. */
+  /** "yyyy-MM-dd" — nur Platzzeiten und Karten dieses Tages werden gezeichnet. */
   day: string
   timeZone: string
   onOpenResult: (match: MatchDetail) => void
@@ -95,7 +94,7 @@ export function GanttBoard({
 
         {courts.map((court) => {
           const cards = scheduled.filter((entry) => entry.courtId === court.id)
-          const blocks = court.blocks.filter((block) => dateKey(block.from, timeZone) === day)
+          const closed = closedRanges(court, day, timeZone)
 
           return (
             <div
@@ -155,8 +154,8 @@ export function GanttBoard({
               </div>
 
               <div className="md-gantt__lane" style={{ height: DAY_HOURS * PX_PER_HOUR }}>
-                {blocks.map((block) => (
-                  <Block key={block.id} block={block} timeZone={timeZone} />
+                {closed.map((range) => (
+                  <Closed key={`${range.from}-${range.to}`} from={range.from} to={range.to} />
                 ))}
                 {cards.map((entry) => (
                   <Card
@@ -176,21 +175,58 @@ export function GanttBoard({
   )
 }
 
-/** Sperren liegen auf derselben Skala wie Karten und Zeitachse — sonst sitzt der
- *  16:00-Block optisch woanders als das Match, das er verdrängt. */
-function Block({ block, timeZone }: { block: BlockDetail; timeZone: string }) {
-  const from = minutesOfDay(block.from, timeZone)
-  const to = minutesOfDay(block.to, timeZone)
-  if (from === null || to === null) return null
+/**
+ * Die Zeit, in der der Platz dem Turnier *nicht* gehört.
+ *
+ * Hier standen einmal Sperren — Training, Punktespiel, Wartung. Das waren
+ * Vereinskalenderdaten, und die sind mit dem Verein entfallen. Im Turnier legt
+ * man ein Fenster schlicht nicht an, und was übrig bleibt, ist die Lücke: alles
+ * außerhalb der gebuchten Fenster. Sie bleibt sichtbar, denn ein Match, das
+ * dort landet, ist kein Fehler des Solvers, sondern eine Ansetzung von Hand,
+ * für die niemand einen Platz hat.
+ */
+function closedRanges(
+  court: CourtDetail,
+  day: string,
+  timeZone: string,
+): { from: number; to: number }[] {
+  const open = court.windows
+    .map((window) => ({
+      from: dateKey(window.from, timeZone) === day ? minutesOfDay(window.from, timeZone) : null,
+      to: dateKey(window.from, timeZone) === day ? minutesOfDay(window.to, timeZone) : null,
+    }))
+    .filter((range): range is { from: number; to: number } => range.from !== null && range.to !== null)
+    .sort((a, b) => a.from - b.from)
 
+  const dayStart = DAY_START_HOUR * 60
+  const dayEnd = (DAY_START_HOUR + DAY_HOURS) * 60
+
+  // Kein Fenster an diesem Tag heißt: der ganze Tag ist zu. Das ist der
+  // Normalfall eines Turniers, dessen Plätze noch nicht gebucht sind — und es
+  // soll auffallen, statt als leerer Platz nach Freiraum auszusehen.
+  if (open.length === 0) return [{ from: dayStart, to: dayEnd }]
+
+  const gaps: { from: number; to: number }[] = []
+  let cursor = dayStart
+
+  for (const range of open) {
+    if (range.from > cursor) gaps.push({ from: cursor, to: Math.min(range.from, dayEnd) })
+    cursor = Math.max(cursor, range.to)
+  }
+
+  if (cursor < dayEnd) gaps.push({ from: cursor, to: dayEnd })
+
+  return gaps.filter((gap) => gap.to > gap.from)
+}
+
+function Closed({ from, to }: { from: number; to: number }) {
   return (
     <div
       className="md-gantt__block"
       style={{ top: topFor(from), height: ((to - from) / 60) * PX_PER_HOUR }}
-      title={block.note ?? blockReasonLabel[block.reason]}
+      title="Der Platz steht dem Turnier zu dieser Zeit nicht zur Verfügung."
     >
-      {blockReasonLabel[block.reason]}
-      {block.note ? ` · ${block.note}` : ''}
+      keine Platzzeit
     </div>
   )
 }

@@ -1,13 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Scheduling;
 using TennisTurnier.Domain.Security;
+using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Api.Tests;
 
@@ -26,7 +25,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
 
     public SchedulingApiTests(TennisTurnierApiFactory factory) => _factory = factory;
 
-    private async Task<(HttpClient Admin, Guid ClubId, Guid TournamentId)> DrawnAsync(
+    private async Task<(HttpClient Admin, Guid TournamentId)> DrawnAsync(
         int participants = 16,
         int courts = 4)
     {
@@ -34,14 +33,14 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
             "plan-admin",
             new TurnierWunsch
             {
-                Verein = "TC Spielplan",
+                Anlage = "TC Spielplan",
                 Teilnehmer = participants,
                 Plaetze = courts,
                 CenterCourt = true,
-                Oeffnungszeiten = true,
+                Platzzeiten = true,
             });
 
-        return (aufbau.Admin, aufbau.ClubId, aufbau.TournamentId);
+        return (aufbau.Admin, aufbau.TournamentId);
     }
 
     private static async Task<SchedulePlanResult> ProposeAsync(HttpClient client, Guid tournamentId)
@@ -68,7 +67,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Vorschlag_setzt_jedes_Match_an_und_begruendet_es()
     {
-        var (admin, _, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
 
         var proposal = await ProposeAsync(admin, tournamentId);
         var matches = (await PhasesAsync(admin, tournamentId)).Single().Matches;
@@ -84,7 +83,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     public async Task Ein_Vorschlag_allein_veraendert_nichts()
     {
         // Der Kern der Trennung: Rechnen ist folgenlos.
-        var (admin, _, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
 
         await ProposeAsync(admin, tournamentId);
 
@@ -96,7 +95,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Erst_die_Bestaetigung_traegt_den_Plan_ein()
     {
-        var (admin, _, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
         var proposal = await ProposeAsync(admin, tournamentId);
 
         var response = await admin.PostAsJsonAsync(
@@ -113,7 +112,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_bestaetigter_Plan_steht_auch_in_der_oeffentlichen_Ansicht()
     {
-        var (admin, _, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
         await admin.PostAsJsonAsync(
             $"/api/tournaments/{tournamentId}/schedule/confirm",
             From(await ProposeAsync(admin, tournamentId)),
@@ -133,7 +132,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     {
         // Ohne diese Eigenschaft bekäme die Turnierleitung bei jedem Klick einen
         // anderen Aushang.
-        var (admin, _, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
         await admin.PostAsJsonAsync(
             $"/api/tournaments/{tournamentId}/schedule/confirm",
             From(await ProposeAsync(admin, tournamentId)),
@@ -149,14 +148,14 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Eine_Verschiebung_von_Hand_ueberlebt_den_naechsten_Lauf()
     {
-        var (admin, clubId, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
         await admin.PostAsJsonAsync(
             $"/api/tournaments/{tournamentId}/schedule/confirm",
             From(await ProposeAsync(admin, tournamentId)),
             Json);
 
         var match = (await PhasesAsync(admin, tournamentId)).Single().Matches.First(m => m.Round == 1);
-        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+        var courts = await admin.PlaetzeAsync(tournamentId);
         var moved = new DateTimeOffset(2026, 5, 17, 15, 0, 0, TimeSpan.FromHours(2));
 
         await admin.PostAsJsonAsync(
@@ -174,35 +173,59 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
-    public async Task Ohne_Platz_sagt_der_Vorschlag_warum_nichts_geht()
+    public async Task Ohne_Platz_wird_der_Vorschlag_ausdruecklich_abgewiesen()
     {
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 4, courts: 0);
+        // Bislang kam hier ein leerer Vorschlag zurück, in dem jedes Match als
+        // „nicht angesetzt" stand. Solange die Plätze am Verein hingen, war das
+        // der seltene Fall eines Vereins ohne Öffnungszeiten. Seit sie am Turnier
+        // hängen, ist es der Normalfall eines frisch angelegten Turniers — und
+        // der Veranstalter säße vor einem leeren Board, ohne dass irgendwo
+        // stünde, warum.
+        var (admin, tournamentId) = await DrawnAsync(participants: 4, courts: 0);
 
-        var proposal = await ProposeAsync(admin, tournamentId);
+        var response = await admin.PostAsync($"/api/tournaments/{tournamentId}/schedule/proposal", null);
 
-        Assert.Empty(proposal.Assignments);
-        Assert.NotEmpty(proposal.Unscheduled);
-        Assert.All(proposal.Unscheduled, un => Assert.False(string.IsNullOrWhiteSpace(un.Reason)));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Contains(
+            "Platzzeit",
+            await response.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Ohne_Oeffnungszeiten_bleibt_jedes_Match_uebrig()
+    public async Task Ein_Platz_ohne_Zeiten_zaehlt_wie_kein_Platz()
     {
         // Der andere Weg zum selben Ergebnis: es gibt einen Platz, aber er hat
-        // kein freies Fenster. Der Test davor trifft den Frühausstieg „gar kein
-        // Platz" und nicht diesen Fall.
-        var (admin, clubId, tournamentId) = await DrawnAsync(participants: 4, courts: 0);
+        // kein Fenster. Der Test davor trifft den Fall „gar kein Platz" und
+        // nicht diesen — ein angelegter Platz ohne Zeiten sieht in der
+        // Oberfläche nach Fortschritt aus und ist doch keiner.
+        var (admin, tournamentId) = await DrawnAsync(participants: 4, courts: 0);
 
         await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/courts",
+            $"/api/tournaments/{tournamentId}/courts",
             new CreateCourtRequest("Platz ohne Zeiten", CourtSurface.Clay, CourtLocation.Outdoor),
             Json);
 
-        var proposal = await ProposeAsync(admin, tournamentId);
+        var response = await admin.PostAsync($"/api/tournaments/{tournamentId}/schedule/proposal", null);
 
-        Assert.Empty(proposal.Assignments);
-        Assert.NotEmpty(proposal.Unscheduled);
-        Assert.All(proposal.Unscheduled, un => Assert.Contains("Fenster", un.Reason, StringComparison.Ordinal));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Auslosen_geht_auch_ohne_gebuchte_Plaetze()
+    {
+        // Ausdrücklich erlaubt: Meldeschluss und Platzbuchung sind zwei
+        // Vorgänge, und wer zuerst auslost und dann beim Verein anruft, geht
+        // keinen falschen Weg. Abgewiesen wird erst der Spielplan — dort, wo die
+        // leere Antwort sonst unerklärlich wäre.
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "plan-ohne-platz",
+            new TurnierWunsch { Anlage = "TC Ohne Platz", Teilnehmer = 4, Plaetze = 0 });
+
+        var detail = await aufbau.Admin.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{aufbau.TournamentId}", Json);
+
+        Assert.Equal(TournamentState.DrawGenerated, detail!.State);
     }
 
     // --- Was eine Bestätigung nicht darf -----------------------------------
@@ -213,7 +236,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: der Anlegepfad prüfte nichts. Ein Body mit demselben Match
         // zweimal legte zwei Zuweisungen an — das Match stand danach zur selben
         // Zeit auf zwei Plätzen.
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 4);
+        var (admin, tournamentId) = await DrawnAsync(participants: 4);
         var proposal = await ProposeAsync(admin, tournamentId);
 
         var first = proposal.Assignments[0];
@@ -241,7 +264,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
         // einer noch nicht existierenden Zeile wirkt kein Zähler. Beide Requests
         // liefen durch und hinterließen jedes Match doppelt in der Platzbelegung —
         // sichtbar nur in der öffentlichen Warteschlange.
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 8);
+        var (admin, tournamentId) = await DrawnAsync(participants: 8);
         var request = From(await ProposeAsync(admin, tournamentId));
 
         var responses = await Task.WhenAll(
@@ -267,7 +290,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: geprüft wurde nur, was in der Bestätigung stand. Eine
         // Ansetzung, die genau auf einer bereits gespeicherten lag, ging als
         // verstoßfrei durch — der Prüfer sah die andere Hälfte nie.
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 8);
+        var (admin, tournamentId) = await DrawnAsync(participants: 8);
         var proposal = await ProposeAsync(admin, tournamentId);
 
         await admin.PostAsJsonAsync(
@@ -303,7 +326,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
         // Seit M7 gibt die Ergebniseingabe den Platz sofort frei; hier bleibt zu
         // prüfen, dass danach nichts mehr übrig ist, das ein Spielplanlauf
         // abräumen müsste.
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 8);
+        var (admin, tournamentId) = await DrawnAsync(participants: 8);
         await admin.PostAsJsonAsync(
             $"/api/tournaments/{tournamentId}/schedule/confirm",
             From(await ProposeAsync(admin, tournamentId)),
@@ -340,7 +363,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: das gespielte Match fehlte in der Aufgabe, die Bestätigung
         // brach mit 404 ab. Für den Aufrufer heißt das „such weiter" — richtig
         // ist „rechne neu".
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 8);
+        var (admin, tournamentId) = await DrawnAsync(participants: 8);
         var proposal = await ProposeAsync(admin, tournamentId);
 
         var match = (await PhasesAsync(admin, tournamentId)).Single()
@@ -360,7 +383,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Beginn_ausserhalb_des_Turnierzeitraums_wird_abgewiesen()
     {
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 4);
+        var (admin, tournamentId) = await DrawnAsync(participants: 4);
         var proposal = await ProposeAsync(admin, tournamentId);
         var first = proposal.Assignments[0];
 
@@ -383,7 +406,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Eine_Bestaetigung_ohne_Ansetzungen_ist_ein_Fehler_der_Anfrage()
     {
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 4);
+        var (admin, tournamentId) = await DrawnAsync(participants: 4);
 
         var response = await admin.PostAsync(
             $"/api/tournaments/{tournamentId}/schedule/confirm",
@@ -398,10 +421,10 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: der Solver reichte sie weiter, die Bestätigung fand den
         // Platz nicht und antwortete 404 — der ganze Spielplan war blockiert,
         // ohne dass irgendwo stand, warum.
-        var (admin, clubId, tournamentId) = await DrawnAsync(participants: 4);
+        var (admin, tournamentId) = await DrawnAsync(participants: 4);
         var match = (await PhasesAsync(admin, tournamentId)).Single().Matches[0];
 
-        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+        var courts = await admin.PlaetzeAsync(tournamentId);
         var court = courts![^1];
 
         await admin.PostAsJsonAsync(
@@ -415,7 +438,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.Equal(
             HttpStatusCode.NoContent,
             (await admin.PutAsJsonAsync(
-                $"/api/clubs/{clubId}/courts/{court.Id}",
+                $"/api/tournaments/{tournamentId}/courts/{court.Id}",
                 new UpdateCourtRequest(court.Name, IsCenterCourt: false, IsActive: false),
                 Json)).StatusCode);
 
@@ -440,7 +463,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
         // Dort ist eine Startzeit eine Behauptung; es zählt die Reihenfolge auf
         // dem Platz (ADR-0002). Das gilt für beide Schritte: auch ein Vorschlag
         // wäre dort eine Liste von Uhrzeiten, die niemand zusagen kann.
-        var (admin, _, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
         var proposal = await ProposeAsync(admin, tournamentId);
 
         await admin.PostAsync($"/api/tournaments/{tournamentId}/scheduling/match-day", null);
@@ -458,7 +481,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Schiedsrichter_darf_keinen_Plan_rechnen_lassen()
     {
-        var (_, _, tournamentId) = await DrawnAsync(participants: 4);
+        var (_, tournamentId) = await DrawnAsync(participants: 4);
 
         var referee = $"referee-{Guid.NewGuid():N}";
         await _factory.GrantAsync(referee, Role.Referee, ResourceScope.Tournament(tournamentId));
@@ -474,7 +497,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
     {
         // Zeit für etwas zu reservieren, das schon gespielt ist, wäre ein Platz,
         // der den ganzen Tag leer bleibt.
-        var (admin, _, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
         var match = (await PhasesAsync(admin, tournamentId)).Single()
             .Matches.First(m => m.Status == MatchStatus.Ready);
 

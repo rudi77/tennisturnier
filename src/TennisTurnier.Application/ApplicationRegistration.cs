@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
@@ -26,10 +25,10 @@ public static class ApplicationRegistration
     {
         services.AddSingleton(bootstrapAdmins ?? new BootstrapAdminOptions());
         services.AddScoped<SystemAdminBootstrap>();
+        services.AddScoped<OrganizerBootstrap>();
 
         services.AddScoped<IMeService, MeService>();
         services.AddScoped<IPostCommitQueue, PostCommitQueue>();
-        services.AddScoped<IClubService, ClubService>();
         services.AddScoped<DrawBuilder>();
         services.AddScoped<ITournamentService, TournamentService>();
         services.AddScoped<IMatchService, MatchService>();

@@ -14,41 +14,67 @@ namespace TennisTurnier.Domain.Tournaments;
 public sealed class Tournament : Entity
 {
     private readonly List<TournamentEntry> _entries = [];
+    private readonly List<TournamentCourt> _courts = [];
 
     public Tournament(
         Guid id,
-        Guid clubId,
         string name,
+        Venue venue,
+        Discipline discipline,
         DateOnly startsOn,
         DateOnly endsOn,
         Guid formatTemplateId)
         : base(id)
     {
-        if (clubId == Guid.Empty)
-        {
-            throw new DomainException("Ein Turnier braucht einen ausrichtenden Verein.");
-        }
+        ArgumentNullException.ThrowIfNull(venue);
 
         if (formatTemplateId == Guid.Empty)
         {
             throw new DomainException("Ein Turnier braucht eine Formatvorlage.");
         }
 
-        ClubId = clubId;
         Name = ValidateName(name);
+        Venue = venue;
+        Discipline = discipline;
         FormatTemplateId = formatTemplateId;
         SetDates(startsOn, endsOn);
+
+        // Der Anmeldelink entsteht mit dem Turnier und nicht erst beim Öffnen
+        // der Meldung: so lässt er sich vorbereiten — auf den Aushang, in die
+        // Vereinszeitung —, und er überlebt eine zurückgenommene Auslosung.
+        Registration = RegistrationLink.New();
 
         State = TournamentState.Draft;
         SchedulingMode = SchedulingMode.Planning;
     }
 
     /// <summary>Konstruktor für den Persistenzadapter.</summary>
-    private Tournament(Guid id) : base(id) => Name = string.Empty;
-
-    public Guid ClubId { get; private set; }
+    private Tournament(Guid id) : base(id)
+    {
+        Name = string.Empty;
+        Venue = null!;
+        Registration = null!;
+    }
 
     public string Name { get; private set; }
+
+    /// <summary>Wo gespielt wird — samt der Zeitzone, in der die Platzzeiten gelten.</summary>
+    public Venue Venue { get; private set; }
+
+    public Discipline Discipline { get; private set; }
+
+    /// <summary>
+    /// Die Plätze, die diesem Turnier zur Verfügung stehen.
+    ///
+    /// Reserviert werden sie außerhalb dieser Anwendung; hier steht nur, was
+    /// zugesagt ist. Sie gehören dem Turnier und keinem Verein — ein Platzstamm,
+    /// der über Turniere hinweg gepflegt werden müsste, stünde zwischen dem
+    /// Veranstalter und seiner Ausschreibung.
+    /// </summary>
+    public IReadOnlyList<TournamentCourt> Courts => _courts;
+
+    /// <summary>Der Weg, auf dem sich jemand ohne Konto zu diesem Turnier meldet.</summary>
+    public RegistrationLink Registration { get; private set; }
 
     public DateOnly StartsOn { get; private set; }
 
@@ -105,6 +131,145 @@ public sealed class Tournament : Entity
     {
         RequireNotFinished();
         SetDates(startsOn, endsOn);
+        Touch();
+    }
+
+    public void MoveTo(Venue venue)
+    {
+        ArgumentNullException.ThrowIfNull(venue);
+        RequireNotFinished();
+        Venue = venue;
+        Touch();
+    }
+
+    /// <summary>
+    /// Die Disziplin lässt sich nur ändern, solange niemand gemeldet ist.
+    ///
+    /// Ein Einzelturnier, das nachträglich zum Doppel erklärt wird, hätte ein
+    /// Feld aus Einzelspielern — und umgekehrt Paare, von denen die Hälfte
+    /// nicht mehr antreten dürfte.
+    /// </summary>
+    public void ChangeDiscipline(Discipline discipline)
+    {
+        RequireNotFinished();
+
+        if (_entries.Count > 0 && discipline != Discipline)
+        {
+            throw new DomainException(
+                $"Die Disziplin lässt sich nicht mehr ändern, es stehen bereits {_entries.Count} Meldungen im Feld.");
+        }
+
+        Discipline = discipline;
+        Touch();
+    }
+
+    // --- Plätze -----------------------------------------------------------
+
+    /// <summary>
+    /// Nimmt einen Platz auf. Der Name muss innerhalb des Turniers eindeutig
+    /// sein — nur die Wurzel kennt die Geschwisterplätze, und ein belegter Name
+    /// soll als fachlicher Fehler auffallen, nicht als Datenbankfehler.
+    /// </summary>
+    public TournamentCourt AddCourt(
+        Guid courtId,
+        string name,
+        CourtSurface surface,
+        CourtLocation location)
+    {
+        RequireNotFinished();
+        RequireFreeCourtName(name, exceptCourtId: null);
+
+        var court = new TournamentCourt(courtId, Id, name, surface, location);
+        _courts.Add(court);
+        Touch();
+
+        return court;
+    }
+
+    public void RenameCourt(Guid courtId, string name)
+    {
+        RequireNotFinished();
+        RequireFreeCourtName(name, exceptCourtId: courtId);
+        CourtOf(courtId).Rename(name);
+        Touch();
+    }
+
+    /// <summary>
+    /// Entfernt einen Platz samt seiner Zeiten.
+    ///
+    /// Ausdrücklich etwas anderes als das Stilllegen: wer einen Platz
+    /// stillgelegt, hat ihn nicht mehr, aber was auf ihm gespielt wurde, bleibt
+    /// lesbar. Entfernen geht deshalb nur, solange keine Ansetzung darauf zeigt
+    /// — das kann dieses Aggregat nicht wissen und prüft der Anwendungsfall.
+    /// </summary>
+    public void RemoveCourt(Guid courtId)
+    {
+        RequireNotFinished();
+        _courts.Remove(CourtOf(courtId));
+        Touch();
+    }
+
+    public TournamentCourt CourtOf(Guid courtId) =>
+        _courts.FirstOrDefault(c => c.Id == courtId)
+        ?? throw new DomainException($"Das Turnier hat keinen Platz mit der Id {courtId}.");
+
+    /// <summary>
+    /// Weist ein Turnier ab, für das keine Platzzeit erfasst ist.
+    ///
+    /// Bislang war das der Fall eines Vereins ohne Öffnungszeiten und damit
+    /// selten. Jetzt ist es der Normalfall eines frisch angelegten Turniers, und
+    /// ohne diese Prüfung säße der Veranstalter vor einem leeren Spielplan, in
+    /// dem jedes Match als „nicht angesetzt" steht, ohne dass irgendwo stünde,
+    /// warum.
+    /// </summary>
+    public void RequireCourtTimesRecorded()
+    {
+        if (!_courts.Any(court => court.IsActive && court.Windows.Count > 0))
+        {
+            throw new DomainException(
+                "Für dieses Turnier ist keine Platzzeit erfasst. Ohne sie gibt es nichts, worin ein " +
+                "Spielplan liegen könnte — zuerst Plätze anlegen und ihre Zeiten eintragen.");
+        }
+    }
+
+    /// <summary>
+    /// Weist eine Meldung ab, die nicht zur Ausschreibung passt: ein Einzelner
+    /// im Doppel, ein Paar im Einzel.
+    ///
+    /// Bislang fiel ein Doppel ohne Partner erst beim Anlegen des Teilnehmers
+    /// auf, und zwar ohne die Disziplin überhaupt zu kennen — das Turnier war,
+    /// was der erste Melder daraus machte. Seit sich jemand selbst melden kann,
+    /// muss die Ausschreibung das entscheiden.
+    /// </summary>
+    public void RequireMatchesDiscipline(bool hasPartner)
+    {
+        if (Discipline.NeedsPartner() && !hasPartner)
+        {
+            throw new DomainException(
+                $"Dieses Turnier wird im {Discipline} gespielt. Eine Meldung braucht einen Partner.");
+        }
+
+        if (!Discipline.NeedsPartner() && hasPartner)
+        {
+            throw new DomainException(
+                "Dieses Turnier wird im Einzel gespielt. Eine Meldung nennt genau eine Spielerin oder einen Spieler.");
+        }
+    }
+
+    // --- Anmeldung --------------------------------------------------------
+
+    public void ConfigureRegistration(int? capacity, DateTimeOffset? deadline)
+    {
+        RequireNotFinished();
+        Registration = Registration.With(capacity, deadline);
+        Touch();
+    }
+
+    /// <summary>Neues Token; das alte ist damit sofort wertlos.</summary>
+    public void RotateRegistrationLink()
+    {
+        RequireNotFinished();
+        Registration = Registration.Rotated();
         Touch();
     }
 
@@ -306,6 +471,20 @@ public sealed class Tournament : Entity
         }
     }
 
+    private void RequireFreeCourtName(string name, Guid? exceptCourtId)
+    {
+        var candidate = (name ?? string.Empty).Trim();
+
+        var taken = _courts.Any(c =>
+            c.Id != exceptCourtId
+            && string.Equals(c.Name, candidate, StringComparison.OrdinalIgnoreCase));
+
+        if (taken)
+        {
+            throw new DomainException($"Das Turnier hat bereits einen Platz mit dem Namen „{candidate}“.");
+        }
+    }
+
     private void RequireSeedIsFree(int? seed)
     {
         if (seed is null)
@@ -355,6 +534,23 @@ public sealed class Tournament : Entity
     /// Turniers ist die Klammer um den ganzen Plan und fängt genau das ab.
     /// </summary>
     public void MarkScheduleChanged() => Touch();
+
+    /// <summary>
+    /// Der Zeitraum des Turniers auf der absoluten Zeitachse, in der Zeitzone
+    /// seines Ortes und mit einem Tag Luft nach jeder Seite.
+    ///
+    /// Die Luft ist kein Schlendrian: ein Abendspiel kann über Mitternacht
+    /// gehen, und ein Ort westlich von UTC beginnt seinen ersten Turniertag
+    /// nach UTC-Mitternacht. Vor allem aber steht die Rechnung damit an genau
+    /// einer Stelle — sonst hielte die Spielplanprüfung eine Ansetzung für
+    /// zulässig, die der Solver nie vorgeschlagen hätte, oder umgekehrt.
+    /// </summary>
+    public TimeSlot Period()
+    {
+        var local = new LocalTime(Venue.TimeZone);
+
+        return new TimeSlot(local.Midnight(StartsOn.AddDays(-1)), local.Midnight(EndsOn.AddDays(2)));
+    }
 
     /// <summary>
     /// Weist einen Zeitpunkt zurück, der nicht im Turnierzeitraum liegt.

@@ -9,17 +9,16 @@
 import { ApiError, http, apiUrl } from './client'
 import type {
   AssignCourtResult,
-  ClubDetail,
-  ClubSummary,
   ConfirmedAssignment,
   CourtBoard,
   CourtLocation,
   CourtSurface,
+  Discipline,
   FormatDefinition,
   FormatTemplateDetail,
   FormatTemplateSummary,
-  FreeWindow,
   MatchOutcome,
+  MeResponse,
   ParticipantSummary,
   PhaseDetail,
   PlayerSummary,
@@ -31,62 +30,83 @@ import type {
   TournamentSummary,
 } from './types'
 
-// --- Vereine und Plätze -----------------------------------------------------
+// --- Wer fragt --------------------------------------------------------------
 
-export const clubs = {
-  list: () => http.get<ClubSummary[]>('/api/clubs'),
-  get: (clubId: string) => http.get<ClubDetail>(`/api/clubs/${clubId}`),
+export const me = {
+  /** Benutzer samt Rollen — damit die Oberfläche weiß, was sie anbieten darf. */
+  get: () => http.get<MeResponse>('/api/me'),
+}
 
-  // Anlegen darf nur ein SystemAdmin (Permission.ManageClubs im globalen
-  // Scope). Für jeden anderen antwortet die API mit 404, nicht mit 403 —
-  // ADR-0004 lässt einen Fehler nicht verraten, was es zu sehen gäbe.
-  create: (body: { name: string; timeZoneId: string; city: string | null }) =>
-    http.post<{ id: string }>('/api/clubs', body),
+// --- Turniere ---------------------------------------------------------------
 
+/** Ort, Zeitraum und Disziplin stehen im Anlegen und nicht in einer späteren
+ *  Einstellung: ohne Zeitzone ist keine Platzzeit auf die Zeitachse abzubilden,
+ *  und ohne Disziplin entschiede der erste Melder, was für ein Turnier es wird. */
+export interface TournamentBody {
+  name: string
+  venueName: string
+  venueAddress: string | null
+  venueCity: string | null
+  timeZoneId: string
+  discipline: Discipline
+  startsOn: string
+  endsOn: string
+}
+
+export const tournaments = {
+  /** Die Turniere des Aufrufers — der Einstieg, seit es keinen Verein mehr gibt. */
+  listMine: () => http.get<TournamentSummary[]>('/api/tournaments'),
+
+  get: (tournamentId: string) => http.get<TournamentDetail>(`/api/tournaments/${tournamentId}`),
+
+  // Wer anlegt, wird Turnierleiter seines Turniers — in derselben
+  // Arbeitseinheit. Es braucht dafür keine Freischaltung.
+  create: (body: TournamentBody & { formatTemplateId: string }) =>
+    http.post<{ id: string }>('/api/tournaments', body),
+
+  update: (tournamentId: string, body: TournamentBody) =>
+    http.put<void>(`/api/tournaments/${tournamentId}`, body),
+
+  // --- Plätze ---
+  // Sie hingen am Verein und hängen jetzt am Turnier. Reserviert wird
+  // außerhalb dieser Anwendung; was zugesagt ist, gilt für dieses Turnier.
   addCourt: (
-    clubId: string,
+    tournamentId: string,
     body: {
       name: string
       surface: CourtSurface
       location: CourtLocation
       isCenterCourt: boolean
     },
-  ) => http.post<{ id: string }>(`/api/clubs/${clubId}/courts`, body),
+  ) => http.post<{ id: string }>(`/api/tournaments/${tournamentId}/courts`, body),
 
-  // Öffnungszeiten hängen am Platz, nicht am Turnier: der Platz gehört dem
-  // Verein, ein Turnier belegt nur Fenster darin.
-  addAvailability: (
-    clubId: string,
+  updateCourt: (
+    tournamentId: string,
     courtId: string,
-    body: {
-      dayOfWeek: number
-      opensAt: string
-      closesAt: string
-      validFrom: string
-      validUntil: string | null
-    },
-  ) => http.post<{ id: string }>(`/api/clubs/${clubId}/courts/${courtId}/availability`, body),
+    body: { name: string; isCenterCourt: boolean; isActive: boolean },
+  ) => http.put<void>(`/api/tournaments/${tournamentId}/courts/${courtId}`, body),
 
-  removeAvailability: (clubId: string, courtId: string, windowId: string) =>
-    http.del<void>(`/api/clubs/${clubId}/courts/${courtId}/availability/${windowId}`),
+  removeCourt: (tournamentId: string, courtId: string) =>
+    http.del<void>(`/api/tournaments/${tournamentId}/courts/${courtId}`),
 
-  freeWindows: (clubId: string, courtId: string, from: string, to: string) =>
-    http.get<FreeWindow[]>(
-      `/api/clubs/${clubId}/courts/${courtId}/free-windows` +
-        `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    ),
-}
+  /**
+   * Die Massenanlage: dieselbe Uhrzeitspanne an jedem Turniertag, für die
+   * genannten Plätze oder für alle. Genau das, was der Veranstalter am Telefon
+   * vereinbart hat — und ein Aufruf statt vierzehn.
+   *
+   * Die Uhrzeiten sind lokal zu verstehen, in der Zeitzone der Anlage.
+   */
+  addCourtWindows: (
+    tournamentId: string,
+    body: { from: string; to: string; courtIds?: string[] | null },
+  ) => http.post<{ created: number }>(`/api/tournaments/${tournamentId}/courts/windows`, body),
 
-// --- Turniere ---------------------------------------------------------------
+  /** Ein einzelnes Fenster, absolut — für den Nachtrag am Rand. */
+  addCourtWindow: (tournamentId: string, courtId: string, body: { from: string; to: string }) =>
+    http.post<{ id: string }>(`/api/tournaments/${tournamentId}/courts/${courtId}/windows`, body),
 
-export const tournaments = {
-  listByClub: (clubId: string) =>
-    http.get<TournamentSummary[]>(`/api/clubs/${clubId}/tournaments`),
-
-  get: (tournamentId: string) => http.get<TournamentDetail>(`/api/tournaments/${tournamentId}`),
-
-  create: (clubId: string, body: { name: string; startsOn: string; endsOn: string; formatTemplateId: string }) =>
-    http.post<{ id: string }>(`/api/clubs/${clubId}/tournaments`, body),
+  removeCourtWindow: (tournamentId: string, courtId: string, windowId: string) =>
+    http.del<void>(`/api/tournaments/${tournamentId}/courts/${courtId}/windows/${windowId}`),
 
   // Zustandsübergänge sind eigene Endpunkte, kein Feld im PUT: „Auslosung
   // zurücknehmen" verwirft den Draw, „Turniertag starten" ändert die Bedeutung
@@ -112,13 +132,17 @@ export const tournaments = {
 // --- Formatvorlagen ---------------------------------------------------------
 
 export const formatTemplates = {
-  listByClub: (clubId: string) =>
-    http.get<FormatTemplateSummary[]>(`/api/clubs/${clubId}/format-templates`),
+  /** Die mitgelieferten Vorlagen und die eigenen des Aufrufers. */
+  list: () => http.get<FormatTemplateSummary[]>('/api/format-templates'),
   get: (templateId: string) => http.get<FormatTemplateDetail>(`/api/format-templates/${templateId}`),
 
-  /** Eingebaute Vorlagen sind nicht editierbar — wer Parameter ändert, kopiert sie. */
-  copy: (clubId: string, templateId: string, name: string) =>
-    http.post<{ id: string }>(`/api/clubs/${clubId}/format-templates/${templateId}/copy`, { name }),
+  /**
+   * Eingebaute Vorlagen sind nicht editierbar — wer Parameter ändert, kopiert
+   * sie. Die Kopie gehört ihrem Anleger; sie gehörte einmal einem Verein, und
+   * ohne Eigentümer wäre sie im nächsten Turnier nicht mehr auffindbar.
+   */
+  copy: (templateId: string, name: string) =>
+    http.post<{ id: string }>(`/api/format-templates/${templateId}/copy`, { name }),
 
   save: (templateId: string, definition: FormatDefinition) =>
     http.put<void>(`/api/format-templates/${templateId}`, { definition }),

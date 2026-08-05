@@ -1,10 +1,10 @@
 /**
  * Zeit.
  *
- * Intern ist alles UTC (`DateTimeOffset`), angezeigt wird in der Vereinszeitzone
- * — ein Sonntagsfinale im Oktober fällt sonst auf die falsche Stunde. Deshalb
- * nimmt jede Formatierung hier die Zeitzone des Vereins entgegen und nicht die
- * des Browsers.
+ * Intern ist alles UTC (`DateTimeOffset`), angezeigt wird in der Zeitzone des
+ * Turnierorts — ein Sonntagsfinale im Oktober fällt sonst auf die falsche
+ * Stunde. Deshalb nimmt jede Formatierung hier diese Zone entgegen und nicht
+ * die des Browsers.
  */
 
 /** "01:15:00" oder "1.02:30:00" → Minuten. */
@@ -33,7 +33,7 @@ function formatter(timeZone: string, options: Intl.DateTimeFormatOptions): Intl.
   }
 }
 
-/** "14:00" in der Vereinszeitzone. */
+/** "14:00" in der Zeitzone des Turnierorts. */
 export function formatClock(iso: string | null | undefined, timeZone: string): string {
   if (!iso) return '—'
   const date = new Date(iso)
@@ -49,7 +49,7 @@ export function formatDayShort(iso: string | null | undefined, timeZone: string)
   return formatter(timeZone, { weekday: 'short', day: '2-digit', month: '2-digit' }).format(date)
 }
 
-/** Minuten seit Mitternacht in der Vereinszeitzone — die Grundlage des Gantt-Rasters. */
+/** Minuten seit Mitternacht am Turnierort — die Grundlage des Gantt-Rasters. */
 export function minutesOfDay(iso: string | null | undefined, timeZone: string): number | null {
   if (!iso) return null
   const date = new Date(iso)
@@ -64,7 +64,7 @@ export function minutesOfDay(iso: string | null | undefined, timeZone: string): 
   return hour * 60 + minute
 }
 
-/** "yyyy-MM-dd" in der Vereinszeitzone — zum Vergleich mit DateOnly-Feldern. */
+/** "yyyy-MM-dd" am Turnierort — zum Vergleich mit DateOnly-Feldern. */
 export function dateKey(iso: string | null | undefined, timeZone: string): string | null {
   if (!iso) return null
   const date = new Date(iso)

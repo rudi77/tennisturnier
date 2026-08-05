@@ -9,17 +9,75 @@ namespace TennisTurnier.Application.Tournaments;
 // eine deckungsgleiche Kopie als DTO wäre eine zweite Wahrheit, die auseinander
 // läuft. Beide sind unveränderliche Wertobjekte ohne Verhalten, keine Entitäten.
 
+/// <param name="VenueName">Die Anlage, auf der gespielt wird — „TC Maria Alm".</param>
+/// <param name="TimeZoneId">
+/// IANA-Zeitzone der Anlage. Ohne sie ist keine Platzzeit auf die Zeitachse
+/// abzubilden; sie steht deshalb im Anlegen und nicht in einer späteren
+/// Einstellung.
+/// </param>
 public sealed record CreateTournamentRequest(
     string Name,
+    string VenueName,
+    string? VenueAddress,
+    string? VenueCity,
+    string TimeZoneId,
+    Discipline Discipline,
     DateOnly StartsOn,
     DateOnly EndsOn,
     Guid FormatTemplateId);
 
-public sealed record UpdateTournamentRequest(string Name, DateOnly StartsOn, DateOnly EndsOn);
+public sealed record UpdateTournamentRequest(
+    string Name,
+    string VenueName,
+    string? VenueAddress,
+    string? VenueCity,
+    string TimeZoneId,
+    Discipline Discipline,
+    DateOnly StartsOn,
+    DateOnly EndsOn);
+
+// --- Plätze -----------------------------------------------------------------
+
+public sealed record CreateCourtRequest(
+    string Name,
+    CourtSurface Surface,
+    CourtLocation Location,
+    bool IsCenterCourt = false);
+
+public sealed record UpdateCourtRequest(string Name, bool IsCenterCourt, bool IsActive);
+
+public sealed record CourtDetail(
+    Guid Id,
+    string Name,
+    CourtSurface Surface,
+    CourtLocation Location,
+    bool IsCenterCourt,
+    bool IsActive,
+    IReadOnlyList<CourtWindowDetail> Windows);
+
+public sealed record CourtWindowDetail(Guid Id, DateTimeOffset From, DateTimeOffset To);
+
+/// <summary>Eine einzelne Platzzeit, als absolutes Fenster.</summary>
+public sealed record CreateCourtWindowRequest(DateTimeOffset From, DateTimeOffset To);
+
+/// <summary>
+/// Die Massenanlage: dieselbe Uhrzeitspanne an jedem Turniertag, für die
+/// genannten Plätze — oder für alle, wenn keiner genannt ist.
+///
+/// Genau das, was der Veranstalter am Telefon vereinbart hat („beide Plätze,
+/// Samstag und Sonntag, acht bis zweiundzwanzig Uhr"). Die Uhrzeiten sind lokal
+/// zu verstehen, in der Zeitzone der Anlage.
+/// </summary>
+public sealed record CreateCourtWindowsRequest(
+    TimeOnly From,
+    TimeOnly To,
+    IReadOnlyList<Guid>? CourtIds = null);
 
 public sealed record TournamentSummary(
     Guid Id,
     string Name,
+    string VenueName,
+    Discipline Discipline,
     DateOnly StartsOn,
     DateOnly EndsOn,
     TournamentState State,
@@ -28,16 +86,35 @@ public sealed record TournamentSummary(
 
 public sealed record TournamentDetail(
     Guid Id,
-    Guid ClubId,
     string Name,
+    VenueDetail Venue,
+    Discipline Discipline,
     DateOnly StartsOn,
     DateOnly EndsOn,
     TournamentState State,
     SchedulingMode SchedulingMode,
     Guid FormatTemplateId,
     FormatSnapshot? Format,
+    IReadOnlyList<CourtDetail> Courts,
     IReadOnlyList<EntryDetail> Entries,
     int Version);
+
+public sealed record VenueDetail(string Name, string? Address, string? City, string TimeZoneId);
+
+/// <summary>
+/// Der Anmeldelink samt seinen Bedingungen. Nur für die Turnierleitung — das
+/// Token ist der Schlüssel zum Melden und gehört nicht in eine öffentliche
+/// Antwort.
+/// </summary>
+public sealed record RegistrationDetail(
+    string Token,
+    int? Capacity,
+    DateTimeOffset? Deadline,
+    int Applied,
+    int Accepted,
+    int WaitingList);
+
+public sealed record ConfigureRegistrationRequest(int? Capacity, DateTimeOffset? Deadline);
 
 public sealed record EntryDetail(
     Guid Id,

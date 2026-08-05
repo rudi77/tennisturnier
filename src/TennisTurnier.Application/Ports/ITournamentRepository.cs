@@ -12,8 +12,6 @@ public interface ITournamentRepository
 {
     Task<Tournament?> FindAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<Tournament>> ListByClubAsync(Guid clubId, CancellationToken cancellationToken = default);
-
     /// <summary>Die Turniere des Aufrufers — der Einstieg in die Oberfläche.</summary>
     Task<IReadOnlyList<Tournament>> ListForCallerAsync(CancellationToken cancellationToken = default);
 
@@ -28,7 +26,8 @@ public interface IFormatTemplateRepository
 {
     Task<FormatTemplate?> FindAsync(Guid templateId, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<FormatTemplate>> ListForClubAsync(Guid clubId, CancellationToken cancellationToken = default);
+    /// <summary>Die mitgelieferten Vorlagen und die eigenen des Aufrufers.</summary>
+    Task<IReadOnlyList<FormatTemplate>> ListForCallerAsync(CancellationToken cancellationToken = default);
 
     void Add(FormatTemplate template);
 }
@@ -53,15 +52,15 @@ public interface IPlayerRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Ist der Spieler für ein Turnier dieses Vereins gemeldet?
+    /// Ist der Spieler für dieses Turnier gemeldet?
     ///
     /// Die Frage entscheidet, wer seine Kontaktdaten sehen darf. Ohne sie wäre
-    /// die Berechtigungsprüfung wertlos: der Verein käme vom Aufrufer und hätte
+    /// die Berechtigungsprüfung wertlos: das Turnier käme vom Aufrufer und hätte
     /// keinerlei Bezug zum abgefragten Spieler (ADR-0008).
     /// </summary>
-    Task<bool> IsKnownInClubAsync(
+    Task<bool> IsEnteredInTournamentAsync(
         Guid playerId,
-        Guid clubId,
+        Guid tournamentId,
         CancellationToken cancellationToken = default);
 
     void Add(Player player);

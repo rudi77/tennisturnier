@@ -175,7 +175,7 @@ function PhoneView({
               <span style={{ fontSize: 'var(--fs-md)', fontWeight: 'var(--fw-bold)' }}>{view.name}</span>
             </div>
             <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-on-dark-2)', marginTop: 4 }}>
-              {view.clubName} · {view.startsOn} – {view.endsOn}
+              {view.venueName} · {view.startsOn} – {view.endsOn}
             </div>
           </div>
 
@@ -375,7 +375,7 @@ function PhoneView({
               etag,
               id: view.id,
               name: view.name,
-              clubName: view.clubName,
+              venueName: view.venueName,
               state: view.state,
               schedulingMode: view.schedulingMode,
               courts: view.courts.map((court) => ({
@@ -441,7 +441,7 @@ function KioskView({ view, timeZone }: { view: PublicTournamentView; timeZone: s
             {view.name}
           </div>
           <div style={{ fontSize: 'var(--fs-md)', color: 'var(--fg-on-dark-2)', marginTop: 3 }}>
-            {view.clubName} · {view.state}
+            {view.venueName} · {view.state}
           </div>
         </div>
         <div style={{ marginLeft: 'auto', textAlign: 'right' }}>

@@ -18,10 +18,15 @@ namespace TennisTurnier.Application.PublicView;
 /// Anzeige entbehrlich und laden nur dazu ein, öffentliche mit internen Daten
 /// zusammenzuführen.
 /// </summary>
+/// <param name="VenueName">
+/// Die Anlage, auf der gespielt wird. Hieß einmal <c>ClubName</c> und war der
+/// ausrichtende Verein; sie steht jetzt am Turnier selbst — mehr als ihr Name
+/// gehört auch weiterhin nicht in eine öffentliche Antwort.
+/// </param>
 public sealed record PublicTournamentView(
     Guid Id,
     string Name,
-    string ClubName,
+    string VenueName,
     DateOnly StartsOn,
     DateOnly EndsOn,
     TournamentState State,

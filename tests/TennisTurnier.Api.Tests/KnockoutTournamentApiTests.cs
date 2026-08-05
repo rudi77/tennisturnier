@@ -1,9 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
@@ -24,7 +22,7 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
     public KnockoutTournamentApiTests(TennisTurnierApiFactory factory) => _factory = factory;
 
     /// <summary>Turnier mit ausgelostem Baum über die angegebene Teilnehmerzahl.</summary>
-    private async Task<(HttpClient Client, Guid ClubId, Guid TournamentId)> DrawnTournamentAsync(
+    private async Task<(HttpClient Client, Guid CourtId, Guid TournamentId)> DrawnTournamentAsync(
         int participants,
         bool seedAll = false)
     {
@@ -32,13 +30,13 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
             "ko-admin",
             new TurnierWunsch
             {
-                Verein = "TC KO",
+                Anlage = "TC KO",
                 Teilnehmer = participants,
                 Setzen = seedAll,
                 Plaetze = 1,
             });
 
-        return (aufbau.Admin, aufbau.ClubId, aufbau.TournamentId);
+        return (aufbau.Admin, aufbau.CourtIds.Single(), aufbau.TournamentId);
     }
 
     private static async Task<List<PhaseDetail>> PhasesAsync(HttpClient client, Guid tournamentId) =>
@@ -244,12 +242,9 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
     [Fact]
     public async Task Ein_Match_laesst_sich_einem_Platz_zuweisen()
     {
-        var (client, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        var (client, courtId, tournamentId) = await DrawnTournamentAsync(4);
         var phase = Assert.Single(await PhasesAsync(client, tournamentId));
         var match = phase.Matches.First(m => m.Round == 1);
-
-        var courts = await client.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
-        var courtId = courts!.Single().Id;
 
         var response = await client.PostAsJsonAsync(
             $"/api/matches/{match.Id}/court",
@@ -276,12 +271,9 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
     [Fact]
     public async Task Eine_zweite_Zuweisung_ersetzt_die_erste()
     {
-        var (client, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        var (client, courtId, tournamentId) = await DrawnTournamentAsync(4);
         var phase = Assert.Single(await PhasesAsync(client, tournamentId));
         var match = phase.Matches.First(m => m.Round == 1);
-
-        var courts = await client.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
-        var courtId = courts!.Single().Id;
 
         async Task<AssignCourtResult> AssignAsync(int sequence) =>
             (await (await client.PostAsJsonAsync(
@@ -310,12 +302,9 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
         // gleichzeitige Aufrufe lasen beide dieselbe alte Zuweisung, löschten sie
         // beide und legten je eine neue an — am Ende stand das Match zweimal in
         // der Platzbelegung, ohne dass irgendwer einen Konflikt gesehen hätte.
-        var (client, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        var (client, courtId, tournamentId) = await DrawnTournamentAsync(4);
         var phase = Assert.Single(await PhasesAsync(client, tournamentId));
         var match = phase.Matches.First(m => m.Round == 1);
-
-        var courts = await client.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
-        var courtId = courts!.Single().Id;
 
         await client.PostAsJsonAsync(
             $"/api/matches/{match.Id}/court", new AssignCourtRequest(courtId, 1, null, null, null), Json);
@@ -338,17 +327,17 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
     }
 
     [Fact]
-    public async Task Ein_Turnierleiter_ohne_Vereinsrolle_kann_einen_Platz_vergeben()
+    public async Task Ein_nachtraeglich_berufener_Turnierleiter_kann_einen_Platz_vergeben()
     {
-        // Regression: die Plätze hängen am Verein, und der Query-Filter auf Club
-        // kannte nur Vereinsrollen. Der Turnierleiter fand damit sein Turnier,
-        // aber nicht den Verein — die Platzvergabe endete in einem 404 auf den
-        // ausrichtenden Verein selbst.
-        var (admin, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        // Regression aus der Zeit des Vereins: die Plätze hingen an ihm, der
+        // Filter kannte nur Vereinsrollen, und die Platzvergabe endete für den
+        // Turnierleiter in einem 404 auf fremde Stammdaten. Der Fall ist
+        // strukturell erledigt — die Plätze kommen jetzt mit dem Turnier —, und
+        // der Test hält fest, dass das auch für einen Turnierleiter gilt, der
+        // das Turnier nicht selbst angelegt hat.
+        var (admin, courtId, tournamentId) = await DrawnTournamentAsync(4);
         var phase = Assert.Single(await PhasesAsync(admin, tournamentId));
         var match = phase.Matches.First(m => m.Round == 1);
-
-        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
 
         var director = $"director-{Guid.NewGuid():N}";
         await _factory.GrantAsync(director, Role.TournamentDirector, ResourceScope.Tournament(tournamentId));
@@ -356,12 +345,12 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
 
         var response = await client.PostAsJsonAsync(
             $"/api/matches/{match.Id}/court",
-            new AssignCourtRequest(courts!.Single().Id, 1, null, null, null),
+            new AssignCourtRequest(courtId, 1, null, null, null),
             Json);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        // Und der Platz trägt seinen Namen: ohne den Verein blieb er „(unbekannt)".
+        // Und der Platz trägt seinen Namen: fand ihn der Aufrufer nicht, blieb er „(unbekannt)".
         var updated = Assert.Single(await PhasesAsync(client, tournamentId));
         Assert.Equal("Platz 1", updated.Matches.First(m => m.Id == match.Id).Assignment!.CourtName);
     }
@@ -387,11 +376,9 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
     [Fact]
     public async Task Ein_Schiedsrichter_darf_Ergebnisse_eintragen_aber_keine_Plaetze_vergeben()
     {
-        var (admin, clubId, tournamentId) = await DrawnTournamentAsync(4);
+        var (admin, courtId, tournamentId) = await DrawnTournamentAsync(4);
         var phase = Assert.Single(await PhasesAsync(admin, tournamentId));
         var match = phase.Matches.First(m => m.Round == 1);
-
-        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
 
         var referee = $"referee-{Guid.NewGuid():N}";
         await _factory.GrantAsync(referee, Role.Referee, ResourceScope.Tournament(tournamentId));
@@ -405,7 +392,7 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
 
         var assignment = await client.PostAsJsonAsync(
             $"/api/matches/{match.Id}/court",
-            new AssignCourtRequest(courts!.Single().Id, 1, null, null, null),
+            new AssignCourtRequest(courtId, 1, null, null, null),
             Json);
         Assert.Equal(HttpStatusCode.NotFound, assignment.StatusCode);
     }

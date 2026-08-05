@@ -1,9 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Tournaments;
@@ -34,7 +32,7 @@ public sealed class SwissApiTests : IClassFixture<TennisTurnierApiFactory>
             {
                 Vorlage = BuiltInFormats.Swiss.Name,
                 Name = "Schweizer Turnier",
-                Verein = "TC Schweiz",
+                Anlage = "TC Schweiz",
                 Teilnehmer = participants,
             });
 
@@ -346,18 +344,15 @@ public sealed class SwissApiTests : IClassFixture<TennisTurnierApiFactory>
         _factory.Clock.Now = new DateTimeOffset(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2));
 
         var (client, tournamentId) = await DrawnAsync();
-        var clubId = (await client.GetFromJsonAsync<TournamentDetail>(
-            $"/api/tournaments/{tournamentId}", Json))!.ClubId;
 
         var courtId = await TurnierAufbau.CreatedIdAsync(await client.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/courts",
+            $"/api/tournaments/{tournamentId}/courts",
             new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor),
             Json));
 
         await client.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/courts/{courtId}/availability",
-            new CreateAvailabilityRequest(
-                DayOfWeek.Saturday, new TimeOnly(8, 0), new TimeOnly(21, 0), new DateOnly(2026, 1, 1), null),
+            $"/api/tournaments/{tournamentId}/courts/windows",
+            new CreateCourtWindowsRequest(new TimeOnly(8, 0), new TimeOnly(21, 0)),
             Json);
 
         await PlayRoundAsync(client, tournamentId, 1);

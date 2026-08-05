@@ -1,9 +1,9 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.Security;
+using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Security;
 
 namespace TennisTurnier.Api.Tests;
@@ -13,9 +13,11 @@ namespace TennisTurnier.Api.Tests;
 /// nirgends herkommen könnte: Rollen vergibt, wer eine hat, und nach einer
 /// frischen Migration hat niemand eine.
 ///
-/// Geprüft wird durchgehend an der Wirkung — „darf einen Verein anlegen" —, nicht
-/// an der Zeile in der Tabelle. Eine Zuweisung, die der Query-Filter aus ADR-0004
-/// nicht erreicht, wäre keine.
+/// Geprüft wird durchgehend an der Wirkung, nicht an der Zeile in der Tabelle:
+/// eine Zuweisung, die der Query-Filter aus ADR-0004 nicht erreicht, wäre keine.
+/// Die Wirkung war einmal „darf einen Verein anlegen". Das taugt nicht mehr —
+/// Turniere anlegen darf seit dem Selbstservice jeder. Sie ist jetzt „sieht ein
+/// fremdes Turnier": genau das kann ausschließlich der Systemadministrator.
 /// </summary>
 public sealed class BootstrapAdminTests
 {
@@ -23,11 +25,24 @@ public sealed class BootstrapAdminTests
 
     private const string AdminEmail = "erster.admin@example.invalid";
 
-    private static Task<HttpResponseMessage> CreateClubAsync(HttpClient client) =>
-        client.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Bootstrap {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json);
+    /// <summary>
+    /// Legt als ein anderer Benutzer ein Turnier an und liefert, wie viele
+    /// Turniere der geprüfte Client davon sieht.
+    ///
+    /// Null heißt: er sieht nur, was ihm gehört. Eins heißt: er sieht alles.
+    /// </summary>
+    private static async Task<int> FremdeTurniereAsync(
+        TennisTurnierApiFactory factory,
+        HttpClient client)
+    {
+        await factory.NeuesTurnierAsync(
+            $"fremder-{Guid.NewGuid():N}",
+            new TurnierWunsch { Anlage = "TC Fremd", Auslosen = false });
+
+        var meine = await client.GetFromJsonAsync<List<TournamentSummary>>("/api/tournaments", Json);
+
+        return meine!.Count;
+    }
 
     [Fact]
     public async Task Wer_in_der_Konfiguration_steht_wird_bei_der_Anmeldung_Systemadministrator()
@@ -35,9 +50,7 @@ public sealed class BootstrapAdminTests
         using var factory = new TennisTurnierApiFactory([AdminEmail]);
         var client = factory.CreateClientAs("bootstrap-per-mail", AdminEmail);
 
-        var response = await CreateClubAsync(client);
-
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, await FremdeTurniereAsync(factory, client));
     }
 
     [Fact]
@@ -48,9 +61,7 @@ public sealed class BootstrapAdminTests
         using var factory = new TennisTurnierApiFactory(["bootstrap-per-subject"]);
         var client = factory.CreateClientAs("bootstrap-per-subject");
 
-        var response = await CreateClubAsync(client);
-
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, await FremdeTurniereAsync(factory, client));
     }
 
     [Fact]
@@ -59,9 +70,7 @@ public sealed class BootstrapAdminTests
         using var factory = new TennisTurnierApiFactory([AdminEmail.ToUpperInvariant()]);
         var client = factory.CreateClientAs("bootstrap-gross-klein", AdminEmail);
 
-        var response = await CreateClubAsync(client);
-
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(1, await FremdeTurniereAsync(factory, client));
     }
 
     [Fact]
@@ -70,10 +79,7 @@ public sealed class BootstrapAdminTests
         using var factory = new TennisTurnierApiFactory([AdminEmail]);
         var client = factory.CreateClientAs("fremder", "jemand.anderes@example.invalid");
 
-        var response = await CreateClubAsync(client);
-
-        // 404 und nicht 403: ein 403 bestätigte die Existenz der Ressource (ADR-0004).
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(0, await FremdeTurniereAsync(factory, client));
     }
 
     [Fact]
@@ -82,9 +88,37 @@ public sealed class BootstrapAdminTests
         using var factory = new TennisTurnierApiFactory();
         var client = factory.CreateClientAs("niemand", AdminEmail);
 
-        var response = await CreateClubAsync(client);
+        Assert.Equal(0, await FremdeTurniereAsync(factory, client));
+    }
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    [Fact]
+    public async Task Ein_Systemadministrator_bekommt_die_Veranstalterrolle_nicht_zusaetzlich()
+    {
+        // Er darf ohnehin alles; eine zweite Zuweisung wäre eine Zeile ohne
+        // Wirkung, die bei jedem Request neu geschrieben werden müsste.
+        using var factory = new TennisTurnierApiFactory([AdminEmail]);
+        var client = factory.CreateClientAs("bootstrap-ohne-organizer", AdminEmail);
+
+        var me = await client.GetFromJsonAsync<MeResponse>("/api/me", Json);
+
+        Assert.True(me!.IsSystemAdmin);
+        Assert.DoesNotContain(me.Roles, r => r.Role == Role.Organizer);
+    }
+
+    [Fact]
+    public async Task Wer_sich_anmeldet_wird_Veranstalter()
+    {
+        // Der Selbstservice: kein Eintrag in einer Konfigurationsdatei, keine
+        // Freischaltung durch jemand anderen. Die Rolle wird ausdrücklich
+        // vergeben und steht deshalb in der Auskunft — eine unsichtbare Regel im
+        // Code wäre weder abfragbar noch entziehbar.
+        using var factory = new TennisTurnierApiFactory();
+        var client = factory.CreateClientAs("frisch-angemeldet");
+
+        var me = await client.GetFromJsonAsync<MeResponse>("/api/me", Json);
+
+        Assert.False(me!.IsSystemAdmin);
+        Assert.Contains(me.Roles, r => r.Role == Role.Organizer && r.Scope == ScopeType.Global);
     }
 
     [Fact]
@@ -98,7 +132,7 @@ public sealed class BootstrapAdminTests
 
         for (var i = 0; i < 3; i++)
         {
-            Assert.Equal(HttpStatusCode.Created, (await CreateClubAsync(client)).StatusCode);
+            Assert.NotNull(await client.GetFromJsonAsync<MeResponse>("/api/me", Json));
         }
 
         using var scope = factory.CreateMigratedScope();
@@ -112,5 +146,27 @@ public sealed class BootstrapAdminTests
         var assignments = await directory.GetAssignmentsAsync(account.Id);
 
         Assert.Single(assignments, a => a.Role == Role.SystemAdmin);
+    }
+
+    [Fact]
+    public async Task Auch_die_Veranstalterrolle_entsteht_nur_einmal()
+    {
+        using var factory = new TennisTurnierApiFactory();
+        var client = factory.CreateClientAs("organizer-mehrfach");
+
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.NotNull(await client.GetFromJsonAsync<MeResponse>("/api/me", Json));
+        }
+
+        using var scope = factory.CreateMigratedScope();
+        var directory = scope.ServiceProvider.GetRequiredService<IUserDirectory>();
+        var account = await directory.EnsureAccountAsync(
+            TennisTurnierApiFactory.TestIssuer,
+            "organizer-mehrfach",
+            email: null,
+            displayName: "organizer-mehrfach");
+
+        Assert.Single(await directory.GetAssignmentsAsync(account.Id), a => a.Role == Role.Organizer);
     }
 }

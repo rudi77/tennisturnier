@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Scheduling;
@@ -128,7 +127,7 @@ public sealed class CourtAssignmentConfiguration : IEntityTypeConfiguration<Cour
             .HasForeignKey(a => a.MatchId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne<Court>()
+        builder.HasOne<TournamentCourt>()
             .WithMany()
             .HasForeignKey(a => a.CourtId)
             .OnDelete(DeleteBehavior.Restrict);

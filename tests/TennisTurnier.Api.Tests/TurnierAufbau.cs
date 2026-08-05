@@ -1,11 +1,8 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
-using TennisTurnier.Domain.Security;
+using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Api.Tests;
 
@@ -18,11 +15,11 @@ namespace TennisTurnier.Api.Tests;
 /// gleich, sondern nur ähnlich — und jede Änderung am Weg dorthin musste an elf
 /// Stellen nachgezogen werden.
 ///
-/// Genau das steht bevor: der Verein verschwindet als Wurzel, und das Turnier
-/// tritt an seine Stelle. Danach ändert sich hier eine Methode statt elf
-/// Dateien. Der Aufbau geht bewusst weiterhin über HTTP und nicht über die
-/// Repositories — ein Test, der die Datenbank direkt füllt, überspränge genau
-/// die Verdrahtung, an der ein Autorisierungsfehler entstünde.
+/// Genau das ist eingetreten: der Verein ist als Wurzel verschwunden, und das
+/// Turnier ist an seine Stelle getreten. Der Umbau kostete hier eine Handvoll
+/// Methoden statt elf Dateien. Der Aufbau geht bewusst weiterhin über HTTP und
+/// nicht über die Repositories — ein Test, der die Datenbank direkt füllt,
+/// überspränge genau die Verdrahtung, an der ein Autorisierungsfehler entstünde.
 /// </summary>
 internal sealed record TurnierWunsch
 {
@@ -30,8 +27,17 @@ internal sealed record TurnierWunsch
 
     public string Name { get; init; } = "Clubmeisterschaft";
 
-    /// <summary>Namenspräfix des Vereins; die Eindeutigkeit ergänzt der Aufbau.</summary>
-    public string Verein { get; init; } = "TC Test";
+    /// <summary>Der Ort, an dem gespielt wird. Er hängt jetzt am Turnier selbst.</summary>
+    public string Anlage { get; init; } = "TC Test";
+
+    public string Zeitzone { get; init; } = "Europe/Vienna";
+
+    /// <summary>
+    /// Die Disziplin. Ohne Angabe ergibt sie sich aus dem Feld: wer
+    /// <see cref="Teams"/> nennt, will ein Doppel — und ein Turnier, dessen
+    /// Ausschreibung etwas anderes sagt, nähme die Meldung gar nicht an.
+    /// </summary>
+    public Discipline? Disziplin { get; init; }
 
     public DateOnly Beginn { get; init; } = new(2026, 5, 16);
 
@@ -62,11 +68,12 @@ internal sealed record TurnierWunsch
     public bool CenterCourt { get; init; }
 
     /// <summary>
-    /// Öffnungszeiten für jeden Platz, Samstag und Sonntag 8 bis 21 Uhr. Ohne
-    /// sie hat kein Platz ein freies Fenster und der Solver nichts, worin er
-    /// planen könnte.
+    /// Platzzeiten für jeden Platz, an jedem Turniertag von 8 bis 21 Uhr
+    /// Ortszeit. Ohne sie hat kein Platz ein freies Fenster, der Solver nichts,
+    /// worin er planen könnte — und das Turnier weist den Vorschlag ausdrücklich
+    /// ab.
     /// </summary>
-    public bool Oeffnungszeiten { get; init; }
+    public bool Platzzeiten { get; init; }
 
     public bool Auslosen { get; init; } = true;
 
@@ -87,7 +94,6 @@ internal sealed record TurnierWunsch
 /// <summary>Was der Aufbau hinterlassen hat.</summary>
 internal sealed record AufgebautesTurnier(
     HttpClient Admin,
-    Guid ClubId,
     Guid TournamentId,
     IReadOnlyList<Guid> CourtIds,
     IReadOnlyList<Guid> EntryIds);
@@ -99,6 +105,11 @@ internal static class TurnierAufbau
     /// <summary>
     /// Baut ein Turnier so weit auf, wie der Wunsch es verlangt, und tritt dabei
     /// als der angegebene Benutzer auf.
+    ///
+    /// Der Benutzer bekommt keine Rolle vorab: wer sich anmeldet, ist
+    /// Veranstalter, und wer anlegt, wird Turnierleiter seines Turniers. Ein
+    /// Aufbau, der sich vorsichtshalber zum Systemadministrator machte, ließe
+    /// genau die Kette ungeprüft, an der der Umbau hängt.
     ///
     /// Der Weg wird nur so weit gegangen, wie etwas zu tun ist: ohne Teilnehmer
     /// wird die Meldung gar nicht erst geöffnet, und das Turnier bleibt im
@@ -133,25 +144,35 @@ internal static class TurnierAufbau
                 "Der Turniertagbetrieb setzt einen bestätigten Spielplan voraus.");
         }
 
-        await factory.GrantAsync(benutzer, Role.SystemAdmin, ResourceScope.Global);
+        if (w.Spielplan && !w.Platzzeiten)
+        {
+            throw new InvalidOperationException(
+                "Ein Spielplan setzt erfasste Platzzeiten voraus — ohne sie weist das Turnier den " +
+                "Vorschlag ausdrücklich ab, statt ein leeres Board zu liefern.");
+        }
+
         var admin = factory.CreateClientAs(benutzer);
 
-        var clubId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"{w.Verein} {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        var courtIds = await CourtsAsync(admin, clubId, w);
-
         var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
+            "/api/format-templates", Json);
 
         var templateId = templates!.Single(t => t.Name == w.Vorlage).Id;
 
         var tournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(w.Name, w.Beginn, w.Ende, templateId),
+            "/api/tournaments",
+            new CreateTournamentRequest(
+                w.Name,
+                w.Anlage,
+                null,
+                "Maria Alm",
+                w.Zeitzone,
+                w.Disziplin ?? (w.Teams is null ? Discipline.Singles : Discipline.Doubles),
+                w.Beginn,
+                w.Ende,
+                templateId),
             Json));
+
+        var courtIds = await PlaetzeAsync(admin, tournamentId, w);
 
         var entryIds = feldgroesse == 0
             ? []
@@ -180,42 +201,41 @@ internal static class TurnierAufbau
                 "Turniertag starten");
         }
 
-        return new AufgebautesTurnier(admin, clubId, tournamentId, courtIds, entryIds);
+        return new AufgebautesTurnier(admin, tournamentId, courtIds, entryIds);
     }
 
-    private static async Task<IReadOnlyList<Guid>> CourtsAsync(
+    /// <summary>
+    /// Die Plätze und ihre Zeiten. Die Zeiten entstehen über die Massenanlage —
+    /// beide Plätze, alle Turniertage, eine Uhrzeitspanne —, weil das der Weg
+    /// ist, den ein Veranstalter tatsächlich geht.
+    /// </summary>
+    private static async Task<IReadOnlyList<Guid>> PlaetzeAsync(
         HttpClient admin,
-        Guid clubId,
+        Guid tournamentId,
         TurnierWunsch w)
     {
         var courtIds = new List<Guid>();
 
         for (var i = 1; i <= w.Plaetze; i++)
         {
-            var courtId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                $"/api/clubs/{clubId}/courts",
+            courtIds.Add(await CreatedIdAsync(await admin.PostAsJsonAsync(
+                $"/api/tournaments/{tournamentId}/courts",
                 new CreateCourtRequest(
                     $"Platz {i}",
                     CourtSurface.Clay,
                     CourtLocation.Outdoor,
                     IsCenterCourt: w.CenterCourt && i == 1),
-                Json));
+                Json)));
+        }
 
-            courtIds.Add(courtId);
-
-            if (!w.Oeffnungszeiten)
-            {
-                continue;
-            }
-
-            foreach (var day in new[] { DayOfWeek.Saturday, DayOfWeek.Sunday })
-            {
+        if (w.Platzzeiten && courtIds.Count > 0)
+        {
+            await GelungenAsync(
                 await admin.PostAsJsonAsync(
-                    $"/api/clubs/{clubId}/courts/{courtId}/availability",
-                    new CreateAvailabilityRequest(
-                        day, new TimeOnly(8, 0), new TimeOnly(21, 0), new DateOnly(2026, 1, 1), null),
-                    Json);
-            }
+                    $"/api/tournaments/{tournamentId}/courts/windows",
+                    new CreateCourtWindowsRequest(new TimeOnly(8, 0), new TimeOnly(21, 0)),
+                    Json),
+                "Platzzeiten anlegen");
         }
 
         return courtIds;
@@ -256,7 +276,7 @@ internal static class TurnierAufbau
     }
 
     /// <summary>
-    /// Ein Spieler. Der Nachname ist zufällig, weil Spieler vereinsübergreifend
+    /// Ein Spieler. Der Nachname ist zufällig, weil Spieler turnierübergreifend
     /// existieren (ADR-0008) und über Testklassen hinweg in derselben Datenbank
     /// stehen — ein fester Name machte die Suche mehrdeutig.
     /// </summary>
@@ -282,15 +302,36 @@ internal static class TurnierAufbau
     /// </summary>
     private static async Task SpielplanAsync(HttpClient admin, Guid tournamentId)
     {
-        var proposal = (await (await admin.PostAsync(
-            $"/api/tournaments/{tournamentId}/schedule/proposal", null))
-            .Content.ReadFromJsonAsync<SchedulePlanResult>(Json))!;
+        var response = await admin.PostAsync($"/api/tournaments/{tournamentId}/schedule/proposal", null);
+        await GelungenAsync(response, "Spielplan rechnen");
 
-        await admin.PostAsJsonAsync(
-            $"/api/tournaments/{tournamentId}/schedule/confirm",
-            new ConfirmScheduleRequest([.. proposal.Assignments.Select(a => new ConfirmedAssignment(
-                a.MatchId, a.CourtId, a.SequenceOnCourt, a.PlannedStart, a.EstimatedDuration))]),
-            Json);
+        var proposal = (await response.Content.ReadFromJsonAsync<SchedulePlanResult>(Json))!;
+
+        await GelungenAsync(
+            await admin.PostAsJsonAsync(
+                $"/api/tournaments/{tournamentId}/schedule/confirm",
+                new ConfirmScheduleRequest([.. proposal.Assignments.Select(a => new ConfirmedAssignment(
+                    a.MatchId, a.CourtId, a.SequenceOnCourt, a.PlannedStart, a.EstimatedDuration))]),
+                Json),
+            "Spielplan bestätigen");
+    }
+
+    /// <summary>
+    /// Die Plätze des Turniers samt ihren Zeiten.
+    ///
+    /// Es gibt keinen eigenen Endpunkt dafür — die Plätze gehören zum Turnier
+    /// und stehen in seiner Detailansicht. Das ist auch die Auskunft, die die
+    /// Oberfläche bekommt; ein Test, der sich anderswo bediente, prüfte einen
+    /// Weg, den es nicht gibt.
+    /// </summary>
+    public static async Task<IReadOnlyList<CourtDetail>> PlaetzeAsync(
+        this HttpClient client,
+        Guid tournamentId)
+    {
+        var detail = await client.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+
+        return detail!.Courts;
     }
 
     public static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)

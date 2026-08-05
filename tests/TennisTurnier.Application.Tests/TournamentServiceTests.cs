@@ -10,11 +10,10 @@ namespace TennisTurnier.Application.Tests;
 public sealed class TournamentServiceTests
 {
     private static readonly Guid UserId = Guid.NewGuid();
-    private static readonly Guid ClubId = Guid.NewGuid();
 
     private readonly MutableUserContext _userContext = new();
     private readonly InMemoryTournamentRepository _tournaments;
-    private readonly InMemoryFormatTemplateRepository _templates = new();
+    private readonly InMemoryFormatTemplateRepository _templates;
     private readonly InMemoryPlayerRepository _players = new();
     private readonly InMemoryPhaseRepository _phaseRepository = new();
     private readonly InMemoryRoleAssignmentRepository _roles = new();
@@ -26,6 +25,7 @@ public sealed class TournamentServiceTests
     public TournamentServiceTests()
     {
         _tournaments = new InMemoryTournamentRepository(_userContext);
+        _templates = new InMemoryFormatTemplateRepository(_userContext);
         _publicView.SaveCount = () => _unitOfWork.SavedChanges;
         _service = new TournamentService(
             _tournaments,
@@ -36,23 +36,43 @@ public sealed class TournamentServiceTests
             _publicView,
             _unitOfWork,
             _userContext);
-        _template = _templates.Seed(new FormatTemplate(Guid.NewGuid(), ClubId, BuiltInFormats.Knockout));
+        _template = _templates.Seed(new FormatTemplate(Guid.NewGuid(), UserId, BuiltInFormats.Knockout));
 
-        ActAsSystemAdmin();
+        ActAsOrganizer();
     }
 
     private void ActAs(params RoleAssignment[] assignments) =>
         _userContext.Current = new UserPrincipal(UserId, assignments);
 
     /// <summary>
-    /// Ein Turnier anlegen darf, wer <c>ManageTournament</c> global hat — solange
-    /// der Verein noch existiert, ist das allein der Systemadministrator.
+    /// Der Normalfall, seit der Verein weg ist: wer sich anmeldet, ist
+    /// Veranstalter und darf ausschreiben. Alles Weitere folgt aus der
+    /// Turnierleiterrolle, die er beim Anlegen bekommt.
     /// </summary>
-    private void ActAsSystemAdmin() =>
-        ActAs(new RoleAssignment(Guid.NewGuid(), UserId, Role.SystemAdmin, ResourceScope.Global));
+    private void ActAsOrganizer() =>
+        ActAs(new RoleAssignment(Guid.NewGuid(), UserId, Role.Organizer, ResourceScope.Global));
+
+    /// <summary>
+    /// Der Anleger führt sein Turnier — im echten Ablauf trägt die
+    /// Rollenzuweisung aus <c>CreateAsync</c> das nach. Der Fake spiegelt keine
+    /// Zuweisungen in den Benutzerkontext zurück; das tut hier dieser Aufruf.
+    /// </summary>
+    private void ActAsDirectorOf(Guid tournamentId) =>
+        ActAs(
+            new RoleAssignment(Guid.NewGuid(), UserId, Role.Organizer, ResourceScope.Global),
+            new RoleAssignment(
+                Guid.NewGuid(), UserId, Role.TournamentDirector, ResourceScope.Tournament(tournamentId)));
 
     private static CreateTournamentRequest NewRequest(Guid templateId) => new(
-        "Clubmeisterschaft 2026", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId);
+        "Clubmeisterschaft 2026",
+        "TC Maria Alm",
+        null,
+        "Maria Alm",
+        "Europe/Vienna",
+        Discipline.Singles,
+        new DateOnly(2026, 5, 16),
+        new DateOnly(2026, 5, 17),
+        templateId);
 
     private Guid SeedParticipant(string name)
     {
@@ -61,9 +81,26 @@ public sealed class TournamentServiceTests
         return participant.Id;
     }
 
+    /// <summary>
+    /// Legt ein Turnier an und übernimmt die dabei entstandene Turnierleiterrolle
+    /// in den Benutzerkontext.
+    ///
+    /// Im Betrieb tut das die Middleware beim nächsten Request; hier steht es
+    /// ausdrücklich da, weil sonst jeder Folgeaufruf am Query-Filter scheiterte —
+    /// und genau das wäre auch die Wirkung, wenn <c>CreateAsync</c> die Zuweisung
+    /// vergäße.
+    /// </summary>
+    private async Task<Guid> AnlegenAsync(Guid? templateId = null)
+    {
+        var id = await _service.CreateAsync(NewRequest(templateId ?? _template.Id));
+        ActAsDirectorOf(id);
+
+        return id;
+    }
+
     private async Task<Guid> CreateWithTwoEntriesAsync()
     {
-        var id = await _service.CreateAsync(ClubId, NewRequest(_template.Id));
+        var id = await AnlegenAsync();
         await _service.OpenRegistrationAsync(id);
 
         foreach (var name in new[] { "Müller, Anna", "Berger, Eva" })
@@ -79,7 +116,7 @@ public sealed class TournamentServiceTests
     public async Task Ein_Turnier_braucht_eine_vorhandene_Formatvorlage()
     {
         await Assert.ThrowsAsync<NotFoundException>(
-            () => _service.CreateAsync(ClubId, NewRequest(Guid.NewGuid())));
+            () => _service.CreateAsync(NewRequest(Guid.NewGuid())));
     }
 
     [Fact]
@@ -90,13 +127,13 @@ public sealed class TournamentServiceTests
             Guid.NewGuid(), UserId, Role.Referee, ResourceScope.Tournament(Guid.NewGuid())));
 
         await Assert.ThrowsAsync<AccessDeniedException>(
-            () => _service.CreateAsync(ClubId, NewRequest(_template.Id)));
+            () => _service.CreateAsync(NewRequest(_template.Id)));
     }
 
     [Fact]
     public async Task Ein_Turnier_ausserhalb_des_Scopes_wirkt_wie_nicht_vorhanden()
     {
-        var id = await _service.CreateAsync(ClubId, NewRequest(_template.Id));
+        var id = await _service.CreateAsync(NewRequest(_template.Id));
 
         ActAs(new RoleAssignment(
             Guid.NewGuid(), UserId, Role.TournamentDirector, ResourceScope.Tournament(Guid.NewGuid())));
@@ -110,7 +147,7 @@ public sealed class TournamentServiceTests
         // Die Zuweisung entsteht in derselben Arbeitseinheit wie das Turnier.
         // Ohne sie wäre es für seinen eigenen Anleger im nächsten Augenblick
         // nicht mehr auffindbar — und ohne Rolle gäbe es keinen Weg zurück.
-        var id = await _service.CreateAsync(ClubId, NewRequest(_template.Id));
+        var id = await _service.CreateAsync(NewRequest(_template.Id));
 
         var assignment = Assert.Single(_roles.Assignments);
 
@@ -120,9 +157,24 @@ public sealed class TournamentServiceTests
     }
 
     [Fact]
+    public async Task Ein_frisch_angelegtes_Turnier_traegt_Ort_und_Disziplin()
+    {
+        // Beides stand vorher nirgends: der Ort gar nicht, die Disziplin nur
+        // implizit in dem, was jemand als Teilnehmer anlegte.
+        var id = await AnlegenAsync();
+
+        var detail = await _service.GetAsync(id);
+
+        Assert.Equal("TC Maria Alm", detail.Venue.Name);
+        Assert.Equal("Europe/Vienna", detail.Venue.TimeZoneId);
+        Assert.Equal(Discipline.Singles, detail.Discipline);
+        Assert.Empty(detail.Courts);
+    }
+
+    [Fact]
     public async Task Der_Turnierleiter_darf_sein_Turnier_verwalten()
     {
-        var id = await _service.CreateAsync(ClubId, NewRequest(_template.Id));
+        var id = await _service.CreateAsync(NewRequest(_template.Id));
 
         ActAs(new RoleAssignment(
             Guid.NewGuid(), UserId, Role.TournamentDirector, ResourceScope.Tournament(id)));
@@ -135,7 +187,7 @@ public sealed class TournamentServiceTests
     [Fact]
     public async Task Eine_Meldung_setzt_einen_vorhandenen_Teilnehmer_voraus()
     {
-        var id = await _service.CreateAsync(ClubId, NewRequest(_template.Id));
+        var id = await AnlegenAsync();
         await _service.OpenRegistrationAsync(id);
 
         await Assert.ThrowsAsync<NotFoundException>(
@@ -170,43 +222,49 @@ public sealed class TournamentServiceTests
     }
 
     [Fact]
-    public async Task Die_Liste_zeigt_nur_Turniere_des_angefragten_Vereins()
+    public async Task Die_Liste_zeigt_nur_die_eigenen_Turniere()
     {
-        await _service.CreateAsync(ClubId, NewRequest(_template.Id));
+        var id = await AnlegenAsync();
 
-        var otherClub = Guid.NewGuid();
-        var otherTemplate = _templates.Seed(
-            new FormatTemplate(Guid.NewGuid(), otherClub, BuiltInFormats.Knockout));
+        var summary = Assert.Single(await _service.ListMineAsync());
+        Assert.Equal(id, summary.Id);
+        Assert.Equal("TC Maria Alm", summary.VenueName);
 
-        // Mit der eigenen Vorlage des anderen Vereins: eine fremde nähme er nicht
-        // an, und das ist Gegenstand eines eigenen Tests.
-        await _service.CreateAsync(otherClub, NewRequest(otherTemplate.Id));
+        // Ein anderer Veranstalter — angemeldet, aber ohne Rolle an diesem
+        // Turnier. Die Liste ist der Einstieg in die Oberfläche; stünde hier ein
+        // fremdes Turnier, wäre der ganze Filter wertlos.
+        var anderer = Guid.NewGuid();
+        _userContext.Current = new UserPrincipal(
+            anderer,
+            [new RoleAssignment(Guid.NewGuid(), anderer, Role.Organizer, ResourceScope.Global)]);
 
-        Assert.Single(await _service.ListAsync(ClubId));
-        Assert.Single(await _service.ListAsync(otherClub));
+        Assert.Empty(await _service.ListMineAsync());
     }
 
     /// <summary>
     /// Sichtbar heißt nicht verwendbar.
     ///
-    /// Wer zwei Vereine verwaltet, sieht die Vorlagen beider. Nähme das Turnier
-    /// des einen die Vorlage des anderen, hinge sein Format bis zur Auslosung an
-    /// einer Definition, die jemand aus einem fremden Verein noch ändern kann —
-    /// und die Änderung fröre mit der Auslosung ein.
+    /// Die mitgelieferten Vorlagen sieht jeder. Nähme ein Turnier die eigene
+    /// Vorlage eines fremden Benutzers, hinge sein Format bis zur Auslosung an
+    /// einer Definition, die ein anderer noch ändern kann — und die Änderung
+    /// fröre mit der Auslosung ein.
     /// </summary>
     [Fact]
-    public async Task Ein_Turnier_nimmt_keine_Vorlage_eines_fremden_Vereins()
+    public async Task Ein_Turnier_nimmt_keine_Vorlage_eines_fremden_Benutzers()
     {
+        var fremde = _templates.Seed(
+            new FormatTemplate(Guid.NewGuid(), Guid.NewGuid(), BuiltInFormats.League));
+
         await Assert.ThrowsAsync<NotFoundException>(
-            () => _service.CreateAsync(Guid.NewGuid(), NewRequest(_template.Id)));
+            () => _service.CreateAsync(NewRequest(fremde.Id)));
     }
 
     [Fact]
-    public async Task Eine_mitgelieferte_Vorlage_steht_jedem_Verein_offen()
+    public async Task Eine_mitgelieferte_Vorlage_steht_jedem_offen()
     {
         var builtIn = _templates.Seed(new FormatTemplate(Guid.NewGuid(), null, BuiltInFormats.League));
 
-        Assert.NotEqual(Guid.Empty, await _service.CreateAsync(Guid.NewGuid(), NewRequest(builtIn.Id)));
+        Assert.NotEqual(Guid.Empty, await _service.CreateAsync(NewRequest(builtIn.Id)));
     }
 
     [Fact]
@@ -237,7 +295,7 @@ public sealed class TournamentServiceTests
         var before = _unitOfWork.SavedChanges;
 
         await _service.GetAsync(id);
-        await _service.ListAsync(ClubId);
+        await _service.ListMineAsync();
 
         Assert.Equal(before, _unitOfWork.SavedChanges);
     }
@@ -245,7 +303,7 @@ public sealed class TournamentServiceTests
     [Fact]
     public async Task Jeder_Zustandsuebergang_wird_gespeichert()
     {
-        var id = await _service.CreateAsync(ClubId, NewRequest(_template.Id));
+        var id = await AnlegenAsync();
         var before = _unitOfWork.SavedChanges;
 
         await _service.OpenRegistrationAsync(id);
@@ -261,7 +319,7 @@ public sealed class TournamentServiceTests
         var before = _publicView.Rebuilt.Count;
 
         await _service.GetAsync(id);
-        await _service.ListAsync(ClubId);
+        await _service.ListMineAsync();
 
         Assert.Equal(before, _publicView.Rebuilt.Count);
     }

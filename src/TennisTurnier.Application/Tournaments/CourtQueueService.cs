@@ -1,7 +1,6 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Scheduling;
@@ -57,7 +56,6 @@ public sealed class CourtQueueService : ICourtQueueService
 {
     private readonly ITournamentRepository _tournaments;
     private readonly ICourtAssignmentRepository _assignments;
-    private readonly IClubRepository _clubs;
     private readonly IPlayerRepository _players;
     private readonly IPublicViewService _publicView;
     private readonly IUnitOfWork _unitOfWork;
@@ -67,7 +65,6 @@ public sealed class CourtQueueService : ICourtQueueService
     public CourtQueueService(
         ITournamentRepository tournaments,
         ICourtAssignmentRepository assignments,
-        IClubRepository clubs,
         IPlayerRepository players,
         IPublicViewService publicView,
         IUnitOfWork unitOfWork,
@@ -76,7 +73,6 @@ public sealed class CourtQueueService : ICourtQueueService
     {
         _tournaments = tournaments;
         _assignments = assignments;
-        _clubs = clubs;
         _players = players;
         _publicView = publicView;
         _unitOfWork = unitOfWork;
@@ -89,18 +85,16 @@ public sealed class CourtQueueService : ICourtQueueService
         CancellationToken cancellationToken = default)
     {
         var tournament = await LoadTournamentAsync(tournamentId, cancellationToken);
-        var club = await LoadClubAsync(tournament, cancellationToken);
 
         var assignments = await _assignments.ListByTournamentAsync(tournamentId, cancellationToken);
         var matches = await _assignments.ListMatchesAsync(tournamentId, cancellationToken);
         var names = await NamesByEntryAsync(tournament, cancellationToken);
 
-        var calendar = new CourtCalendar(club.TimeZone);
-        var range = calendar.TournamentRange(tournament.StartsOn, tournament.EndsOn);
+        var range = tournament.Period();
 
         return
         [
-            .. club.Courts
+            .. tournament.Courts
                 .Where(court => court.IsActive || assignments.Any(a => a.CourtId == court.Id && !a.IsOver))
                 .OrderBy(court => court.Name, StringComparer.CurrentCulture)
                 .Select(court => Board(
@@ -109,7 +103,7 @@ public sealed class CourtQueueService : ICourtQueueService
                     matches,
                     names,
                     MatchOrigins.LabelsOf(matches),
-                    calendar.FreeWindows(court, range))),
+                    court.FreeWindows(range))),
         ];
     }
 
@@ -139,7 +133,7 @@ public sealed class CourtQueueService : ICourtQueueService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var (tournament, club, assignment) = await LoadForDayAsync(assignmentId, cancellationToken);
+        var (tournament, assignment) = await LoadForDayAsync(assignmentId, cancellationToken);
 
         // Auf welchem Platz weitergespielt wird, entscheidet die Turnierleitung.
         RequireManagePermission(tournament);
@@ -156,7 +150,7 @@ public sealed class CourtQueueService : ICourtQueueService
 
         if (request.CourtId is { } courtId && courtId != assignment.CourtId)
         {
-            var court = club.Courts.FirstOrDefault(c => c.Id == courtId && c.IsActive)
+            var court = tournament.Courts.FirstOrDefault(c => c.Id == courtId && c.IsActive)
                 ?? throw new NotFoundException("Platz", courtId);
 
             // Die unterbrochene Zuweisung wird abgeschlossen und bleibt als
@@ -234,7 +228,7 @@ public sealed class CourtQueueService : ICourtQueueService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var (tournament, _, assignment) = await LoadForDayAsync(assignmentId, cancellationToken);
+        var (tournament, assignment) = await LoadForDayAsync(assignmentId, cancellationToken);
 
         // Eine Zusage verschiebt alles dahinter — das ist eine Dispositions-
         // entscheidung und keine Ergebniseingabe.
@@ -260,7 +254,7 @@ public sealed class CourtQueueService : ICourtQueueService
         CancellationToken cancellationToken,
         bool requireCourtFree = false)
     {
-        var (tournament, _, assignment) = await LoadForDayAsync(assignmentId, cancellationToken);
+        var (tournament, assignment) = await LoadForDayAsync(assignmentId, cancellationToken);
 
         if (requireCourtFree)
         {
@@ -370,7 +364,7 @@ public sealed class CourtQueueService : ICourtQueueService
     private static int NextSequence(IReadOnlyList<CourtAssignment> assignments, Guid courtId) =>
         assignments.Where(a => a.CourtId == courtId).Select(a => a.SequenceOnCourt).DefaultIfEmpty(0).Max() + 1;
 
-    private async Task<(Tournament Tournament, Club Club, CourtAssignment Assignment)> LoadForDayAsync(
+    private async Task<(Tournament Tournament, CourtAssignment Assignment)> LoadForDayAsync(
         Guid assignmentId,
         CancellationToken cancellationToken)
     {
@@ -386,16 +380,12 @@ public sealed class CourtQueueService : ICourtQueueService
 
         RequireMatchDay(tournament);
 
-        return (tournament, await LoadClubAsync(tournament, cancellationToken), assignment);
+        return (tournament, assignment);
     }
 
     private async Task<Tournament> LoadTournamentAsync(Guid tournamentId, CancellationToken cancellationToken) =>
         await _tournaments.FindAsync(tournamentId, cancellationToken)
         ?? throw new NotFoundException("Turnier", tournamentId);
-
-    private async Task<Club> LoadClubAsync(Tournament tournament, CancellationToken cancellationToken) =>
-        await _clubs.FindAsync(tournament.ClubId, cancellationToken)
-        ?? throw new NotFoundException("Verein", tournament.ClubId);
 
     /// <summary>
     /// Aufrufen, Starten und Beenden gehören in den Turniertagbetrieb.
@@ -423,7 +413,7 @@ public sealed class CourtQueueService : ICourtQueueService
     // --- Abbildung ---------------------------------------------------------
 
     private static CourtBoard Board(
-        Court court,
+        TournamentCourt court,
         IReadOnlyList<CourtAssignment> assignments,
         IReadOnlyList<Match> matches,
         IReadOnlyDictionary<Guid, string> names,

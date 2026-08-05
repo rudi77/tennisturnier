@@ -1,33 +1,28 @@
 import { createContext, useContext } from 'react'
-import type { ClubDetail, ClubSummary, TournamentDetail, TournamentSummary } from '../api/types'
+import type { MeResponse, TournamentDetail, TournamentSummary } from '../api/types'
 
 /**
- * Was gerade bearbeitet wird: ein Verein, ein Turnier.
+ * Was gerade bearbeitet wird: ein Turnier.
  *
- * Der Prototyp kannte genau ein Turnier. Die API ist mandantenfähig und
- * club-scoped (ADR-0004), also braucht die Oberfläche eine Auswahl — sie steht
- * in der Kopfzeile und nicht in einer eigenen Ebene, weil die Turnierleitung an
- * einem Tag mit genau einem Turnier arbeitet.
+ * Hier stand einmal ein Verein daneben. Er ist als Wurzel entfallen — das
+ * Turnier trägt seinen Ort, seine Plätze und deren Zeiten jetzt selbst, und
+ * damit gibt es nur noch eine Auswahl. Sie steht in der Kopfzeile und nicht in
+ * einer eigenen Ebene, weil die Turnierleitung an einem Tag mit genau einem
+ * Turnier arbeitet.
  */
 export interface Workspace {
-  clubs: ClubSummary[]
-  club: ClubDetail | null
+  /** Wer fragt und was er darf. Null, solange die Auskunft noch lädt. */
+  me: MeResponse | null
   tournaments: TournamentSummary[]
   tournament: TournamentDetail | null
-  /** Die Zeitzone des Vereins. Angezeigt wird immer in ihr, nie in der des Browsers. */
-  timeZone: string
-  selectClub: (clubId: string) => void
-  selectTournament: (tournamentId: string) => void
-  /** Lädt Turnier und Verein neu — nach jedem Zustandsübergang nötig. */
-  reloadTournament: () => Promise<void>
   /**
-   * Lädt Vereinsliste und den geladenen Verein neu.
-   *
-   * Getrennt von `reloadTournament`, weil Plätze und Öffnungszeiten sich ändern,
-   * ohne dass ein Turnier davon weiß — der Spielplan merkt es erst beim
-   * nächsten Lösen.
+   * Die Zeitzone des Turnierorts. Angezeigt wird immer in ihr, nie in der des
+   * Browsers — eine Ansetzung um 14 Uhr ist die Ortszeit der Anlage.
    */
-  reloadClubs: () => Promise<void>
+  timeZone: string
+  selectTournament: (tournamentId: string) => void
+  /** Lädt Turnier und Liste neu — nach jedem Zustandsübergang nötig. */
+  reloadTournament: () => Promise<void>
   loading: boolean
 }
 

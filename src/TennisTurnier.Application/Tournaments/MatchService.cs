@@ -1,7 +1,6 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
@@ -53,7 +52,6 @@ public sealed class MatchService : IMatchService
     private readonly ITournamentRepository _tournaments;
     private readonly IPhaseRepository _phases;
     private readonly ICourtAssignmentRepository _assignments;
-    private readonly IClubRepository _clubs;
     private readonly IPlayerRepository _players;
     private readonly IPublicViewService _publicView;
     private readonly IUnitOfWork _unitOfWork;
@@ -64,7 +62,6 @@ public sealed class MatchService : IMatchService
         ITournamentRepository tournaments,
         IPhaseRepository phases,
         ICourtAssignmentRepository assignments,
-        IClubRepository clubs,
         IPlayerRepository players,
         IPublicViewService publicView,
         IUnitOfWork unitOfWork,
@@ -74,7 +71,6 @@ public sealed class MatchService : IMatchService
         _tournaments = tournaments;
         _phases = phases;
         _assignments = assignments;
-        _clubs = clubs;
         _players = players;
         _publicView = publicView;
         _unitOfWork = unitOfWork;
@@ -307,10 +303,7 @@ public sealed class MatchService : IMatchService
         var (tournament, _, _, _) = await LoadForResultAsync(matchId, cancellationToken);
         RequireManagePermission(tournament);
 
-        var club = await _clubs.FindAsync(tournament.ClubId, cancellationToken)
-            ?? throw new NotFoundException("Verein", tournament.ClubId);
-
-        var court = club.Courts.FirstOrDefault(c => c.Id == request.CourtId)
+        var court = tournament.Courts.FirstOrDefault(c => c.Id == request.CourtId)
             ?? throw new NotFoundException("Platz", request.CourtId);
 
         // Ein stillgelegter Platz taucht in der öffentlichen Platzliste nicht auf.
@@ -351,7 +344,6 @@ public sealed class MatchService : IMatchService
         // die Zuschauer gemeldet ist.
         var violations = await ValidateAsync(
             tournament,
-            club,
             existing.Where(a => a.Id != assignment.Id).Append(assignment).ToList(),
             cancellationToken);
 
@@ -425,19 +417,17 @@ public sealed class MatchService : IMatchService
 
     private async Task<IReadOnlyList<ScheduleViolationDetail>> ValidateAsync(
         Tournament tournament,
-        Club club,
         IReadOnlyList<CourtAssignment> assignments,
         CancellationToken cancellationToken)
     {
         var matches = await _assignments.ListMatchesAsync(tournament.Id, cancellationToken);
         var playersByEntry = await PlayersByEntryAsync(tournament, cancellationToken);
 
-        var calendar = new CourtCalendar(club.TimeZone);
-        var range = calendar.TournamentRange(tournament.StartsOn, tournament.EndsOn);
+        var range = tournament.Period();
 
-        var windows = club.Courts.ToDictionary(
+        var windows = tournament.Courts.ToDictionary(
             court => court.Id,
-            court => calendar.FreeWindows(court, range));
+            court => court.FreeWindows(range));
 
         var context = new SchedulingContext(matches, playersByEntry, windows, DefaultRest);
 
@@ -481,7 +471,6 @@ public sealed class MatchService : IMatchService
     {
         var nameByEntry = await NamesByEntryAsync(tournament, cancellationToken);
         var assignments = await _assignments.ListByTournamentAsync(tournament.Id, cancellationToken);
-        var club = await _clubs.FindAsync(tournament.ClubId, cancellationToken);
 
         // Über alle Phasen hinweg: eine Herkunft darf auf ein Match einer
         // früheren Phase zeigen — der Qualifikant kommt aus der Gruppenphase.
@@ -494,7 +483,7 @@ public sealed class MatchService : IMatchService
                 .Where(a => !a.IsOver)
                 .GroupBy(a => a.MatchId)
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.Version).First()),
-            club?.Courts.ToDictionary(c => c.Id, c => c.Name) ?? [],
+            tournament.Courts.ToDictionary(c => c.Id, c => c.Name),
             MatchOrigins.LabelsOf(matches));
     }
 

@@ -29,6 +29,16 @@ Die Datenbank ist eine SQLite-Datei, die beim Start angelegt und migriert wird.
 Ohne Keycloak startet die Anwendung ebenfalls — dann sind nur die öffentlichen
 Endpunkte erreichbar.
 
+> **Einmalig nach dem Umbau „Turnier als Wurzel":** Das Schema hat eine neue
+> Baseline-Migration bekommen, und es gibt keinen datenerhaltenden Pfad — der
+> Verein ist als Aggregat entfallen. Eine bestehende Datei aus der Zeit davor
+> lässt sich nicht migrieren; sie wird gelöscht und beim nächsten Start neu
+> angelegt:
+>
+> ```bash
+> rm -f tennisturnier.db tennisturnier.db-wal tennisturnier.db-shm
+> ```
+
 Ein Token für die Testbenutzer (`systemadmin`, `clubadmin`, `referee`;
 Passwort jeweils gleich dem Benutzernamen):
 

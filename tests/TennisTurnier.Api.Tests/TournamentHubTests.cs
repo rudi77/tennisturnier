@@ -2,7 +2,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR.Client;
 using TennisTurnier.Api.Realtime;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
@@ -41,7 +40,7 @@ public sealed class TournamentHubTests : IClassFixture<TennisTurnierApiFactory>
     {
         var aufbau = await _factory.NeuesTurnierAsync(
             "hub-admin",
-            new TurnierWunsch { Verein = "TC Hub", Teilnehmer = 4 });
+            new TurnierWunsch { Anlage = "TC Hub", Teilnehmer = 4 });
 
         return (aufbau.Admin, aufbau.TournamentId);
     }

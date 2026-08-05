@@ -1,6 +1,7 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
+using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Security;
 using TennisTurnier.Domain.Tournaments;
 
@@ -40,26 +41,33 @@ public sealed class TournamentService : ITournamentService
     private UserPrincipal User => _userContext.Current;
 
     public async Task<Guid> CreateAsync(
-        Guid clubId,
         CreateTournamentRequest request,
         CancellationToken cancellationToken = default)
     {
-        User.Require(Permission.ManageTournament, ResourceScope.Global);
+        ArgumentNullException.ThrowIfNull(request);
+
+        User.Require(Permission.CreateTournament, ResourceScope.Global);
 
         var template = await _templates.FindAsync(request.FormatTemplateId, cancellationToken)
             ?? throw new NotFoundException("Formatvorlage", request.FormatTemplateId);
 
-        // Sichtbar heißt nicht verwendbar. Wer zwei Vereine verwaltet, sieht die
-        // Vorlagen beider — nähme das Turnier des einen die Vorlage des anderen,
-        // hinge sein eingefrorenes Format an einer Definition, die jemand aus
-        // einem fremden Verein bis zur Auslosung noch ändern kann.
-        if (!template.IsBuiltIn && template.ClubId != clubId)
+        // Sichtbar heißt nicht verwendbar. Die mitgelieferten Vorlagen sieht
+        // jeder — nähme ein Turnier die eigene Vorlage eines anderen Benutzers,
+        // hinge sein eingefrorenes Format bis zur Auslosung an einer Definition,
+        // die ein Fremder noch ändern kann.
+        if (!template.IsBuiltIn && template.OwnerUserId != User.UserId)
         {
             throw new NotFoundException("Formatvorlage", request.FormatTemplateId);
         }
 
         var tournament = new Tournament(
-            Guid.NewGuid(), clubId, request.Name, request.StartsOn, request.EndsOn, template.Id);
+            Guid.NewGuid(),
+            request.Name,
+            new Venue(request.VenueName, request.VenueAddress, request.VenueCity, request.TimeZoneId),
+            request.Discipline,
+            request.StartsOn,
+            request.EndsOn,
+            template.Id);
 
         _tournaments.Add(tournament);
         MakeCallerDirectorOf(tournament);
@@ -99,18 +107,19 @@ public sealed class TournamentService : ITournamentService
             ResourceScope.Tournament(tournament.Id)));
     }
 
-    public async Task<IReadOnlyList<TournamentSummary>> ListAsync(
-        Guid clubId,
-        CancellationToken cancellationToken = default) =>
-        Summarize(await _tournaments.ListByClubAsync(clubId, cancellationToken));
-
     public async Task<IReadOnlyList<TournamentSummary>> ListMineAsync(
         CancellationToken cancellationToken = default) =>
-        Summarize(await _tournaments.ListForCallerAsync(cancellationToken));
-
-    private static IReadOnlyList<TournamentSummary> Summarize(IReadOnlyList<Tournament> tournaments) =>
-        [.. tournaments.Select(t => new TournamentSummary(
-            t.Id, t.Name, t.StartsOn, t.EndsOn, t.State, t.SchedulingMode, t.AcceptedEntries.Count))];
+        [.. (await _tournaments.ListForCallerAsync(cancellationToken))
+            .Select(t => new TournamentSummary(
+                t.Id,
+                t.Name,
+                t.Venue.Name,
+                t.Discipline,
+                t.StartsOn,
+                t.EndsOn,
+                t.State,
+                t.SchedulingMode,
+                t.AcceptedEntries.Count))];
 
     public async Task<TournamentDetail> GetAsync(Guid tournamentId, CancellationToken cancellationToken = default)
     {
@@ -119,14 +128,22 @@ public sealed class TournamentService : ITournamentService
 
         return new TournamentDetail(
             tournament.Id,
-            tournament.ClubId,
             tournament.Name,
+            new VenueDetail(
+                tournament.Venue.Name,
+                tournament.Venue.Address,
+                tournament.Venue.City,
+                tournament.Venue.TimeZoneId),
+            tournament.Discipline,
             tournament.StartsOn,
             tournament.EndsOn,
             tournament.State,
             tournament.SchedulingMode,
             tournament.FormatTemplateId,
             tournament.Format,
+            [.. tournament.Courts
+                .OrderBy(court => court.Name, StringComparer.CurrentCulture)
+                .Select(Describe)],
             tournament.Entries
                 .Select(e => new EntryDetail(
                     e.Id,
@@ -138,6 +155,17 @@ public sealed class TournamentService : ITournamentService
             tournament.Version);
     }
 
+    private static CourtDetail Describe(TournamentCourt court) => new(
+        court.Id,
+        court.Name,
+        court.Surface,
+        court.Location,
+        court.IsCenterCourt,
+        court.IsActive,
+        [.. court.Windows
+            .OrderBy(window => window.Period.Start)
+            .Select(window => new CourtWindowDetail(window.Id, window.Period.Start, window.Period.End))]);
+
     public Task UpdateAsync(
         Guid tournamentId,
         UpdateTournamentRequest request,
@@ -145,8 +173,162 @@ public sealed class TournamentService : ITournamentService
         MutateAsync(tournamentId, tournament =>
         {
             tournament.Rename(request.Name);
+            tournament.MoveTo(new Venue(
+                request.VenueName, request.VenueAddress, request.VenueCity, request.TimeZoneId));
+            tournament.ChangeDiscipline(request.Discipline);
             tournament.Reschedule(request.StartsOn, request.EndsOn);
         }, cancellationToken);
+
+    // --- Plätze -----------------------------------------------------------
+
+    public async Task<Guid> AddCourtAsync(
+        Guid tournamentId,
+        CreateCourtRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await LoadForManagement(tournamentId, cancellationToken);
+
+        var court = tournament.AddCourt(Guid.NewGuid(), request.Name, request.Surface, request.Location);
+        court.MarkAsCenterCourt(request.IsCenterCourt);
+
+        await SaveAndRebuildAsync(tournament, cancellationToken);
+
+        return court.Id;
+    }
+
+    public async Task UpdateCourtAsync(
+        Guid tournamentId,
+        Guid courtId,
+        UpdateCourtRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await LoadForManagement(tournamentId, cancellationToken);
+
+        tournament.RenameCourt(courtId, request.Name);
+
+        var court = tournament.CourtOf(courtId);
+        court.MarkAsCenterCourt(request.IsCenterCourt);
+
+        if (request.IsActive)
+        {
+            court.Reactivate();
+        }
+        else
+        {
+            court.Deactivate();
+        }
+
+        await SaveAndRebuildAsync(tournament, cancellationToken);
+    }
+
+    public async Task RemoveCourtAsync(
+        Guid tournamentId,
+        Guid courtId,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await LoadForManagement(tournamentId, cancellationToken);
+        tournament.RemoveCourt(courtId);
+
+        await SaveAndRebuildAsync(tournament, cancellationToken);
+    }
+
+    public async Task<Guid> AddCourtWindowAsync(
+        Guid tournamentId,
+        Guid courtId,
+        CreateCourtWindowRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await LoadForManagement(tournamentId, cancellationToken);
+
+        var window = tournament.CourtOf(courtId).AddWindow(
+            Guid.NewGuid(), new TimeSlot(request.From, request.To));
+
+        tournament.MarkScheduleChanged();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return window.Id;
+    }
+
+    public async Task RemoveCourtWindowAsync(
+        Guid tournamentId,
+        Guid courtId,
+        Guid windowId,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await LoadForManagement(tournamentId, cancellationToken);
+        tournament.CourtOf(courtId).RemoveWindow(windowId);
+
+        tournament.MarkScheduleChanged();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Legt dieselbe Uhrzeitspanne an jedem Turniertag an — für die genannten
+    /// Plätze oder für alle.
+    ///
+    /// Der Weg, den ein Veranstalter tatsächlich geht: er hat für das ganze
+    /// Wochenende zwei Plätze von acht bis zweiundzwanzig zugesagt bekommen. Ihn
+    /// dafür zwölf Einzelaufrufe machen zu lassen wäre eine Oberfläche, die den
+    /// Datensatz abbildet statt den Vorgang.
+    ///
+    /// Die Uhrzeiten sind lokal zu verstehen und werden in der Zeitzone der
+    /// Anlage aufgelöst — <see cref="LocalTime"/> entscheidet dabei, was an den
+    /// zwei Umstellungsnächten im Jahr gilt.
+    /// </summary>
+    public async Task<int> AddCourtWindowsAsync(
+        Guid tournamentId,
+        CreateCourtWindowsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var tournament = await LoadForManagement(tournamentId, cancellationToken);
+
+        if (request.To <= request.From)
+        {
+            throw new DomainException(
+                $"Die Platzzeit muss vorwärts laufen, war aber {request.From:HH\\:mm} bis {request.To:HH\\:mm}.");
+        }
+
+        var courts = request.CourtIds is { Count: > 0 } ids
+            ? [.. ids.Select(tournament.CourtOf)]
+            : tournament.Courts.Where(court => court.IsActive).ToList();
+
+        if (courts.Count == 0)
+        {
+            throw new DomainException("Das Turnier hat keinen Platz, für den sich eine Zeit anlegen ließe.");
+        }
+
+        var local = new LocalTime(tournament.Venue.TimeZone);
+        var created = 0;
+
+        for (var day = tournament.StartsOn; day <= tournament.EndsOn; day = day.AddDays(1))
+        {
+            var from = local.Resolve(day, request.From, LocalTime.Ambiguity.Earliest);
+            var to = local.Resolve(day, request.To, LocalTime.Ambiguity.Latest);
+
+            foreach (var court in courts)
+            {
+                court.AddWindow(Guid.NewGuid(), new TimeSlot(from, to));
+                created++;
+            }
+        }
+
+        tournament.MarkScheduleChanged();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return created;
+    }
+
+    /// <summary>
+    /// Name und Zeiten der Plätze stehen in der öffentlichen Ansicht (ADR-0003).
+    /// Ohne den Neuaufbau schickt der Aushang die Zuschauer auf einen Platz, der
+    /// inzwischen anders heißt.
+    /// </summary>
+    private async Task SaveAndRebuildAsync(Tournament tournament, CancellationToken cancellationToken)
+    {
+        await _unitOfWork.FlushAsync(cancellationToken);
+        await _publicView.RebuildAsync(tournament.Id, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
 
     // --- Zustandsübergänge ------------------------------------------------
 
@@ -217,8 +399,14 @@ public sealed class TournamentService : ITournamentService
     {
         var tournament = await LoadForManagement(tournamentId, cancellationToken);
 
-        _ = await _players.FindParticipantAsync(request.ParticipantId, cancellationToken)
+        var participant = await _players.FindParticipantAsync(request.ParticipantId, cancellationToken)
             ?? throw new NotFoundException("Teilnehmer", request.ParticipantId);
+
+        // Die Disziplin steht in der Ausschreibung, der Teilnehmer entsteht
+        // davon unabhängig. Hier treffen sie zum ersten Mal aufeinander — und
+        // hier gehört die Prüfung hin, nicht ins Anlegen des Teilnehmers, der
+        // von keinem Turnier weiß.
+        tournament.RequireMatchesDiscipline(participant.IsTeam);
 
         var entry = tournament.Enter(Guid.NewGuid(), request.ParticipantId, request.Seed);
         var entryId = entry.Id;
@@ -283,8 +471,6 @@ public sealed class TournamentService : ITournamentService
     {
         var tournament = await Load(tournamentId, cancellationToken);
 
-        // Beide Wege sind zulässig: Turnierleiter des Turniers oder
-        // Administrator des ausrichtenden Vereins.
         User.Require(
             Permission.ManageTournament,
             ResourceScope.Tournament(tournamentId));

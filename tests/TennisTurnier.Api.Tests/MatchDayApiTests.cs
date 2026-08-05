@@ -1,9 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Scheduling;
@@ -28,7 +26,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     public MatchDayApiTests(TennisTurnierApiFactory factory) => _factory = factory;
 
     /// <summary>Ein ausgelostes Turnier mit bestätigtem Spielplan im Turniertagbetrieb.</summary>
-    private async Task<(HttpClient Admin, Guid ClubId, Guid TournamentId)> MatchDayAsync(
+    private async Task<(HttpClient Admin, Guid TournamentId)> MatchDayAsync(
         int participants = 8,
         int courts = 2)
     {
@@ -36,10 +34,10 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
             "tag-admin",
             new TurnierWunsch
             {
-                Verein = "TC Turniertag",
+                Anlage = "TC Turniertag",
                 Teilnehmer = participants,
                 Plaetze = courts,
-                Oeffnungszeiten = true,
+                Platzzeiten = true,
                 Spielplan = true,
                 Turniertag = true,
 
@@ -51,7 +49,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
                 Uhr = new DateTimeOffset(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2)),
             });
 
-        return (aufbau.Admin, aufbau.ClubId, aufbau.TournamentId);
+        return (aufbau.Admin, aufbau.TournamentId);
     }
 
     private static async Task<List<CourtBoard>> BoardAsync(HttpClient client, Guid tournamentId) =>
@@ -61,7 +59,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Die_Platzuebersicht_zeigt_Warteschlangen()
     {
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
 
         var board = await BoardAsync(admin, tournamentId);
 
@@ -77,7 +75,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Match_laesst_sich_aufrufen_starten_und_beenden()
     {
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var first = (await BoardAsync(admin, tournamentId))[0].Queue[0];
 
         Assert.Equal(
@@ -105,7 +103,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // Der Kern des Tagesbetriebs: die Schätzungen der Wartenden werden
         // nachgezogen, sobald tatsächlich etwas passiert. Ein Plan, der nach dem
         // ersten Match noch die Zeiten von gestern zeigt, ist Fiktion.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var court = (await BoardAsync(admin, tournamentId))[0];
         var second = court.Queue[1];
 
@@ -129,7 +127,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // „Nicht vor 14 Uhr" ist das Einzige, worauf sich ein Spieler verlassen
         // kann. Die Schätzung darf darunter nicht rutschen, auch wenn der Platz
         // früher frei wird.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var court = (await BoardAsync(admin, tournamentId))[0];
 
         // Eine Zusage weit nach dem Zeitpunkt, zu dem der Platz frei wird.
@@ -157,7 +155,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Die_Warteschlange_laesst_sich_umstellen()
     {
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var court = (await BoardAsync(admin, tournamentId))[0];
         var reversed = court.Queue.Select(q => q.AssignmentId).Reverse().ToList();
 
@@ -177,7 +175,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Eine_unvollstaendige_Reihenfolge_wird_abgewiesen()
     {
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var court = (await BoardAsync(admin, tournamentId))[0];
 
         var response = await admin.PostAsJsonAsync(
@@ -195,7 +193,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // ohne dass der Plan als Ganzes ungültig wird. Die unterbrochene
         // Zuweisung bleibt als Historie stehen — erst beide zusammen erzählen,
         // was an diesem Tag passiert ist (ADR-0002).
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var board = await BoardAsync(admin, tournamentId);
         var running = board[0].Queue[0];
         var otherCourt = board[1].CourtId;
@@ -227,7 +225,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Eine_unterbrochene_Partie_geht_auch_auf_demselben_Platz_weiter()
     {
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var running = (await BoardAsync(admin, tournamentId))[0].Queue[0];
 
         await admin.PostAsync($"/api/assignments/{running.AssignmentId}/start", null);
@@ -247,7 +245,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Die_oeffentliche_Ansicht_zeigt_die_Fortsetzung_und_nicht_den_alten_Platz()
     {
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var board = await BoardAsync(admin, tournamentId);
         var running = board[0].Queue[0];
         var otherCourt = board[1].CourtId;
@@ -281,7 +279,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     {
         // Der Wechsel in den Turniertagbetrieb ist ein ausdrücklicher Schritt: er
         // ändert die Bedeutung jeder angezeigten Uhrzeit.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var first = (await BoardAsync(admin, tournamentId))[0].Queue[0];
 
         await admin.PostAsync($"/api/tournaments/{tournamentId}/scheduling/planning", null);
@@ -298,7 +296,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // ließ sich beliebig oft fortsetzen. Danach stand dasselbe Match auf
         // mehreren Plätzen — und auf einem INSERT wirkt kein Zähler, also fiel
         // auch parallel nichts auf.
-        var (admin, _, tournamentId) = await MatchDayAsync(courts: 3);
+        var (admin, tournamentId) = await MatchDayAsync(courts: 3);
         var board = await BoardAsync(admin, tournamentId);
         var running = board[0].Queue[0];
 
@@ -336,7 +334,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: die Prüfung auf feststehende Teilnehmer lief nur bei
         // „aufrufen" und „starten". Über „fortsetzen" ließ sich ein bereits
         // eingetragenes Match wieder als laufend auf einen Platz stellen.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var running = (await BoardAsync(admin, tournamentId))[0].Queue[0];
 
         await admin.PostAsync($"/api/assignments/{running.AssignmentId}/start", null);
@@ -360,7 +358,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // dem „aufgerufen" vor „läuft" steht. Sobald das nächste Match gerufen
         // war, galt es als das laufende — und das tatsächlich laufende war über
         // die Übersicht nicht mehr zu beenden.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var court = (await BoardAsync(admin, tournamentId))[0];
 
         await admin.PostAsync($"/api/assignments/{court.Queue[0].AssignmentId}/start", null);
@@ -379,7 +377,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: die Zusage wurde ungeprüft übernommen und zog die ganze
         // Warteschlange mit — ein Tippfehler schob den halben Platz ins Jahr 2099
         // und stand dort öffentlich.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var court = (await BoardAsync(admin, tournamentId))[0];
 
         var response = await admin.PostAsJsonAsync(
@@ -397,7 +395,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // im Planungsmodus. Ein Aufruf, der inhaltlich nichts änderte, zog damit
         // den gesamten gerechneten Spielplan eines Platzes auf die aktuelle
         // Uhrzeit.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var court = (await BoardAsync(admin, tournamentId))[0];
         var before = court.Queue.Select(q => q.EstimatedStart).ToList();
 
@@ -429,7 +427,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // hinten, bis das Finale rechnerisch nachts stattfände. Das ist keine
         // Fehlfunktion, aber die Turnierleitung muss es sehen — sie muss dann
         // Plätze umverteilen oder vertagen.
-        var (admin, _, tournamentId) = await MatchDayAsync(participants: 8, courts: 1);
+        var (admin, tournamentId) = await MatchDayAsync(participants: 8, courts: 1);
         var court = (await BoardAsync(admin, tournamentId))[0];
 
         Assert.All(court.Queue, q => Assert.True(q.WithinOpeningHours));
@@ -453,7 +451,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // Zuweisung blieb mit ihrer Nummer in der Warteschlange stehen,
         // blockierte anderthalb Stunden für alles dahinter und war über den
         // Turniertag nicht mehr loszuwerden.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var court = (await BoardAsync(admin, tournamentId))[0];
         var absent = court.Queue[1];
 
@@ -474,7 +472,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: der Vorschlag bot das unterbrochene Match mit an, und die
         // Bestätigung wies daraufhin den ganzen Vorschlag ab — umplanen ging nur
         // noch mit von Hand zusammengestrichener Liste.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var running = (await BoardAsync(admin, tournamentId))[0].Queue[0];
 
         await admin.PostAsync($"/api/assignments/{running.AssignmentId}/start", null);
@@ -506,7 +504,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     [InlineData("suspend")]
     public async Task Ein_Schiedsrichter_darf_am_Platz_arbeiten(string action)
     {
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var first = (await BoardAsync(admin, tournamentId))[0].Queue[0];
 
         var referee = $"referee-{Guid.NewGuid():N}";
@@ -542,7 +540,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     [InlineData("start")]
     public async Task Auf_einem_belegten_Platz_beginnt_keine_zweite_Partie(string action)
     {
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var queue = (await BoardAsync(admin, tournamentId))[0].Queue;
 
         await admin.PostAsync($"/api/assignments/{queue[0].AssignmentId}/start", null);
@@ -566,7 +564,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Vor_der_zugesagten_Zeit_wird_nicht_aufgerufen()
     {
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var waiting = (await BoardAsync(admin, tournamentId))[0].Queue[0];
 
         var promised = _factory.Clock.Now.AddHours(6);
@@ -595,7 +593,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // setzen, die die Schätzungen des ganzen Platzes verschiebt, und eine
         // Partie auf einen beliebigen Platz des Vereins verlegen — beides
         // Entscheidungen der Turnierleitung.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
         var board = await BoardAsync(admin, tournamentId);
         var first = board[0].Queue[0];
 
@@ -634,7 +632,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         // Die Abnahmebedingung aus dem Fahrplan, als Ablauf: alle Erstrunden
         // werden gespielt, eines davon nach einer Unterbrechung auf einem anderen
         // Platz, und danach steht der Spielplan weiterhin.
-        var (admin, _, tournamentId) = await MatchDayAsync();
+        var (admin, tournamentId) = await MatchDayAsync();
 
         var interrupted = true;
 

@@ -312,7 +312,7 @@ function AddEntryPanel({
    * Einzel ist der Sonderfall mit einem.
    *
    * Die Meldung wird gleich angenommen. Die Domäne trennt beides wegen der
-   * Warteliste — für ein Vereinsturnier, das gerade sein erstes Feld füllt, wäre
+   * Warteliste — für ein Turnier, das gerade sein erstes Feld füllt, wäre
    * eine Meldung, die stillschweigend nicht im Draw landet, aber die schlechtere
    * Überraschung.
    */
@@ -428,7 +428,7 @@ function AddEntryPanel({
  * Ein Spielerplatz: gesucht oder neu angelegt.
  *
  * Der neue Spieler entsteht sofort beim Klick und nicht erst beim Melden. Ein
- * Spieler ist Stammdatum des Vereins und überlebt das Turnier — ihn erst am Ende
+ * Spieler gehört keinem Turnier und überlebt es (ADR-0008) — ihn erst am Ende
  * anzulegen hieße, im Doppel zwei halbfertige Zustände gleichzeitig zu führen.
  */
 function PlayerSlot({

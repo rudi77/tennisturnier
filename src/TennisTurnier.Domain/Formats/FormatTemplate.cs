@@ -12,13 +12,13 @@ namespace TennisTurnier.Domain.Formats;
 /// </summary>
 public sealed class FormatTemplate : Entity
 {
-    public FormatTemplate(Guid id, Guid? clubId, FormatDefinition definition)
+    public FormatTemplate(Guid id, Guid? ownerUserId, FormatDefinition definition)
         : base(id)
     {
         ArgumentNullException.ThrowIfNull(definition);
         definition.Validate();
 
-        ClubId = clubId;
+        OwnerUserId = ownerUserId;
         Definition = definition;
         Version = 1;
     }
@@ -27,10 +27,14 @@ public sealed class FormatTemplate : Entity
     private FormatTemplate(Guid id) : base(id) => Definition = null!;
 
     /// <summary>
-    /// Der Verein, dem die Vorlage gehört. Leer bei den mitgelieferten
-    /// Standardvorlagen, die allen Vereinen zur Verfügung stehen.
+    /// Der Benutzer, dem die Vorlage gehört. Leer bei den mitgelieferten
+    /// Standardvorlagen, die jedem zur Verfügung stehen.
+    ///
+    /// Eine eigene Vorlage gehörte einmal einem Verein. Sie gehört jetzt dem,
+    /// der sie angelegt hat — sonst könnte er sie im nächsten Turnier nicht
+    /// wiederverwenden, und das ist der Zweck einer Vorlage.
     /// </summary>
-    public Guid? ClubId { get; private set; }
+    public Guid? OwnerUserId { get; private set; }
 
     public FormatDefinition Definition { get; private set; }
 
@@ -38,7 +42,7 @@ public sealed class FormatTemplate : Entity
 
     public string Name => Definition.Name;
 
-    public bool IsBuiltIn => ClubId is null;
+    public bool IsBuiltIn => OwnerUserId is null;
 
     /// <summary>
     /// Ersetzt die Definition und zählt die Version hoch. Laufende Turniere sind
@@ -61,14 +65,14 @@ public sealed class FormatTemplate : Entity
     }
 
     /// <summary>
-    /// Legt eine bearbeitbare Kopie für einen Verein an — der übliche Weg, eine
-    /// Standardvorlage abzuwandeln.
+    /// Legt eine bearbeitbare Kopie an — der übliche Weg, eine Standardvorlage
+    /// abzuwandeln.
     /// </summary>
-    public FormatTemplate CopyFor(Guid newId, Guid clubId, string name)
+    public FormatTemplate CopyFor(Guid newId, Guid ownerUserId, string name)
     {
-        if (clubId == Guid.Empty)
+        if (ownerUserId == Guid.Empty)
         {
-            throw new DomainException("Eine Kopie braucht einen Verein.");
+            throw new DomainException("Eine Kopie braucht einen Eigentümer.");
         }
 
         if (string.IsNullOrWhiteSpace(name))
@@ -76,6 +80,6 @@ public sealed class FormatTemplate : Entity
             throw new DomainException("Eine Kopie braucht einen Namen.");
         }
 
-        return new FormatTemplate(newId, clubId, Definition with { Name = name.Trim() });
+        return new FormatTemplate(newId, ownerUserId, Definition with { Name = name.Trim() });
     }
 }

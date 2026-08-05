@@ -3,9 +3,12 @@ namespace TennisTurnier.Application.Tournaments;
 /// <summary>Anwendungsfälle rund um das Turnier — ein Driving Port (ADR-0005).</summary>
 public interface ITournamentService
 {
-    Task<Guid> CreateAsync(Guid clubId, CreateTournamentRequest request, CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<TournamentSummary>> ListAsync(Guid clubId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Legt ein Turnier an und macht seinen Anleger zum Turnierleiter. Der
+    /// Einstieg — es braucht dafür keinen Verein und keine Vorbereitung außer
+    /// einer Formatvorlage.
+    /// </summary>
+    Task<Guid> CreateAsync(CreateTournamentRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Die Turniere, an denen der Aufrufer eine Rolle hat. Der Einstieg in die
@@ -18,6 +21,42 @@ public interface ITournamentService
     Task UpdateAsync(
         Guid tournamentId,
         UpdateTournamentRequest request,
+        CancellationToken cancellationToken = default);
+
+    // --- Plätze ---
+
+    Task<Guid> AddCourtAsync(
+        Guid tournamentId,
+        CreateCourtRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task UpdateCourtAsync(
+        Guid tournamentId,
+        Guid courtId,
+        UpdateCourtRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task RemoveCourtAsync(Guid tournamentId, Guid courtId, CancellationToken cancellationToken = default);
+
+    Task<Guid> AddCourtWindowAsync(
+        Guid tournamentId,
+        Guid courtId,
+        CreateCourtWindowRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task RemoveCourtWindowAsync(
+        Guid tournamentId,
+        Guid courtId,
+        Guid windowId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Dieselbe Uhrzeitspanne an jedem Turniertag — der Weg, den ein
+    /// Veranstalter tatsächlich geht. Liefert die Zahl der angelegten Fenster.
+    /// </summary>
+    Task<int> AddCourtWindowsAsync(
+        Guid tournamentId,
+        CreateCourtWindowsRequest request,
         CancellationToken cancellationToken = default);
 
     // --- Zustandsübergänge ---
@@ -82,9 +121,9 @@ public interface IPlayerService
 
     /// <summary>
     /// Vollständige Spielerdaten inklusive Kontakt. Setzt <c>ViewInternals</c> im
-    /// angegebenen Verein voraus.
+    /// angegebenen Turnier voraus — und dass der Spieler dort gemeldet ist.
     /// </summary>
-    Task<PlayerDetail> GetAsync(Guid clubId, Guid playerId, CancellationToken cancellationToken = default);
+    Task<PlayerDetail> GetAsync(Guid tournamentId, Guid playerId, CancellationToken cancellationToken = default);
 
     Task<ParticipantSummary> CreateParticipantAsync(
         CreateParticipantRequest request,
@@ -94,14 +133,12 @@ public interface IPlayerService
 /// <summary>Formatvorlagen (ADR-0001).</summary>
 public interface IFormatTemplateService
 {
-    Task<IReadOnlyList<FormatTemplateSummary>> ListAsync(
-        Guid clubId,
-        CancellationToken cancellationToken = default);
+    /// <summary>Die mitgelieferten Vorlagen und die eigenen des Aufrufers.</summary>
+    Task<IReadOnlyList<FormatTemplateSummary>> ListAsync(CancellationToken cancellationToken = default);
 
     Task<FormatTemplateDetail> GetAsync(Guid templateId, CancellationToken cancellationToken = default);
 
     Task<Guid> CreateAsync(
-        Guid clubId,
         SaveFormatTemplateRequest request,
         CancellationToken cancellationToken = default);
 
@@ -112,7 +149,6 @@ public interface IFormatTemplateService
 
     /// <summary>Legt eine bearbeitbare Kopie an — der Weg, ein Standardformat abzuwandeln.</summary>
     Task<Guid> CopyAsync(
-        Guid clubId,
         Guid templateId,
         CopyFormatTemplateRequest request,
         CancellationToken cancellationToken = default);

@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
@@ -35,7 +34,7 @@ public sealed class GroupThenKnockoutApiTests : IClassFixture<TennisTurnierApiFa
             new TurnierWunsch
             {
                 Vorlage = BuiltInFormats.GroupThenKnockout.Name,
-                Verein = "TC Gruppen",
+                Anlage = "TC Gruppen",
                 Teilnehmer = participants,
             });
 

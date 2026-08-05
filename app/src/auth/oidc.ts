@@ -10,7 +10,7 @@
  * dafür als öffentlichen Client mit `http://localhost:5000/*` als Redirect-URI.
  *
  * Die Rollen kommen bewusst NICHT aus dem Token: der IdP liefert nur Identität,
- * die Zuordnung zu Verein und Turnier gehört in die Anwendung (ADR-0004/0007).
+ * die Zuordnung zu einem Turnier gehört in die Anwendung (ADR-0004/0007).
  * Ein frisch angemeldeter Benutzer hat deshalb zunächst keine Rechte — das ist
  * kein Fehler, sondern die Voreinstellung.
  */

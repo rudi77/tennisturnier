@@ -2,9 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Security;
@@ -43,20 +41,20 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     /// tragen — sonst prüfte die Datensparsamkeit gegen Daten, die es gar nicht
     /// gibt.
     /// </summary>
-    private async Task<(HttpClient Admin, Guid ClubId, Guid TournamentId)> DrawnTournamentAsync(
+    private async Task<(HttpClient Admin, Guid TournamentId)> DrawnTournamentAsync(
         int participants = 4)
     {
         var aufbau = await _factory.NeuesTurnierAsync(
             "public-admin",
             new TurnierWunsch
             {
-                Verein = "TC Öffentlich",
+                Anlage = "TC Öffentlich",
                 Teilnehmer = participants,
                 Kontaktdaten = true,
                 Plaetze = 1,
             });
 
-        return (aufbau.Admin, aufbau.ClubId, aufbau.TournamentId);
+        return (aufbau.Admin, aufbau.TournamentId);
     }
 
     /// <summary>Ein Client ohne jeden Anmeldeheader — der Zuschauer.</summary>
@@ -65,7 +63,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Zuschauer_ohne_Anmeldung_sieht_das_Bracket()
     {
-        var (_, _, tournamentId) = await DrawnTournamentAsync();
+        var (_, tournamentId) = await DrawnTournamentAsync();
 
         var response = await Spectator().GetAsync($"/public/tournaments/{tournamentId}");
 
@@ -81,7 +79,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Die_oeffentliche_Ansicht_enthaelt_keine_personenbezogenen_Daten()
     {
-        var (_, _, tournamentId) = await DrawnTournamentAsync();
+        var (_, tournamentId) = await DrawnTournamentAsync();
 
         var body = await Spectator().GetStringAsync($"/public/tournaments/{tournamentId}");
 
@@ -102,7 +100,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     {
         // Die Gegenprobe zur Datensparsamkeit: ohne sie wäre die Regel oben auch
         // dann erfüllt, wenn die Ansicht schlicht leer bliebe.
-        var (admin, _, tournamentId) = await DrawnTournamentAsync();
+        var (admin, tournamentId) = await DrawnTournamentAsync();
 
         var phases = await admin.GetFromJsonAsync<List<PhaseDetail>>(
             $"/api/tournaments/{tournamentId}/phases", Json);
@@ -118,7 +116,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_zweiter_Abruf_mit_dem_ETag_liefert_304()
     {
-        var (_, _, tournamentId) = await DrawnTournamentAsync();
+        var (_, tournamentId) = await DrawnTournamentAsync();
         var spectator = Spectator();
 
         var first = await spectator.GetAsync($"/public/tournaments/{tournamentId}");
@@ -138,7 +136,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_neues_Ergebnis_aendert_den_ETag()
     {
-        var (admin, _, tournamentId) = await DrawnTournamentAsync();
+        var (admin, tournamentId) = await DrawnTournamentAsync();
         var spectator = Spectator();
 
         var before = (await spectator.GetAsync($"/public/tournaments/{tournamentId}")).Headers.ETag!;
@@ -171,7 +169,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
         // Der Neuaufbau läuft nach jeder Handlung. Bliebe eine Änderung ohne
         // Wirkung dennoch nicht unbemerkt, wäre jeder Cache wertlos und jeder
         // Zuschauer bekäme fortwährend Pushs ohne Neuigkeit.
-        var (admin, _, tournamentId) = await DrawnTournamentAsync();
+        var (admin, tournamentId) = await DrawnTournamentAsync();
         var spectator = Spectator();
 
         var before = (await spectator.GetAsync($"/public/tournaments/{tournamentId}")).Headers.ETag!;
@@ -192,7 +190,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
             "public-admin",
             new TurnierWunsch
             {
-                Verein = "TC Entwurf",
+                Anlage = "TC Entwurf",
                 Name = "Noch nicht ausgelost",
                 Auslosen = false,
             });
@@ -207,7 +205,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     {
         // Ein stehengebliebenes Bracket zu einem Feld, das es nicht mehr gibt,
         // wäre schlimmer als gar keines.
-        var (admin, _, tournamentId) = await DrawnTournamentAsync();
+        var (admin, tournamentId) = await DrawnTournamentAsync();
         var spectator = Spectator();
 
         Assert.Equal(
@@ -226,7 +224,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     {
         // Der Sinn des Summentyps aus ADR-0001 auf der Anzeigeseite: das Bracket
         // erzählt schon etwas, bevor ein Ball gespielt wurde.
-        var (_, _, tournamentId) = await DrawnTournamentAsync();
+        var (_, tournamentId) = await DrawnTournamentAsync();
 
         var view = await Spectator().GetFromJsonAsync<JsonElement>(
             $"/public/tournaments/{tournamentId}", Json);
@@ -244,13 +242,13 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_zugewiesener_Platz_steht_in_der_Ansicht()
     {
-        var (admin, clubId, tournamentId) = await DrawnTournamentAsync();
+        var (admin, tournamentId) = await DrawnTournamentAsync();
 
         var phases = await admin.GetFromJsonAsync<List<PhaseDetail>>(
             $"/api/tournaments/{tournamentId}/phases", Json);
         var match = phases!.Single().Matches.First(m => m.Status == MatchStatus.Ready);
 
-        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+        var courts = await admin.PlaetzeAsync(tournamentId);
         var earliest = new DateTimeOffset(2026, 5, 16, 9, 0, 0, TimeSpan.FromHours(2));
 
         await admin.PostAsJsonAsync(
@@ -274,7 +272,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     {
         // Die Projektion ist abgeleiteter Zustand. Ohne diesen Weg bliebe ein
         // behobener Fehler im Bauplan in allen alten Ständen stehen (ADR-0003).
-        var (admin, _, tournamentId) = await DrawnTournamentAsync();
+        var (admin, tournamentId) = await DrawnTournamentAsync();
         var spectator = Spectator();
 
         var before = (await spectator.GetAsync($"/public/tournaments/{tournamentId}")).Headers.ETag!;
@@ -291,7 +289,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Zuschauer_kann_den_Neuaufbau_nicht_ausloesen()
     {
-        var (_, _, tournamentId) = await DrawnTournamentAsync();
+        var (_, tournamentId) = await DrawnTournamentAsync();
 
         var response = await Spectator()
             .PostAsync($"/api/tournaments/{tournamentId}/public-view/rebuild", null);

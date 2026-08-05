@@ -1,9 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Security;
@@ -44,18 +42,18 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
-    private async Task<(HttpClient Admin, Guid ClubId, Guid TournamentId)> DrawnAsync(int participants = 8)
+    private async Task<(HttpClient Admin, Guid TournamentId)> DrawnAsync(int participants = 8)
     {
         var aufbau = await _factory.NeuesTurnierAsync(
             "konsistenz-admin",
             new TurnierWunsch
             {
-                Verein = "TC Konsistenz",
+                Anlage = "TC Konsistenz",
                 Teilnehmer = participants,
                 Plaetze = 1,
             });
 
-        return (aufbau.Admin, aufbau.ClubId, aufbau.TournamentId);
+        return (aufbau.Admin, aufbau.TournamentId);
     }
 
     private static async Task<List<PhaseDetail>> PhasesAsync(HttpClient client, Guid tournamentId) =>
@@ -80,7 +78,7 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
         // unvollständigen Stand aber als letzter fest — lautlos, mit passendem
         // ETag, und dauerhaft, bis zufällig jemand dasselbe Turnier erneut
         // anfasste. Beim letzten Match hieße das: das Endergebnis erscheint nie.
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 16);
+        var (admin, tournamentId) = await DrawnAsync(participants: 16);
         var ready = (await PhasesAsync(admin, tournamentId)).Single()
             .Matches.Where(m => m.Status == MatchStatus.Ready).ToList();
 
@@ -109,7 +107,7 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
         // war. Wer der Aufforderung folgte und es wiederholte, überschrieb damit
         // ein bereits ausgewertetes Ergebnis. Ein 409 muss heißen: nichts
         // passiert, bitte neu laden.
-        var (admin, _, tournamentId) = await DrawnAsync(participants: 16);
+        var (admin, tournamentId) = await DrawnAsync(participants: 16);
         var ready = (await PhasesAsync(admin, tournamentId)).Single()
             .Matches.Where(m => m.Status == MatchStatus.Ready).ToList();
 
@@ -139,14 +137,14 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
     [Fact]
     public async Task Ein_umbenannter_Platz_heisst_auch_oeffentlich_anders()
     {
-        // Regression: der ClubService kannte die öffentliche Ansicht nicht. Am
-        // Turniertag schickte der Aushang die Zuschauer damit auf einen Platz,
-        // den es unter dem Namen nicht mehr gibt.
-        var (admin, clubId, tournamentId) = await DrawnAsync();
+        // Regression: die Platzverwaltung kannte die öffentliche Ansicht nicht.
+        // Am Turniertag schickte der Aushang die Zuschauer damit auf einen
+        // Platz, den es unter dem Namen nicht mehr gibt.
+        var (admin, tournamentId) = await DrawnAsync();
         var match = (await PhasesAsync(admin, tournamentId)).Single()
             .Matches.First(m => m.Status == MatchStatus.Ready);
 
-        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+        var courts = await admin.PlaetzeAsync(tournamentId);
         var courtId = courts!.Single().Id;
 
         await admin.PostAsJsonAsync(
@@ -155,7 +153,7 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
         Assert.Equal(
             HttpStatusCode.NoContent,
             (await admin.PutAsJsonAsync(
-                $"/api/clubs/{clubId}/courts/{courtId}",
+                $"/api/tournaments/{tournamentId}/courts/{courtId}",
                 new UpdateCourtRequest("Center Court", IsCenterCourt: true, IsActive: true),
                 Json)).StatusCode);
 
@@ -171,16 +169,31 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
     }
 
     [Fact]
-    public async Task Ein_umbenannter_Verein_heisst_auch_oeffentlich_anders()
+    public async Task Ein_umbenannter_Ort_heisst_auch_oeffentlich_anders()
     {
-        var (admin, clubId, tournamentId) = await DrawnAsync();
+        // Der Ort steht am Turnier und nicht mehr in eigenen Stammdaten. Genau
+        // deshalb muss die Änderung durch dieselbe Kette laufen wie jede andere
+        // — sonst nennt der Aushang eine Anlage, die niemand mehr so kennt.
+        var (admin, tournamentId) = await DrawnAsync();
+        var detail = (await admin.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json))!;
 
         await admin.PutAsJsonAsync(
-            $"/api/clubs/{clubId}", new UpdateClubRequest("TC Neuer Name", "Europe/Vienna", null), Json);
+            $"/api/tournaments/{tournamentId}",
+            new UpdateTournamentRequest(
+                detail.Name,
+                "TC Neuer Name",
+                detail.Venue.Address,
+                detail.Venue.City,
+                detail.Venue.TimeZoneId,
+                detail.Discipline,
+                detail.StartsOn,
+                detail.EndsOn),
+            Json);
 
         Assert.Equal(
             "TC Neuer Name",
-            (await PublicViewAsync(tournamentId)).GetProperty("clubName").GetString());
+            (await PublicViewAsync(tournamentId)).GetProperty("venueName").GetString());
     }
 
     [Fact]
@@ -190,15 +203,15 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
         // Platzliste, das Match behielt aber seinen Namen. Es stand damit
         // öffentlich auf einem Platz, den die Liste nicht kennt — und die
         // Warteschlange, die am Turniertag die eigentliche Aussage ist, fehlte.
-        var (admin, clubId, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
         var match = (await PhasesAsync(admin, tournamentId)).Single()
             .Matches.First(m => m.Status == MatchStatus.Ready);
 
-        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+        var courts = await admin.PlaetzeAsync(tournamentId);
         var courtId = courts!.Single().Id;
 
         await admin.PutAsJsonAsync(
-            $"/api/clubs/{clubId}/courts/{courtId}",
+            $"/api/tournaments/{tournamentId}/courts/{courtId}",
             new UpdateCourtRequest("Platz 1", IsCenterCourt: false, IsActive: false),
             Json);
 
@@ -211,18 +224,18 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
     [Fact]
     public async Task Ein_belegter_Platz_bleibt_sichtbar_auch_wenn_er_stillgelegt_wird()
     {
-        var (admin, clubId, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
         var match = (await PhasesAsync(admin, tournamentId)).Single()
             .Matches.First(m => m.Status == MatchStatus.Ready);
 
-        var courts = await admin.GetFromJsonAsync<List<CourtDetail>>($"/api/clubs/{clubId}/courts", Json);
+        var courts = await admin.PlaetzeAsync(tournamentId);
         var courtId = courts!.Single().Id;
 
         await admin.PostAsJsonAsync(
             $"/api/matches/{match.Id}/court", new AssignCourtRequest(courtId, 1, null, null, null), Json);
 
         await admin.PutAsJsonAsync(
-            $"/api/clubs/{clubId}/courts/{courtId}",
+            $"/api/tournaments/{tournamentId}/courts/{courtId}",
             new UpdateCourtRequest("Platz 1", IsCenterCourt: false, IsActive: false),
             Json);
 
@@ -241,7 +254,7 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
         // fiel samt seiner Siege aus der Endplatzierung, stand aber weiter als
         // Sieger im Baum. Ein Rückzug nach der Auslosung wird als Nichtantreten
         // gewertet und verändert den Baum ausdrücklich nicht.
-        var (admin, _, tournamentId) = await DrawnAsync();
+        var (admin, tournamentId) = await DrawnAsync();
         var phase = (await PhasesAsync(admin, tournamentId)).Single();
         var match = phase.Matches.First(m => m.Status == MatchStatus.Ready);
 

@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using TennisTurnier.Domain.Clubs;
+using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.Security;
@@ -11,7 +11,6 @@ public sealed class TournamentPersistenceTests : IAsyncLifetime
 {
     private readonly SqliteTestDatabase _database = new();
 
-    private Guid _clubId;
     private Guid _templateId;
     private readonly List<Guid> _participantIds = [];
 
@@ -20,10 +19,8 @@ public sealed class TournamentPersistenceTests : IAsyncLifetime
         _database.ActingAs = UserPrincipal.System;
         await using var db = _database.NewContext();
 
-        var club = new Club(Guid.NewGuid(), "TC Musterstadt", "Europe/Vienna");
-        db.Clubs.Add(club);
-
-        var template = new FormatTemplate(Guid.NewGuid(), club.Id, BuiltInFormats.GroupThenKnockout);
+        var template = new FormatTemplate(
+            Guid.NewGuid(), Guid.NewGuid(), BuiltInFormats.GroupThenKnockout);
         db.FormatTemplates.Add(template);
 
         foreach (var name in new[] { "Müller, Anna", "Berger, Eva", "Huber, Lisa", "Wagner, Sarah" })
@@ -37,15 +34,19 @@ public sealed class TournamentPersistenceTests : IAsyncLifetime
 
         await db.SaveChangesAsync();
 
-        _clubId = club.Id;
         _templateId = template.Id;
     }
 
     public async Task DisposeAsync() => await _database.DisposeAsync();
 
     private Tournament NewTournament() => new(
-        Guid.NewGuid(), _clubId, "Clubmeisterschaft 2026",
-        new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), _templateId);
+        Guid.NewGuid(),
+        "Clubmeisterschaft 2026",
+        new Venue("TC Musterstadt", "Hauptstraße 1", "Musterstadt", "Europe/Vienna"),
+        Discipline.Singles,
+        new DateOnly(2026, 5, 16),
+        new DateOnly(2026, 5, 17),
+        _templateId);
 
     private async Task<Guid> SeedTournamentAsync(bool withDraw)
     {
@@ -84,6 +85,89 @@ public sealed class TournamentPersistenceTests : IAsyncLifetime
         Assert.Equal(TournamentState.RegistrationOpen, tournament.State);
         Assert.Equal(4, tournament.Entries.Count);
         Assert.Equal(4, tournament.AcceptedEntries.Count);
+    }
+
+    [Fact]
+    public async Task Ort_Disziplin_und_Anmeldelink_ueberleben_den_Neuaufbau()
+    {
+        // Alle drei sind Wertobjekte in den Spalten des Turniers und keine
+        // eigenen Tabellen. Verlöre der Ort seine Zeitzone, wäre keine Platzzeit
+        // mehr auf die Zeitachse abzubilden; verlöre die Anmeldung ihr Token,
+        // wäre jeder verschickte Link tot.
+        var id = await SeedTournamentAsync(withDraw: false);
+
+        await using var db = _database.NewContext();
+        var tournament = await db.Tournaments.SingleAsync(t => t.Id == id);
+
+        Assert.Equal("TC Musterstadt", tournament.Venue.Name);
+        Assert.Equal("Hauptstraße 1", tournament.Venue.Address);
+        Assert.Equal("Musterstadt", tournament.Venue.City);
+        Assert.Equal("Europe/Vienna", tournament.Venue.TimeZoneId);
+        Assert.Equal(Discipline.Singles, tournament.Discipline);
+        Assert.False(string.IsNullOrWhiteSpace(tournament.Registration.Token));
+    }
+
+    [Fact]
+    public async Task Plaetze_und_ihre_Zeiten_ueberleben_den_Neuaufbau()
+    {
+        // Sie hingen am Verein und hängen jetzt am Turnier. Die Zeiten sind
+        // absolute Fenster: „Platz 1 am 16. Mai von 8 bis 20" ist genau das, was
+        // am Telefon vereinbart wurde.
+        var id = Guid.NewGuid();
+        var von = new DateTimeOffset(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2));
+        var bis = new DateTimeOffset(2026, 5, 16, 20, 0, 0, TimeSpan.FromHours(2));
+
+        await using (var db = _database.NewContext())
+        {
+            var tournament = NewTournament();
+            var center = tournament.AddCourt(
+                Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
+            center.MarkAsCenterCourt(true);
+            center.AddWindow(Guid.NewGuid(), new TimeSlot(von, bis));
+            tournament.AddCourt(Guid.NewGuid(), "Platz 2", CourtSurface.Hard, CourtLocation.Indoor);
+
+            db.Tournaments.Add(tournament);
+            await db.SaveChangesAsync();
+            id = tournament.Id;
+        }
+
+        await using (var db = _database.NewContext())
+        {
+            var tournament = await db.Tournaments.SingleAsync(t => t.Id == id);
+
+            Assert.Equal(2, tournament.Courts.Count);
+
+            var center = tournament.Courts.Single(c => c.Name == "Platz 1");
+            Assert.True(center.IsCenterCourt);
+            Assert.Equal(CourtSurface.Clay, center.Surface);
+
+            var window = Assert.Single(center.Windows);
+            Assert.Equal(von, window.Period.Start);
+            Assert.Equal(bis, window.Period.End);
+            Assert.Equal(id, window.TournamentId);
+
+            Assert.Empty(tournament.Courts.Single(c => c.Name == "Platz 2").Windows);
+        }
+    }
+
+    [Fact]
+    public async Task Zwei_Turniere_duerfen_denselben_Platznamen_tragen()
+    {
+        // Der eindeutige Index steht auf (TournamentId, Name) und nicht auf dem
+        // Namen allein: „Platz 1" gibt es auf jeder Anlage, und die Anlage ist
+        // kein verwalteter Stammsatz mehr.
+        await using var db = _database.NewContext();
+
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            var tournament = NewTournament();
+            tournament.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
+            db.Tournaments.Add(tournament);
+        }
+
+        await db.SaveChangesAsync();
+
+        Assert.Equal(2, await db.Courts.CountAsync(c => c.Name == "Platz 1"));
     }
 
     [Fact]

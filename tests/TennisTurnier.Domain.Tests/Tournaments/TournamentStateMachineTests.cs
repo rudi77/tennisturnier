@@ -8,10 +8,13 @@ public sealed class TournamentStateMachineTests
 {
     private static readonly Guid TemplateId = Guid.NewGuid();
 
+    private static readonly Venue Ort = new("TC Test", null, "Maria Alm", "Europe/Vienna");
+
     private static Tournament NewTournament() => new(
         Guid.NewGuid(),
-        Guid.NewGuid(),
         "Clubmeisterschaft 2026",
+        Ort,
+        Discipline.Singles,
         new DateOnly(2026, 5, 16),
         new DateOnly(2026, 5, 17),
         TemplateId);
@@ -49,7 +52,7 @@ public sealed class TournamentStateMachineTests
     public void Das_Turnierende_darf_nicht_vor_dem_Beginn_liegen()
     {
         Assert.Throws<DomainException>(() => new Tournament(
-            Guid.NewGuid(), Guid.NewGuid(), "Test",
+            Guid.NewGuid(), "Test", Ort, Discipline.Singles,
             new DateOnly(2026, 5, 17), new DateOnly(2026, 5, 16), TemplateId));
     }
 

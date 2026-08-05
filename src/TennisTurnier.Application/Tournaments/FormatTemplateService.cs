@@ -24,10 +24,9 @@ public sealed class FormatTemplateService : IFormatTemplateService
     private UserPrincipal User => _userContext.Current;
 
     public async Task<IReadOnlyList<FormatTemplateSummary>> ListAsync(
-        Guid clubId,
         CancellationToken cancellationToken = default)
     {
-        var templates = await _templates.ListForClubAsync(clubId, cancellationToken);
+        var templates = await _templates.ListForCallerAsync(cancellationToken);
 
         return templates.Select(Summarize).ToList();
     }
@@ -43,13 +42,12 @@ public sealed class FormatTemplateService : IFormatTemplateService
     }
 
     public async Task<Guid> CreateAsync(
-        Guid clubId,
         SaveFormatTemplateRequest request,
         CancellationToken cancellationToken = default)
     {
-        User.Require(Permission.ManageTournament, ResourceScope.Global);
+        User.Require(Permission.CreateTournament, ResourceScope.Global);
 
-        var template = new FormatTemplate(Guid.NewGuid(), clubId, request.Definition);
+        var template = new FormatTemplate(Guid.NewGuid(), User.UserId, request.Definition);
         _templates.Add(template);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -69,15 +67,14 @@ public sealed class FormatTemplateService : IFormatTemplateService
     }
 
     public async Task<Guid> CopyAsync(
-        Guid clubId,
         Guid templateId,
         CopyFormatTemplateRequest request,
         CancellationToken cancellationToken = default)
     {
-        User.Require(Permission.ManageTournament, ResourceScope.Global);
+        User.Require(Permission.CreateTournament, ResourceScope.Global);
 
         var source = await Load(templateId, cancellationToken);
-        var copy = source.CopyFor(Guid.NewGuid(), clubId, request.Name);
+        var copy = source.CopyFor(Guid.NewGuid(), User.UserId, request.Name);
 
         _templates.Add(copy);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -90,20 +87,30 @@ public sealed class FormatTemplateService : IFormatTemplateService
         ?? throw new NotFoundException("Formatvorlage", templateId);
 
     /// <summary>
-    /// Eine mitgelieferte Vorlage gehört keinem Verein und lässt sich nicht
-    /// ändern — das setzt bereits das Aggregat durch.
+    /// Eine mitgelieferte Vorlage gehört niemandem und lässt sich nicht ändern
+    /// — das setzt bereits das Aggregat durch; hier wird nur der Weg dorthin
+    /// abgekürzt, damit der Systemadministrator sie pflegen kann.
     ///
-    /// Für die vereinseigene Vorlage gab es hier einmal eine feinere Regel: sie
-    /// durfte ändern, wer im besitzenden Verein Turniere verwaltet. Mit dem
-    /// Wegfall der Vereinsrolle bleibt davon der globale Scope übrig, den nur
-    /// der Systemadministrator hat. Der Besitz einer Vorlage wandert mit dem
-    /// Verein — sie gehört dann dem Benutzer, der sie angelegt hat.
+    /// Eine eigene Vorlage ändert, wem sie gehört. Sie gehörte einmal einem
+    /// Verein; jetzt gehört sie dem, der sie angelegt hat — sonst könnte er sie
+    /// im nächsten Turnier nicht wiederverwenden, und das ist ihr Zweck.
     /// </summary>
     private void RequireOwnership(FormatTemplate template)
     {
-        User.Require(
-            template.IsBuiltIn ? Permission.ManageClubs : Permission.ManageTournament,
-            ResourceScope.Global);
+        if (template.OwnerUserId == User.UserId && User.IsAuthenticated)
+        {
+            return;
+        }
+
+        User.Require(Permission.CreateTournament, ResourceScope.Global);
+
+        if (!User.IsSystemAdmin)
+        {
+            // Ein Veranstalter darf Vorlagen anlegen, aber keine fremden
+            // ändern. Als „nicht gefunden", nicht als „nicht erlaubt": ein 403
+            // verriete, dass es diese Vorlage gibt (ADR-0004).
+            throw new NotFoundException("Formatvorlage", template.Id);
+        }
     }
 
     private static FormatTemplateSummary Summarize(FormatTemplate template) => new(

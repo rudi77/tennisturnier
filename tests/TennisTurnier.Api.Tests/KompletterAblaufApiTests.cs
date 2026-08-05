@@ -1,9 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
+using TennisTurnier.Application.Security;
 using TennisTurnier.Application.Tournaments;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Scheduling;
@@ -13,8 +12,9 @@ using TennisTurnier.Domain.Tournaments;
 namespace TennisTurnier.Api.Tests;
 
 /// <summary>
-/// Der ganze Weg am Stück: leere Datenbank → Verein → Plätze → Öffnungszeiten →
-/// Turnier → Meldungen → Draw → Spielplan → Turniertag → Ergebnis.
+/// Der ganze Weg am Stück: leere Datenbank → Anmeldung → Turnier samt Ort und
+/// Disziplin → Plätze → Platzzeiten → Meldungen → Draw → Spielplan → Turniertag
+/// → Ergebnis.
 ///
 /// Die übrigen Testklassen prüfen je einen Abschnitt und bauen sich den Rest als
 /// Vorbedingung zusammen. Genau das verdeckt aber die Sorte Fehler, die hier
@@ -22,8 +22,9 @@ namespace TennisTurnier.Api.Tests;
 /// frisch angelegtes Turnier ohne Weg zum Draw war ein solcher Fall — jeder
 /// Abschnitt funktionierte, der Übergang fehlte.
 ///
-/// Die Aufrufe folgen deshalb der Reihenfolge, in der die Oberfläche sie macht:
-/// ClubScreen, WizardScreen, DrawPreparation, BoardScreen.
+/// Der Anfang war einmal ein Verein, den jemand anlegen musste, bevor
+/// irgendetwas ging. Er ist ersatzlos entfallen: wer sich anmeldet, darf
+/// ausschreiben, und der erste Aufruf ist das Turnier selbst.
 /// </summary>
 public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFactory>
 {
@@ -48,66 +49,88 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
     [Fact]
     public async Task Vom_leeren_System_bis_zum_ersten_Ergebnis()
     {
-        await _factory.GrantAsync("ablauf-admin", Role.SystemAdmin, ResourceScope.Global);
-        var admin = _factory.CreateClientAs("ablauf-admin");
+        // --- Anmeldung: kein Eintrag in einer Konfiguration, keine Freischaltung
+        var admin = _factory.CreateClientAs($"ablauf-{Guid.NewGuid():N}");
 
-        // --- ClubScreen: Verein ------------------------------------------------
-        var clubId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TS Maria Alm {Guid.NewGuid():N}", "Europe/Vienna", "Maria Alm"),
-            Json));
+        var me = await admin.GetFromJsonAsync<MeResponse>("/api/me", Json);
+        Assert.False(me!.IsSystemAdmin);
+        Assert.Contains(me.Roles, r => r.Role == Role.Organizer && r.Scope == ScopeType.Global);
 
-        // --- ClubScreen: Plätze und Öffnungszeiten -----------------------------
-        // Zwei Plätze, jeden Wochentag von 8 bis 22 Uhr — dieselbe Massenanlage,
-        // die der Screen macht. Ohne Zeitfenster hätte der Solver nichts.
-        var courtIds = new List<Guid>();
-        for (var i = 1; i <= 2; i++)
-        {
-            var courtId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                $"/api/clubs/{clubId}/courts",
-                new CreateCourtRequest($"Platz {i}", CourtSurface.Clay, CourtLocation.Outdoor, IsCenterCourt: i == 1),
-                Json));
-
-            courtIds.Add(courtId);
-
-            foreach (var day in Enum.GetValues<DayOfWeek>())
-            {
-                AssertOk(
-                    await admin.PostAsJsonAsync(
-                        $"/api/clubs/{clubId}/courts/{courtId}/availability",
-                        new CreateAvailabilityRequest(
-                            day, new TimeOnly(8, 0), new TimeOnly(22, 0), new DateOnly(2026, 1, 1), null),
-                        Json),
-                    $"Öffnungszeit {day} auf Platz {i}");
-            }
-        }
-
-        var club = await admin.GetFromJsonAsync<ClubDetail>($"/api/clubs/{clubId}", Json);
-        Assert.Equal(2, club!.Courts.Count);
-        Assert.All(club.Courts, court => Assert.Equal(7, court.Availability.Count));
-
-        // --- WizardScreen: Turnier --------------------------------------------
+        // --- WizardScreen, Schritt 1: Eckdaten --------------------------------
+        // Ort, Zeitraum und Disziplin stehen am Turnier. Alle drei stehen im
+        // Anlegen und nicht in einer späteren Einstellung: ohne Zeitzone ist
+        // keine Platzzeit auf die Zeitachse abzubilden, und ohne Disziplin
+        // entschiede der erste Melder, was für ein Turnier es wird.
         var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
+            "/api/format-templates", Json);
 
         var tournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
+            "/api/tournaments",
             new CreateTournamentRequest(
                 "Doppel-Clubmeisterschaft 2026",
+                "TC Maria Alm",
+                "Am Gemeindeberg 1",
+                "Maria Alm",
+                "Europe/Vienna",
+                Discipline.Doubles,
                 new DateOnly(2026, 5, 16),
                 new DateOnly(2026, 5, 17),
                 templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id),
             Json));
 
+        // Der Anleger führt sein Turnier — in derselben Arbeitseinheit vergeben.
+        // Ohne diese Zuweisung wäre es für ihn im nächsten Augenblick nicht mehr
+        // auffindbar, und ohne Rolle gäbe es keinen Weg zurück.
+        var nachAnlage = await admin.GetFromJsonAsync<MeResponse>("/api/me", Json);
+        Assert.Contains(
+            nachAnlage!.Roles,
+            r => r.Role == Role.TournamentDirector && r.ResourceId == tournamentId);
+
+        var meine = await admin.GetFromJsonAsync<List<TournamentSummary>>("/api/tournaments", Json);
+        var eintrag = Assert.Single(meine!);
+        Assert.Equal(tournamentId, eintrag.Id);
+        Assert.Equal("TC Maria Alm", eintrag.VenueName);
+
         var frisch = await admin.GetFromJsonAsync<TournamentDetail>(
             $"/api/tournaments/{tournamentId}", Json);
         Assert.Equal(TournamentState.Draft, frisch!.State);
+        Assert.Equal("Europe/Vienna", frisch.Venue.TimeZoneId);
+        Assert.Equal(Discipline.Doubles, frisch.Discipline);
 
         // Der Turniertag ist hier zu Recht verschlossen — das war der Punkt, an
         // dem die Oberfläche vorher endete, ohne einen Weg weiter zu zeigen.
         Assert.Equal(
             HttpStatusCode.UnprocessableEntity,
             (await admin.PostAsync($"/api/tournaments/{tournamentId}/scheduling/match-day", null)).StatusCode);
+
+        // --- WizardScreen, Schritt „Plätze": zwei Plätze und ihre Zeiten ------
+        var courtIds = new List<Guid>();
+        for (var i = 1; i <= 2; i++)
+        {
+            courtIds.Add(await CreatedIdAsync(await admin.PostAsJsonAsync(
+                $"/api/tournaments/{tournamentId}/courts",
+                new CreateCourtRequest(
+                    $"Platz {i}", CourtSurface.Clay, CourtLocation.Outdoor, IsCenterCourt: i == 1),
+                Json)));
+        }
+
+        // Die Massenanlage: beide Plätze, beide Turniertage, acht bis
+        // zweiundzwanzig Uhr Ortszeit. Genau das, was am Telefon vereinbart
+        // wurde — und ein Aufruf statt vierzehn.
+        var windows = await admin.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/courts/windows",
+            new CreateCourtWindowsRequest(new TimeOnly(8, 0), new TimeOnly(22, 0)),
+            Json);
+        AssertOk(windows, "Platzzeiten anlegen");
+
+        Assert.Equal(
+            4,
+            (await windows.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("created").GetInt32());
+
+        var mitPlaetzen = await admin.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+        Assert.Equal(2, mitPlaetzen!.Courts.Count);
+        Assert.All(mitPlaetzen.Courts, court => Assert.Equal(2, court.Windows.Count));
 
         // --- DrawPreparation: Meldung öffnen ----------------------------------
         AssertOk(
@@ -143,6 +166,24 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
                 await admin.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null),
                 $"Meldung annehmen ({team})");
         }
+
+        // Ein Einzelner passt hier nicht hinein. Das fiel früher erst auf, wenn
+        // überhaupt — die Ausschreibung kannte ihre eigene Disziplin nicht.
+        var einzelspieler = await CreatedIdAsync(await admin.PostAsJsonAsync(
+            "/api/players",
+            new CreatePlayerRequest("Lisa", $"C{Guid.NewGuid():N}"[..10], null, null, null),
+            Json));
+
+        var alleine = await (await admin.PostAsJsonAsync(
+            "/api/participants", new CreateParticipantRequest(einzelspieler, null), Json))
+            .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
+
+        Assert.Equal(
+            HttpStatusCode.UnprocessableEntity,
+            (await admin.PostAsJsonAsync(
+                $"/api/tournaments/{tournamentId}/entries",
+                new EnterTournamentRequest(alleine!.Id, null),
+                Json)).StatusCode);
 
         // --- DrawPreparation: Meldeschluss und Auslosung ----------------------
         AssertOk(
@@ -257,5 +298,12 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
 
         var sicht = await oeffentlich.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("InProgress", sicht.GetProperty("state").GetString());
+        Assert.Equal("TC Maria Alm", sicht.GetProperty("venueName").GetString());
+
+        // Die Adresse steht nicht darin: die öffentliche Sicht trägt den Namen
+        // der Anlage, weil Zuschauer wissen müssen, wohin sie fahren — mehr
+        // gehört ihr nicht (ADR-0003).
+        var roh = await oeffentlich.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("Am Gemeindeberg", roh, StringComparison.Ordinal);
     }
 }

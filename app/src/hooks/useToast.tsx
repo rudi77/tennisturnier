@@ -45,7 +45,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return
         }
         if (cause.isNotFound) {
-          emit(`${prefix}Nicht gefunden oder außerhalb des eigenen Vereins.`, 'error')
+          emit(`${prefix}Nicht gefunden oder außerhalb der eigenen Turniere.`, 'error')
           return
         }
         if (cause.isUnauthorized) {

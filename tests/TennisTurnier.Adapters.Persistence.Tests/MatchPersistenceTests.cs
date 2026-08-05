@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
@@ -24,16 +23,20 @@ public sealed class MatchPersistenceTests : IAsyncLifetime
         _database.ActingAs = UserPrincipal.System;
         await using var db = _database.NewContext();
 
-        var club = new Club(Guid.NewGuid(), "TC Musterstadt", "Europe/Vienna");
-        var court = club.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
-        db.Clubs.Add(club);
-
-        var template = new FormatTemplate(Guid.NewGuid(), club.Id, BuiltInFormats.Knockout);
+        var template = new FormatTemplate(Guid.NewGuid(), Guid.NewGuid(), BuiltInFormats.Knockout);
         db.FormatTemplates.Add(template);
 
         var tournament = new Tournament(
-            Guid.NewGuid(), club.Id, "Clubmeisterschaft",
-            new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), template.Id);
+            Guid.NewGuid(),
+            "Clubmeisterschaft",
+            new Venue("TC Musterstadt", null, "Musterstadt", "Europe/Vienna"),
+            Discipline.Singles,
+            new DateOnly(2026, 5, 16),
+            new DateOnly(2026, 5, 17),
+            template.Id);
+
+        var court = tournament.AddCourt(
+            Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
 
         tournament.OpenRegistration();
         for (var i = 0; i < 4; i++)

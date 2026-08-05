@@ -56,7 +56,6 @@ app.MapGet("/api/me", async (IMeService service, CancellationToken ct) =>
     await service.GetAsync(ct) is { } me ? Results.Ok(me) : Results.NoContent())
     .WithTags("Benutzer");
 
-app.MapClubEndpoints();
 app.MapTournamentEndpoints();
 app.MapMatchEndpoints();
 app.MapPublicEndpoints();

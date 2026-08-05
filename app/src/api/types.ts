@@ -2,11 +2,15 @@
  * Die Verträge der API, gespiegelt aus dem Backend.
  *
  * Quellen (rudi77/tennisturnier):
- *   src/TennisTurnier.Application/Clubs/ClubContracts.cs
  *   src/TennisTurnier.Application/Tournaments/{Tournament,Match,CourtQueue}Contracts.cs
  *   src/TennisTurnier.Application/Tournaments/SchedulingService.cs
+ *   src/TennisTurnier.Application/Security/MeContracts.cs
  *   src/TennisTurnier.Application/PublicView/PublicViewContracts.cs
  *   src/TennisTurnier.Domain/**  (Aufzählungen)
+ *
+ * Der Verein ist als Wurzel entfallen; ClubContracts.cs gibt es nicht mehr.
+ * Ort, Disziplin, Plätze und Platzzeiten hängen jetzt am Turnier und stehen
+ * deshalb weiter unten unter „Turnier".
  *
  * ACHTUNG — zwei verschiedene Darstellungen derselben Aufzählungen:
  *
@@ -39,14 +43,13 @@ export type CourtSurface = (typeof CourtSurface)[keyof typeof CourtSurface]
 export const CourtLocation = { Outdoor: 0, Indoor: 1 } as const
 export type CourtLocation = (typeof CourtLocation)[keyof typeof CourtLocation]
 
-export const BlockReason = {
-  Training: 0,
-  LeagueMatch: 1,
-  Maintenance: 2,
-  Weather: 3,
-  Other: 4,
-} as const
-export type BlockReason = (typeof BlockReason)[keyof typeof BlockReason]
+/**
+ * Was gespielt wird. Steht in der Ausschreibung und entscheidet, ob eine
+ * Meldung einen Partner braucht — vorher ergab sich das nur daraus, was jemand
+ * als Teilnehmer anlegte.
+ */
+export const Discipline = { Singles: 0, Doubles: 1, Mixed: 2 } as const
+export type Discipline = (typeof Discipline)[keyof typeof Discipline]
 
 export const TournamentState = {
   Draft: 0,
@@ -131,14 +134,22 @@ export const Tiebreaker = {
 } as const
 export type Tiebreaker = (typeof Tiebreaker)[keyof typeof Tiebreaker]
 
+/**
+ * Vier Rollen, nicht mehr fünf: `ClubAdmin` und `Player` sind mit dem Verein
+ * entfallen. `Organizer` ist neu und global — sein einziges Recht ist, ein
+ * Turnier anzulegen; alles Weitere folgt aus der Turnierleiterrolle, die der
+ * Anleger dabei bekommt.
+ */
 export const Role = {
   SystemAdmin: 0,
-  ClubAdmin: 1,
+  Organizer: 1,
   TournamentDirector: 2,
   Referee: 3,
-  Player: 4,
 } as const
 export type Role = (typeof Role)[keyof typeof Role]
+
+export const ScopeType = { Global: 0, Tournament: 1 } as const
+export type ScopeType = (typeof ScopeType)[keyof typeof ScopeType]
 
 // ---------------------------------------------------------------------------
 // Aufzählungen der öffentlichen Projektion (Zeichenketten)
@@ -169,59 +180,33 @@ export type PublicTournamentState =
 export type PublicSchedulingMode = 'Planning' | 'MatchDay'
 
 // ---------------------------------------------------------------------------
-// Verein und Plätze
+// Wer fragt
 // ---------------------------------------------------------------------------
 
-export interface ClubSummary {
-  id: string
-  name: string
-  city: string | null
-  timeZoneId: string
-  courtCount: number
+/**
+ * Die Auskunft über den Aufrufer.
+ *
+ * Die Oberfläche muss entscheiden, welche Schaltfläche sie zeigt. Sie leitete
+ * das einmal aus dem Vorhandensein von Daten ab — wer keinen Verein sah, bekam
+ * keine Verwaltung. Seit die Rollen am Turnier hängen, trägt diese Vermutung
+ * nicht mehr: ein Turnierleiter sieht sein Turnier und sonst nichts.
+ *
+ * Ausdrücklich keine Sicherheitsgrenze. Was tatsächlich erlaubt ist,
+ * entscheidet der Anwendungsfall und vor ihm der Query-Filter.
+ */
+export interface MeResponse {
+  userId: string
+  displayName: string | null
+  email: string | null
+  isSystemAdmin: boolean
+  roles: RoleAssignmentSummary[]
 }
 
-export interface ClubDetail {
+export interface RoleAssignmentSummary {
   id: string
-  name: string
-  city: string | null
-  timeZoneId: string
-  courts: CourtDetail[]
-}
-
-export interface CourtDetail {
-  id: string
-  name: string
-  surface: CourtSurface
-  location: CourtLocation
-  isCenterCourt: boolean
-  isActive: boolean
-  availability: AvailabilityDetail[]
-  blocks: BlockDetail[]
-}
-
-export interface AvailabilityDetail {
-  id: string
-  /** 0 = Sonntag, wie System.DayOfWeek. */
-  dayOfWeek: number
-  /** "HH:mm:ss" — TimeOnly. */
-  opensAt: string
-  closesAt: string
-  /** "yyyy-MM-dd" — DateOnly. */
-  validFrom: string
-  validUntil: string | null
-}
-
-export interface BlockDetail {
-  id: string
-  from: string
-  to: string
-  reason: BlockReason
-  note: string | null
-}
-
-export interface FreeWindow {
-  from: string
-  to: string
+  role: Role
+  scope: ScopeType
+  resourceId: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -231,6 +216,8 @@ export interface FreeWindow {
 export interface TournamentSummary {
   id: string
   name: string
+  venueName: string
+  discipline: Discipline
   startsOn: string
   endsOn: string
   state: TournamentState
@@ -240,16 +227,52 @@ export interface TournamentSummary {
 
 export interface TournamentDetail {
   id: string
-  clubId: string
   name: string
+  venue: VenueDetail
+  discipline: Discipline
   startsOn: string
   endsOn: string
   state: TournamentState
   schedulingMode: SchedulingMode
   formatTemplateId: string
   format: FormatSnapshot | null
+  courts: CourtDetail[]
   entries: EntryDetail[]
   version: number
+}
+
+/**
+ * Wo gespielt wird — ein Wertobjekt am Turnier, keine verwaltete Anlage.
+ * Reserviert wird außerhalb dieser Anwendung; hier steht nur, was zugesagt ist.
+ */
+export interface VenueDetail {
+  name: string
+  address: string | null
+  city: string | null
+  /** IANA-Zone. Ohne sie ist keine Platzzeit auf die Zeitachse abzubilden. */
+  timeZoneId: string
+}
+
+export interface CourtDetail {
+  id: string
+  name: string
+  surface: CourtSurface
+  location: CourtLocation
+  isCenterCourt: boolean
+  isActive: boolean
+  windows: CourtWindowDetail[]
+}
+
+/**
+ * Eine Platzzeit als absolutes Fenster — „Platz 3 am 16. Mai von 9 bis 18".
+ *
+ * Ausdrücklich kein Wochentagsraster mehr: das waren Vereinsstammdaten, und
+ * die sind abgeschafft. Was hier steht, ist, was am Telefon vereinbart wurde.
+ */
+export interface CourtWindowDetail {
+  id: string
+  from: string
+  to: string
 }
 
 export interface EntryDetail {
@@ -528,7 +551,8 @@ export interface AssignCourtResult {
 export interface PublicTournamentView {
   id: string
   name: string
-  clubName: string
+  /** Der Name der Anlage. Mehr vom Ort steht bewusst nicht darin. */
+  venueName: string
   startsOn: string
   endsOn: string
   state: PublicTournamentState

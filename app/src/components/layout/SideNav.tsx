@@ -1,16 +1,16 @@
 import type { User } from 'oidc-client-ts'
 import { MatchdayMark } from '../core/MatchdayMark'
 import { displayName, initials } from '../../auth/oidc'
-import type { ClubDetail } from '../../api/types'
+import type { TournamentDetail } from '../../api/types'
 
-export type ScreenId = 'board' | 'draw' | 'create' | 'club' | 'public'
+export type ScreenId = 'tournaments' | 'board' | 'draw' | 'create' | 'public'
 
-// „Verein" steht vor „Turnier anlegen", weil es davor kommt: ohne Verein gibt
-// es keine Plätze, ohne Plätze keinen Spielplan.
+// „Meine Turniere" steht voran, weil es der Einstieg ist: hier stand einmal ein
+// Verein, den jemand anlegen musste, bevor irgendetwas ging.
 const ITEMS: { id: ScreenId; label: string; tag: string }[] = [
-  { id: 'board', label: 'Spielplan', tag: '01' },
+  { id: 'tournaments', label: 'Meine Turniere', tag: '01' },
   { id: 'draw', label: 'Draw & Bracket', tag: '02' },
-  { id: 'club', label: 'Verein', tag: '03' },
+  { id: 'board', label: 'Spielplan', tag: '03' },
   { id: 'create', label: 'Turnier anlegen', tag: '04' },
   { id: 'public', label: 'Live-Ansicht', tag: '05' },
 ]
@@ -18,13 +18,13 @@ const ITEMS: { id: ScreenId; label: string; tag: string }[] = [
 export function SideNav({
   screen,
   onNavigate,
-  club,
+  tournament,
   user,
   onLogout,
 }: {
   screen: ScreenId
   onNavigate: (id: ScreenId) => void
-  club: ClubDetail | null
+  tournament: TournamentDetail | null
   user: User | null
   onLogout: () => void
 }) {
@@ -61,7 +61,7 @@ export function SideNav({
             fontWeight: 'var(--fw-semibold)',
           }}
         >
-          Verein
+          Turnierort
         </div>
         <div
           style={{
@@ -71,10 +71,12 @@ export function SideNav({
             marginTop: 5,
           }}
         >
-          {club?.name ?? '—'}
+          {tournament?.venue.name ?? '—'}
         </div>
         <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-on-dark-2)', marginTop: 2 }}>
-          {club ? `${club.courts.length} Plätze · ${club.timeZoneId}` : 'kein Verein geladen'}
+          {tournament
+            ? `${tournament.courts.length} Plätze · ${tournament.venue.timeZoneId}`
+            : 'kein Turnier geladen'}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 'var(--sp-6)' }}>

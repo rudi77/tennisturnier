@@ -4,7 +4,7 @@
  * Die Fehlerabbildung des Backends ist bewusst fachlich (DomainExceptionHandler)
  * und wird hier nicht eingeebnet:
  *
- *   404  Nicht gefunden — oder fremder Club-Scope. Der Unterschied ist
+ *   404  Nicht gefunden — oder ein fremdes Turnier. Der Unterschied ist
  *        absichtlich nicht erkennbar (ADR-0004), also darf die Oberfläche ihn
  *        auch nicht behaupten.
  *   409  Zwischenzeitlich geändert. Am Turniertag der Normalfall: zwei

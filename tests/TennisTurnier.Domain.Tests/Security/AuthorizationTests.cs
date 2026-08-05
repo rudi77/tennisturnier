@@ -33,11 +33,27 @@ public sealed class AuthorizationTests
     }
 
     [Fact]
-    public void Ein_Turnierleiter_darf_keine_Vereine_anlegen()
+    public void Ein_Turnierleiter_darf_keine_weiteren_Turniere_anlegen()
     {
+        // Turnierleiter ist man für ein Turnier. Wer ausschreiben will, braucht
+        // dafür die globale Rolle Organizer — sonst würde die Rolle, die man beim
+        // Anlegen bekommt, sich selbst vermehren.
         var principal = PrincipalWith(Assign(Role.TournamentDirector, ResourceScope.Tournament(TournamentA)));
 
-        Assert.False(principal.Can(Permission.ManageClubs, ResourceScope.Global));
+        Assert.False(principal.Can(Permission.CreateTournament, ResourceScope.Global));
+    }
+
+    [Fact]
+    public void Ein_Veranstalter_darf_anlegen_und_sonst_nichts()
+    {
+        // Die Rolle, die jeder angemeldete Benutzer bekommt. Sie ist global und
+        // trotzdem harmlos, weil sie genau ein Recht trägt.
+        var principal = PrincipalWith(Assign(Role.Organizer, ResourceScope.Global));
+
+        Assert.True(principal.Can(Permission.CreateTournament, ResourceScope.Global));
+        Assert.False(principal.Can(Permission.ManageTournament, ResourceScope.Tournament(TournamentA)));
+        Assert.False(principal.Can(Permission.EnterResults, ResourceScope.Tournament(TournamentA)));
+        Assert.False(principal.Can(Permission.ViewInternals, ResourceScope.Tournament(TournamentA)));
     }
 
     [Fact]
@@ -45,7 +61,7 @@ public sealed class AuthorizationTests
     {
         var principal = PrincipalWith(Assign(Role.SystemAdmin, ResourceScope.Global));
 
-        Assert.True(principal.Can(Permission.ManageClubs, ResourceScope.Global));
+        Assert.True(principal.Can(Permission.CreateTournament, ResourceScope.Global));
         Assert.True(principal.Can(Permission.ManageTournament, ResourceScope.Tournament(TournamentB)));
         Assert.True(principal.Can(Permission.EnterResults, ResourceScope.Tournament(TournamentA)));
     }
@@ -95,7 +111,7 @@ public sealed class AuthorizationTests
     public void Der_Systemkontext_umgeht_jede_Pruefung()
     {
         Assert.True(UserPrincipal.System.IsSystemAdmin);
-        Assert.True(UserPrincipal.System.Can(Permission.ManageClubs, ResourceScope.Global));
+        Assert.True(UserPrincipal.System.Can(Permission.CreateTournament, ResourceScope.Global));
         Assert.True(UserPrincipal.System.Can(
             Permission.ManageTournament, ResourceScope.Tournament(TournamentA)));
     }
@@ -141,6 +157,7 @@ public sealed class AuthorizationTests
 
     [Theory]
     [InlineData(Role.SystemAdmin, ScopeType.Tournament)]
+    [InlineData(Role.Organizer, ScopeType.Tournament)]
     [InlineData(Role.Referee, ScopeType.Global)]
     [InlineData(Role.TournamentDirector, ScopeType.Global)]
     public void Eine_Rolle_im_falschen_Scope_wird_abgewiesen(Role role, ScopeType scopeType)

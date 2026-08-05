@@ -2,13 +2,14 @@ using TennisTurnier.Application.Ports;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Players;
+using TennisTurnier.Domain.Security;
 using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Application.Tests.Fakes;
 
 /// <summary>
-/// Turnierspeicher im Arbeitsspeicher, der den Club-Scope genauso anwendet wie
-/// der echte Query-Filter (ADR-0004).
+/// Turnierspeicher im Arbeitsspeicher, der den Turnier-Scope genauso anwendet
+/// wie der echte Query-Filter (ADR-0004).
 /// </summary>
 public sealed class InMemoryTournamentRepository : ITournamentRepository
 {
@@ -25,11 +26,6 @@ public sealed class InMemoryTournamentRepository : ITournamentRepository
 
     public Task<Tournament?> FindAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
         Task.FromResult(Visible().FirstOrDefault(t => t.Id == tournamentId));
-
-    public Task<IReadOnlyList<Tournament>> ListByClubAsync(
-        Guid clubId,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<Tournament>>(Visible().Where(t => t.ClubId == clubId).ToList());
 
     public Task<IReadOnlyList<Tournament>> ListForCallerAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Tournament>>([.. Visible()]);
@@ -53,6 +49,9 @@ public sealed class InMemoryTournamentRepository : ITournamentRepository
 public sealed class InMemoryFormatTemplateRepository : IFormatTemplateRepository
 {
     private readonly Dictionary<Guid, FormatTemplate> _templates = [];
+    private readonly IUserContext? _userContext;
+
+    public InMemoryFormatTemplateRepository(IUserContext? userContext = null) => _userContext = userContext;
 
     public FormatTemplate Seed(FormatTemplate template)
     {
@@ -63,11 +62,18 @@ public sealed class InMemoryFormatTemplateRepository : IFormatTemplateRepository
     public Task<FormatTemplate?> FindAsync(Guid templateId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_templates.GetValueOrDefault(templateId));
 
-    public Task<IReadOnlyList<FormatTemplate>> ListForClubAsync(
-        Guid clubId,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<FormatTemplate>>(
-            _templates.Values.Where(t => t.ClubId is null || t.ClubId == clubId).ToList());
+    /// <summary>
+    /// Die mitgelieferten Vorlagen und die eigenen des Aufrufers. Eine Vorlage
+    /// gehört seit dem Wegfall des Vereins ihrem Anleger — das ist genau die
+    /// Bedingung, die auch der Query-Filter stellt.
+    /// </summary>
+    public Task<IReadOnlyList<FormatTemplate>> ListForCallerAsync(CancellationToken cancellationToken = default)
+    {
+        var caller = _userContext?.Current.UserId;
+
+        return Task.FromResult<IReadOnlyList<FormatTemplate>>(
+            [.. _templates.Values.Where(t => t.OwnerUserId is null || t.OwnerUserId == caller)]);
+    }
 
     public void Add(FormatTemplate template) => _templates[template.Id] = template;
 }
@@ -114,18 +120,28 @@ public sealed class InMemoryPlayerRepository : IPlayerRepository
         Task.FromResult<IReadOnlyList<Participant>>(
             _participants.Values.Where(p => participantIds.Contains(p.Id)).ToList());
 
-    /// <summary>Welche Spieler in welchem Verein bekannt sind, wird im Test gesetzt.</summary>
-    public HashSet<(Guid PlayerId, Guid ClubId)> KnownInClub { get; } = [];
+    /// <summary>Welcher Spieler in welchem Turnier gemeldet ist, wird im Test gesetzt.</summary>
+    public HashSet<(Guid PlayerId, Guid TournamentId)> EnteredInTournament { get; } = [];
 
-    public Task<bool> IsKnownInClubAsync(
+    public Task<bool> IsEnteredInTournamentAsync(
         Guid playerId,
-        Guid clubId,
+        Guid tournamentId,
         CancellationToken cancellationToken = default) =>
-        Task.FromResult(KnownInClub.Contains((playerId, clubId)));
+        Task.FromResult(EnteredInTournament.Contains((playerId, tournamentId)));
 
     public void Add(Player player) => _players[player.Id] = player;
 
     public void Add(Participant participant) => _participants[participant.Id] = participant;
+}
+
+/// <summary>
+/// Der Benutzerkontext, den ein Test von Fall zu Fall umstellt — der Weg,
+/// dieselbe Handlung einmal als Turnierleiter und einmal als Außenstehender zu
+/// prüfen.
+/// </summary>
+public sealed class MutableUserContext : IUserContext
+{
+    public UserPrincipal Current { get; set; } = UserPrincipal.Anonymous;
 }
 
 public sealed class InMemoryPhaseRepository : IPhaseRepository

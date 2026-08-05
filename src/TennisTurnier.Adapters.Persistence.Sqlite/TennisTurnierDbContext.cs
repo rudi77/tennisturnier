@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TennisTurnier.Adapters.Persistence.Sqlite.Configuration;
 using TennisTurnier.Application.Ports;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
@@ -23,9 +22,7 @@ public sealed class TennisTurnierDbContext : DbContext
         _userContext = userContext;
     }
 
-    public DbSet<Club> Clubs => Set<Club>();
-
-    public DbSet<Court> Courts => Set<Court>();
+    public DbSet<TournamentCourt> Courts => Set<TournamentCourt>();
 
     public DbSet<Tournament> Tournaments => Set<Tournament>();
 
@@ -66,6 +63,9 @@ public sealed class TennisTurnierDbContext : DbContext
     /// </summary>
     private IReadOnlyCollection<Guid> VisibleTournamentIds => _userContext.Current.TournamentIds;
 
+    /// <summary>Der Aufrufer selbst — die eigenen Formatvorlagen hängen daran.</summary>
+    private Guid CallerId => _userContext.Current.UserId;
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // Gilt für jede Zeitangabe im Modell — siehe UtcDateTimeOffsetConverter.
@@ -82,61 +82,41 @@ public sealed class TennisTurnierDbContext : DbContext
         // vergessene Prüfung im Endpunkt darf keine fremden Daten ausliefern
         // können.
         //
-        // Er hing bis hierher an den Vereinen des Aufrufers. Jetzt hängt er an
+        // Er hing bis vor Kurzem an den Vereinen des Aufrufers. Jetzt hängt er an
         // seinen Turnieren, und das ist die engere Grenze: wer keine Rolle an
-        // einem Turnier hat, sieht es nicht — auch nicht über den Verein.
+        // einem Turnier hat, sieht es nicht.
         //
-        // Der ausrichtende Verein bleibt sichtbar, solange ein sichtbares
-        // Turnier auf ihn zeigt: seine Plätze werden zum Spielplan gebraucht.
-        // Der Unterabfrage genügt die Zugehörigkeit, denn auf `Tournaments`
-        // liegt bereits der Filter des Turniers.
-        modelBuilder.Entity<Club>()
-            .HasQueryFilter(club =>
-                SeesEverything
-                || Tournaments.Any(tournament => tournament.ClubId == club.Id));
-
-        modelBuilder.Entity<Court>()
-            .HasQueryFilter(court =>
-                SeesEverything
-                || Tournaments.Any(tournament => tournament.ClubId == court.ClubId));
-
-        // Auch die Kindtabellen brauchen den Filter. Über die Navigation vom
-        // Verein aus wären sie zwar bereits abgeschirmt, aber ADR-0004 begründet
-        // den Filter gerade damit, dass er nicht davon abhängt, auf welchem Weg
-        // jemand abfragt. Ein direktes `Set<CourtBlock>()` lieferte sonst die
-        // internen Notizen fremder Vereine.
-        //
-        // Die Unterabfrage nennt keine Bedingung: auf `Courts` liegt bereits der
-        // Filter des Platzes. Damit gibt es genau eine Stelle, an der steht, wer
-        // einen Platz sieht — und die Kindtabellen können nicht dahinter
-        // zurückfallen.
-        modelBuilder.Entity<AvailabilityWindow>()
-            .HasQueryFilter(window => SeesEverything || Courts.Any(court => court.Id == window.CourtId));
-
-        modelBuilder.Entity<CourtBlock>()
-            .HasQueryFilter(block => SeesEverything || Courts.Any(court => court.Id == block.CourtId));
-
         // Ein Turnier sieht, wer eine Rolle daran hat. Das ist der ganze Filter
         // — und die Stelle, von der alle anderen abhängen.
         modelBuilder.Entity<Tournament>()
             .HasQueryFilter(tournament =>
                 SeesEverything || VisibleTournamentIds.Contains(tournament.Id));
 
-        // Einstufig gegen die sichtbaren Turniere und nicht über eine
-        // Unterabfrage: dasselbe Muster, das Phase, Match und Platzzuweisung
-        // bereits benutzen.
+        // Plätze, Platzzeiten und Meldungen prüfen einstufig gegen die sichtbaren
+        // Turniere statt über eine Unterabfrage — dasselbe Muster, das Phase,
+        // Match und Platzzuweisung bereits benutzen. Sie tragen dafür alle eine
+        // eigene Turnierkennung, auch wenn sie über die Navigation erreichbar
+        // wären: ADR-0004 begründet den Filter gerade damit, dass er nicht davon
+        // abhängt, auf welchem Weg jemand abfragt.
+        modelBuilder.Entity<TournamentCourt>()
+            .HasQueryFilter(court =>
+                SeesEverything || VisibleTournamentIds.Contains(court.TournamentId));
+
+        modelBuilder.Entity<CourtWindow>()
+            .HasQueryFilter(window =>
+                SeesEverything || VisibleTournamentIds.Contains(window.TournamentId));
+
         modelBuilder.Entity<TournamentEntry>()
             .HasQueryFilter(entry =>
                 SeesEverything || VisibleTournamentIds.Contains(entry.TournamentId));
 
-        // Vorlagen ohne Verein sind die mitgelieferten Standardformate und für
-        // jeden sichtbar; eine eigene Vorlage sieht, wer ein Turnier des
-        // Vereins verwaltet, dem sie gehört.
+        // Vorlagen ohne Eigentümer sind die mitgelieferten Standardformate und
+        // für jeden sichtbar; eine eigene Vorlage sieht nur, wem sie gehört.
         modelBuilder.Entity<FormatTemplate>()
             .HasQueryFilter(template =>
                 SeesEverything
-                || template.ClubId == null
-                || Tournaments.Any(tournament => tournament.ClubId == template.ClubId));
+                || template.OwnerUserId == null
+                || template.OwnerUserId == CallerId);
 
         // Phasen, Matches und Platzzuweisungen hängen am Turnier und erben
         // dessen Sichtbarkeit.
@@ -153,8 +133,8 @@ public sealed class TennisTurnierDbContext : DbContext
         // nur, was jeder sehen darf, und wird ohne Anmeldung gelesen (ADR-0003).
         // Diese Ausnahme ist die Begründung dafür, dass es sie überhaupt gibt.
 
-        // Spieler und Teilnehmer tragen bewusst keine ClubId (ADR-0008) und
-        // können daher nicht gefiltert werden. Ihr Schutz entsteht dort, wo
+        // Spieler und Teilnehmer gehören keinem Turnier (ADR-0008) und können
+        // daher nicht gefiltert werden. Ihr Schutz entsteht dort, wo
         // Kontaktdaten abgebildet werden, nicht hier.
 
         UseDomainAssignedKeys(modelBuilder);
@@ -167,7 +147,7 @@ public sealed class TennisTurnierDbContext : DbContext
     ///
     /// Ohne diese Angabe hält EF Core einen Guid-Schlüssel für generiert und
     /// schließt aus einem bereits gesetzten Wert, die Entität sei bereits
-    /// gespeichert. Ein neu über <c>Club.AddCourt</c> angelegter Platz würde dann
+    /// gespeichert. Ein neu über <c>Tournament.AddCourt</c> angelegter Platz würde dann
     /// als UPDATE geschrieben, das keine Zeile trifft — und der Platz wäre
     /// stillschweigend nicht angelegt. Es lohnt, das zentral zu setzen statt
     /// je Entität daran zu denken.

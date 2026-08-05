@@ -11,9 +11,9 @@
 import {
   AssignmentSource,
   AssignmentStatus,
-  BlockReason,
   CourtLocation,
   CourtSurface,
+  Discipline,
   EntryStatus,
   MatchOutcome,
   MatchStatus,
@@ -123,12 +123,10 @@ export const locationLabel: Record<CourtLocation, string> = {
   [CourtLocation.Indoor]: 'Halle',
 }
 
-export const blockReasonLabel: Record<BlockReason, string> = {
-  [BlockReason.Training]: 'Training',
-  [BlockReason.LeagueMatch]: 'Punktespiel',
-  [BlockReason.Maintenance]: 'Wartung',
-  [BlockReason.Weather]: 'Wetter',
-  [BlockReason.Other]: 'Gesperrt',
+export const disciplineLabel: Record<Discipline, string> = {
+  [Discipline.Singles]: 'Einzel',
+  [Discipline.Doubles]: 'Doppel',
+  [Discipline.Mixed]: 'Mixed',
 }
 
 export const assignmentSourceLabel: Record<AssignmentSource, string> = {

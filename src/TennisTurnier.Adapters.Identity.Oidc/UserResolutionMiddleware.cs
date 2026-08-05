@@ -23,17 +23,20 @@ public sealed class UserResolutionMiddleware : IMiddleware
     private readonly IUserContext _userContext;
     private readonly IUserDirectory _directory;
     private readonly SystemAdminBootstrap _bootstrap;
+    private readonly OrganizerBootstrap _organizers;
     private readonly ILogger<UserResolutionMiddleware> _logger;
 
     public UserResolutionMiddleware(
         IUserContext userContext,
         IUserDirectory directory,
         SystemAdminBootstrap bootstrap,
+        OrganizerBootstrap organizers,
         ILogger<UserResolutionMiddleware> logger)
     {
         _userContext = userContext;
         _directory = directory;
         _bootstrap = bootstrap;
+        _organizers = organizers;
         _logger = logger;
     }
 
@@ -102,6 +105,19 @@ public sealed class UserResolutionMiddleware : IMiddleware
                     account.Email ?? "(keine im Token)",
                     account.SubjectId);
                 break;
+        }
+
+        // Und der Selbstservice: wer sich anmeldet, darf Turniere anlegen. Nach
+        // dem Systemadministrator, damit er die Rolle nicht zusätzlich bekommt —
+        // er darf ohnehin alles.
+        if (await _organizers.ApplyAsync(account, assignments, cancellationToken))
+        {
+            _logger.LogInformation(
+                "Konto {UserId} ({Subject}) wurde als Veranstalter freigeschaltet.",
+                account.Id,
+                account.SubjectId);
+
+            assignments = await _directory.GetAssignmentsAsync(account.Id, cancellationToken);
         }
 
         return new UserPrincipal(account.Id, assignments);

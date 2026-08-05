@@ -1,64 +1,86 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
-import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
+import { ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { useResource } from '../hooks/useResource'
 import { useToast } from '../hooks/useToast'
 import { useWorkspace } from '../state/WorkspaceContext'
+import { formatTemplates as templateApi, tournaments as tournamentApi } from '../api/endpoints'
 import {
-  clubs as clubApi,
-  formatTemplates as templateApi,
-  tournaments as tournamentApi,
-} from '../api/endpoints'
-import {
+  CourtLocation,
+  CourtSurface,
+  Discipline,
   FinalSetMode,
   PhaseFormatKind,
   QualificationRule,
   type FormatDefinition,
-  type FreeWindow,
 } from '../api/types'
-import { courtMeta } from '../lib/labels'
-import { blockReasonLabel } from '../lib/labels'
-import { minutesOfDay, toDateOnly } from '../lib/time'
+import { disciplineLabel, surfaceLabel } from '../lib/labels'
+import { toDateOnly } from '../lib/time'
 
-const STEPS = ['Format', 'Parameter', 'Plätze', 'Snapshot'] as const
+const STEPS = ['Eckdaten', 'Format', 'Parameter', 'Plätze', 'Zusammenfassung'] as const
 
-const DAY_START = 9 * 60
-const DAY_END = 21 * 60
+/** Ein Platz, wie er im Schritt „Plätze" zusammengestellt wird. */
+interface CourtDraft {
+  name: string
+  surface: CourtSurface
+  location: CourtLocation
+  isCenterCourt: boolean
+}
+
+const DEFAULT_COURTS: CourtDraft[] = [
+  { name: 'Platz 1', surface: CourtSurface.Clay, location: CourtLocation.Outdoor, isCenterCourt: true },
+  { name: 'Platz 2', surface: CourtSurface.Clay, location: CourtLocation.Outdoor, isCenterCourt: false },
+]
 
 /**
  * Turnier anlegen.
  *
- * Der Weg ist Vorlage → Parameter → Plätze → Snapshot, wie im Entwurf. Zwei
- * Dinge weichen davon ab, weil die API sie anders schneidet, und beide stehen
- * im Schritt selbst:
+ * Der Weg ist Eckdaten → Format → Parameter → Plätze → Zusammenfassung.
  *
- *  - Parameter sind Teil der *Formatvorlage*, nicht des Turniers. Eine
- *    eingebaute Vorlage ist nicht editierbar; wer etwas ändert, legt eine Kopie
- *    des Vereins an. Genau das tut dieser Schritt.
- *  - Eine Auswahl der Plätze *pro Turnier* gibt es in der API nicht — Plätze
- *    gehören dem Verein, und der Solver nimmt die aktiven. Der Schritt zeigt
- *    deshalb die freien Fenster, statt eine Auswahl vorzutäuschen, die nirgends
- *    ankommt.
+ * Zwei Dinge sind hier neu, und beide sind der Kern des Umbaus:
+ *
+ *  - Die **Eckdaten** stehen voran. Ort, Zeitraum und Disziplin gehören zum
+ *    Turnier, nicht zu einer Anlage, die vorher jemand pflegen müsste. Ohne
+ *    Zeitzone ist keine Platzzeit auf die Zeitachse abzubilden, und ohne
+ *    Disziplin entschiede der erste Melder, was für ein Turnier es wird.
+ *  - Der Schritt **Plätze** ist zum ersten Mal echt. Er hat einmal nur die
+ *    freien Fenster des Vereins angezeigt und dazugeschrieben, dass eine
+ *    Auswahl pro Turnier die API nicht kenne. Jetzt legt er die Plätze an und
+ *    bucht ihre Zeiten — beide Plätze, alle Turniertage, eine Uhrzeitspanne,
+ *    in einem Aufruf.
+ *
+ * Parameter bleiben, was sie waren: Teil der *Formatvorlage*, nicht des
+ * Turniers. Eine eingebaute Vorlage ist nicht editierbar; wer etwas ändert,
+ * bekommt eine eigene Kopie — sie gehört jetzt ihm und nicht mehr einem Verein.
  */
-export function WizardScreen() {
-  const { club, selectTournament, reloadTournament } = useWorkspace()
+export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
+  const { selectTournament, reloadTournament } = useWorkspace()
   const { show, showError } = useToast()
 
   const [step, setStep] = useState(1)
-  const [templateId, setTemplateId] = useState<string | null>(null)
-  const [draft, setDraft] = useState<FormatDefinition | null>(null)
+
+  // --- Eckdaten
   const [name, setName] = useState('')
+  const [venueName, setVenueName] = useState('')
+  const [venueAddress, setVenueAddress] = useState('')
+  const [venueCity, setVenueCity] = useState('')
+  const [timeZoneId, setTimeZoneId] = useState('Europe/Vienna')
+  const [discipline, setDiscipline] = useState<Discipline>(Discipline.Singles)
   const [startsOn, setStartsOn] = useState(() => toDateOnly(new Date()))
   const [endsOn, setEndsOn] = useState(() => toDateOnly(new Date()))
+
+  // --- Format
+  const [templateId, setTemplateId] = useState<string | null>(null)
+  const [draft, setDraft] = useState<FormatDefinition | null>(null)
+
+  // --- Plätze
+  const [courts, setCourts] = useState<CourtDraft[]>(DEFAULT_COURTS)
+  const [opensAt, setOpensAt] = useState('08:00')
+  const [closesAt, setClosesAt] = useState('22:00')
+
   const [saving, setSaving] = useState(false)
 
-  const clubId = club?.id ?? null
-
-  const templates = useResource(
-    () => templateApi.listByClub(clubId as string),
-    [clubId],
-    { enabled: !!clubId },
-  )
+  const templates = useResource(() => templateApi.list(), [])
 
   useEffect(() => {
     if (!templateId && templates.data && templates.data.length > 0) {
@@ -82,6 +104,8 @@ export function WizardScreen() {
     return JSON.stringify(draft) !== JSON.stringify(template.data.definition)
   }, [draft, template.data])
 
+  const days = useMemo(() => countDays(startsOn, endsOn), [startsOn, endsOn])
+
   const firstPhase = draft?.phases?.[0] ?? null
   const knockoutPhase = draft?.phases?.find((phase) => phase.format === PhaseFormatKind.Knockout)
   const qualifyingPhase = draft?.phases?.find((phase) => phase.qualification)
@@ -95,10 +119,16 @@ export function WizardScreen() {
     })
   }
 
+  const complete = name.trim().length > 0 && venueName.trim().length > 0 && !!templateId
+
   const create = async () => {
-    if (!clubId || !templateId || !draft) return
+    if (!templateId || !draft) return
     if (!name.trim()) {
       showError(new Error('Ein Turnier braucht einen Namen.'), 'Anlegen')
+      return
+    }
+    if (!venueName.trim()) {
+      showError(new Error('Ein Turnier braucht einen Ort, an dem es stattfindet.'), 'Anlegen')
       return
     }
 
@@ -108,28 +138,59 @@ export function WizardScreen() {
 
       if (dirty) {
         // Eine eingebaute Vorlage bleibt unangetastet: geänderte Parameter
-        // ergeben eine eigene Vorlage des Vereins.
+        // ergeben eine eigene Vorlage — sie gehört dem, der sie anlegt.
         if (template.data?.isBuiltIn) {
-          const copy = await templateApi.copy(clubId, templateId, `${draft.name} · ${name.trim()}`)
+          const copy = await templateApi.copy(templateId, `${draft.name} · ${name.trim()}`)
           effectiveTemplateId = copy.id
         }
         await templateApi.save(effectiveTemplateId, draft)
       }
 
-      const created = await tournamentApi.create(clubId, {
+      const created = await tournamentApi.create({
         name: name.trim(),
+        venueName: venueName.trim(),
+        venueAddress: venueAddress.trim() || null,
+        venueCity: venueCity.trim() || null,
+        timeZoneId,
+        discipline,
         startsOn,
         endsOn,
         formatTemplateId: effectiveTemplateId,
       })
 
+      // Erst danach die Plätze: sie gehören diesem Turnier und keinem anderen.
+      const wanted = courts.filter((court) => court.name.trim().length > 0)
+      for (const court of wanted) {
+        await tournamentApi.addCourt(created.id, {
+          name: court.name.trim(),
+          surface: court.surface,
+          location: court.location,
+          isCenterCourt: court.isCenterCourt,
+        })
+      }
+
+      let windows = 0
+      if (wanted.length > 0) {
+        // Die Massenanlage: dieselbe Uhrzeitspanne an jedem Turniertag. Sie ist
+        // ein Aufruf und nicht einer je Platz und Tag — genau das, was am
+        // Telefon vereinbart wurde.
+        const result = await tournamentApi.addCourtWindows(created.id, {
+          from: `${opensAt}:00`,
+          to: `${closesAt}:00`,
+        })
+        windows = result.created
+      }
+
       selectTournament(created.id)
       await reloadTournament()
+
       show(
-        dirty
-          ? `Turnier angelegt · eigene Vorlage gespeichert — als nächstes Meldung öffnen und Teilnehmer erfassen`
-          : `Turnier angelegt — als nächstes Meldung öffnen und Teilnehmer erfassen`,
+        wanted.length === 0
+          ? 'Turnier angelegt — ohne Plätze. Ohne erfasste Platzzeit weist der Spielplan den Vorschlag ab.'
+          : `Turnier angelegt · ${wanted.length} Plätze, ${windows} Platzzeiten — als nächstes Meldung öffnen`,
       )
+
+      onCreated?.()
     } catch (cause) {
       showError(cause, 'Anlegen')
     } finally {
@@ -137,26 +198,12 @@ export function WizardScreen() {
     }
   }
 
-  if (!club) {
-    return (
-      <>
-        <PageHeader title="Turnier anlegen" tag="wizard" subtitle="Kein Verein geladen" />
-        <section className="md-section">
-          <Empty
-            title="Kein Verein"
-            hint={'Ohne Verein gibt es keine Plätze und keine Vorlagen. Unter „Verein“ lässt sich einer anlegen — das ist der erste Schritt.'}
-          />
-        </section>
-      </>
-    )
-  }
-
   return (
     <>
       <PageHeader
         title="Turnier anlegen"
         tag="wizard"
-        subtitle="Vorlage → Parameter → Plätze → Snapshot"
+        subtitle="Eckdaten → Format → Parameter → Plätze → Zusammenfassung"
       />
 
       <section
@@ -189,10 +236,10 @@ export function WizardScreen() {
             <>
               {step === 1 && (
                 <Panel
-                  title="Format wählen"
-                  hint="Vorlagen sind versioniert. Beim Draw wird die gewählte Vorlage als Snapshot eingefroren und ist gegen spätere Änderungen immun."
+                  title="Eckdaten"
+                  hint="Ort, Zeitraum und Disziplin gehören dem Turnier. Die Zeitzone steht hier und nicht in einer späteren Einstellung: ohne sie ist keine Platzzeit auf die Zeitachse abzubilden."
                 >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)', marginBottom: 'var(--sp-8)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
                     <Field label="Name">
                       <input
                         className="md-input"
@@ -202,6 +249,64 @@ export function WizardScreen() {
                         style={{ width: '100%' }}
                       />
                     </Field>
+
+                    <Field label="Anlage">
+                      <input
+                        className="md-input"
+                        value={venueName}
+                        onChange={(event) => setVenueName(event.target.value)}
+                        placeholder="TC Maria Alm"
+                        style={{ width: '100%' }}
+                      />
+                    </Field>
+
+                    <div style={{ display: 'flex', gap: 'var(--sp-6)', flexWrap: 'wrap' }}>
+                      <Field label="Adresse (optional)">
+                        <input
+                          className="md-input"
+                          value={venueAddress}
+                          onChange={(event) => setVenueAddress(event.target.value)}
+                          placeholder="Am Gemeindeberg 1"
+                        />
+                      </Field>
+                      <Field label="Ort (optional)">
+                        <input
+                          className="md-input"
+                          value={venueCity}
+                          onChange={(event) => setVenueCity(event.target.value)}
+                          placeholder="Maria Alm"
+                        />
+                      </Field>
+                    </div>
+
+                    <Field label="Zeitzone">
+                      <select
+                        className="md-input"
+                        value={timeZoneId}
+                        onChange={(event) => setTimeZoneId(event.target.value)}
+                      >
+                        {['Europe/Vienna', 'Europe/Berlin', 'Europe/Zurich', 'UTC'].map((zone) => (
+                          <option key={zone} value={zone}>
+                            {zone}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    <Row label="Disziplin" hint="entscheidet, ob eine Meldung einen Partner braucht">
+                      {[Discipline.Singles, Discipline.Doubles, Discipline.Mixed].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className="md-pill"
+                          aria-pressed={discipline === value}
+                          onClick={() => setDiscipline(value)}
+                        >
+                          {disciplineLabel[value]}
+                        </button>
+                      ))}
+                    </Row>
+
                     <div style={{ display: 'flex', gap: 'var(--sp-6)', flexWrap: 'wrap' }}>
                       <Field label="Beginn">
                         <input
@@ -225,7 +330,14 @@ export function WizardScreen() {
                       </Field>
                     </div>
                   </div>
+                </Panel>
+              )}
 
+              {step === 2 && (
+                <Panel
+                  title="Format wählen"
+                  hint="Vorlagen sind versioniert. Beim Draw wird die gewählte Vorlage als Snapshot eingefroren und ist gegen spätere Änderungen immun."
+                >
                   <div
                     style={{
                       display: 'grid',
@@ -266,7 +378,7 @@ export function WizardScreen() {
                             </div>
                           </div>
                           <div className="md-num" style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 6 }}>
-                            v{entry.version} {entry.isBuiltIn ? '· eingebaut' : '· Verein'}
+                            v{entry.version} {entry.isBuiltIn ? '· eingebaut' : '· eigene Vorlage'}
                           </div>
                           <div
                             style={{
@@ -285,10 +397,10 @@ export function WizardScreen() {
                 </Panel>
               )}
 
-              {step === 2 && (
+              {step === 3 && (
                 <Panel
                   title="Parameter"
-                  hint="Satzformat, Gruppengröße und Qualifikanten sind Parameter der Vorlage — keine eigene Turnierart. Eine Änderung an einer eingebauten Vorlage legt beim Anlegen eine Kopie des Vereins an."
+                  hint="Satzformat, Gruppengröße und Qualifikanten sind Parameter der Vorlage — keine eigene Turnierart. Eine Änderung an einer eingebauten Vorlage legt beim Anlegen eine eigene Kopie an."
                 >
                   {!draft ? (
                     <Loading label="Vorlage wird geladen …" />
@@ -432,21 +544,40 @@ export function WizardScreen() {
                 </Panel>
               )}
 
-              {step === 3 && (
-                <CourtsStep clubId={club.id} day={startsOn} />
+              {step === 4 && (
+                <CourtsStep
+                  courts={courts}
+                  setCourts={setCourts}
+                  opensAt={opensAt}
+                  closesAt={closesAt}
+                  setOpensAt={setOpensAt}
+                  setClosesAt={setClosesAt}
+                  days={days}
+                  timeZoneId={timeZoneId}
+                />
               )}
 
-              {step === 4 && (
+              {step === 5 && (
                 <Panel
                   title="Zusammenfassung"
-                  hint="Dieser Snapshot wird beim Draw eingefroren und ist gegen einen späteren Vorlagenwechsel immun."
+                  hint="Der Formatsnapshot wird beim Draw eingefroren und ist gegen einen späteren Vorlagenwechsel immun. Plätze und Zeiten lassen sich danach weiter ändern."
                 >
                   <pre className="md-snapshot">
                     {JSON.stringify(
                       {
                         name: name || '(ohne Namen)',
-                        startsOn,
-                        endsOn,
+                        ort: {
+                          name: venueName || '(ohne Anlage)',
+                          adresse: venueAddress || null,
+                          ort: venueCity || null,
+                          zeitzone: timeZoneId,
+                        },
+                        disziplin: disciplineLabel[discipline],
+                        zeitraum: `${startsOn} – ${endsOn}`,
+                        plaetze: courts
+                          .filter((court) => court.name.trim())
+                          .map((court) => court.name.trim()),
+                        platzzeiten: `${opensAt} – ${closesAt} an ${days} ${days === 1 ? 'Tag' : 'Tagen'}`,
                         formatTemplateId: templateId,
                         eigeneKopie: dirty,
                         definition: draft,
@@ -461,11 +592,16 @@ export function WizardScreen() {
                       type="button"
                       className="md-btn md-btn--accent"
                       onClick={() => void create()}
-                      disabled={saving || !name.trim()}
+                      disabled={saving || !complete}
                       style={{ minHeight: 'var(--hit-target)' }}
                     >
                       {saving ? 'Legt an …' : 'Turnier anlegen'}
                     </button>
+                    {!complete && (
+                      <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', alignSelf: 'center' }}>
+                        Name und Anlage fehlen noch — beide stehen unter „Eckdaten".
+                      </span>
+                    )}
                   </div>
 
                   <div className="md-hint" style={{ marginTop: 'var(--sp-6)', fontSize: 'var(--fs-xs)' }}>
@@ -499,12 +635,17 @@ export function WizardScreen() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 'var(--sp-8)' }}>
-            <Fact k="Format" v={draft?.id ?? '—'} />
-            <Fact k="Phasen" v={String(draft?.phases?.length ?? 0)} />
-            <Fact k="Satzformat" v={draft?.matchFormat ? `best of ${draft.matchFormat.bestOf}` : '—'} />
+            <Fact k="Ort" v={venueName || '—'} />
+            <Fact k="Zeitzone" v={timeZoneId} />
+            <Fact k="Disziplin" v={disciplineLabel[discipline]} />
             <Fact k="Zeitraum" v={`${startsOn} – ${endsOn}`} />
-            <Fact k="Plätze" v={`${club.courts.filter((court) => court.isActive).length} aktiv`} />
-            <Fact k="Vorlage" v={dirty ? 'eigene Kopie' : (template.data?.isBuiltIn ? 'eingebaut' : 'Verein')} />
+            <Fact k="Format" v={draft?.id ?? '—'} />
+            <Fact k="Satzformat" v={draft?.matchFormat ? `best of ${draft.matchFormat.bestOf}` : '—'} />
+            <Fact
+              k="Plätze"
+              v={`${courts.filter((court) => court.name.trim()).length} · ${opensAt}–${closesAt}`}
+            />
+            <Fact k="Vorlage" v={dirty ? 'eigene Kopie' : template.data?.isBuiltIn ? 'eingebaut' : 'eigene'} />
           </div>
 
           <div
@@ -524,137 +665,182 @@ export function WizardScreen() {
   )
 }
 
-function CourtsStep({ clubId, day }: { clubId: string; day: string }) {
-  const { club, timeZone } = useWorkspace()
+/**
+ * Plätze und ihre Zeiten.
+ *
+ * Der Schritt hieß einmal genauso und zeigte doch nur an, was der Verein an
+ * Fenstern übrig hatte — mit dem Hinweis, eine Auswahl pro Turnier kenne die
+ * API nicht. Genau diese Lücke geht hier zu.
+ *
+ * Die Zeiten sind eine Uhrzeitspanne je Turniertag und keine Wochentagsregel:
+ * „beide Plätze, Samstag und Sonntag, acht bis zweiundzwanzig" ist, was am
+ * Telefon vereinbart wurde. Ein Wochentagsraster wären Vereinsstammdaten.
+ */
+function CourtsStep({
+  courts,
+  setCourts,
+  opensAt,
+  closesAt,
+  setOpensAt,
+  setClosesAt,
+  days,
+  timeZoneId,
+}: {
+  courts: CourtDraft[]
+  setCourts: (next: CourtDraft[]) => void
+  opensAt: string
+  closesAt: string
+  setOpensAt: (next: string) => void
+  setClosesAt: (next: string) => void
+  days: number
+  timeZoneId: string
+}) {
+  const patch = (index: number, mutate: (court: CourtDraft) => void) => {
+    const next = courts.map((court) => ({ ...court }))
+    const target = next[index]
+    if (!target) return
+    mutate(target)
 
-  const windows = useResource(
-    async (signal) => {
-      const courts = club?.courts ?? []
-      const from = `${day}T00:00:00Z`
-      const to = `${day}T23:59:59Z`
-      const entries = await Promise.all(
-        courts.map(async (court) => {
-          try {
-            return [court.id, await clubApi.freeWindows(clubId, court.id, from, to)] as const
-          } catch {
-            // Ein Platz ohne Öffnungszeiten ist kein Fehler des ganzen Schrittes.
-            return [court.id, [] as FreeWindow[]] as const
-          }
-        }),
-      )
-      if (signal.aborted) return new Map<string, FreeWindow[]>()
-      return new Map(entries)
-    },
-    [clubId, day, club?.courts.length],
-    { enabled: !!club },
-  )
+    // Genau ein Center Court: er ist das bevorzugte Ziel für Finalspiele, und
+    // zwei davon wären keine Bevorzugung.
+    if (target.isCenterCourt) {
+      next.forEach((court, i) => {
+        if (i !== index) court.isCenterCourt = false
+      })
+    }
+
+    setCourts(next)
+  }
 
   return (
     <Panel
-      title="Plätze & Zeitfenster"
-      hint="Freie Fenster = Öffnungszeiten minus Sperren, berechnet vom CourtCalendar der Domäne. Eine Auswahl pro Turnier kennt die API nicht — Plätze gehören dem Verein, und der Solver nimmt die aktiven."
+      title="Plätze & Zeiten"
+      hint="Reserviert wird außerhalb dieser Anwendung — der Veranstalter ruft beim Verein an. Hier steht nur, was zugesagt ist: welche Plätze, zu welchen Zeiten."
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-        {(club?.courts ?? []).map((court) => {
-          const free = windows.data?.get(court.id) ?? []
-          const blocks = court.blocks.filter((block) => {
-            const start = minutesOfDay(block.from, timeZone)
-            return start !== null
-          })
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
+        {courts.map((court, index) => (
+          <div
+            key={index}
+            style={{
+              display: 'flex',
+              gap: 'var(--sp-4)',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <input
+              className="md-input"
+              value={court.name}
+              onChange={(event) => patch(index, (target) => void (target.name = event.target.value))}
+              placeholder={`Platz ${index + 1}`}
+              style={{ width: 150 }}
+              aria-label={`Name von Platz ${index + 1}`}
+            />
 
-          return (
-            <div key={court.id} className="md-checkrow" aria-pressed={court.isActive} style={{ cursor: 'default' }}>
-              <div
-                style={{
-                  width: 18,
-                  height: 18,
-                  flex: 'none',
-                  borderRadius: 'var(--radius-xs)',
-                  display: 'grid',
-                  placeItems: 'center',
-                  fontSize: 11,
-                  fontWeight: 'var(--fw-bold)',
-                  background: court.isActive ? 'var(--court-900)' : 'var(--surface)',
-                  color: 'var(--fg-on-dark)',
-                  border: court.isActive ? '1px solid var(--court-900)' : '1px solid #b8c1d0',
-                }}
-              >
-                {court.isActive ? '✓' : ''}
-              </div>
+            <select
+              className="md-input"
+              value={court.surface}
+              onChange={(event) =>
+                patch(index, (target) => void (target.surface = Number(event.target.value) as CourtSurface))
+              }
+              aria-label={`Belag von Platz ${index + 1}`}
+            >
+              {Object.values(CourtSurface).map((surface) => (
+                <option key={surface} value={surface}>
+                  {surfaceLabel[surface]}
+                </option>
+              ))}
+            </select>
 
-              <div style={{ fontSize: 12.5, fontWeight: 'var(--fw-semibold)', width: 88, flex: 'none' }}>
-                {court.name}
-              </div>
-              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-2)', width: 130, flex: 'none' }}>
-                {courtMeta(court.surface, court.location)}
-                {court.isCenterCourt ? ' · Center' : ''}
-              </div>
+            <select
+              className="md-input"
+              value={court.location}
+              onChange={(event) =>
+                patch(index, (target) => void (target.location = Number(event.target.value) as CourtLocation))
+              }
+              aria-label={`Lage von Platz ${index + 1}`}
+            >
+              <option value={CourtLocation.Outdoor}>Freiplatz</option>
+              <option value={CourtLocation.Indoor}>Halle</option>
+            </select>
 
-              <div
-                style={{
-                  flex: 1,
-                  height: 16,
-                  borderRadius: 'var(--radius-xs)',
-                  background: 'var(--line-soft)',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  minWidth: 120,
-                }}
-                title="09:00 – 21:00"
-              >
-                {free.map((window, index) => {
-                  const from = minutesOfDay(window.from, timeZone) ?? DAY_START
-                  const to = minutesOfDay(window.to, timeZone) ?? DAY_END
-                  const left = ((from - DAY_START) / (DAY_END - DAY_START)) * 100
-                  const width = ((to - from) / (DAY_END - DAY_START)) * 100
-                  return (
-                    <div
-                      key={index}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        bottom: 0,
-                        left: `${Math.max(0, left)}%`,
-                        width: `${Math.max(0, Math.min(100, width))}%`,
-                        background: 'rgba(31, 158, 222, 0.28)',
-                      }}
-                    />
-                  )
-                })}
-                {blocks.map((block) => {
-                  const from = minutesOfDay(block.from, timeZone) ?? DAY_START
-                  const to = minutesOfDay(block.to, timeZone) ?? from
-                  const left = ((from - DAY_START) / (DAY_END - DAY_START)) * 100
-                  const width = ((to - from) / (DAY_END - DAY_START)) * 100
-                  return (
-                    <div
-                      key={block.id}
-                      title={`${blockReasonLabel[block.reason]}${block.note ? ` · ${block.note}` : ''}`}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        bottom: 0,
-                        left: `${Math.max(0, left)}%`,
-                        width: `${Math.max(0, Math.min(100, width))}%`,
-                        background: 'var(--block-hatch-strong)',
-                      }}
-                    />
-                  )
-                })}
-              </div>
+            <button
+              type="button"
+              className="md-pill"
+              aria-pressed={court.isCenterCourt}
+              onClick={() => patch(index, (target) => void (target.isCenterCourt = !target.isCenterCourt))}
+            >
+              Center Court
+            </button>
 
-              <div
-                className="md-num"
-                style={{ fontSize: 10.5, color: 'var(--fg-3)', width: 104, flex: 'none', textAlign: 'right' }}
-              >
-                {windows.loading ? '…' : free.length === 0 ? 'kein Fenster' : `${free.length} Fenster`}
-              </div>
-            </div>
-          )
-        })}
+            <button
+              type="button"
+              className="md-btn"
+              onClick={() => setCourts(courts.filter((_, i) => i !== index))}
+              aria-label={`Platz ${index + 1} entfernen`}
+            >
+              Entfernen
+            </button>
+          </div>
+        ))}
+
+        <div>
+          <button
+            type="button"
+            className="md-btn"
+            onClick={() =>
+              setCourts([
+                ...courts,
+                {
+                  name: `Platz ${courts.length + 1}`,
+                  surface: CourtSurface.Clay,
+                  location: CourtLocation.Outdoor,
+                  isCenterCourt: false,
+                },
+              ])
+            }
+          >
+            Platz hinzufügen
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 'var(--sp-6)', marginTop: 'var(--sp-10)', flexWrap: 'wrap' }}>
+        <Field label="von">
+          <input
+            className="md-input"
+            type="time"
+            value={opensAt}
+            onChange={(event) => setOpensAt(event.target.value)}
+          />
+        </Field>
+        <Field label="bis">
+          <input
+            className="md-input"
+            type="time"
+            value={closesAt}
+            onChange={(event) => setClosesAt(event.target.value)}
+          />
+        </Field>
+      </div>
+
+      <div className="md-hint" style={{ marginTop: 'var(--sp-6)', fontSize: 'var(--fs-xs)' }}>
+        {courts.filter((court) => court.name.trim()).length * days} Platzzeiten —{' '}
+        {courts.filter((court) => court.name.trim()).length} Plätze an {days}{' '}
+        {days === 1 ? 'Turniertag' : 'Turniertagen'}, jeweils {opensAt}–{closesAt} Ortszeit
+        ({timeZoneId}). Ohne mindestens eine weist der Spielplan den Vorschlag ausdrücklich ab,
+        statt ein leeres Board zu liefern.
       </div>
     </Panel>
   )
+}
+
+/** Turniertage einschließlich beider Ränder. */
+function countDays(startsOn: string, endsOn: string): number {
+  const start = new Date(`${startsOn}T00:00:00Z`).getTime()
+  const end = new Date(`${endsOn}T00:00:00Z`).getTime()
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return 0
+  return Math.round((end - start) / 86_400_000) + 1
 }
 
 function Panel({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {

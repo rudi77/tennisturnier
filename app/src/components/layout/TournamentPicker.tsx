@@ -2,33 +2,18 @@ import { useWorkspace } from '../../state/WorkspaceContext'
 import { tournamentStateLabel } from '../../lib/labels'
 
 /**
- * Verein und Turnier auswählen.
+ * Das Turnier auswählen.
  *
- * Der Prototyp kannte genau ein Turnier; die API ist club-scoped. Die Auswahl
- * steht deshalb in der Kopfzeile statt in einer eigenen Ebene — die
- * Turnierleitung arbeitet an einem Tag mit genau einem Turnier und soll nicht
- * dauernd navigieren, aber sehen, welches gemeint ist.
+ * Hier stand einmal ein Verein daneben — er ist als Wurzel entfallen, und damit
+ * bleibt eine Auswahl. Sie steht in der Kopfzeile statt in einer eigenen Ebene:
+ * die Turnierleitung arbeitet an einem Tag mit genau einem Turnier und soll
+ * nicht dauernd navigieren, aber sehen, welches gemeint ist.
  */
 export function TournamentPicker() {
-  const { clubs, club, tournaments, tournament, selectClub, selectTournament } = useWorkspace()
+  const { tournaments, tournament, selectTournament } = useWorkspace()
 
   return (
     <div style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'center', flexWrap: 'wrap' }}>
-      {clubs.length > 1 && (
-        <select
-          className="md-input"
-          aria-label="Verein"
-          value={club?.id ?? ''}
-          onChange={(event) => selectClub(event.target.value)}
-        >
-          {clubs.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.name}
-            </option>
-          ))}
-        </select>
-      )}
-
       <select
         className="md-input"
         aria-label="Turnier"

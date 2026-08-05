@@ -16,6 +16,16 @@ public enum Role
     /// <summary>Darf alles. Scope: Global.</summary>
     SystemAdmin,
 
+    /// <summary>
+    /// Darf Turniere anlegen — und führt danach seine eigenen. Scope: Global.
+    ///
+    /// Global und trotzdem harmlos: das einzige Recht dieser Rolle ist
+    /// <see cref="Permission.CreateTournament"/>, und was daraus entsteht,
+    /// gehört ihrem Anleger allein. Sie ist die Antwort auf die Frage, wer
+    /// überhaupt hereindarf, nicht auf die Frage, wer was sieht.
+    /// </summary>
+    Organizer,
+
     /// <summary>Draw, Spielplan und Ergebnisse eines Turniers. Scope: Tournament.</summary>
     TournamentDirector,
 
@@ -30,21 +40,17 @@ public enum Role
 /// </summary>
 public enum Permission
 {
-    // Die drei vereinsbezogenen Rechte hat seit dem Wegfall von ClubAdmin nur
-    // noch der Systemadministrator. Sie stehen hier, bis der Verein selbst
-    // entfällt — sie vorher zu streichen hieße, die Vereinsverwaltung für einen
-    // Commit ungeschützt zu lassen.
+    /// <summary>
+    /// Ein Turnier anlegen. Bewusst getrennt von
+    /// <see cref="ManageTournament"/>: das eine sagt, wer hereindarf, das
+    /// andere, wer ein bestimmtes Turnier führt. Nur das erste kann global
+    /// sein, denn ein Turnier, das es noch nicht gibt, hat keinen Scope.
+    /// </summary>
+    CreateTournament,
 
-    /// <summary>Vereine anlegen und löschen.</summary>
-    ManageClubs,
-
-    /// <summary>Stammdaten eines Vereins ändern.</summary>
-    ManageClub,
-
-    /// <summary>Plätze, Öffnungszeiten und Sperren eines Vereins pflegen.</summary>
-    ManageCourts,
-
-    /// <summary>Turniere anlegen, Draw erzeugen, Spielplan ändern.</summary>
+    /// <summary>
+    /// Ein Turnier führen: Stammdaten, Plätze, Meldungen, Draw, Spielplan.
+    /// </summary>
     ManageTournament,
 
     /// <summary>Ergebnisse eintragen und korrigieren.</summary>

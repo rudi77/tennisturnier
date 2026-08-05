@@ -58,7 +58,7 @@ public sealed class PlayerService : IPlayerService
     }
 
     public async Task<PlayerDetail> GetAsync(
-        Guid clubId,
+        Guid tournamentId,
         Guid playerId,
         CancellationToken cancellationToken = default)
     {
@@ -68,19 +68,14 @@ public sealed class PlayerService : IPlayerService
         // Spieler fallen nicht unter den Query-Filter (ADR-0008), der Schutz muss
         // hier entstehen — und er braucht zwei Bedingungen, nicht eine.
         //
-        // Die Berechtigung allein genügt nicht: der Verein kommt aus dem Aufruf
+        // Die Berechtigung allein genügt nicht: das Turnier kommt aus dem Aufruf
         // und hat für sich genommen keinen Bezug zum abgefragten Spieler. Wer
         // irgendwo ViewInternals hat, könnte sonst die Kontaktdaten jedes
-        // beliebigen Spielers lesen, indem er seinen eigenen Verein angibt.
-        // Deshalb muss der Spieler diesem Verein auch tatsächlich bekannt sein.
-        //
-        // Die Prüfung steht vorübergehend im globalen Scope, weil der Verein
-        // keiner mehr ist: sie trifft damit nur noch den Systemadministrator.
-        // Mit dem Verein verschwindet auch dieser Zuschnitt — die Kontaktdaten
-        // eines Melders gehören dann an das Turnier, für das er gemeldet ist.
-        _userContext.Current.Require(Permission.ViewInternals, ResourceScope.Global);
+        // beliebigen Spielers lesen, indem er sein eigenes Turnier angibt.
+        // Deshalb muss der Spieler für dieses Turnier auch gemeldet sein.
+        _userContext.Current.Require(Permission.ViewInternals, ResourceScope.Tournament(tournamentId));
 
-        if (!await _players.IsKnownInClubAsync(playerId, clubId, cancellationToken))
+        if (!await _players.IsEnteredInTournamentAsync(playerId, tournamentId, cancellationToken))
         {
             throw new NotFoundException("Spieler", playerId);
         }

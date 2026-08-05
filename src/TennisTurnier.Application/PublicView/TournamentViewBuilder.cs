@@ -1,5 +1,4 @@
 using TennisTurnier.Application.Tournaments;
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Scheduling;
@@ -20,21 +19,19 @@ public static class TournamentViewBuilder
 {
     public static PublicTournamentView Build(
         Tournament tournament,
-        Club club,
         IReadOnlyList<Phase> phases,
         IReadOnlyDictionary<Guid, Standings> standingsByPhase,
         IReadOnlyDictionary<Guid, string> participantNameByEntry,
         IReadOnlyList<CourtAssignment> assignments)
     {
         ArgumentNullException.ThrowIfNull(tournament);
-        ArgumentNullException.ThrowIfNull(club);
         ArgumentNullException.ThrowIfNull(phases);
 
         var seedByEntry = tournament.Entries
             .Where(entry => entry.Seed is not null)
             .ToDictionary(entry => entry.Id, entry => entry.Seed);
 
-        var courtNames = club.Courts.ToDictionary(court => court.Id, court => court.Name);
+        var courtNames = tournament.Courts.ToDictionary(court => court.Id, court => court.Name);
         // Je Match die Zuweisung, die gerade gilt. Nach einer Unterbrechung gibt
         // es zwei: die unterbrochene als Historie und die Fortsetzung. Gezeigt
         // wird, was läuft — sonst schickt der Aushang die Zuschauer auf den Platz
@@ -49,13 +46,13 @@ public static class TournamentViewBuilder
         return new PublicTournamentView(
             tournament.Id,
             tournament.Name,
-            club.Name,
+            tournament.Venue.Name,
             tournament.StartsOn,
             tournament.EndsOn,
             tournament.State,
             tournament.SchedulingMode,
             [.. phases.OrderBy(phase => phase.Ordinal).Select(phase => Describe(phase, standingsByPhase, context))],
-            Describe(club, assignments));
+            Describe(tournament, assignments));
     }
 
     private sealed record BuildContext(
@@ -151,7 +148,7 @@ public static class TournamentViewBuilder
     /// niemanden etwas an, der wissen will, wo als Nächstes gespielt wird.
     /// </summary>
     private static IReadOnlyList<PublicCourtView> Describe(
-        Club club,
+        Tournament tournament,
         IReadOnlyList<CourtAssignment> assignments)
     {
         // Was auf dem Platz steht: erst das laufende oder aufgerufene Match, dann
@@ -172,7 +169,7 @@ public static class TournamentViewBuilder
         // Aussage ist, fehlte ganz (ADR-0002).
         return
         [
-            .. club.Courts
+            .. tournament.Courts
                 .Where(court => court.IsActive || byCourt.ContainsKey(court.Id))
                 .OrderBy(court => court.Name, StringComparer.CurrentCulture)
                 .Select(court => new PublicCourtView(

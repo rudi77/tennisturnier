@@ -6,12 +6,12 @@ import { Toast } from './components/layout/Toast'
 import { SideNav, type ScreenId } from './components/layout/SideNav'
 import { ErrorBlock, Loading } from './components/layout/StateBlock'
 import { WorkspaceContext, type Workspace } from './state/WorkspaceContext'
-import { clubs as clubApi, tournaments as tournamentApi } from './api/endpoints'
+import { me as meApi, tournaments as tournamentApi } from './api/endpoints'
 import { useResource } from './hooks/useResource'
-import type { ClubDetail, TournamentDetail } from './api/types'
+import type { TournamentDetail } from './api/types'
 import { BoardScreen } from './screens/BoardScreen'
-import { ClubScreen } from './screens/ClubScreen'
 import { DrawScreen } from './screens/DrawScreen'
+import { TournamentsScreen } from './screens/TournamentsScreen'
 import { WizardScreen } from './screens/WizardScreen'
 import { PublicScreen } from './screens/PublicScreen'
 
@@ -46,31 +46,16 @@ function Root() {
 function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPublic: () => void }) {
   const { user, logout } = useAuth()
 
-  const [screen, setScreen] = useState<ScreenId>(publicOnly ? 'public' : 'board')
-  const [clubId, setClubId] = useState<string | null>(null)
+  // Der Einstieg ist die Turnierliste und nicht mehr der Spielplan: wer sich
+  // anmeldet, hat vielleicht noch gar kein Turnier — und legt hier eines an.
+  const [screen, setScreen] = useState<ScreenId>(publicOnly ? 'public' : 'tournaments')
   const [tournamentId, setTournamentId] = useState<string | null>(null)
 
-  // Ohne Anmeldung gibt es keine Vereinsliste — /api ist geschützt. Dann bleibt
+  // Ohne Anmeldung gibt es keine Turnierliste — /api ist geschützt. Dann bleibt
   // nur die öffentliche Ansicht, die ihre Turnier-Id aus der Adresszeile nimmt.
-  const clubList = useResource(() => clubApi.list(), [], { enabled: !publicOnly })
+  const me = useResource(() => meApi.get(), [], { enabled: !publicOnly })
 
-  useEffect(() => {
-    if (!clubId && clubList.data && clubList.data.length > 0) {
-      setClubId(clubList.data[0]?.id ?? null)
-    }
-  }, [clubList.data, clubId])
-
-  const club = useResource<ClubDetail>(
-    () => clubApi.get(clubId as string),
-    [clubId],
-    { enabled: !publicOnly && !!clubId },
-  )
-
-  const tournamentList = useResource(
-    () => tournamentApi.listByClub(clubId as string),
-    [clubId],
-    { enabled: !publicOnly && !!clubId },
-  )
+  const tournamentList = useResource(() => tournamentApi.listMine(), [], { enabled: !publicOnly })
 
   useEffect(() => {
     if (!tournamentList.data) return
@@ -88,29 +73,32 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
     await Promise.all([tournament.reload(), tournamentList.reload()])
   }, [tournament, tournamentList])
 
-  const reloadClubs = useCallback(async () => {
-    await Promise.all([clubList.reload(), club.reload()])
-  }, [clubList, club])
-
-  const selectClub = useCallback((next: string) => {
-    setClubId(next)
-    setTournamentId(null)
+  const selectTournament = useCallback((next: string) => {
+    setTournamentId(next)
   }, [])
 
   const workspace = useMemo<Workspace>(
     () => ({
-      clubs: clubList.data ?? [],
-      club: club.data,
+      me: me.data,
       tournaments: tournamentList.data ?? [],
       tournament: tournament.data,
-      timeZone: club.data?.timeZoneId ?? 'Europe/Vienna',
-      selectClub,
-      selectTournament: setTournamentId,
+      // Die Zeitzone kommt vom Ort des Turniers. Sie stand einmal am Verein;
+      // jetzt gibt es sie nur, wenn ein Turnier geladen ist — bis dahin die
+      // Zone dieser Anwendung, damit kein Datum als UTC durchschlägt.
+      timeZone: tournament.data?.venue.timeZoneId ?? 'Europe/Vienna',
+      selectTournament,
       reloadTournament,
-      reloadClubs,
-      loading: clubList.loading || club.loading || tournament.loading,
+      loading: tournamentList.loading || tournament.loading,
     }),
-    [clubList.data, clubList.loading, club.data, club.loading, tournamentList.data, tournament.data, tournament.loading, selectClub, reloadTournament, reloadClubs],
+    [
+      me.data,
+      tournamentList.data,
+      tournamentList.loading,
+      tournament.data,
+      tournament.loading,
+      selectTournament,
+      reloadTournament,
+    ],
   )
 
   const navigate = (next: ScreenId) => {
@@ -127,15 +115,15 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
         <SideNav
           screen={screen}
           onNavigate={navigate}
-          club={club.data}
+          tournament={tournament.data}
           user={user}
           onLogout={logout}
         />
         <main className="md-main">
-          {clubList.error && !publicOnly ? (
-            <ErrorBlock error={clubList.error} onRetry={() => void clubList.reload()} />
+          {tournamentList.error && !publicOnly ? (
+            <ErrorBlock error={tournamentList.error} onRetry={() => void tournamentList.reload()} />
           ) : (
-            <Screen screen={screen} publicOnly={publicOnly} />
+            <Screen screen={screen} publicOnly={publicOnly} onNavigate={navigate} />
           )}
         </main>
       </div>
@@ -143,17 +131,25 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
   )
 }
 
-function Screen({ screen, publicOnly }: { screen: ScreenId; publicOnly: boolean }) {
+function Screen({
+  screen,
+  publicOnly,
+  onNavigate,
+}: {
+  screen: ScreenId
+  publicOnly: boolean
+  onNavigate: (id: ScreenId) => void
+}) {
   if (publicOnly) return <PublicScreen standalone />
   switch (screen) {
+    case 'tournaments':
+      return <TournamentsScreen onCreate={() => onNavigate('create')} onOpen={() => onNavigate('draw')} />
     case 'board':
       return <BoardScreen />
     case 'draw':
       return <DrawScreen />
-    case 'club':
-      return <ClubScreen />
     case 'create':
-      return <WizardScreen />
+      return <WizardScreen onCreated={() => onNavigate('draw')} />
     case 'public':
       return <PublicScreen />
   }

@@ -23,14 +23,14 @@ export function Empty({ title, hint }: { title: string; hint?: string }) {
  * Ein Fehler.
  *
  * 404 wird nicht als „nicht vorhanden" behauptet: die API antwortet auch dann
- * mit 404, wenn die Ressource einem fremden Verein gehört (ADR-0004). Die
+ * mit 404, wenn die Ressource zu einem fremden Turnier gehört (ADR-0004). Die
  * Oberfläche darf den Unterschied nicht erfinden.
  */
 export function ErrorBlock({ error, onRetry }: { error: Error; onRetry?: () => void }) {
   const api = error instanceof ApiError ? error : null
 
   const title = api?.isNotFound
-    ? 'Nicht gefunden oder außerhalb des eigenen Vereins'
+    ? 'Nicht gefunden oder außerhalb der eigenen Turniere'
     : api?.isUnauthorized
       ? 'Keine Berechtigung'
       : api?.isConflict
@@ -38,7 +38,7 @@ export function ErrorBlock({ error, onRetry }: { error: Error; onRetry?: () => v
         : 'Konnte nicht geladen werden'
 
   const hint = api?.isUnauthorized
-    ? 'Die Rollen vergibt die Anwendung, nicht der IdP — ein frisch angemeldeter Benutzer hat zunächst keine.'
+    ? 'Die Rollen vergibt die Anwendung, nicht der IdP. Ein Turnier sieht nur, wer eine Rolle daran hat.'
     : api?.isNotFound
       ? 'Die API unterscheidet beides bewusst nicht, damit die Fehlermeldung nicht verrät, was es zu sehen gäbe.'
       : error.message

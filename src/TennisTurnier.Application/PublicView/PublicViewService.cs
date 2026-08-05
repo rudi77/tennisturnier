@@ -65,7 +65,6 @@ public sealed class PublicViewService : IPublicViewService
     };
 
     private readonly ITournamentRepository _tournaments;
-    private readonly IClubRepository _clubs;
     private readonly IPhaseRepository _phases;
     private readonly ICourtAssignmentRepository _assignments;
     private readonly IPlayerRepository _players;
@@ -78,7 +77,6 @@ public sealed class PublicViewService : IPublicViewService
 
     public PublicViewService(
         ITournamentRepository tournaments,
-        IClubRepository clubs,
         IPhaseRepository phases,
         ICourtAssignmentRepository assignments,
         IPlayerRepository players,
@@ -90,7 +88,6 @@ public sealed class PublicViewService : IPublicViewService
         IClock clock)
     {
         _tournaments = tournaments;
-        _clubs = clubs;
         _phases = phases;
         _assignments = assignments;
         _players = players;
@@ -187,9 +184,6 @@ public sealed class PublicViewService : IPublicViewService
         Tournament tournament,
         CancellationToken cancellationToken)
     {
-        var club = await _clubs.FindAsync(tournament.ClubId, cancellationToken)
-            ?? throw new NotFoundException("Verein", tournament.ClubId);
-
         var phases = await _phases.ListByTournamentAsync(tournament.Id, cancellationToken);
         var assignments = await _assignments.ListByTournamentAsync(tournament.Id, cancellationToken);
         var names = await NamesByEntryAsync(tournament, cancellationToken);
@@ -209,7 +203,7 @@ public sealed class PublicViewService : IPublicViewService
             standings[phase.Id] = PhaseFormats.For(phase.Format).ComputeStandings(state);
         }
 
-        return TournamentViewBuilder.Build(tournament, club, phases, standings, names, assignments);
+        return TournamentViewBuilder.Build(tournament, phases, standings, names, assignments);
     }
 
     /// <summary>

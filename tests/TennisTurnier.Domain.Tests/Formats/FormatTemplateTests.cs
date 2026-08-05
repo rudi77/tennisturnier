@@ -6,18 +6,18 @@ namespace TennisTurnier.Domain.Tests.Formats;
 
 public sealed class FormatTemplateTests
 {
-    private static readonly Guid ClubId = Guid.NewGuid();
+    private static readonly Guid OwnerId = Guid.NewGuid();
 
-    private static FormatTemplate ClubTemplate(FormatDefinition? definition = null) =>
-        new(Guid.NewGuid(), ClubId, definition ?? BuiltInFormats.Knockout);
+    private static FormatTemplate EigeneVorlage(FormatDefinition? definition = null) =>
+        new(Guid.NewGuid(), OwnerId, definition ?? BuiltInFormats.Knockout);
 
     private static FormatTemplate BuiltIn() =>
-        new(Guid.NewGuid(), clubId: null, BuiltInFormats.Knockout);
+        new(Guid.NewGuid(), ownerUserId: null, BuiltInFormats.Knockout);
 
     [Fact]
     public void Eine_neue_Vorlage_hat_Version_eins()
     {
-        Assert.Equal(1, ClubTemplate().Version);
+        Assert.Equal(1, EigeneVorlage().Version);
     }
 
     [Fact]
@@ -25,13 +25,13 @@ public sealed class FormatTemplateTests
     {
         var invalid = BuiltInFormats.Knockout with { Phases = [] };
 
-        Assert.Throws<DomainException>(() => new FormatTemplate(Guid.NewGuid(), ClubId, invalid));
+        Assert.Throws<DomainException>(() => new FormatTemplate(Guid.NewGuid(), OwnerId, invalid));
     }
 
     [Fact]
     public void Eine_Aenderung_zaehlt_die_Version_hoch()
     {
-        var template = ClubTemplate();
+        var template = EigeneVorlage();
 
         template.Update(BuiltInFormats.League);
 
@@ -42,7 +42,7 @@ public sealed class FormatTemplateTests
     [Fact]
     public void Eine_ungueltige_Definition_wird_auch_beim_Aendern_abgewiesen()
     {
-        var template = ClubTemplate();
+        var template = EigeneVorlage();
 
         Assert.Throws<DomainException>(() => template.Update(BuiltInFormats.Knockout with { Phases = [] }));
         Assert.Equal(1, template.Version);
@@ -58,9 +58,9 @@ public sealed class FormatTemplateTests
     }
 
     [Fact]
-    public void Eine_Kopie_gehoert_dem_Verein_und_ist_aenderbar()
+    public void Eine_Kopie_gehoert_ihrem_Anleger_und_ist_aenderbar()
     {
-        var copy = BuiltIn().CopyFor(Guid.NewGuid(), ClubId, "  Hausformat  ");
+        var copy = BuiltIn().CopyFor(Guid.NewGuid(), OwnerId, "  Hausformat  ");
 
         Assert.False(copy.IsBuiltIn);
         Assert.Equal("Hausformat", copy.Name);
@@ -75,7 +75,7 @@ public sealed class FormatTemplateTests
         // Der eigentliche Zweck des eingefrorenen Snapshots (ADR-0001): wer die
         // Vorlage nachschärft, während ein Turnier läuft, darf dessen Regeln
         // nicht rückwirkend verändern.
-        var template = ClubTemplate(BuiltInFormats.Knockout);
+        var template = EigeneVorlage(BuiltInFormats.Knockout);
         var tournament = TournamentReadyForDraw(template.Id);
 
         tournament.GenerateDraw(template.Definition, template.Version);
@@ -91,7 +91,7 @@ public sealed class FormatTemplateTests
     [Fact]
     public void Der_Snapshot_haelt_fest_aus_welchem_Stand_er_stammt()
     {
-        var template = ClubTemplate();
+        var template = EigeneVorlage();
         template.Update(BuiltInFormats.League);
         var tournament = TournamentReadyForDraw(template.Id);
 
@@ -104,8 +104,13 @@ public sealed class FormatTemplateTests
     private static Tournament TournamentReadyForDraw(Guid templateId)
     {
         var tournament = new Tournament(
-            Guid.NewGuid(), ClubId, "Clubmeisterschaft",
-            new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId);
+            Guid.NewGuid(),
+            "Clubmeisterschaft",
+            new Venue("TC Test", null, "Maria Alm", "Europe/Vienna"),
+            Discipline.Singles,
+            new DateOnly(2026, 5, 16),
+            new DateOnly(2026, 5, 17),
+            templateId);
 
         tournament.OpenRegistration();
         for (var i = 0; i < 2; i++)

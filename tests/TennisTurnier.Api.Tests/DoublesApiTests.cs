@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Clubs;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Security;
 
@@ -143,7 +142,7 @@ public sealed class DoublesApiTests : IClassFixture<TennisTurnierApiFactory>
             "doubles-admin",
             new TurnierWunsch
             {
-                Verein = "TC Doppel",
+                Anlage = "TC Doppel",
                 Name = "Doppel-Clubmeisterschaft",
                 Teams = ["Netzroller", "Grundlinie", "Volleyfreunde", "Rückhand"],
                 Setzen = false,

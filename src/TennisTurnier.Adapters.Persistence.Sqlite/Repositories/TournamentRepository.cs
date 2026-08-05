@@ -15,14 +15,6 @@ public sealed class TournamentRepository : ITournamentRepository
     public Task<Tournament?> FindAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
         _db.Tournaments.FirstOrDefaultAsync(t => t.Id == tournamentId, cancellationToken);
 
-    public async Task<IReadOnlyList<Tournament>> ListByClubAsync(
-        Guid clubId,
-        CancellationToken cancellationToken = default) =>
-        await _db.Tournaments
-            .Where(t => t.ClubId == clubId)
-            .OrderByDescending(t => t.StartsOn)
-            .ToListAsync(cancellationToken);
-
     /// <summary>
     /// Die Turniere, die der Aufrufer sehen darf.
     ///
@@ -49,17 +41,14 @@ public sealed class FormatTemplateRepository : IFormatTemplateRepository
         _db.FormatTemplates.FirstOrDefaultAsync(t => t.Id == templateId, cancellationToken);
 
     /// <summary>
-    /// Die Vorlagen des Vereins und die mitgelieferten Standardformate. Der
-    /// Query-Filter blendet fremde Vereinsvorlagen bereits aus; die Einschränkung
-    /// hier grenzt zusätzlich auf den angefragten Verein ein, damit ein Benutzer
-    /// mit mehreren Vereinen nicht die Vorlagen aller sieht.
+    /// Die mitgelieferten Standardformate und die eigenen Vorlagen des
+    /// Aufrufers. Welche das sind, entscheidet der Query-Filter — hier steht
+    /// nur die Reihenfolge: die mitgelieferten zuerst.
     /// </summary>
-    public async Task<IReadOnlyList<FormatTemplate>> ListForClubAsync(
-        Guid clubId,
+    public async Task<IReadOnlyList<FormatTemplate>> ListForCallerAsync(
         CancellationToken cancellationToken = default) =>
         await _db.FormatTemplates
-            .Where(t => t.ClubId == null || t.ClubId == clubId)
-            .OrderBy(t => t.ClubId == null ? 0 : 1)
+            .OrderBy(t => t.OwnerUserId == null ? 0 : 1)
             .ToListAsync(cancellationToken);
 
     public void Add(FormatTemplate template) => _db.FormatTemplates.Add(template);
@@ -118,21 +107,19 @@ public sealed class PlayerRepository : IPlayerRepository
     /// Berechtigung des Aufrufers ist an der Aufrufstelle bereits geprüft; hier
     /// würde der Filter die Antwort nur verfälschen.
     /// </summary>
-    public async Task<bool> IsKnownInClubAsync(
+    public async Task<bool> IsEnteredInTournamentAsync(
         Guid playerId,
-        Guid clubId,
+        Guid tournamentId,
         CancellationToken cancellationToken = default)
     {
         // Die Spielerliste eines Teilnehmers liegt als Text vor und ist nicht
         // durchsuchbar (ADR-0006: JSON- und Listenspalten werden nie
-        // serverseitig abgefragt). Deshalb erst die Teilnehmer der Turniere
-        // dieses Vereins eingrenzen und dann im Speicher prüfen — eine Menge in
-        // der Größenordnung der Meldungen eines Vereins, nicht aller Spieler.
+        // serverseitig abgefragt). Deshalb erst die Teilnehmer dieses Turniers
+        // eingrenzen und dann im Speicher prüfen — eine Menge in der
+        // Größenordnung eines Teilnehmerfelds, nicht aller Spieler.
         var participantIds = await _db.Set<TournamentEntry>()
             .IgnoreQueryFilters()
-            .Where(entry => _db.Tournaments
-                .IgnoreQueryFilters()
-                .Any(t => t.Id == entry.TournamentId && t.ClubId == clubId))
+            .Where(entry => entry.TournamentId == tournamentId)
             .Select(entry => entry.ParticipantId)
             .Distinct()
             .ToListAsync(cancellationToken);

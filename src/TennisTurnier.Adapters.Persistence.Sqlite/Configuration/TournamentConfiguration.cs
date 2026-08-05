@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using TennisTurnier.Domain.Clubs;
+using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.Tournaments;
@@ -14,11 +14,37 @@ public sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournamen
         builder.ToTable("Tournaments");
         builder.HasKey(t => t.Id);
 
-        builder.Property(t => t.ClubId).IsRequired();
         builder.Property(t => t.Name).IsRequired().HasMaxLength(200);
         builder.Property(t => t.State).HasConversion<string>().HasMaxLength(30);
         builder.Property(t => t.SchedulingMode).HasConversion<string>().HasMaxLength(20);
+        builder.Property(t => t.Discipline).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.FormatTemplateId).IsRequired();
+
+        // Der Ort als Spalten am Turnier, nicht als eigene Tabelle: ein Ort ohne
+        // Turnier hat keine Bedeutung, und zwei Turniere an derselben Anlage
+        // teilen sich nichts (siehe Venue).
+        builder.ComplexProperty(t => t.Venue, venue =>
+        {
+            venue.Property(v => v.Name).HasColumnName("VenueName").IsRequired().HasMaxLength(200);
+            venue.Property(v => v.Address).HasColumnName("VenueAddress").HasMaxLength(300);
+            venue.Property(v => v.City).HasColumnName("VenueCity").HasMaxLength(200);
+            venue.Property(v => v.TimeZoneId).HasColumnName("TimeZoneId").IsRequired().HasMaxLength(100);
+        });
+
+        // Als Owned Entity und nicht als ComplexProperty: nur so lässt sich der
+        // eindeutige Index auf das Token legen. Er ist keine Formsache — das
+        // Token ist das einzige Feld dieser Tabelle, das ohne Query-Filter
+        // nachgeschlagen wird, und der Weg der Selbstmeldung führt über ihn.
+        builder.OwnsOne(t => t.Registration, link =>
+        {
+            link.Property(r => r.Token).HasColumnName("RegistrationToken").IsRequired().HasMaxLength(64);
+            link.Property(r => r.Capacity).HasColumnName("RegistrationCapacity");
+            link.Property(r => r.Deadline).HasColumnName("RegistrationDeadline");
+
+            link.HasIndex(r => r.Token).IsUnique();
+        });
+
+        builder.Navigation(t => t.Registration).IsRequired();
 
         // Der eingefrorene Snapshot als eine JSON-Spalte (ADR-0001, ADR-0006).
         // Die Spalte ist optional; EF ruft den Konverter bei null nicht auf,
@@ -32,10 +58,14 @@ public sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournamen
         // statt rowversion — verhält sich auf SQLite und PostgreSQL gleich.
         builder.Property(t => t.Version).IsConcurrencyToken();
 
-        builder.HasOne<Club>()
-            .WithMany()
-            .HasForeignKey(t => t.ClubId)
-            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(t => t.Courts)
+            .WithOne()
+            .HasForeignKey(c => c.TournamentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(t => t.Courts)
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .AutoInclude();
 
         builder.HasMany(t => t.Entries)
             .WithOne()
@@ -53,8 +83,55 @@ public sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournamen
         // Rückzug wieder genullt wird.
         builder.Ignore(t => t.AcceptedEntries);
 
-        builder.HasIndex(t => t.ClubId);
-        builder.HasIndex(t => new { t.ClubId, t.StartsOn });
+        builder.HasIndex(t => t.StartsOn);
+    }
+}
+
+public sealed class TournamentCourtConfiguration : IEntityTypeConfiguration<TournamentCourt>
+{
+    public void Configure(EntityTypeBuilder<TournamentCourt> builder)
+    {
+        builder.ToTable("TournamentCourts");
+        builder.HasKey(c => c.Id);
+
+        builder.Property(c => c.TournamentId).IsRequired();
+        builder.Property(c => c.Name).IsRequired().HasMaxLength(100);
+        builder.Property(c => c.Surface).HasConversion<string>().HasMaxLength(20);
+        builder.Property(c => c.Location).HasConversion<string>().HasMaxLength(20);
+
+        builder.HasMany(c => c.Windows)
+            .WithOne()
+            .HasForeignKey(w => w.CourtId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(c => c.Windows)
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .AutoInclude();
+
+        // Die Eindeutigkeit prüft bereits das Aggregat — hier steht sie ein
+        // zweites Mal, weil sie sonst nur so lange hielte, wie jeder Weg über
+        // das Aggregat führt.
+        builder.HasIndex(c => new { c.TournamentId, c.Name }).IsUnique();
+    }
+}
+
+public sealed class CourtWindowConfiguration : IEntityTypeConfiguration<CourtWindow>
+{
+    public void Configure(EntityTypeBuilder<CourtWindow> builder)
+    {
+        builder.ToTable("CourtWindows");
+        builder.HasKey(w => w.Id);
+
+        builder.Property(w => w.TournamentId).IsRequired();
+        builder.Property(w => w.CourtId).IsRequired();
+
+        builder.ComplexProperty(w => w.Period, period =>
+        {
+            period.Property(p => p.Start).HasColumnName("From").IsRequired();
+            period.Property(p => p.End).HasColumnName("To").IsRequired();
+        });
+
+        builder.HasIndex(w => new { w.TournamentId, w.CourtId });
     }
 }
 
@@ -131,7 +208,7 @@ public sealed class FormatTemplateConfiguration : IEntityTypeConfiguration<Forma
         builder.ToTable("FormatTemplates");
         builder.HasKey(t => t.Id);
 
-        builder.Property(t => t.ClubId);
+        builder.Property(t => t.OwnerUserId);
 
         // Wie beim Turnier: ohne Token gingen zwei gleichzeitige Bearbeitungen
         // derselben Vorlage beide durch, schrieben dieselbe neue Version und
@@ -144,6 +221,6 @@ public sealed class FormatTemplateConfiguration : IEntityTypeConfiguration<Forma
             .HasConversion(new FormatDefinitionConverter(), new FormatDefinitionComparer())
             .IsRequired();
 
-        builder.HasIndex(t => t.ClubId);
+        builder.HasIndex(t => t.OwnerUserId);
     }
 }

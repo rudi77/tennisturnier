@@ -17,4 +17,14 @@ public sealed class BootstrapAdminOptions
     /// nächsten Anmeldung die globale Rolle <c>SystemAdmin</c>.
     /// </summary>
     public IList<string> BootstrapSystemAdmins { get; set; } = [];
+
+    /// <summary>
+    /// Darf jeder angemeldete Benutzer Turniere anlegen?
+    ///
+    /// Vorgabe ja — das ist der Zweck: wer ein Turnier veranstalten will, soll
+    /// es ausschreiben können, ohne dass ihn zuvor jemand freischaltet. Eine
+    /// Instanz, die geschlossen laufen soll, schaltet es hier ab; die Rolle
+    /// vergibt dann ein Systemadministrator.
+    /// </summary>
+    public bool SelfServiceOrganizers { get; set; } = true;
 }

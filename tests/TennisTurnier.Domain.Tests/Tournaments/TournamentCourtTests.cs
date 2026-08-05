@@ -1,4 +1,3 @@
-using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Tournaments;
 

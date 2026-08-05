@@ -15,23 +15,19 @@ internal static class TournamentEndpoints
 
     private static void MapTournaments(IEndpointRouteBuilder app)
     {
+        var all = app.MapGroup("/api/tournaments").WithTags("Turniere");
+
         // Der Einstieg: die Turniere des Aufrufers. Welche das sind, entscheidet
         // der Query-Filter — hier steht keine zweite Bedingung.
-        app.MapGet("/api/tournaments", async (ITournamentService service, CancellationToken ct) =>
-            Results.Ok(await service.ListMineAsync(ct))).WithTags("Turniere");
+        all.MapGet("/", async (ITournamentService service, CancellationToken ct) =>
+            Results.Ok(await service.ListMineAsync(ct)));
 
-        var byClub = app.MapGroup("/api/clubs/{clubId:guid}/tournaments").WithTags("Turniere");
-
-        byClub.MapGet("/", async (Guid clubId, ITournamentService service, CancellationToken ct) =>
-            Results.Ok(await service.ListAsync(clubId, ct)));
-
-        byClub.MapPost("/", async (
-            Guid clubId,
+        all.MapPost("/", async (
             CreateTournamentRequest request,
             ITournamentService service,
             CancellationToken ct) =>
         {
-            var id = await service.CreateAsync(clubId, request, ct);
+            var id = await service.CreateAsync(request, ct);
             return Results.Created($"/api/tournaments/{id}", new { id });
         });
 
@@ -52,6 +48,78 @@ internal static class TournamentEndpoints
 
         MapTransitions(tournaments);
         MapEntries(tournaments);
+        MapCourts(tournaments);
+    }
+
+    /// <summary>
+    /// Die Plätze des Turniers samt ihren Zeiten.
+    ///
+    /// Sie hingen einmal am Verein. Dass sie jetzt am Turnier hängen, ist der
+    /// Kern des Umbaus: reserviert wird außerhalb dieser Anwendung, und was
+    /// zugesagt ist, gilt für dieses Turnier und für kein anderes.
+    /// </summary>
+    private static void MapCourts(RouteGroupBuilder tournaments)
+    {
+        var courts = tournaments.MapGroup("/courts").WithTags("Plätze");
+
+        courts.MapPost("/", async (
+            Guid tournamentId,
+            CreateCourtRequest request,
+            ITournamentService service,
+            CancellationToken ct) =>
+        {
+            var id = await service.AddCourtAsync(tournamentId, request, ct);
+            return Results.Created($"/api/tournaments/{tournamentId}/courts/{id}", new { id });
+        });
+
+        courts.MapPut("/{courtId:guid}", async (
+            Guid tournamentId,
+            Guid courtId,
+            UpdateCourtRequest request,
+            ITournamentService service,
+            CancellationToken ct) =>
+        {
+            await service.UpdateCourtAsync(tournamentId, courtId, request, ct);
+            return Results.NoContent();
+        });
+
+        courts.MapDelete("/{courtId:guid}", async (
+            Guid tournamentId, Guid courtId, ITournamentService service, CancellationToken ct) =>
+        {
+            await service.RemoveCourtAsync(tournamentId, courtId, ct);
+            return Results.NoContent();
+        });
+
+        // Die Massenanlage steht vor der Einzelanlage, weil sie der Normalfall
+        // ist: „beide Plätze, beide Turniertage, acht bis zweiundzwanzig".
+        courts.MapPost("/windows", async (
+            Guid tournamentId,
+            CreateCourtWindowsRequest request,
+            ITournamentService service,
+            CancellationToken ct) =>
+            Results.Ok(new { created = await service.AddCourtWindowsAsync(tournamentId, request, ct) }));
+
+        courts.MapPost("/{courtId:guid}/windows", async (
+            Guid tournamentId,
+            Guid courtId,
+            CreateCourtWindowRequest request,
+            ITournamentService service,
+            CancellationToken ct) =>
+        {
+            var id = await service.AddCourtWindowAsync(tournamentId, courtId, request, ct);
+            return Results.Created($"/api/tournaments/{tournamentId}/courts/{courtId}/windows/{id}", new { id });
+        });
+
+        courts.MapDelete("/{courtId:guid}/windows/{windowId:guid}", async (
+            Guid tournamentId,
+            Guid courtId,
+            Guid windowId,
+            ITournamentService service,
+            CancellationToken ct) =>
+        {
+            await service.RemoveCourtWindowAsync(tournamentId, courtId, windowId, ct);
+            return Results.NoContent();
+        });
     }
 
     /// <summary>
@@ -138,29 +206,27 @@ internal static class TournamentEndpoints
 
     private static void MapFormatTemplates(IEndpointRouteBuilder app)
     {
-        var byClub = app.MapGroup("/api/clubs/{clubId:guid}/format-templates").WithTags("Formatvorlagen");
+        var all = app.MapGroup("/api/format-templates").WithTags("Formatvorlagen");
 
-        byClub.MapGet("/", async (Guid clubId, IFormatTemplateService service, CancellationToken ct) =>
-            Results.Ok(await service.ListAsync(clubId, ct)));
+        all.MapGet("/", async (IFormatTemplateService service, CancellationToken ct) =>
+            Results.Ok(await service.ListAsync(ct)));
 
-        byClub.MapPost("/", async (
-            Guid clubId,
+        all.MapPost("/", async (
             SaveFormatTemplateRequest request,
             IFormatTemplateService service,
             CancellationToken ct) =>
         {
-            var id = await service.CreateAsync(clubId, request, ct);
+            var id = await service.CreateAsync(request, ct);
             return Results.Created($"/api/format-templates/{id}", new { id });
         });
 
-        byClub.MapPost("/{templateId:guid}/copy", async (
-            Guid clubId,
+        all.MapPost("/{templateId:guid}/copy", async (
             Guid templateId,
             CopyFormatTemplateRequest request,
             IFormatTemplateService service,
             CancellationToken ct) =>
         {
-            var id = await service.CopyAsync(clubId, templateId, request, ct);
+            var id = await service.CopyAsync(templateId, request, ct);
             return Results.Created($"/api/format-templates/{id}", new { id });
         });
 
@@ -197,14 +263,17 @@ internal static class TournamentEndpoints
             return Results.Created($"/api/players/{id}", new { id });
         });
 
-        // Kontaktdaten hängen an einem Verein, weil Spieler selbst keinem
-        // gehören (ADR-0008) und der Query-Filter hier nicht greift.
-        players.MapGet("/{playerId:guid}", async (
+        // Kontaktdaten hängen am Turnier, weil Spieler selbst keinem gehören
+        // (ADR-0008) und der Query-Filter hier nicht greift. Das Turnier steht
+        // deshalb im Pfad und nicht im Query-String: die Berechtigung wird
+        // gegen genau dieses Turnier geprüft, und der Spieler muss dafür
+        // gemeldet sein.
+        app.MapGet("/api/tournaments/{tournamentId:guid}/players/{playerId:guid}", async (
+            Guid tournamentId,
             Guid playerId,
-            Guid clubId,
             IPlayerService service,
             CancellationToken ct) =>
-            Results.Ok(await service.GetAsync(clubId, playerId, ct)));
+            Results.Ok(await service.GetAsync(tournamentId, playerId, ct))).WithTags("Spieler");
 
         app.MapPost("/api/participants", async (
             CreateParticipantRequest request,
