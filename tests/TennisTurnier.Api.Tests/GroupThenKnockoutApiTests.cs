@@ -27,61 +27,19 @@ public sealed class GroupThenKnockoutApiTests : IClassFixture<TennisTurnierApiFa
 
     public GroupThenKnockoutApiTests(TennisTurnierApiFactory factory) => _factory = factory;
 
-    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
-    {
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return body.GetProperty("id").GetGuid();
-    }
-
     /// <summary>16 Teilnehmer, vier Gruppen, die besten zwei kommen weiter.</summary>
     private async Task<(HttpClient Client, Guid TournamentId)> DrawnAsync(int participants = 16)
     {
-        await _factory.GrantAsync("gk-admin", Role.SystemAdmin, ResourceScope.Global);
-        var client = _factory.CreateClientAs("gk-admin");
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "gk-admin",
+            new TurnierWunsch
+            {
+                Vorlage = BuiltInFormats.GroupThenKnockout.Name,
+                Verein = "TC Gruppen",
+                Teilnehmer = participants,
+            });
 
-        var clubId = await CreatedIdAsync(await client.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Gruppen {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        var templates = await client.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
-        var templateId = templates!.Single(t => t.Name == BuiltInFormats.GroupThenKnockout.Name).Id;
-
-        var tournamentId = await CreatedIdAsync(await client.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Clubmeisterschaft", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId),
-            Json));
-
-        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
-
-        for (var i = 1; i <= participants; i++)
-        {
-            var playerId = await CreatedIdAsync(await client.PostAsJsonAsync(
-                "/api/players",
-                new CreatePlayerRequest($"Vorname{i:00}", $"N{Guid.NewGuid():N}"[..10], null, null, null),
-                Json));
-
-            var participant = await (await client.PostAsJsonAsync(
-                "/api/participants", new CreateParticipantRequest(playerId, null), Json))
-                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
-
-            var entryId = await CreatedIdAsync(await client.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(participant!.Id, i),
-                Json));
-
-            await client.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
-        }
-
-        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await client.PostAsync($"/api/tournaments/{tournamentId}/draw", null)).StatusCode);
-
-        return (client, tournamentId);
+        return (aufbau.Admin, aufbau.TournamentId);
     }
 
     private static async Task<List<PhaseDetail>> PhasesAsync(HttpClient client, Guid tournamentId) =>

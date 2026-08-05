@@ -6,7 +6,6 @@ using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Clubs;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
-using TennisTurnier.Domain.Security;
 using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Api.Tests;
@@ -27,61 +26,19 @@ public sealed class SwissApiTests : IClassFixture<TennisTurnierApiFactory>
 
     public SwissApiTests(TennisTurnierApiFactory factory) => _factory = factory;
 
-    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
-    {
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return body.GetProperty("id").GetGuid();
-    }
-
     private async Task<(HttpClient Client, Guid TournamentId)> DrawnAsync(int participants = 8)
     {
-        var user = $"swiss-{Guid.NewGuid():N}"[..20];
-        await _factory.GrantAsync(user, Role.SystemAdmin, ResourceScope.Global);
-        var client = _factory.CreateClientAs(user);
+        var aufbau = await _factory.NeuesTurnierAsync(
+            $"swiss-{Guid.NewGuid():N}"[..20],
+            new TurnierWunsch
+            {
+                Vorlage = BuiltInFormats.Swiss.Name,
+                Name = "Schweizer Turnier",
+                Verein = "TC Schweiz",
+                Teilnehmer = participants,
+            });
 
-        var clubId = await CreatedIdAsync(await client.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Schweiz {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        var templates = await client.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
-        var templateId = templates!.Single(t => t.Name == BuiltInFormats.Swiss.Name).Id;
-
-        var tournamentId = await CreatedIdAsync(await client.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Schweizer Turnier", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId),
-            Json));
-
-        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
-
-        for (var i = 1; i <= participants; i++)
-        {
-            var playerId = await CreatedIdAsync(await client.PostAsJsonAsync(
-                "/api/players",
-                new CreatePlayerRequest($"Vorname{i:00}", $"N{Guid.NewGuid():N}"[..10], null, null, null),
-                Json));
-
-            var participant = await (await client.PostAsJsonAsync(
-                "/api/participants", new CreateParticipantRequest(playerId, null), Json))
-                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
-
-            var entryId = await CreatedIdAsync(await client.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(participant!.Id, i),
-                Json));
-
-            await client.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
-        }
-
-        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await client.PostAsync($"/api/tournaments/{tournamentId}/draw", null)).StatusCode);
-
-        return (client, tournamentId);
+        return (aufbau.Admin, aufbau.TournamentId);
     }
 
     private static async Task<PhaseDetail> PhaseAsync(HttpClient client, Guid tournamentId) =>
@@ -392,7 +349,7 @@ public sealed class SwissApiTests : IClassFixture<TennisTurnierApiFactory>
         var clubId = (await client.GetFromJsonAsync<TournamentDetail>(
             $"/api/tournaments/{tournamentId}", Json))!.ClubId;
 
-        var courtId = await CreatedIdAsync(await client.PostAsJsonAsync(
+        var courtId = await TurnierAufbau.CreatedIdAsync(await client.PostAsJsonAsync(
             $"/api/clubs/{clubId}/courts",
             new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor),
             Json));

@@ -25,12 +25,6 @@ public sealed class TournamentHubTests : IClassFixture<TennisTurnierApiFactory>
 
     public TournamentHubTests(TennisTurnierApiFactory factory) => _factory = factory;
 
-    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
-    {
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return body.GetProperty("id").GetGuid();
-    }
-
     /// <summary>
     /// Eine Verbindung über den Testserver. <c>HttpMessageHandlerFactory</c> ist
     /// der Weg, den In-Memory-Transport zu benutzen — ohne ihn versuchte der
@@ -45,51 +39,11 @@ public sealed class TournamentHubTests : IClassFixture<TennisTurnierApiFactory>
 
     private async Task<(HttpClient Admin, Guid TournamentId)> DrawnTournamentAsync()
     {
-        await _factory.GrantAsync("hub-admin", Role.SystemAdmin, ResourceScope.Global);
-        var admin = _factory.CreateClientAs("hub-admin");
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "hub-admin",
+            new TurnierWunsch { Verein = "TC Hub", Teilnehmer = 4 });
 
-        var clubId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Hub {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
-
-        var tournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Clubmeisterschaft",
-                new DateOnly(2026, 5, 16),
-                new DateOnly(2026, 5, 17),
-                templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id),
-            Json));
-
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
-
-        for (var i = 1; i <= 4; i++)
-        {
-            var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                "/api/players",
-                new CreatePlayerRequest($"Vorname{i:00}", $"N{Guid.NewGuid():N}"[..10], null, null, null),
-                Json));
-
-            var participant = await (await admin.PostAsJsonAsync(
-                "/api/participants", new CreateParticipantRequest(playerId, null), Json))
-                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
-
-            var entryId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(participant!.Id, i),
-                Json));
-
-            await admin.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
-        }
-
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/draw", null);
-
-        return (admin, tournamentId);
+        return (aufbau.Admin, aufbau.TournamentId);
     }
 
     [Fact]

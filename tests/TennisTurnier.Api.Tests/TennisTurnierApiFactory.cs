@@ -153,13 +153,29 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
             return;
         }
 
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-
+        // Hier stand einmal SqliteConnection.ClearAllPools(), damit sich die
+        // Datei anschließend löschen ließ. Der Verbindungspool ist aber
+        // prozessweit, und diese Fabrik ist es nicht: die Testklassen laufen
+        // nebeneinander, jede mit ihrer eigenen Datei. Wer beim Aufräumen alle
+        // Pools leerte, nahm den noch laufenden Klassen ihre Verbindungen weg —
+        // deren nächster Zugriff endete in einem 500, und zwar in einem Test,
+        // der mit der Ursache nichts zu tun hatte. Das war der Grund, aus dem
+        // etwa jeder vierte Lauf an wechselnder Stelle rot war.
+        //
+        // Die Datei bleibt deshalb liegen, solange der Pool sie hält. Sie liegt
+        // im Temp-Verzeichnis, ist ein paar Kilobyte groß und trägt einen
+        // eindeutigen Namen; das ist der günstigere Preis.
         foreach (var file in new[] { _databasePath, $"{_databasePath}-shm", $"{_databasePath}-wal" })
         {
-            if (File.Exists(file))
+            try
             {
-                File.Delete(file);
+                if (File.Exists(file))
+                {
+                    File.Delete(file);
+                }
+            }
+            catch (IOException)
+            {
             }
         }
     }

@@ -27,100 +27,31 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
 
     public MatchDayApiTests(TennisTurnierApiFactory factory) => _factory = factory;
 
-    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
-    {
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return body.GetProperty("id").GetGuid();
-    }
-
     /// <summary>Ein ausgelostes Turnier mit bestätigtem Spielplan im Turniertagbetrieb.</summary>
     private async Task<(HttpClient Admin, Guid ClubId, Guid TournamentId)> MatchDayAsync(
         int participants = 8,
         int courts = 2)
     {
-        // Die Uhr steht auf dem Morgen des ersten Turniertags. Ohne sie läge das
-        // Turnier in der Vergangenheit der Systemuhr, und alles, was „ab jetzt"
-        // rechnet, spränge in die Gegenwart — eine Zusage für 14 Uhr wäre dann
-        // längst verstrichen, und der Test bewiese nichts.
-        _factory.Clock.Now = new DateTimeOffset(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2));
-
-        await _factory.GrantAsync("tag-admin", Role.SystemAdmin, ResourceScope.Global);
-        var admin = _factory.CreateClientAs("tag-admin");
-
-        var clubId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Turniertag {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        for (var i = 1; i <= courts; i++)
-        {
-            var courtId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                $"/api/clubs/{clubId}/courts",
-                new CreateCourtRequest($"Platz {i}", CourtSurface.Clay, CourtLocation.Outdoor),
-                Json));
-
-            foreach (var day in new[] { DayOfWeek.Saturday, DayOfWeek.Sunday })
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "tag-admin",
+            new TurnierWunsch
             {
-                await admin.PostAsJsonAsync(
-                    $"/api/clubs/{clubId}/courts/{courtId}/availability",
-                    new CreateAvailabilityRequest(
-                        day, new TimeOnly(8, 0), new TimeOnly(21, 0), new DateOnly(2026, 1, 1), null),
-                    Json);
-            }
-        }
+                Verein = "TC Turniertag",
+                Teilnehmer = participants,
+                Plaetze = courts,
+                Oeffnungszeiten = true,
+                Spielplan = true,
+                Turniertag = true,
 
-        var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
+                // Die Uhr steht auf dem Morgen des ersten Turniertags. Ohne sie
+                // läge das Turnier in der Vergangenheit der Systemuhr, und alles,
+                // was „ab jetzt" rechnet, spränge in die Gegenwart — eine Zusage
+                // für 14 Uhr wäre dann längst verstrichen, und der Test bewiese
+                // nichts.
+                Uhr = new DateTimeOffset(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2)),
+            });
 
-        var tournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Clubmeisterschaft",
-                new DateOnly(2026, 5, 16),
-                new DateOnly(2026, 5, 17),
-                templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id),
-            Json));
-
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
-
-        for (var i = 1; i <= participants; i++)
-        {
-            var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                "/api/players",
-                new CreatePlayerRequest($"Vorname{i:00}", $"N{Guid.NewGuid():N}"[..10], null, null, null),
-                Json));
-
-            var participant = await (await admin.PostAsJsonAsync(
-                "/api/participants", new CreateParticipantRequest(playerId, null), Json))
-                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
-
-            var entryId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(participant!.Id, i),
-                Json));
-
-            await admin.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
-        }
-
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/draw", null);
-
-        var proposal = (await (await admin.PostAsync(
-            $"/api/tournaments/{tournamentId}/schedule/proposal", null))
-            .Content.ReadFromJsonAsync<SchedulePlanResult>(Json))!;
-
-        await admin.PostAsJsonAsync(
-            $"/api/tournaments/{tournamentId}/schedule/confirm",
-            new ConfirmScheduleRequest([.. proposal.Assignments.Select(a => new ConfirmedAssignment(
-                a.MatchId, a.CourtId, a.SequenceOnCourt, a.PlannedStart, a.EstimatedDuration))]),
-            Json);
-
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await admin.PostAsync($"/api/tournaments/{tournamentId}/scheduling/match-day", null)).StatusCode);
-
-        return (admin, clubId, tournamentId);
+        return (aufbau.Admin, aufbau.ClubId, aufbau.TournamentId);
     }
 
     private static async Task<List<CourtBoard>> BoardAsync(HttpClient client, Guid tournamentId) =>

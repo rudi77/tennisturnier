@@ -139,51 +139,18 @@ public sealed class DoublesApiTests : IClassFixture<TennisTurnierApiFactory>
         // Die eigentliche Frage: trägt das Doppel bis zum Draw durch? Die
         // Formatvorlage kennt keine Disziplin — ein Doppelturnier ist eines,
         // dessen Teilnehmer Paare sind.
-        var client = await AdminClientAsync();
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "doubles-admin",
+            new TurnierWunsch
+            {
+                Verein = "TC Doppel",
+                Name = "Doppel-Clubmeisterschaft",
+                Teams = ["Netzroller", "Grundlinie", "Volleyfreunde", "Rückhand"],
+                Setzen = false,
+            });
 
-        var clubId = await CreatedIdAsync(await client.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Doppel {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        var templates = await client.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
-        var templateId = templates!.First(t => t.Phases.Count == 1).Id;
-
-        var tournamentId = await CreatedIdAsync(await client.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Doppel-Clubmeisterschaft",
-                new DateOnly(2026, 5, 16),
-                new DateOnly(2026, 5, 17),
-                templateId),
-            Json));
-
-        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
-
-        foreach (var team in new[] { "Netzroller", "Grundlinie", "Volleyfreunde", "Rückhand" })
-        {
-            var first = await CreatePlayerAsync(client, "Anna", $"A{Guid.NewGuid():N}"[..10]);
-            var second = await CreatePlayerAsync(client, "Eva", $"B{Guid.NewGuid():N}"[..10]);
-
-            var participant = await (await CreateParticipantAsync(client, first, second, team))
-                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
-
-            var entryId = await CreatedIdAsync(await client.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(participant!.Id, null),
-                Json));
-
-            await client.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
-        }
-
-        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
-        var draw = await client.PostAsync($"/api/tournaments/{tournamentId}/draw", null);
-
-        Assert.Equal(HttpStatusCode.NoContent, draw.StatusCode);
-
-        var tournament = await client.GetFromJsonAsync<TournamentDetail>(
-            $"/api/tournaments/{tournamentId}", Json);
+        var tournament = await aufbau.Admin.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{aufbau.TournamentId}", Json);
 
         Assert.All(
             tournament!.Entries,

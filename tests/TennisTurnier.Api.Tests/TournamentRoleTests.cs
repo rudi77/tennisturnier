@@ -31,31 +31,14 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
         return _factory.CreateClientAs("role-tests-admin");
     }
 
-    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
+    /// <summary>Ein Turnier im Entwurf — mehr braucht keine Frage nach einer Rolle.</summary>
+    private async Task<(Guid ClubId, Guid TournamentId)> SeedTournamentAsync()
     {
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return body.GetProperty("id").GetGuid();
-    }
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "role-tests-admin",
+            new TurnierWunsch { Verein = "TC Rollen", Auslosen = false });
 
-    private async Task<(Guid ClubId, Guid TournamentId)> SeedTournamentAsync(HttpClient admin)
-    {
-        var clubId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Rollen {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
-        var templateId = templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id;
-
-        var tournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Clubmeisterschaft", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId),
-            Json));
-
-        return (clubId, tournamentId);
+        return (aufbau.ClubId, aufbau.TournamentId);
     }
 
     [Fact]
@@ -64,8 +47,7 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: der Query-Filter kannte nur Vereinsrollen, also lief jeder
         // Aufruf eines reinen Turnierleiters in ein 404 — auch das Auslosen,
         // wofür er ausdrücklich berufen wurde.
-        var admin = await AdminClientAsync();
-        var (_, tournamentId) = await SeedTournamentAsync(admin);
+        var (_, tournamentId) = await SeedTournamentAsync();
 
         var director = $"director-{Guid.NewGuid():N}";
         await _factory.GrantAsync(director, Role.TournamentDirector, ResourceScope.Tournament(tournamentId));
@@ -84,9 +66,8 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Turnierleiter_erreicht_ein_fremdes_Turnier_nicht()
     {
-        var admin = await AdminClientAsync();
-        var (_, ownTournament) = await SeedTournamentAsync(admin);
-        var (_, foreignTournament) = await SeedTournamentAsync(admin);
+        var (_, ownTournament) = await SeedTournamentAsync();
+        var (_, foreignTournament) = await SeedTournamentAsync();
 
         var director = $"director-{Guid.NewGuid():N}";
         await _factory.GrantAsync(director, Role.TournamentDirector, ResourceScope.Tournament(ownTournament));
@@ -101,8 +82,7 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Schiedsrichter_darf_das_Turnier_sehen_aber_nicht_fuehren()
     {
-        var admin = await AdminClientAsync();
-        var (_, tournamentId) = await SeedTournamentAsync(admin);
+        var (_, tournamentId) = await SeedTournamentAsync();
 
         var referee = $"referee-{Guid.NewGuid():N}";
         await _factory.GrantAsync(referee, Role.Referee, ResourceScope.Tournament(tournamentId));
@@ -117,8 +97,7 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_ClubAdmin_kann_das_Turnier_seines_Vereins_fuehren()
     {
-        var admin = await AdminClientAsync();
-        var (clubId, tournamentId) = await SeedTournamentAsync(admin);
+        var (clubId, tournamentId) = await SeedTournamentAsync();
 
         var clubAdmin = $"clubadmin-{Guid.NewGuid():N}";
         await _factory.GrantAsync(clubAdmin, Role.ClubAdmin, ResourceScope.Club(clubId));
@@ -132,8 +111,7 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Spieler_darf_das_Turnier_seines_Vereins_sehen_aber_nicht_fuehren()
     {
-        var admin = await AdminClientAsync();
-        var (clubId, tournamentId) = await SeedTournamentAsync(admin);
+        var (clubId, tournamentId) = await SeedTournamentAsync();
 
         var player = $"player-{Guid.NewGuid():N}";
         await _factory.GrantAsync(player, Role.Player, ResourceScope.Club(clubId));
@@ -152,9 +130,9 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
         // ViewInternals hatte, konnte damit die Kontaktdaten jedes beliebigen
         // Spielers lesen, indem er seinen eigenen Verein angab.
         var admin = await AdminClientAsync();
-        var (ownClubId, _) = await SeedTournamentAsync(admin);
+        var (ownClubId, _) = await SeedTournamentAsync();
 
-        var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+        var playerId = await TurnierAufbau.CreatedIdAsync(await admin.PostAsJsonAsync(
             "/api/players",
             new CreatePlayerRequest("Anna", $"Unbeteiligt{Guid.NewGuid():N}"[..16],
                 "geheim@example.invalid", "+43 1 234567", new DateOnly(1990, 3, 14)),
@@ -179,9 +157,9 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
         // Die Gegenprobe: ohne sie wäre die Regel oben auch dann erfüllt, wenn
         // niemand mehr an Kontaktdaten käme.
         var admin = await AdminClientAsync();
-        var (clubId, tournamentId) = await SeedTournamentAsync(admin);
+        var (clubId, tournamentId) = await SeedTournamentAsync();
 
-        var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+        var playerId = await TurnierAufbau.CreatedIdAsync(await admin.PostAsJsonAsync(
             "/api/players",
             new CreatePlayerRequest("Eva", $"Gemeldet{Guid.NewGuid():N}"[..14],
                 "eva@example.invalid", null, null),
@@ -212,12 +190,12 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: geprüft wurde nur beim nachträglichen Setzen. Der Konflikt
         // schlug damit erst beim Auslosen zu, also nach Meldeschluss.
         var admin = await AdminClientAsync();
-        var (_, tournamentId) = await SeedTournamentAsync(admin);
+        var (_, tournamentId) = await SeedTournamentAsync();
         await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
 
         async Task<HttpResponseMessage> EnterWithSeedOneAsync()
         {
-            var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+            var playerId = await TurnierAufbau.CreatedIdAsync(await admin.PostAsJsonAsync(
                 "/api/players",
                 new CreatePlayerRequest("Gesetzt", $"Nr{Guid.NewGuid():N}"[..10], null, null, null),
                 Json));
@@ -242,7 +220,7 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
         // Regression: SwitchToPlanning war die einzige ändernde Methode ohne
         // Zustandsprüfung und änderte auch abgeschlossene Turniere noch.
         var admin = await AdminClientAsync();
-        var (_, tournamentId) = await SeedTournamentAsync(admin);
+        var (_, tournamentId) = await SeedTournamentAsync();
 
         await admin.PostAsync($"/api/tournaments/{tournamentId}/abandon", null);
 

@@ -254,11 +254,17 @@ public sealed class TournamentApiTests : IClassFixture<TennisTurnierApiFactory>
 
     private async Task<(HttpClient Client, Guid TournamentId)> DrawnTournamentAsync()
     {
-        var client = await SystemAdminClientAsync();
-        var clubId = await CreateClubAsync(client);
-        var templateId = await KnockoutTemplateIdAsync(client, clubId);
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "tournament-system-admin",
+            new TurnierWunsch
+            {
+                Verein = "TC Turnier",
+                Name = "Turnier",
+                Teilnehmer = 2,
+                Setzen = false,
+            });
 
-        return (client, await DrawTournamentAsync(client, clubId, templateId));
+        return (aufbau.Admin, aufbau.TournamentId);
     }
 
     private async Task<Guid> DrawTournamentAsync(HttpClient client, Guid clubId, Guid templateId)

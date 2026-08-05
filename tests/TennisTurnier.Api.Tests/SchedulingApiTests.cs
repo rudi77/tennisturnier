@@ -26,83 +26,22 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
 
     public SchedulingApiTests(TennisTurnierApiFactory factory) => _factory = factory;
 
-    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
-    {
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return body.GetProperty("id").GetGuid();
-    }
-
     private async Task<(HttpClient Admin, Guid ClubId, Guid TournamentId)> DrawnAsync(
         int participants = 16,
         int courts = 4)
     {
-        await _factory.GrantAsync("plan-admin", Role.SystemAdmin, ResourceScope.Global);
-        var admin = _factory.CreateClientAs("plan-admin");
-
-        var clubId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Spielplan {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        for (var i = 1; i <= courts; i++)
-        {
-            var courtId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                $"/api/clubs/{clubId}/courts",
-                new CreateCourtRequest($"Platz {i}", CourtSurface.Clay, CourtLocation.Outdoor, IsCenterCourt: i == 1),
-                Json));
-
-            // Ohne Öffnungszeiten hat kein Platz ein freies Fenster, und der
-            // Solver hätte nichts, worin er planen könnte.
-            foreach (var day in new[] { DayOfWeek.Saturday, DayOfWeek.Sunday })
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "plan-admin",
+            new TurnierWunsch
             {
-                await admin.PostAsJsonAsync(
-                    $"/api/clubs/{clubId}/courts/{courtId}/availability",
-                    new CreateAvailabilityRequest(
-                        day, new TimeOnly(8, 0), new TimeOnly(21, 0), new DateOnly(2026, 1, 1), null),
-                    Json);
-            }
-        }
+                Verein = "TC Spielplan",
+                Teilnehmer = participants,
+                Plaetze = courts,
+                CenterCourt = true,
+                Oeffnungszeiten = true,
+            });
 
-        var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
-
-        var tournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Clubmeisterschaft",
-                new DateOnly(2026, 5, 16),
-                new DateOnly(2026, 5, 17),
-                templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id),
-            Json));
-
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
-
-        for (var i = 1; i <= participants; i++)
-        {
-            var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                "/api/players",
-                new CreatePlayerRequest($"Vorname{i:00}", $"N{Guid.NewGuid():N}"[..10], null, null, null),
-                Json));
-
-            var participant = await (await admin.PostAsJsonAsync(
-                "/api/participants", new CreateParticipantRequest(playerId, null), Json))
-                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
-
-            var entryId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(participant!.Id, i),
-                Json));
-
-            await admin.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
-        }
-
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await admin.PostAsync($"/api/tournaments/{tournamentId}/draw", null)).StatusCode);
-
-        return (admin, clubId, tournamentId);
+        return (aufbau.Admin, aufbau.ClubId, aufbau.TournamentId);
     }
 
     private static async Task<SchedulePlanResult> ProposeAsync(HttpClient client, Guid tournamentId)

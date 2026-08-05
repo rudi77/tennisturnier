@@ -23,73 +23,22 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
 
     public KnockoutTournamentApiTests(TennisTurnierApiFactory factory) => _factory = factory;
 
-    private async Task<HttpClient> AdminClientAsync()
-    {
-        await _factory.GrantAsync("ko-admin", Role.SystemAdmin, ResourceScope.Global);
-        return _factory.CreateClientAs("ko-admin");
-    }
-
-    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
-    {
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return body.GetProperty("id").GetGuid();
-    }
-
     /// <summary>Turnier mit ausgelostem Baum über die angegebene Teilnehmerzahl.</summary>
     private async Task<(HttpClient Client, Guid ClubId, Guid TournamentId)> DrawnTournamentAsync(
         int participants,
         bool seedAll = false)
     {
-        var client = await AdminClientAsync();
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "ko-admin",
+            new TurnierWunsch
+            {
+                Verein = "TC KO",
+                Teilnehmer = participants,
+                Setzen = seedAll,
+                Plaetze = 1,
+            });
 
-        var clubId = await CreatedIdAsync(await client.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC KO {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        await client.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/courts",
-            new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor),
-            Json);
-
-        var templates = await client.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
-        var templateId = templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id;
-
-        var tournamentId = await CreatedIdAsync(await client.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Clubmeisterschaft", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId),
-            Json));
-
-        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
-
-        for (var i = 1; i <= participants; i++)
-        {
-            var playerId = await CreatedIdAsync(await client.PostAsJsonAsync(
-                "/api/players",
-                new CreatePlayerRequest($"Vorname{i:00}", $"N{Guid.NewGuid():N}"[..10], null, null, null),
-                Json));
-
-            var participant = await (await client.PostAsJsonAsync(
-                "/api/participants", new CreateParticipantRequest(playerId, null), Json))
-                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
-
-            var entryId = await CreatedIdAsync(await client.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(participant!.Id, seedAll ? i : null),
-                Json));
-
-            await client.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
-        }
-
-        await client.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
-
-        var draw = await client.PostAsync($"/api/tournaments/{tournamentId}/draw", null);
-        Assert.Equal(HttpStatusCode.NoContent, draw.StatusCode);
-
-        return (client, clubId, tournamentId);
+        return (aufbau.Admin, aufbau.ClubId, aufbau.TournamentId);
     }
 
     private static async Task<List<PhaseDetail>> PhasesAsync(HttpClient client, Guid tournamentId) =>

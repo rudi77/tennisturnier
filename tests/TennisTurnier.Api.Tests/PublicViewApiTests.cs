@@ -38,19 +38,6 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
 
     public PublicViewApiTests(TennisTurnierApiFactory factory) => _factory = factory;
 
-    private async Task<HttpClient> AdminClientAsync()
-    {
-        await _factory.GrantAsync("public-admin", Role.SystemAdmin, ResourceScope.Global);
-        return _factory.CreateClientAs("public-admin");
-    }
-
-    private static async Task<Guid> CreatedIdAsync(HttpResponseMessage response)
-    {
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return body.GetProperty("id").GetGuid();
-    }
-
     /// <summary>
     /// Ein ausgelostes Turnier, dessen Spieler bewusst vollständige Kontaktdaten
     /// tragen — sonst prüfte die Datensparsamkeit gegen Daten, die es gar nicht
@@ -59,60 +46,17 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     private async Task<(HttpClient Admin, Guid ClubId, Guid TournamentId)> DrawnTournamentAsync(
         int participants = 4)
     {
-        var admin = await AdminClientAsync();
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "public-admin",
+            new TurnierWunsch
+            {
+                Verein = "TC Öffentlich",
+                Teilnehmer = participants,
+                Kontaktdaten = true,
+                Plaetze = 1,
+            });
 
-        var clubId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Öffentlich {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/courts",
-            new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor),
-            Json);
-
-        var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
-        var templateId = templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id;
-
-        var tournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Clubmeisterschaft", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId),
-            Json));
-
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null);
-
-        for (var i = 1; i <= participants; i++)
-        {
-            var playerId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                "/api/players",
-                new CreatePlayerRequest(
-                    $"Vorname{i:00}",
-                    $"N{Guid.NewGuid():N}"[..10],
-                    $"privat{i}@example.invalid",
-                    "+43 1 2345678",
-                    new DateOnly(1990, 3, 14)),
-                Json));
-
-            var participant = await (await admin.PostAsJsonAsync(
-                "/api/participants", new CreateParticipantRequest(playerId, null), Json))
-                .Content.ReadFromJsonAsync<ParticipantSummary>(Json);
-
-            var entryId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-                $"/api/tournaments/{tournamentId}/entries",
-                new EnterTournamentRequest(participant!.Id, i),
-                Json));
-
-            await admin.PostAsync($"/api/tournaments/{tournamentId}/entries/{entryId}/accept", null);
-        }
-
-        await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await admin.PostAsync($"/api/tournaments/{tournamentId}/draw", null)).StatusCode);
-
-        return (admin, clubId, tournamentId);
+        return (aufbau.Admin, aufbau.ClubId, aufbau.TournamentId);
     }
 
     /// <summary>Ein Client ohne jeden Anmeldeheader — der Zuschauer.</summary>
@@ -244,26 +188,16 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     {
         // Vor der Auslosung gibt es nur eine Meldeliste, und die ist nicht
         // öffentlich.
-        var admin = await AdminClientAsync();
+        var aufbau = await _factory.NeuesTurnierAsync(
+            "public-admin",
+            new TurnierWunsch
+            {
+                Verein = "TC Entwurf",
+                Name = "Noch nicht ausgelost",
+                Auslosen = false,
+            });
 
-        var clubId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            "/api/clubs",
-            new CreateClubRequest($"TC Entwurf {Guid.NewGuid():N}", "Europe/Vienna", null),
-            Json));
-
-        var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
-            $"/api/clubs/{clubId}/format-templates", Json);
-
-        var tournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
-            $"/api/clubs/{clubId}/tournaments",
-            new CreateTournamentRequest(
-                "Noch nicht ausgelost",
-                new DateOnly(2026, 5, 16),
-                new DateOnly(2026, 5, 17),
-                templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id),
-            Json));
-
-        var response = await Spectator().GetAsync($"/public/tournaments/{tournamentId}");
+        var response = await Spectator().GetAsync($"/public/tournaments/{aufbau.TournamentId}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
