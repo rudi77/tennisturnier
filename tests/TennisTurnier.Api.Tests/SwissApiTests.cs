@@ -142,6 +142,14 @@ public sealed class SwissApiTests : IClassFixture<TennisTurnierApiFactory>
         var phase = await PhaseAsync(client, tournamentId);
         Assert.Equal(12, phase.Matches.Count);
         Assert.All(phase.Matches, match => Assert.Equal(MatchStatus.Finished, match.Status));
+
+        // Und erst jetzt ist es beendet. Der Unterschied zur ersten Runde ist
+        // der Grund, warum die Frage „ist alles gespielt" an das Format geht und
+        // nicht an die angelegten Matches: nach jeder Runde sind alle
+        // entschieden, und nur das Format weiß, dass noch welche folgen.
+        var afterLast = await client.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+        Assert.Equal(TournamentState.Completed, afterLast!.State);
     }
 
     [Fact]

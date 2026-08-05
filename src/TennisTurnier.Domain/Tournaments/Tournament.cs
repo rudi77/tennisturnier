@@ -339,6 +339,20 @@ public sealed class Tournament : Entity
 
     public void Complete() => TransitionTo(TournamentState.Completed, TournamentState.InProgress);
 
+    /// <summary>
+    /// Nimmt den Abschluss zurück, weil wieder etwas zu spielen ist.
+    ///
+    /// Der Gegenzug zu <see cref="Complete"/>, und ohne ihn wäre das Finale das
+    /// einzige Match, dessen Ergebnis sich nicht korrigieren ließe: wer den
+    /// letzten Eintrag zurücknimmt, hätte ein abgeschlossenes Turnier mit einem
+    /// offenen Match darin.
+    ///
+    /// Ausdrücklich kein Zustandsübergang, den jemand von Hand auslöst — es gibt
+    /// keinen Endpunkt dafür. Er folgt aus der Rücknahme eines Ergebnisses,
+    /// genauso wie der Abschluss aus dem letzten Ergebnis folgt.
+    /// </summary>
+    public void Resume() => TransitionTo(TournamentState.InProgress, TournamentState.Completed);
+
     public void Abandon()
     {
         if (State is TournamentState.Completed or TournamentState.Abandoned)

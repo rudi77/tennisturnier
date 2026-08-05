@@ -287,10 +287,45 @@ public sealed class MatchService : IMatchService
             .Select(a => a.MatchId)
             .ToHashSet();
 
-        var withdrawn = PhaseOrchestrator.Advance(
-            tournament, phases, await NamesByEntryAsync(tournament, cancellationToken), onCourt);
+        var names = await NamesByEntryAsync(tournament, cancellationToken);
+
+        var withdrawn = PhaseOrchestrator.Advance(tournament, phases, names, onCourt);
 
         await ReleaseQueueAsync(tournament.Id, withdrawn, cancellationToken);
+
+        SyncCompletion(tournament, phases, names);
+    }
+
+    /// <summary>
+    /// Schließt das Turnier ab, wenn nichts mehr zu spielen ist — und nimmt den
+    /// Abschluss zurück, wenn wieder etwas zu spielen ist.
+    ///
+    /// Das folgt aus dem Ergebnis und ist keine eigene Handlung: das erste
+    /// Ergebnis macht aus einem ausgelosten ein laufendes Turnier, das letzte
+    /// aus einem laufenden ein abgeschlossenes. Es einer Schaltfläche zu
+    /// überlassen hieße, dass ein Turnier so lange „läuft", bis jemand daran
+    /// denkt — und der Endpunkt <c>complete</c> existiert für den Fall, dass
+    /// abgebrochen wird, bevor alles gespielt ist, nicht für den Normalfall.
+    ///
+    /// Beide Richtungen an einer Stelle, weil sie dieselbe Frage beantworten.
+    /// Nur die eine zu haben wäre die schlechtere Hälfte: das Finale wäre dann
+    /// das einzige Match, dessen Ergebnis sich nicht mehr korrigieren ließe.
+    /// </summary>
+    private static void SyncCompletion(
+        Tournament tournament,
+        IReadOnlyList<Phase> phases,
+        IReadOnlyDictionary<Guid, string> namesByEntry)
+    {
+        var finished = PhaseOrchestrator.IsFinished(tournament, phases, namesByEntry);
+
+        if (finished && tournament.State == TournamentState.InProgress)
+        {
+            tournament.Complete();
+        }
+        else if (!finished && tournament.State == TournamentState.Completed)
+        {
+            tournament.Resume();
+        }
     }
 
     public async Task<AssignCourtResult> AssignCourtAsync(

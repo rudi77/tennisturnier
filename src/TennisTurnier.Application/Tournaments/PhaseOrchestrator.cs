@@ -126,6 +126,39 @@ public static class PhaseOrchestrator
         return withdrawn;
     }
 
+    /// <summary>
+    /// Ist alles gespielt, was zu spielen war?
+    ///
+    /// Gefragt wird das Format und nicht der abgeleitete Phasenstatus. Der Grund
+    /// ist das Schweizer System: es kennt seine nächste Runde erst, wenn die
+    /// vorige gespielt ist, und eine Phase, deren einzige angesetzte Runde
+    /// durch ist, sähe an ihren Matches abgelesen fertig aus. Nur das Format
+    /// weiß, dass noch vier Runden folgen (ADR-0001).
+    ///
+    /// Eine Phase ohne Definition zählt als offen. Das ist der vorsichtigere
+    /// Fehler: ein Turnier fälschlich als abgeschlossen zu melden hieße, dass
+    /// niemand mehr ein Ergebnis einträgt.
+    /// </summary>
+    public static bool IsFinished(
+        Tournament tournament,
+        IReadOnlyList<Phase> phases,
+        IReadOnlyDictionary<Guid, string> namesByEntry)
+    {
+        ArgumentNullException.ThrowIfNull(tournament);
+        ArgumentNullException.ThrowIfNull(phases);
+        ArgumentNullException.ThrowIfNull(namesByEntry);
+
+        if (tournament.Format?.Definition is not { } definition || phases.Count == 0)
+        {
+            return false;
+        }
+
+        return phases.All(phase =>
+            DefinitionOf(definition, phase) is { } phaseDefinition
+            && PhaseFormats.For(phase.Format).IsComplete(
+                StateOf(tournament, definition, phaseDefinition, phase, namesByEntry)));
+    }
+
     /// <summary>Die Phasendefinition zu einer angelegten Phase.</summary>
     public static PhaseDefinition? DefinitionOf(FormatDefinition definition, Phase phase)
     {

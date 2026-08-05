@@ -413,6 +413,74 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
     }
 
     /// <summary>Spielt alle offenen Matches aus; Seite 1 gewinnt jeweils.</summary>
+    [Fact]
+    public async Task Das_letzte_Ergebnis_schliesst_das_Turnier_ab()
+    {
+        // Der Gegenzug zum ersten Ergebnis, das aus einem ausgelosten ein
+        // laufendes Turnier macht. Ohne ihn stünde ein ausgespieltes Turnier
+        // dauerhaft auf „läuft" — bis jemand daran denkt, „complete" zu
+        // drücken, und niemand denkt daran.
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+
+        await PlayOutAsync(client, tournamentId);
+
+        var detail = await client.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+
+        Assert.Equal(TournamentState.Completed, detail!.State);
+    }
+
+    [Fact]
+    public async Task Solange_noch_ein_Match_offen_ist_laeuft_das_Turnier()
+    {
+        // Die Gegenprobe: ohne sie wäre die Regel oben auch dann erfüllt, wenn
+        // jedes Ergebnis das Turnier abschlösse.
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+
+        await client.PutAsJsonAsync(
+            $"/api/matches/{phase.Matches.First(m => m.Round == 1).Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 2)]),
+            Json);
+
+        var detail = await client.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+
+        Assert.Equal(TournamentState.InProgress, detail!.State);
+    }
+
+    [Fact]
+    public async Task Eine_Korrektur_des_Finales_nimmt_den_Abschluss_zurueck()
+    {
+        // Sonst wäre das Finale das einzige Match, dessen Ergebnis sich nicht
+        // mehr korrigieren ließe: das Turnier wäre abgeschlossen, das Match
+        // offen, und beides zugleich ginge nicht.
+        var (client, _, tournamentId) = await DrawnTournamentAsync(4);
+        await PlayOutAsync(client, tournamentId);
+
+        var finale = FinalOf(Assert.Single(await PhasesAsync(client, tournamentId)));
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.DeleteAsync($"/api/matches/{finale.Id}/result")).StatusCode);
+
+        var offen = await client.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+        Assert.Equal(TournamentState.InProgress, offen!.State);
+
+        // Und der Weg wieder vorwärts: das neue Ergebnis schließt erneut ab.
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.PutAsJsonAsync(
+                $"/api/matches/{finale.Id}/result",
+                new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 0), new SetScore(6, 0)]),
+                Json)).StatusCode);
+
+        var wiederZu = await client.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+        Assert.Equal(TournamentState.Completed, wiederZu!.State);
+    }
+
     private static async Task PlayOutAsync(HttpClient client, Guid tournamentId)
     {
         for (var guard = 0; guard < 64; guard++)
