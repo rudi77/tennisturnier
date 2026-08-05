@@ -10,6 +10,7 @@ import { useWorkspace } from '../state/WorkspaceContext'
 import { bracket as bracketApi } from '../api/endpoints'
 import { MatchStatus, TournamentState, type MatchDetail, type PhaseDetail } from '../api/types'
 import { timeSpanToMinutes } from '../lib/time'
+import { matchFormatOf } from '../lib/matchFormat'
 
 type BracketStyle = 'tree' | 'cols' | 'list'
 
@@ -202,6 +203,10 @@ export function DrawScreen() {
         <ResultEditor
           match={editing}
           matchLabel={editing.label ?? editing.id.slice(0, 8)}
+          format={matchFormatOf(
+            tournament?.format?.definition,
+            (phases.data ?? []).find((phase) => phase.id === editing.phaseId)?.ordinal ?? null,
+          )}
           meta={`${editing.assignment?.courtName ?? 'ohne Platz'}${
             editing.assignment ? ` · ≈ ${timeSpanToMinutes(editing.assignment.estimatedDuration)} min` : ''
           } · ${timeZone}`}

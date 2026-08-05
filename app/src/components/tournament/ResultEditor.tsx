@@ -1,18 +1,23 @@
 import { useMemo, useState } from 'react'
 import { matches as matchApi } from '../../api/endpoints'
-import { MatchOutcome, type MatchDetail, type SetScore } from '../../api/types'
+import { MatchOutcome, type MatchDetail, type MatchFormat, type SetScore } from '../../api/types'
 import { outcomeLabel, sideName } from '../../lib/labels'
+import {
+  isMatchTiebreakSet,
+  maxGamesOf,
+  openSetCount,
+  setLabel,
+  whyNotSaveable,
+} from '../../lib/matchFormat'
 import { ScoreStepper } from '../core/ScoreStepper'
 import { useToast } from '../../hooks/useToast'
 
-const SET_COUNT = 3
-
 type Grid = [number, number][]
 
-function initialGrid(match: MatchDetail): Grid {
-  const grid: Grid = Array.from({ length: SET_COUNT }, () => [0, 0])
+function initialGrid(match: MatchDetail, format: MatchFormat): Grid {
+  const grid: Grid = Array.from({ length: format.bestOf }, () => [0, 0] as [number, number])
   match.score?.completedSets.forEach((set, index) => {
-    if (index < SET_COUNT) grid[index] = [set.games1, set.games2]
+    if (index < format.bestOf) grid[index] = [set.games1, set.games2]
   })
   return grid
 }
@@ -24,11 +29,19 @@ function initialGrid(match: MatchDetail): Grid {
  * welche Angaben überhaupt gebraucht werden. Ein Walkover hat keinen
  * Spielstand, eine Aufgabe einen unvollständigen — und beide brauchen die
  * Angabe, *wen* es betrifft, sonst weiß die Domäne nicht, wer weiterkommt.
+ *
+ * Die Maske richtet sich nach dem Satzformat und bot einmal stur drei Spalten
+ * an. Das ging zweifach schief: ein Match über zwei Gewinnsätze ist nach
+ * 6:0, 6:0 vorbei — ein dritter Satz wird zu Recht abgewiesen —, und der
+ * dritte ist in der Vorgabe gar kein Satz, sondern ein Match-Tiebreak bis 10.
+ * Ein 6:0 dort war ebenfalls ungültig, und der Stepper reichte nicht einmal
+ * bis 10.
  */
 export function ResultEditor({
   match,
   matchLabel,
   meta,
+  format,
   nextRoundName,
   onClose,
   onSaved,
@@ -36,6 +49,8 @@ export function ResultEditor({
   match: MatchDetail
   matchLabel: string
   meta: string
+  /** Das Satzformat dieser Phase — es bestimmt, wie viele Spalten es gibt. */
+  format: MatchFormat
   /** Name der Folgerunde, in der die WinnerOf-Refs aufgelöst werden. */
   nextRoundName: string | null
   onClose: () => void
@@ -43,7 +58,7 @@ export function ResultEditor({
 }) {
   const { show, showError } = useToast()
 
-  const [grid, setGrid] = useState<Grid>(() => initialGrid(match))
+  const [grid, setGrid] = useState<Grid>(() => initialGrid(match, format))
   const [outcome, setOutcome] = useState<MatchOutcome>(match.score?.outcome ?? MatchOutcome.Normal)
   const [affectedSide, setAffectedSide] = useState<number>(1)
   const [saving, setSaving] = useState(false)
@@ -54,7 +69,20 @@ export function ResultEditor({
   ]
 
   const needsAffectedSide = outcome !== MatchOutcome.Normal && outcome !== MatchOutcome.Bye
-  const playedSets = useMemo(() => grid.filter(([a, b]) => a > 0 || b > 0), [grid])
+
+  // Nur die Sätze, die es geben kann: der nächste erscheint, wenn der vorige
+  // gespielt und das Match noch offen ist. Danach ist Schluss — ein Satz nach
+  // dem entscheidenden ist kein Zug, den die Maske anbieten darf.
+  const visibleSets = useMemo(() => openSetCount(format, grid), [format, grid])
+  const playedSets = useMemo(
+    () => grid.slice(0, visibleSets).filter(([a, b]) => a > 0 || b > 0),
+    [grid, visibleSets],
+  )
+
+  const problem = useMemo(
+    () => (outcome === MatchOutcome.Normal ? whyNotSaveable(format, grid.slice(0, visibleSets)) : null),
+    [format, grid, visibleSets, outcome],
+  )
 
   const bump = (setIndex: number, side: 0 | 1, next: number) => {
     setGrid((current) =>
@@ -127,15 +155,15 @@ export function ResultEditor({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr auto auto auto',
+              gridTemplateColumns: `1fr repeat(${visibleSets}, auto)`,
               gap: 'var(--sp-5)',
               alignItems: 'center',
             }}
           >
             <div className="md-eyebrow">Spieler</div>
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="md-eyebrow" style={{ textAlign: 'center', width: 64 }}>
-                Satz {n}
+            {Array.from({ length: visibleSets }, (_, index) => (
+              <div key={index} className="md-eyebrow" style={{ textAlign: 'center', width: 64 }}>
+                {setLabel(format, index)}
               </div>
             ))}
 
@@ -144,12 +172,20 @@ export function ResultEditor({
                 key={side}
                 name={name}
                 grid={grid}
+                visibleSets={visibleSets}
+                format={format}
                 side={side as 0 | 1}
                 onBump={bump}
                 disabled={outcome === MatchOutcome.Walkover}
               />
             ))}
           </div>
+
+          {isMatchTiebreakSet(format, visibleSets - 1) && (
+            <div className="md-hint" style={{ marginTop: 'var(--sp-5)' }}>
+              Der Entscheidungssatz ist ein Match-Tiebreak: bis 10, mit zwei Punkten Vorsprung.
+            </div>
+          )}
 
           <div style={{ marginTop: 'var(--sp-8)' }}>
             <div className="md-eyebrow" style={{ marginBottom: 7 }}>
@@ -218,6 +254,21 @@ export function ResultEditor({
               ? `Speichern löst die WinnerOf-Refs in ${nextRoundName} auf und baut die Projektion neu. Eine Korrektur später ist ein eigener Use Case mit Audit-Eintrag und kann an einem bereits gespielten Folgematch scheitern.`
               : 'Letzte Runde — mit dem Ergebnis wechselt das Turnier nach Completed.'}
           </div>
+
+          {/*
+            Dieselbe Aussage wie die Domäne, nur vorher. Wer auf „Speichern"
+            drückt, soll nicht erst vom Server erfahren, dass ein Satz fehlt —
+            und eine gesperrte Schaltfläche ohne Grund wäre eine Sackgasse.
+          */}
+          {problem && (
+            <div
+              className="md-hint"
+              role="status"
+              style={{ marginTop: 'var(--sp-5)', fontWeight: 'var(--fw-semibold)' }}
+            >
+              {problem}
+            </div>
+          )}
         </div>
 
         <div
@@ -242,7 +293,8 @@ export function ResultEditor({
             type="button"
             className="md-btn md-btn--primary"
             onClick={() => void save()}
-            disabled={saving}
+            disabled={saving || problem !== null}
+            title={problem ?? undefined}
             style={{ minHeight: 'var(--hit-target)', fontWeight: 'var(--fw-bold)' }}
           >
             {saving ? 'Speichert …' : 'Speichern & propagieren'}
@@ -256,12 +308,16 @@ export function ResultEditor({
 function Row({
   name,
   grid,
+  visibleSets,
+  format,
   side,
   onBump,
   disabled,
 }: {
   name: string
   grid: Grid
+  visibleSets: number
+  format: MatchFormat
   side: 0 | 1
   onBump: (setIndex: number, side: 0 | 1, next: number) => void
   disabled: boolean
@@ -280,11 +336,12 @@ function Row({
       >
         {name}
       </div>
-      {grid.map((row, setIndex) => (
+      {grid.slice(0, visibleSets).map((row, setIndex) => (
         <div key={setIndex} style={{ opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? 'none' : 'auto' }}>
           <ScoreStepper
-            label={`${name}, Satz ${setIndex + 1}`}
+            label={`${name}, ${setLabel(format, setIndex)}`}
             value={row[side]}
+            max={maxGamesOf(format, setIndex)}
             onChange={(next) => onBump(setIndex, side, next)}
           />
         </div>

@@ -29,6 +29,7 @@ import {
 } from '../api/types'
 import { constraintLabel } from '../lib/labels'
 import { dateKey, minutesToTimeSpan, timeSpanToMinutes, toDateOnly } from '../lib/time'
+import { matchFormatOf } from '../lib/matchFormat'
 
 /**
  * Spielplan — Planungsmodus und Turniertag.
@@ -450,6 +451,10 @@ export function BoardScreen() {
         <ResultEditor
           match={editing}
           matchLabel={editing.label ?? editing.id.slice(0, 8)}
+          format={matchFormatOf(
+            tournament?.format?.definition,
+            (phases.data ?? []).find((phase) => phase.id === editing.phaseId)?.ordinal ?? null,
+          )}
           meta={`${editing.assignment?.courtName ?? 'ohne Platz'} · ≈ ${timeSpanToMinutes(
             editing.assignment?.estimatedDuration ?? '',
           )} min`}
