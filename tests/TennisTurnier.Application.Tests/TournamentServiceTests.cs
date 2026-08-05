@@ -17,6 +17,7 @@ public sealed class TournamentServiceTests
     private readonly InMemoryFormatTemplateRepository _templates = new();
     private readonly InMemoryPlayerRepository _players = new();
     private readonly InMemoryPhaseRepository _phaseRepository = new();
+    private readonly InMemoryRoleAssignmentRepository _roles = new();
     private readonly CountingUnitOfWork _unitOfWork = new();
     private readonly RecordingPublicViewService _publicView = new();
     private readonly TournamentService _service;
@@ -30,20 +31,25 @@ public sealed class TournamentServiceTests
             _tournaments,
             _templates,
             _players,
+            _roles,
             new DrawBuilder(_phaseRepository, _players),
             _publicView,
             _unitOfWork,
             _userContext);
         _template = _templates.Seed(new FormatTemplate(Guid.NewGuid(), ClubId, BuiltInFormats.Knockout));
 
-        ActAsClubAdmin();
+        ActAsSystemAdmin();
     }
 
     private void ActAs(params RoleAssignment[] assignments) =>
         _userContext.Current = new UserPrincipal(UserId, assignments);
 
-    private void ActAsClubAdmin() =>
-        ActAs(new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(ClubId)));
+    /// <summary>
+    /// Ein Turnier anlegen darf, wer <c>ManageTournament</c> global hat — solange
+    /// der Verein noch existiert, ist das allein der Systemadministrator.
+    /// </summary>
+    private void ActAsSystemAdmin() =>
+        ActAs(new RoleAssignment(Guid.NewGuid(), UserId, Role.SystemAdmin, ResourceScope.Global));
 
     private static CreateTournamentRequest NewRequest(Guid templateId) => new(
         "Clubmeisterschaft 2026", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId);
@@ -77,9 +83,11 @@ public sealed class TournamentServiceTests
     }
 
     [Fact]
-    public async Task Ohne_Berechtigung_im_Verein_laesst_sich_kein_Turnier_anlegen()
+    public async Task Ohne_Berechtigung_laesst_sich_kein_Turnier_anlegen()
     {
-        ActAs(new RoleAssignment(Guid.NewGuid(), UserId, Role.Player, ResourceScope.Club(ClubId)));
+        // Ein Schiedsrichter an irgendeinem Turnier ist kein Veranstalter.
+        ActAs(new RoleAssignment(
+            Guid.NewGuid(), UserId, Role.Referee, ResourceScope.Tournament(Guid.NewGuid())));
 
         await Assert.ThrowsAsync<AccessDeniedException>(
             () => _service.CreateAsync(ClubId, NewRequest(_template.Id)));
@@ -89,22 +97,35 @@ public sealed class TournamentServiceTests
     public async Task Ein_Turnier_ausserhalb_des_Scopes_wirkt_wie_nicht_vorhanden()
     {
         var id = await _service.CreateAsync(ClubId, NewRequest(_template.Id));
-        ActAs(new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(Guid.NewGuid())));
+
+        ActAs(new RoleAssignment(
+            Guid.NewGuid(), UserId, Role.TournamentDirector, ResourceScope.Tournament(Guid.NewGuid())));
 
         await Assert.ThrowsAsync<NotFoundException>(() => _service.GetAsync(id));
     }
 
     [Fact]
-    public async Task Der_Turnierleiter_darf_sein_Turnier_verwalten_ohne_Vereinsrolle()
+    public async Task Wer_ein_Turnier_anlegt_wird_sein_Turnierleiter()
     {
-        // Beide Wege sind zulässig — Turnierleiter des Turniers oder
-        // Administrator des Vereins. Der Anwendungsfall kennt beide, statt die
-        // Rangfolge an die Aufrufstelle zu delegieren.
+        // Die Zuweisung entsteht in derselben Arbeitseinheit wie das Turnier.
+        // Ohne sie wäre es für seinen eigenen Anleger im nächsten Augenblick
+        // nicht mehr auffindbar — und ohne Rolle gäbe es keinen Weg zurück.
         var id = await _service.CreateAsync(ClubId, NewRequest(_template.Id));
 
-        ActAs(
-            new RoleAssignment(Guid.NewGuid(), UserId, Role.Player, ResourceScope.Club(ClubId)),
-            new RoleAssignment(Guid.NewGuid(), UserId, Role.TournamentDirector, ResourceScope.Tournament(id)));
+        var assignment = Assert.Single(_roles.Assignments);
+
+        Assert.Equal(UserId, assignment.UserId);
+        Assert.Equal(Role.TournamentDirector, assignment.Role);
+        Assert.Equal(ResourceScope.Tournament(id), assignment.Scope);
+    }
+
+    [Fact]
+    public async Task Der_Turnierleiter_darf_sein_Turnier_verwalten()
+    {
+        var id = await _service.CreateAsync(ClubId, NewRequest(_template.Id));
+
+        ActAs(new RoleAssignment(
+            Guid.NewGuid(), UserId, Role.TournamentDirector, ResourceScope.Tournament(id)));
 
         await _service.OpenRegistrationAsync(id);
 
@@ -157,10 +178,6 @@ public sealed class TournamentServiceTests
         var otherTemplate = _templates.Seed(
             new FormatTemplate(Guid.NewGuid(), otherClub, BuiltInFormats.Knockout));
 
-        ActAs(
-            new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(ClubId)),
-            new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(otherClub)));
-
         // Mit der eigenen Vorlage des anderen Vereins: eine fremde nähme er nicht
         // an, und das ist Gegenstand eines eigenen Tests.
         await _service.CreateAsync(otherClub, NewRequest(otherTemplate.Id));
@@ -180,13 +197,8 @@ public sealed class TournamentServiceTests
     [Fact]
     public async Task Ein_Turnier_nimmt_keine_Vorlage_eines_fremden_Vereins()
     {
-        var otherClub = Guid.NewGuid();
-        ActAs(
-            new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(ClubId)),
-            new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(otherClub)));
-
         await Assert.ThrowsAsync<NotFoundException>(
-            () => _service.CreateAsync(otherClub, NewRequest(_template.Id)));
+            () => _service.CreateAsync(Guid.NewGuid(), NewRequest(_template.Id)));
     }
 
     [Fact]
@@ -194,11 +206,7 @@ public sealed class TournamentServiceTests
     {
         var builtIn = _templates.Seed(new FormatTemplate(Guid.NewGuid(), null, BuiltInFormats.League));
 
-        var otherClub = Guid.NewGuid();
-        ActAs(
-            new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(otherClub)));
-
-        Assert.NotEqual(Guid.Empty, await _service.CreateAsync(otherClub, NewRequest(builtIn.Id)));
+        Assert.NotEqual(Guid.Empty, await _service.CreateAsync(Guid.NewGuid(), NewRequest(builtIn.Id)));
     }
 
     [Fact]
@@ -213,6 +221,7 @@ public sealed class TournamentServiceTests
             _tournaments,
             new InMemoryFormatTemplateRepository(),
             _players,
+            _roles,
             new DrawBuilder(_phaseRepository, _players),
             _publicView,
             _unitOfWork,

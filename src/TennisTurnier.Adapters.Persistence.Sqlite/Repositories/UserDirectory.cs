@@ -38,6 +38,9 @@ public sealed class UserDirectory : IUserDirectory
         return account;
     }
 
+    public Task<UserAccount?> FindAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        _db.UserAccounts.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+
     public async Task<IReadOnlyList<RoleAssignment>> GetAssignmentsAsync(
         Guid userId,
         CancellationToken cancellationToken = default) =>

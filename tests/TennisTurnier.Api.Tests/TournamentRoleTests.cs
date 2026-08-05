@@ -95,32 +95,33 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
-    public async Task Ein_ClubAdmin_kann_das_Turnier_seines_Vereins_fuehren()
+    public async Task Ein_angemeldeter_Benutzer_ohne_Rolle_sieht_das_Turnier_nicht()
     {
-        var (clubId, tournamentId) = await SeedTournamentAsync();
+        // Die neue Grenze: es gibt keinen Weg zu einem Turnier, der nicht über
+        // eine Rolle an genau diesem Turnier führt. Vorher genügte eine Rolle im
+        // ausrichtenden Verein — auch die eines bloßen Vereinsmitglieds.
+        var (_, tournamentId) = await SeedTournamentAsync();
 
-        var clubAdmin = $"clubadmin-{Guid.NewGuid():N}";
-        await _factory.GrantAsync(clubAdmin, Role.ClubAdmin, ResourceScope.Club(clubId));
-        var client = _factory.CreateClientAs(clubAdmin);
+        var stranger = _factory.CreateClientAs($"fremder-{Guid.NewGuid():N}");
 
         Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null)).StatusCode);
+            HttpStatusCode.NotFound,
+            (await stranger.GetAsync($"/api/tournaments/{tournamentId}")).StatusCode);
     }
 
     [Fact]
-    public async Task Ein_Spieler_darf_das_Turnier_seines_Vereins_sehen_aber_nicht_fuehren()
+    public async Task Die_eigene_Turnierliste_enthaelt_nur_Turniere_mit_Rolle()
     {
-        var (clubId, tournamentId) = await SeedTournamentAsync();
+        var (_, ownTournament) = await SeedTournamentAsync();
+        await SeedTournamentAsync();
 
-        var player = $"player-{Guid.NewGuid():N}";
-        await _factory.GrantAsync(player, Role.Player, ResourceScope.Club(clubId));
-        var client = _factory.CreateClientAs(player);
+        var director = $"director-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(director, Role.TournamentDirector, ResourceScope.Tournament(ownTournament));
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/tournaments/{tournamentId}")).StatusCode);
-        Assert.Equal(
-            HttpStatusCode.NotFound,
-            (await client.PostAsync($"/api/tournaments/{tournamentId}/registration/open", null)).StatusCode);
+        var mine = await _factory.CreateClientAs(director)
+            .GetFromJsonAsync<List<TournamentSummary>>("/api/tournaments", Json);
+
+        Assert.Equal([ownTournament], mine!.Select(t => t.Id));
     }
 
     [Fact]
@@ -128,7 +129,9 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
     {
         // Regression: der Verein kam ungeprüft aus dem Query-String. Wer irgendwo
         // ViewInternals hatte, konnte damit die Kontaktdaten jedes beliebigen
-        // Spielers lesen, indem er seinen eigenen Verein angab.
+        // Spielers lesen, indem er seinen eigenen Verein angab. Die Berechtigung
+        // allein genügt deshalb nicht — geprüft wird hier mit dem Aufrufer, der
+        // sie sicher hat.
         var admin = await AdminClientAsync();
         var (ownClubId, _) = await SeedTournamentAsync();
 
@@ -138,11 +141,7 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
                 "geheim@example.invalid", "+43 1 234567", new DateOnly(1990, 3, 14)),
             Json));
 
-        var clubAdmin = $"neugierig-{Guid.NewGuid():N}";
-        await _factory.GrantAsync(clubAdmin, Role.ClubAdmin, ResourceScope.Club(ownClubId));
-
-        var response = await _factory.CreateClientAs(clubAdmin)
-            .GetAsync($"/api/players/{playerId}?clubId={ownClubId}");
+        var response = await admin.GetAsync($"/api/players/{playerId}?clubId={ownClubId}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.DoesNotContain(
@@ -175,10 +174,7 @@ public sealed class TournamentRoleTests : IClassFixture<TennisTurnierApiFactory>
             new EnterTournamentRequest(participant!.Id, null),
             Json);
 
-        var clubAdmin = $"berechtigt-{Guid.NewGuid():N}";
-        await _factory.GrantAsync(clubAdmin, Role.ClubAdmin, ResourceScope.Club(clubId));
-
-        var detail = await _factory.CreateClientAs(clubAdmin)
+        var detail = await admin
             .GetFromJsonAsync<PlayerDetail>($"/api/players/{playerId}?clubId={clubId}", Json);
 
         Assert.Equal("eva@example.invalid", detail!.Email);

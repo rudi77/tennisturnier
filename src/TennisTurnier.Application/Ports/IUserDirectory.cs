@@ -20,6 +20,9 @@ public interface IUserDirectory
         string? displayName,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Das lokale Konto zur Benutzerkennung, oder <c>null</c>.</summary>
+    Task<UserAccount?> FindAsync(Guid userId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<RoleAssignment>> GetAssignmentsAsync(
         Guid userId,
         CancellationToken cancellationToken = default);

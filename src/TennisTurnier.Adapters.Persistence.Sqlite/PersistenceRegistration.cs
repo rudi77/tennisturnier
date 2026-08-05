@@ -37,6 +37,7 @@ public static class PersistenceRegistration
         services.AddScoped<ICourtAssignmentRepository, CourtAssignmentRepository>();
         services.AddScoped<ITournamentProjectionStore, TournamentProjectionStore>();
         services.AddScoped<IUserDirectory, UserDirectory>();
+        services.AddScoped<IRoleAssignmentRepository, RoleAssignmentRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;

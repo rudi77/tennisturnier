@@ -24,7 +24,7 @@ public sealed class PlayerService : IPlayerService
         CreatePlayerRequest request,
         CancellationToken cancellationToken = default)
     {
-        RequireAnyClubManagement();
+        RequireAnyTournamentManagement();
 
         var player = new Player(
             Guid.NewGuid(),
@@ -43,7 +43,7 @@ public sealed class PlayerService : IPlayerService
         int limit = 20,
         CancellationToken cancellationToken = default)
     {
-        RequireAnyClubManagement();
+        RequireAnyTournamentManagement();
 
         if (string.IsNullOrWhiteSpace(term))
         {
@@ -73,7 +73,12 @@ public sealed class PlayerService : IPlayerService
         // irgendwo ViewInternals hat, könnte sonst die Kontaktdaten jedes
         // beliebigen Spielers lesen, indem er seinen eigenen Verein angibt.
         // Deshalb muss der Spieler diesem Verein auch tatsächlich bekannt sein.
-        _userContext.Current.Require(Permission.ViewInternals, ResourceScope.Club(clubId));
+        //
+        // Die Prüfung steht vorübergehend im globalen Scope, weil der Verein
+        // keiner mehr ist: sie trifft damit nur noch den Systemadministrator.
+        // Mit dem Verein verschwindet auch dieser Zuschnitt — die Kontaktdaten
+        // eines Melders gehören dann an das Turnier, für das er gemeldet ist.
+        _userContext.Current.Require(Permission.ViewInternals, ResourceScope.Global);
 
         if (!await _players.IsKnownInClubAsync(playerId, clubId, cancellationToken))
         {
@@ -93,7 +98,7 @@ public sealed class PlayerService : IPlayerService
         CreateParticipantRequest request,
         CancellationToken cancellationToken = default)
     {
-        RequireAnyClubManagement();
+        RequireAnyTournamentManagement();
 
         var first = await LoadPlayer(request.FirstPlayerId, cancellationToken);
 
@@ -147,16 +152,21 @@ public sealed class PlayerService : IPlayerService
         ?? throw new NotFoundException("Spieler", playerId);
 
     /// <summary>
-    /// Spieler und Teilnehmer gehören keinem Verein. Anlegen darf sie deshalb,
-    /// wer irgendwo Turniere verwaltet — eine feinere Regel wäre hier nicht
-    /// begründbar, weil ein Gastspieler gerade nicht dem eigenen Verein angehört.
+    /// Spieler und Teilnehmer gehören keinem Turnier — sie existieren
+    /// übergreifend (ADR-0008) und werden angelegt, bevor eine Meldung
+    /// besteht. Anlegen darf sie deshalb, wer irgendein Turnier verwaltet.
+    ///
+    /// Eine feinere Regel wäre hier nicht begründbar: zum Zeitpunkt des
+    /// Anlegens steht noch nicht fest, für welches Turnier der Spieler gemeldet
+    /// wird, und ein Gastspieler gehört ohnehin zu keinem.
     /// </summary>
-    private void RequireAnyClubManagement()
+    private void RequireAnyTournamentManagement()
     {
         var user = _userContext.Current;
 
         var mayManage = user.IsSystemAdmin
-            || user.ClubIds.Any(clubId => user.Can(Permission.ManageTournament, ResourceScope.Club(clubId)));
+            || user.TournamentIds.Any(id =>
+                user.Can(Permission.ManageTournament, ResourceScope.Tournament(id)));
 
         if (!mayManage)
         {

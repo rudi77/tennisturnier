@@ -53,18 +53,10 @@ public sealed class UserPrincipal
     public bool IsSystemAdmin => _isSystem || Assignments.Any(a => a.Role == Role.SystemAdmin);
 
     /// <summary>
-    /// Die Vereine, in denen der Benutzer irgendeine Rolle hat. Grundlage des
-    /// Query-Filters — ein SystemAdmin wird dort über <see cref="IsSystemAdmin"/>
-    /// behandelt, nicht über diese Liste.
-    /// </summary>
-    public IReadOnlyCollection<Guid> ClubIds => ScopedTo(ScopeType.Club);
-
-    /// <summary>
-    /// Die Turniere, für die der Benutzer eine turniergebundene Rolle hat.
-    ///
-    /// Ohne diese Liste bliebe ein Turnierleiter oder Schiedsrichter, der keiner
-    /// Vereinsrolle hat, für den Query-Filter unsichtbar — sein eigenes Turnier
-    /// käme als „nicht gefunden" zurück, obwohl er genau dafür berufen wurde.
+    /// Die Turniere, für die der Benutzer eine Rolle hat. Grundlage des
+    /// Query-Filters und seit dem Wegfall des Vereins der einzige
+    /// Sichtbarkeitsschlüssel — ein SystemAdmin wird dort über
+    /// <see cref="IsSystemAdmin"/> behandelt, nicht über diese Liste.
     /// </summary>
     public IReadOnlyCollection<Guid> TournamentIds => ScopedTo(ScopeType.Tournament);
 

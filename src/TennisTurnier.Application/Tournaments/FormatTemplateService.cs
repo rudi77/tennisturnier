@@ -47,7 +47,7 @@ public sealed class FormatTemplateService : IFormatTemplateService
         SaveFormatTemplateRequest request,
         CancellationToken cancellationToken = default)
     {
-        User.Require(Permission.ManageTournament, ResourceScope.Club(clubId));
+        User.Require(Permission.ManageTournament, ResourceScope.Global);
 
         var template = new FormatTemplate(Guid.NewGuid(), clubId, request.Definition);
         _templates.Add(template);
@@ -74,7 +74,7 @@ public sealed class FormatTemplateService : IFormatTemplateService
         CopyFormatTemplateRequest request,
         CancellationToken cancellationToken = default)
     {
-        User.Require(Permission.ManageTournament, ResourceScope.Club(clubId));
+        User.Require(Permission.ManageTournament, ResourceScope.Global);
 
         var source = await Load(templateId, cancellationToken);
         var copy = source.CopyFor(Guid.NewGuid(), clubId, request.Name);
@@ -91,19 +91,19 @@ public sealed class FormatTemplateService : IFormatTemplateService
 
     /// <summary>
     /// Eine mitgelieferte Vorlage gehört keinem Verein und lässt sich nicht
-    /// ändern — das setzt bereits das Aggregat durch. Hier geht es um die
-    /// vereinseigene Vorlage: sie darf nur ändern, wer im besitzenden Verein
-    /// Turniere verwaltet.
+    /// ändern — das setzt bereits das Aggregat durch.
+    ///
+    /// Für die vereinseigene Vorlage gab es hier einmal eine feinere Regel: sie
+    /// durfte ändern, wer im besitzenden Verein Turniere verwaltet. Mit dem
+    /// Wegfall der Vereinsrolle bleibt davon der globale Scope übrig, den nur
+    /// der Systemadministrator hat. Der Besitz einer Vorlage wandert mit dem
+    /// Verein — sie gehört dann dem Benutzer, der sie angelegt hat.
     /// </summary>
     private void RequireOwnership(FormatTemplate template)
     {
-        if (template.ClubId is not { } clubId)
-        {
-            User.Require(Permission.ManageClubs, ResourceScope.Global);
-            return;
-        }
-
-        User.Require(Permission.ManageTournament, ResourceScope.Club(clubId));
+        User.Require(
+            template.IsBuiltIn ? Permission.ManageClubs : Permission.ManageTournament,
+            ResourceScope.Global);
     }
 
     private static FormatTemplateSummary Summarize(FormatTemplate template) => new(

@@ -7,10 +7,10 @@ using TennisTurnier.Domain.Tournaments;
 namespace TennisTurnier.Adapters.Persistence.Tests;
 
 /// <summary>
-/// Der Query-Filter für Turniere. Zwei Wege führen zu einem Turnier — über den
-/// ausrichtenden Verein und über eine turniergebundene Rolle. Fehlt der zweite,
-/// ist die Rolle <see cref="Role.TournamentDirector"/> wirkungslos: der
-/// Turnierleiter bekommt sein eigenes Turnier als „nicht gefunden" zurück.
+/// Der Query-Filter für Turniere. Es gibt genau einen Weg zu einem Turnier: eine
+/// Rolle an diesem Turnier. Der zweite — eine Rolle im ausrichtenden Verein —
+/// ist mit dem Verein entfallen, und das ist die engere Grenze: wer zwei Vereine
+/// verwaltete, sah zuvor alles, was dort je stattgefunden hatte.
 /// </summary>
 public sealed class TournamentScopeTests : IAsyncLifetime
 {
@@ -159,21 +159,18 @@ public sealed class TournamentScopeTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Ein_ClubAdmin_sieht_die_Turniere_seines_Vereins()
+    public async Task Ein_angemeldeter_Benutzer_ohne_Rolle_sieht_kein_Turnier()
     {
-        _database.ActingAs = With((Role.ClubAdmin, ResourceScope.Club(_clubId)));
+        // Die neue Grenze: es gibt keinen Weg zu einem Turnier, der nicht über
+        // eine Rolle an genau diesem Turnier führt. Vorher genügte eine Rolle im
+        // ausrichtenden Verein — und wer zwei Vereine verwaltete, sah alles,
+        // was dort je stattgefunden hatte.
+        var stranger = Guid.NewGuid();
+        _database.ActingAs = new UserPrincipal(stranger, []);
+
         await using var db = _database.NewContext();
 
-        Assert.Equal([_tournamentId], (await db.Tournaments.ToListAsync()).Select(t => t.Id));
-    }
-
-    [Fact]
-    public async Task Ein_ClubAdmin_sieht_das_Turnier_eines_fremden_Vereins_nicht()
-    {
-        _database.ActingAs = With((Role.ClubAdmin, ResourceScope.Club(_clubId)));
-        await using var db = _database.NewContext();
-
-        Assert.Null(await db.Tournaments.FirstOrDefaultAsync(t => t.Id == _foreignTournamentId));
+        Assert.Empty(await db.Tournaments.ToListAsync());
     }
 
     [Fact]
@@ -187,19 +184,17 @@ public sealed class TournamentScopeTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Beide_Wege_zusammen_liefern_beide_Turniere()
+    public async Task Zwei_Rollen_liefern_beide_Turniere()
     {
         _database.ActingAs = With(
-            (Role.ClubAdmin, ResourceScope.Club(_clubId)),
-            (Role.TournamentDirector, ResourceScope.Tournament(_foreignTournamentId)));
+            (Role.TournamentDirector, ResourceScope.Tournament(_tournamentId)),
+            (Role.Referee, ResourceScope.Tournament(_foreignTournamentId)));
 
         await using var db = _database.NewContext();
 
         Assert.Equal(
             new[] { _tournamentId, _foreignTournamentId }.Order(),
             (await db.Tournaments.ToListAsync()).Select(t => t.Id).Order());
-
-        _ = _otherClubId;
     }
 
     [Fact]

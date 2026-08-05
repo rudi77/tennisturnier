@@ -225,9 +225,15 @@ public sealed class TournamentApiTests : IClassFixture<TennisTurnierApiFactory>
             new CreateTournamentRequest("Fremd", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId),
             Json));
 
+        // Ein Schiedsrichter irgendwo anders: eine Rolle, aber nicht an diesem
+        // Turnier — und damit für den Query-Filter jemand, für den es das
+        // Turnier nicht gibt.
         var outsider = $"outsider-{Guid.NewGuid():N}";
-        var otherClubId = await CreateClubAsync(admin);
-        await _factory.GrantAsync(outsider, Role.ClubAdmin, ResourceScope.Club(otherClubId));
+        var otherTournamentId = await CreatedIdAsync(await admin.PostAsJsonAsync(
+            $"/api/clubs/{await CreateClubAsync(admin)}/tournaments",
+            new CreateTournamentRequest("Anderswo", new DateOnly(2026, 5, 16), new DateOnly(2026, 5, 17), templateId),
+            Json));
+        await _factory.GrantAsync(outsider, Role.Referee, ResourceScope.Tournament(otherTournamentId));
 
         var response = await _factory.CreateClientAs(outsider).GetAsync($"/api/tournaments/{tournamentId}");
 

@@ -7,6 +7,12 @@ public interface ITournamentService
 
     Task<IReadOnlyList<TournamentSummary>> ListAsync(Guid clubId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Die Turniere, an denen der Aufrufer eine Rolle hat. Der Einstieg in die
+    /// Oberfläche, seit der Verein keiner mehr ist.
+    /// </summary>
+    Task<IReadOnlyList<TournamentSummary>> ListMineAsync(CancellationToken cancellationToken = default);
+
     Task<TournamentDetail> GetAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
     Task UpdateAsync(

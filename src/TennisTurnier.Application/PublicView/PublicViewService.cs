@@ -125,8 +125,7 @@ public sealed class PublicViewService : IPublicViewService
 
         _userContext.Current.Require(
             Permission.ManageTournament,
-            ResourceScope.Tournament(tournament.Id),
-            ResourceScope.Club(tournament.ClubId));
+            ResourceScope.Tournament(tournament.Id));
 
         if (await RebuildAsync(tournamentId, cancellationToken))
         {

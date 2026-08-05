@@ -69,7 +69,7 @@ public sealed class SystemAdminBootstrapTests
         var (bootstrap, directory) = Build(Email);
         var account = Account();
         var vereinsrolle = new RoleAssignment(
-            Guid.NewGuid(), account.Id, Role.ClubAdmin, ResourceScope.Club(Guid.NewGuid()));
+            Guid.NewGuid(), account.Id, Role.TournamentDirector, ResourceScope.Tournament(Guid.NewGuid()));
 
         Assert.Equal(BootstrapOutcome.Granted, await bootstrap.ApplyAsync(account, [vereinsrolle]));
         Assert.Single(directory.Assigned);

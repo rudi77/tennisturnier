@@ -605,13 +605,11 @@ public sealed class MatchService : IMatchService
     private void RequireResultPermission(Tournament tournament) =>
         _userContext.Current.Require(
             Permission.EnterResults,
-            ResourceScope.Tournament(tournament.Id),
-            ResourceScope.Club(tournament.ClubId));
+            ResourceScope.Tournament(tournament.Id));
 
     /// <summary>Den Spielplan ändern darf der Schiedsrichter dagegen nicht.</summary>
     private void RequireManagePermission(Tournament tournament) =>
         _userContext.Current.Require(
             Permission.ManageTournament,
-            ResourceScope.Tournament(tournament.Id),
-            ResourceScope.Club(tournament.ClubId));
+            ResourceScope.Tournament(tournament.Id));
 }

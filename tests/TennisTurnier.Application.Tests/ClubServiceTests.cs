@@ -36,9 +36,6 @@ public sealed class ClubServiceTests
         return _clubs.Seed(club);
     }
 
-    private void ActAsClubAdminOf(Guid clubId) =>
-        ActAs(new RoleAssignment(Guid.NewGuid(), UserId, Role.ClubAdmin, ResourceScope.Club(clubId)));
-
     [Fact]
     public async Task Nur_ein_SystemAdmin_darf_einen_Verein_anlegen()
     {
@@ -59,32 +56,17 @@ public sealed class ClubServiceTests
         Assert.Equal(1, _clubs.SavedChanges);
     }
 
-    [Fact]
-    public async Task Ein_Verein_ausserhalb_des_Scopes_wirkt_wie_nicht_vorhanden()
-    {
-        var foreign = SeedClub("TC Fremd");
-        ActAsClubAdminOf(Guid.NewGuid());
-
-        await Assert.ThrowsAsync<NotFoundException>(() => _service.GetAsync(foreign.Id));
-    }
+    // Wer welchen Verein sieht, entscheidet seit dem Wegfall der Vereinsrolle
+    // allein der Query-Filter — geprüft wird das gegen die echte Datenbank in
+    // ClubVisibilityTests. Zwei Tests, die hier dasselbe gegen einen Fake
+    // behaupteten, sind entfallen: sie hätten nur noch bewiesen, dass der Fake
+    // tut, was ihm aufgetragen wurde.
 
     [Fact]
-    public async Task Die_Liste_enthaelt_nur_Vereine_im_Scope()
-    {
-        var own = SeedClub("TC Eigen");
-        SeedClub("TC Fremd");
-        ActAsClubAdminOf(own.Id);
-
-        var clubs = await _service.ListAsync();
-
-        Assert.Equal([own.Id], clubs.Select(c => c.Id));
-    }
-
-    [Fact]
-    public async Task Ein_ClubAdmin_darf_einen_Platz_anlegen()
+    public async Task Ein_SystemAdmin_darf_einen_Platz_anlegen()
     {
         var club = SeedClub();
-        ActAsClubAdminOf(club.Id);
+        ActAsSystemAdmin();
 
         var courtId = await _service.AddCourtAsync(
             club.Id,
@@ -96,16 +78,18 @@ public sealed class ClubServiceTests
     }
 
     [Fact]
-    public async Task Ein_Schiedsrichter_darf_keine_Plaetze_anlegen()
+    public async Task Ein_Schiedsrichter_eines_fremden_Turniers_erreicht_den_Verein_nicht()
     {
-        // Der Schiedsrichter ist im Verein sichtbar — sehen darf er ihn also,
-        // ändern nicht. Genau diese Trennung prüft der Test.
+        // Und zwar als „nicht gefunden", nicht als „nicht erlaubt": der Verein
+        // liegt außerhalb seines Sichtfelds, und ein 403 verriete, dass es ihn
+        // gibt (ADR-0004). Vorher war das ein Rechtefehler, weil ein
+        // Vereinsmitglied den Verein sehr wohl sah — diese Rolle gibt es nicht
+        // mehr.
         var club = SeedClub();
-        ActAs(
-            new RoleAssignment(Guid.NewGuid(), UserId, Role.Player, ResourceScope.Club(club.Id)),
-            new RoleAssignment(Guid.NewGuid(), UserId, Role.Referee, ResourceScope.Tournament(Guid.NewGuid())));
+        ActAs(new RoleAssignment(
+            Guid.NewGuid(), UserId, Role.Referee, ResourceScope.Tournament(Guid.NewGuid())));
 
-        await Assert.ThrowsAsync<AccessDeniedException>(() => _service.AddCourtAsync(
+        await Assert.ThrowsAsync<NotFoundException>(() => _service.AddCourtAsync(
             club.Id,
             new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor)));
     }
@@ -114,7 +98,7 @@ public sealed class ClubServiceTests
     public async Task Ein_unbekannter_Platz_liefert_nicht_gefunden()
     {
         var club = SeedClub();
-        ActAsClubAdminOf(club.Id);
+        ActAsSystemAdmin();
 
         await Assert.ThrowsAsync<NotFoundException>(() => _service.AddAvailabilityAsync(
             club.Id,
@@ -127,7 +111,7 @@ public sealed class ClubServiceTests
     public async Task Freie_Fenster_ziehen_die_Sperren_ab()
     {
         var club = SeedClub();
-        ActAsClubAdminOf(club.Id);
+        ActAsSystemAdmin();
 
         var courtId = await _service.AddCourtAsync(
             club.Id,
@@ -157,7 +141,7 @@ public sealed class ClubServiceTests
     public async Task Ein_Platz_laesst_sich_stilllegen_und_reaktivieren()
     {
         var club = SeedClub();
-        ActAsClubAdminOf(club.Id);
+        ActAsSystemAdmin();
         var courtId = await _service.AddCourtAsync(
             club.Id,
             new CreateCourtRequest("Platz 1", CourtSurface.Clay, CourtLocation.Outdoor));
@@ -173,7 +157,7 @@ public sealed class ClubServiceTests
     public async Task Jede_aendernde_Handlung_schliesst_mit_einem_Speichern_ab()
     {
         var club = SeedClub();
-        ActAsClubAdminOf(club.Id);
+        ActAsSystemAdmin();
 
         var courtId = await _service.AddCourtAsync(
             club.Id,
@@ -189,7 +173,7 @@ public sealed class ClubServiceTests
     public async Task Lesende_Handlungen_speichern_nicht()
     {
         var club = SeedClub();
-        ActAsClubAdminOf(club.Id);
+        ActAsSystemAdmin();
 
         await _service.GetAsync(club.Id);
         await _service.ListAsync();

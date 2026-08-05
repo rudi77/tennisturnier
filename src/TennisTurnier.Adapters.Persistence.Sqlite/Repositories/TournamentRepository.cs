@@ -23,6 +23,19 @@ public sealed class TournamentRepository : ITournamentRepository
             .OrderByDescending(t => t.StartsOn)
             .ToListAsync(cancellationToken);
 
+    /// <summary>
+    /// Die Turniere, die der Aufrufer sehen darf.
+    ///
+    /// Ohne Einschränkung in der Abfrage: welche das sind, entscheidet allein
+    /// der Query-Filter. Eine zweite Bedingung hier wäre eine zweite Antwort
+    /// auf dieselbe Frage — und die, die auseinanderläuft.
+    /// </summary>
+    public async Task<IReadOnlyList<Tournament>> ListForCallerAsync(
+        CancellationToken cancellationToken = default) =>
+        await _db.Tournaments
+            .OrderByDescending(t => t.StartsOn)
+            .ToListAsync(cancellationToken);
+
     public void Add(Tournament tournament) => _db.Tournaments.Add(tournament);
 }
 

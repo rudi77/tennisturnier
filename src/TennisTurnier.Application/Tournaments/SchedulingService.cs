@@ -525,8 +525,7 @@ public sealed class SchedulingService : ISchedulingService
     private void RequireManagePermission(Tournament tournament) =>
         _userContext.Current.Require(
             Permission.ManageTournament,
-            ResourceScope.Tournament(tournament.Id),
-            ResourceScope.Club(tournament.ClubId));
+            ResourceScope.Tournament(tournament.Id));
 
     /// <summary>
     /// Ein gerechneter Plan gehört in den Planungsmodus. Am Turniertag wäre eine

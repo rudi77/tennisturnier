@@ -40,14 +40,16 @@ public sealed class InMemoryClubRepository : IClubRepository
 
     internal void RecordSave() => SavedChanges++;
 
-    private IEnumerable<Club> Visible()
-    {
-        var user = _userContext.Current;
-
-        return user.IsSystemAdmin
-            ? _clubs.Values
-            : _clubs.Values.Where(c => user.ClubIds.Contains(c.Id));
-    }
+    /// <summary>
+    /// Seit dem Wegfall der Vereinsrolle sieht einen Verein nur, wer ihn über
+    /// ein Turnier erreicht. Dieser Fake kennt keine Turniere; er zeigt deshalb
+    /// nur dem Systemadministrator etwas. Die eigentliche Regel steht im
+    /// Query-Filter und wird gegen die echte Datenbank geprüft
+    /// (<c>ClubVisibilityTests</c>) — hier großzügiger zu sein hieße, einen
+    /// Anwendungsfall als tragfähig zu melden, den die Datenbank abweist.
+    /// </summary>
+    private IEnumerable<Club> Visible() =>
+        _userContext.Current.IsSystemAdmin ? _clubs.Values : [];
 }
 
 public sealed class MutableUserContext : IUserContext

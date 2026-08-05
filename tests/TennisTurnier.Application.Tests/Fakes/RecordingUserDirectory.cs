@@ -23,6 +23,9 @@ public sealed class RecordingUserDirectory : IUserDirectory
         CancellationToken cancellationToken = default) =>
         Task.FromResult(new UserAccount(Guid.NewGuid(), issuer, subjectId, email, displayName));
 
+    public Task<UserAccount?> FindAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<UserAccount?>(null);
+
     public Task<IReadOnlyList<RoleAssignment>> GetAssignmentsAsync(
         Guid userId,
         CancellationToken cancellationToken = default) =>

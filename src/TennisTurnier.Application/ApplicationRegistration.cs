@@ -27,6 +27,7 @@ public static class ApplicationRegistration
         services.AddSingleton(bootstrapAdmins ?? new BootstrapAdminOptions());
         services.AddScoped<SystemAdminBootstrap>();
 
+        services.AddScoped<IMeService, MeService>();
         services.AddScoped<IPostCommitQueue, PostCommitQueue>();
         services.AddScoped<IClubService, ClubService>();
         services.AddScoped<DrawBuilder>();

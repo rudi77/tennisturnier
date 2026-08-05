@@ -16,15 +16,6 @@ public static class Permissions
         {
             [Role.SystemAdmin] = All,
 
-            [Role.ClubAdmin] = new HashSet<Permission>
-            {
-                Permission.ManageClub,
-                Permission.ManageCourts,
-                Permission.ManageTournament,
-                Permission.EnterResults,
-                Permission.ViewInternals,
-            },
-
             [Role.TournamentDirector] = new HashSet<Permission>
             {
                 Permission.ManageTournament,
@@ -36,10 +27,6 @@ public static class Permissions
             {
                 Permission.EnterResults,
             },
-
-            // Ein Spieler verwaltet nur sich selbst. Das läuft nicht über diese
-            // Matrix, sondern über den Bezug auf die eigene Benutzer-Id.
-            [Role.Player] = None,
         };
 
     public static IReadOnlySet<Permission> Of(Role role) =>

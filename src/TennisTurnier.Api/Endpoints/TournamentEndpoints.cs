@@ -15,6 +15,11 @@ internal static class TournamentEndpoints
 
     private static void MapTournaments(IEndpointRouteBuilder app)
     {
+        // Der Einstieg: die Turniere des Aufrufers. Welche das sind, entscheidet
+        // der Query-Filter — hier steht keine zweite Bedingung.
+        app.MapGet("/api/tournaments", async (ITournamentService service, CancellationToken ct) =>
+            Results.Ok(await service.ListMineAsync(ct))).WithTags("Turniere");
+
         var byClub = app.MapGroup("/api/clubs/{clubId:guid}/tournaments").WithTags("Turniere");
 
         byClub.MapGet("/", async (Guid clubId, ITournamentService service, CancellationToken ct) =>

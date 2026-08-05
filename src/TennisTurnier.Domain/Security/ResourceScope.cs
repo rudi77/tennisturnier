@@ -7,16 +7,18 @@ public enum ScopeType
     /// <summary>Systemweit, ohne Bezug auf eine einzelne Ressource.</summary>
     Global,
 
-    Club,
-
     Tournament,
 }
 
 /// <summary>
 /// Die Ressource, auf die sich eine Rolle oder eine Zugriffsprüfung bezieht.
 ///
-/// Der springende Punkt aus ADR-0004: Rollen sind nicht global. „ClubAdmin" ohne
-/// Verein ist keine sinnvolle Aussage — deshalb trägt jede Zuweisung ihren Scope.
+/// Der springende Punkt aus ADR-0004: Rollen sind nicht global. „Turnierleiter"
+/// ohne Turnier ist keine sinnvolle Aussage — deshalb trägt jede Zuweisung
+/// ihren Scope.
+///
+/// Es gab hier einmal einen Scope <c>Club</c>. Er ist entfallen, weil der
+/// Verein als Mandantengrenze entfällt; was von ihm blieb, ist das Turnier.
 /// </summary>
 public readonly record struct ResourceScope
 {
@@ -32,8 +34,6 @@ public readonly record struct ResourceScope
     public Guid? ResourceId { get; }
 
     public static ResourceScope Global { get; } = new(ScopeType.Global, null);
-
-    public static ResourceScope Club(Guid clubId) => Create(ScopeType.Club, clubId);
 
     public static ResourceScope Tournament(Guid tournamentId) => Create(ScopeType.Tournament, tournamentId);
 

@@ -60,7 +60,7 @@ public sealed class ClubService : IClubService
             club.Name,
             club.City,
             club.TimeZoneId,
-            club.Courts.Select(court => ToDetail(court, MaySeeInternals(clubId))).ToList());
+            club.Courts.Select(court => ToDetail(court, MaySeeInternals())).ToList());
     }
 
     public async Task UpdateAsync(
@@ -69,7 +69,7 @@ public sealed class ClubService : IClubService
         CancellationToken cancellationToken = default)
     {
         var club = await Load(clubId, cancellationToken);
-        User.Require(Permission.ManageClub, ResourceScope.Club(clubId));
+        User.Require(Permission.ManageClub, ResourceScope.Global);
 
         club.Rename(request.Name);
         club.MoveTo(request.TimeZoneId);
@@ -231,19 +231,18 @@ public sealed class ClubService : IClubService
     private async Task<Club> LoadForCourtManagement(Guid clubId, CancellationToken cancellationToken)
     {
         var club = await Load(clubId, cancellationToken);
-        User.Require(Permission.ManageCourts, ResourceScope.Club(clubId));
+        User.Require(Permission.ManageCourts, ResourceScope.Global);
         return club;
     }
 
     /// <summary>
-    /// Wer im Verein irgendeine Rolle hat, sieht ihn — auch ein Spieler. Die
-    /// internen Notizen an den Sperren gehören aber ausdrücklich zu
-    /// <see cref="Permission.ViewInternals"/>. Ohne diese Unterscheidung wäre
-    /// die Berechtigung bedeutungslos, weil jedes Vereinsmitglied den Grund
-    /// jeder Sperre im Klartext mitlesen könnte.
+    /// Wer ein Turnier des Vereins führt, sieht ihn. Die internen Notizen an
+    /// den Sperren gehören aber ausdrücklich zu
+    /// <see cref="Permission.ViewInternals"/> — ohne diese Unterscheidung wäre
+    /// die Berechtigung bedeutungslos, weil jeder Mitlesende den Grund jeder
+    /// Sperre im Klartext bekäme.
     /// </summary>
-    private bool MaySeeInternals(Guid clubId) =>
-        User.Can(Permission.ViewInternals, ResourceScope.Club(clubId));
+    private bool MaySeeInternals() => User.Can(Permission.ViewInternals, ResourceScope.Global);
 
     private static Court CourtOf(Club club, Guid courtId) =>
         club.Courts.FirstOrDefault(c => c.Id == courtId)

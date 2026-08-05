@@ -48,6 +48,14 @@ app.UseAuthorization();
 app.UseUserResolution();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("Health");
+
+// „Wer bin ich, und was darf ich" — die Oberfläche muss entscheiden, welche
+// Schaltfläche sie überhaupt zeigt. Ohne Anmeldung ist „niemand" die Antwort
+// und kein Fehler.
+app.MapGet("/api/me", async (IMeService service, CancellationToken ct) =>
+    await service.GetAsync(ct) is { } me ? Results.Ok(me) : Results.NoContent())
+    .WithTags("Benutzer");
+
 app.MapClubEndpoints();
 app.MapTournamentEndpoints();
 app.MapMatchEndpoints();

@@ -78,10 +78,10 @@ public sealed class UserDirectoryTests : IAsyncLifetime
         await using var db = _database.NewContext();
         var directory = new UserDirectory(db);
         var account = await directory.EnsureAccountAsync(Issuer, "sub-1", null, null);
-        var scope = ResourceScope.Club(Guid.NewGuid());
+        var scope = ResourceScope.Tournament(Guid.NewGuid());
 
-        await directory.AssignAsync(new RoleAssignment(Guid.NewGuid(), account.Id, Role.ClubAdmin, scope));
-        await directory.AssignAsync(new RoleAssignment(Guid.NewGuid(), account.Id, Role.ClubAdmin, scope));
+        await directory.AssignAsync(new RoleAssignment(Guid.NewGuid(), account.Id, Role.TournamentDirector, scope));
+        await directory.AssignAsync(new RoleAssignment(Guid.NewGuid(), account.Id, Role.TournamentDirector, scope));
 
         Assert.Single(await directory.GetAssignmentsAsync(account.Id));
     }
@@ -95,16 +95,16 @@ public sealed class UserDirectoryTests : IAsyncLifetime
         // nicht als Fehler nach oben geben.
         await using var setup = _database.NewContext();
         var account = await new UserDirectory(setup).EnsureAccountAsync(Issuer, "sub-1", null, null);
-        var scope = ResourceScope.Club(Guid.NewGuid());
+        var scope = ResourceScope.Tournament(Guid.NewGuid());
 
         await using var first = _database.NewContext();
         await using var second = _database.NewContext();
 
         await new UserDirectory(first).AssignAsync(
-            new RoleAssignment(Guid.NewGuid(), account.Id, Role.ClubAdmin, scope));
+            new RoleAssignment(Guid.NewGuid(), account.Id, Role.TournamentDirector, scope));
 
         await new UserDirectory(second).AssignAsync(
-            new RoleAssignment(Guid.NewGuid(), account.Id, Role.ClubAdmin, scope));
+            new RoleAssignment(Guid.NewGuid(), account.Id, Role.TournamentDirector, scope));
 
         Assert.Single(await new UserDirectory(setup).GetAssignmentsAsync(account.Id));
     }
@@ -117,9 +117,9 @@ public sealed class UserDirectoryTests : IAsyncLifetime
         var account = await directory.EnsureAccountAsync(Issuer, "sub-1", null, null);
 
         await directory.AssignAsync(new RoleAssignment(
-            Guid.NewGuid(), account.Id, Role.ClubAdmin, ResourceScope.Club(Guid.NewGuid())));
+            Guid.NewGuid(), account.Id, Role.TournamentDirector, ResourceScope.Tournament(Guid.NewGuid())));
         await directory.AssignAsync(new RoleAssignment(
-            Guid.NewGuid(), account.Id, Role.ClubAdmin, ResourceScope.Club(Guid.NewGuid())));
+            Guid.NewGuid(), account.Id, Role.TournamentDirector, ResourceScope.Tournament(Guid.NewGuid())));
 
         Assert.Equal(2, (await directory.GetAssignmentsAsync(account.Id)).Count);
     }
@@ -131,7 +131,7 @@ public sealed class UserDirectoryTests : IAsyncLifetime
         var directory = new UserDirectory(db);
         var account = await directory.EnsureAccountAsync(Issuer, "sub-1", null, null);
         var assignment = new RoleAssignment(
-            Guid.NewGuid(), account.Id, Role.ClubAdmin, ResourceScope.Club(Guid.NewGuid()));
+            Guid.NewGuid(), account.Id, Role.TournamentDirector, ResourceScope.Tournament(Guid.NewGuid()));
 
         await directory.AssignAsync(assignment);
         await directory.RevokeAsync(assignment.Id);

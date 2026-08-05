@@ -52,19 +52,17 @@ public sealed class TennisTurnierDbContext : DbContext
     public DbSet<TournamentProjection> TournamentProjections => Set<TournamentProjection>();
 
     /// <summary>
-    /// Sieht der Aufrufer alle Vereine? Wird vom Query-Filter ausgewertet.
+    /// Sieht der Aufrufer alles? Wird vom Query-Filter ausgewertet.
     ///
     /// Der Zugriff läuft absichtlich über Eigenschaften des DbContext und nicht
     /// über konstante Werte: EF Core übersetzt sie in Query-Parameter, sodass der
     /// zwischengespeicherte Abfrageplan für jeden Benutzer gültig bleibt.
     /// </summary>
-    private bool SeesAllClubs => _userContext.Current.IsSystemAdmin;
-
-    private IReadOnlyCollection<Guid> VisibleClubIds => _userContext.Current.ClubIds;
+    private bool SeesEverything => _userContext.Current.IsSystemAdmin;
 
     /// <summary>
-    /// Turniere, zu denen der Aufrufer eine turniergebundene Rolle hat. Ohne sie
-    /// sähe ein Turnierleiter ohne Vereinsrolle sein eigenes Turnier nicht.
+    /// Die Turniere, zu denen der Aufrufer eine Rolle hat — seit dem Wegfall
+    /// des Vereins der einzige Sichtbarkeitsschlüssel.
     /// </summary>
     private IReadOnlyCollection<Guid> VisibleTournamentIds => _userContext.Current.TournamentIds;
 
@@ -81,22 +79,25 @@ public sealed class TennisTurnierDbContext : DbContext
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TennisTurnierDbContext).Assembly);
 
         // ADR-0004: Der Query-Filter ist die eigentliche Sicherheitsgrenze. Eine
-        // vergessene Prüfung im Endpunkt darf keine fremden Vereinsdaten
-        // ausliefern können.
-        // Auch der ausrichtende Verein gehört zum Sichtfeld eines Turnierleiters,
-        // sonst kann er keinen Platz vergeben: die Plätze hängen am Verein. Der
-        // Unterabfrage genügt die Zugehörigkeit — welche Turniere sichtbar sind,
-        // entscheidet der Filter auf Tournament selbst.
+        // vergessene Prüfung im Endpunkt darf keine fremden Daten ausliefern
+        // können.
+        //
+        // Er hing bis hierher an den Vereinen des Aufrufers. Jetzt hängt er an
+        // seinen Turnieren, und das ist die engere Grenze: wer keine Rolle an
+        // einem Turnier hat, sieht es nicht — auch nicht über den Verein.
+        //
+        // Der ausrichtende Verein bleibt sichtbar, solange ein sichtbares
+        // Turnier auf ihn zeigt: seine Plätze werden zum Spielplan gebraucht.
+        // Der Unterabfrage genügt die Zugehörigkeit, denn auf `Tournaments`
+        // liegt bereits der Filter des Turniers.
         modelBuilder.Entity<Club>()
             .HasQueryFilter(club =>
-                SeesAllClubs
-                || VisibleClubIds.Contains(club.Id)
+                SeesEverything
                 || Tournaments.Any(tournament => tournament.ClubId == club.Id));
 
         modelBuilder.Entity<Court>()
             .HasQueryFilter(court =>
-                SeesAllClubs
-                || VisibleClubIds.Contains(court.ClubId)
+                SeesEverything
                 || Tournaments.Any(tournament => tournament.ClubId == court.ClubId));
 
         // Auch die Kindtabellen brauchen den Filter. Über die Navigation vom
@@ -110,46 +111,43 @@ public sealed class TennisTurnierDbContext : DbContext
         // einen Platz sieht — und die Kindtabellen können nicht dahinter
         // zurückfallen.
         modelBuilder.Entity<AvailabilityWindow>()
-            .HasQueryFilter(window => SeesAllClubs || Courts.Any(court => court.Id == window.CourtId));
+            .HasQueryFilter(window => SeesEverything || Courts.Any(court => court.Id == window.CourtId));
 
         modelBuilder.Entity<CourtBlock>()
-            .HasQueryFilter(block => SeesAllClubs || Courts.Any(court => court.Id == block.CourtId));
+            .HasQueryFilter(block => SeesEverything || Courts.Any(court => court.Id == block.CourtId));
 
-        // Zwei Wege führen zu einem Turnier: über den ausrichtenden Verein oder
-        // über eine turniergebundene Rolle. Beide gehören in den Filter, sonst
-        // ist die Rolle TournamentDirector wirkungslos.
+        // Ein Turnier sieht, wer eine Rolle daran hat. Das ist der ganze Filter
+        // — und die Stelle, von der alle anderen abhängen.
         modelBuilder.Entity<Tournament>()
             .HasQueryFilter(tournament =>
-                SeesAllClubs
-                || VisibleClubIds.Contains(tournament.ClubId)
-                || VisibleTournamentIds.Contains(tournament.Id));
+                SeesEverything || VisibleTournamentIds.Contains(tournament.Id));
 
+        // Einstufig gegen die sichtbaren Turniere und nicht über eine
+        // Unterabfrage: dasselbe Muster, das Phase, Match und Platzzuweisung
+        // bereits benutzen.
         modelBuilder.Entity<TournamentEntry>()
             .HasQueryFilter(entry =>
-                SeesAllClubs
-                || VisibleTournamentIds.Contains(entry.TournamentId)
-                || Tournaments.Any(tournament =>
-                    tournament.Id == entry.TournamentId && VisibleClubIds.Contains(tournament.ClubId)));
+                SeesEverything || VisibleTournamentIds.Contains(entry.TournamentId));
 
         // Vorlagen ohne Verein sind die mitgelieferten Standardformate und für
-        // jeden sichtbar; eigene Vorlagen bleiben im Verein.
+        // jeden sichtbar; eine eigene Vorlage sieht, wer ein Turnier des
+        // Vereins verwaltet, dem sie gehört.
         modelBuilder.Entity<FormatTemplate>()
             .HasQueryFilter(template =>
-                SeesAllClubs
+                SeesEverything
                 || template.ClubId == null
-                || VisibleClubIds.Contains(template.ClubId.Value));
+                || Tournaments.Any(tournament => tournament.ClubId == template.ClubId));
 
         // Phasen, Matches und Platzzuweisungen hängen am Turnier und erben
-        // dessen Sichtbarkeit — beide Wege, über den Verein und über eine
-        // turniergebundene Rolle.
+        // dessen Sichtbarkeit.
         modelBuilder.Entity<Phase>()
-            .HasQueryFilter(phase => SeesAllClubs || Tournaments.Any(t => t.Id == phase.TournamentId));
+            .HasQueryFilter(phase => SeesEverything || Tournaments.Any(t => t.Id == phase.TournamentId));
 
         modelBuilder.Entity<Match>()
-            .HasQueryFilter(match => SeesAllClubs || Tournaments.Any(t => t.Id == match.TournamentId));
+            .HasQueryFilter(match => SeesEverything || Tournaments.Any(t => t.Id == match.TournamentId));
 
         modelBuilder.Entity<CourtAssignment>()
-            .HasQueryFilter(a => SeesAllClubs || Tournaments.Any(t => t.Id == a.TournamentId));
+            .HasQueryFilter(a => SeesEverything || Tournaments.Any(t => t.Id == a.TournamentId));
 
         // Die öffentliche Projektion bekommt bewusst keinen Filter: sie enthält
         // nur, was jeder sehen darf, und wird ohne Anmeldung gelesen (ADR-0003).

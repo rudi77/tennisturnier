@@ -31,20 +31,22 @@ public sealed class InMemoryTournamentRepository : ITournamentRepository
         CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<Tournament>>(Visible().Where(t => t.ClubId == clubId).ToList());
 
+    public Task<IReadOnlyList<Tournament>> ListForCallerAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Tournament>>([.. Visible()]);
+
     public void Add(Tournament tournament) => _tournaments[tournament.Id] = tournament;
 
     private IEnumerable<Tournament> Visible()
     {
         var user = _userContext.Current;
 
-        // Muss dem echten Query-Filter entsprechen — beide Wege zum Turnier,
-        // über den Verein und über eine turniergebundene Rolle. Ein Fake, der
-        // nur den Vereinsweg kennt, würde melden, dass ein Anwendungsfall
-        // funktioniert, den die Datenbank abweist.
+        // Muss dem echten Query-Filter entsprechen: der einzige Weg zu einem
+        // Turnier ist eine Rolle an genau diesem Turnier. Ein Fake, der großzügiger
+        // wäre, würde melden, dass ein Anwendungsfall funktioniert, den die
+        // Datenbank abweist.
         return user.IsSystemAdmin
             ? _tournaments.Values
-            : _tournaments.Values.Where(t =>
-                user.ClubIds.Contains(t.ClubId) || user.TournamentIds.Contains(t.Id));
+            : _tournaments.Values.Where(t => user.TournamentIds.Contains(t.Id));
     }
 }
 

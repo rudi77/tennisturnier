@@ -5,14 +5,17 @@ using TennisTurnier.Domain.Tournaments;
 namespace TennisTurnier.Application.Ports;
 
 /// <summary>
-/// Zugriff auf das Turnier-Aggregat. Wie beim Verein filtert die Implementierung
-/// nach dem Club-Scope des Aufrufers (ADR-0004).
+/// Zugriff auf das Turnier-Aggregat. Die Implementierung filtert nach den
+/// Turnieren, an denen der Aufrufer eine Rolle hat (ADR-0004).
 /// </summary>
 public interface ITournamentRepository
 {
     Task<Tournament?> FindAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Tournament>> ListByClubAsync(Guid clubId, CancellationToken cancellationToken = default);
+
+    /// <summary>Die Turniere des Aufrufers — der Einstieg in die Oberfläche.</summary>
+    Task<IReadOnlyList<Tournament>> ListForCallerAsync(CancellationToken cancellationToken = default);
 
     void Add(Tournament tournament);
 }

@@ -58,8 +58,6 @@ public sealed class RoleAssignment : Entity
     private static ScopeType ExpectedScopeOf(Role role) => role switch
     {
         Role.SystemAdmin => ScopeType.Global,
-        Role.ClubAdmin => ScopeType.Club,
-        Role.Player => ScopeType.Club,
         Role.TournamentDirector => ScopeType.Tournament,
         Role.Referee => ScopeType.Tournament,
         _ => throw new DomainException($"Unbekannte Rolle {role}."),

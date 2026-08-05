@@ -11,6 +11,7 @@ public sealed class TournamentService : ITournamentService
     private readonly ITournamentRepository _tournaments;
     private readonly IFormatTemplateRepository _templates;
     private readonly IPlayerRepository _players;
+    private readonly IRoleAssignmentRepository _roles;
     private readonly DrawBuilder _drawBuilder;
     private readonly IPublicViewService _publicView;
     private readonly IUnitOfWork _unitOfWork;
@@ -20,6 +21,7 @@ public sealed class TournamentService : ITournamentService
         ITournamentRepository tournaments,
         IFormatTemplateRepository templates,
         IPlayerRepository players,
+        IRoleAssignmentRepository roles,
         DrawBuilder drawBuilder,
         IPublicViewService publicView,
         IUnitOfWork unitOfWork,
@@ -28,6 +30,7 @@ public sealed class TournamentService : ITournamentService
         _tournaments = tournaments;
         _templates = templates;
         _players = players;
+        _roles = roles;
         _drawBuilder = drawBuilder;
         _publicView = publicView;
         _unitOfWork = unitOfWork;
@@ -41,7 +44,7 @@ public sealed class TournamentService : ITournamentService
         CreateTournamentRequest request,
         CancellationToken cancellationToken = default)
     {
-        User.Require(Permission.ManageTournament, ResourceScope.Club(clubId));
+        User.Require(Permission.ManageTournament, ResourceScope.Global);
 
         var template = await _templates.FindAsync(request.FormatTemplateId, cancellationToken)
             ?? throw new NotFoundException("Formatvorlage", request.FormatTemplateId);
@@ -59,22 +62,55 @@ public sealed class TournamentService : ITournamentService
             Guid.NewGuid(), clubId, request.Name, request.StartsOn, request.EndsOn, template.Id);
 
         _tournaments.Add(tournament);
+        MakeCallerDirectorOf(tournament);
+
+        // Turnier und Rolle in einem Speichervorgang. Das ist keine Feinheit:
+        // seit der Query-Filter allein auf den Turnieren mit Rolle steht, wäre
+        // ein Turnier ohne seine Zuweisung für den eigenen Anleger im nächsten
+        // Augenblick nicht mehr auffindbar — und ohne Rolle gäbe es keinen Weg
+        // zurück.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return tournament.Id;
     }
 
+    /// <summary>
+    /// Wer ein Turnier anlegt, führt es.
+    ///
+    /// Ohne Ausnahme für den Systemadministrator: er sieht zwar ohnehin alles,
+    /// aber eine Regel mit Ausnahme wäre eine Regel, die für den häufigsten
+    /// Aufrufer im Test nie ausgeführt wird — und damit eine, die beim ersten
+    /// echten Benutzer zum ersten Mal läuft.
+    ///
+    /// Der Systemkontext bleibt außen vor: er gehört keinem Menschen, und eine
+    /// Rolle für <see cref="Guid.Empty"/> wäre keine.
+    /// </summary>
+    private void MakeCallerDirectorOf(Tournament tournament)
+    {
+        if (!User.IsAuthenticated)
+        {
+            return;
+        }
+
+        _roles.Add(new RoleAssignment(
+            Guid.NewGuid(),
+            User.UserId,
+            Role.TournamentDirector,
+            ResourceScope.Tournament(tournament.Id)));
+    }
+
     public async Task<IReadOnlyList<TournamentSummary>> ListAsync(
         Guid clubId,
-        CancellationToken cancellationToken = default)
-    {
-        var tournaments = await _tournaments.ListByClubAsync(clubId, cancellationToken);
+        CancellationToken cancellationToken = default) =>
+        Summarize(await _tournaments.ListByClubAsync(clubId, cancellationToken));
 
-        return tournaments
-            .Select(t => new TournamentSummary(
-                t.Id, t.Name, t.StartsOn, t.EndsOn, t.State, t.SchedulingMode, t.AcceptedEntries.Count))
-            .ToList();
-    }
+    public async Task<IReadOnlyList<TournamentSummary>> ListMineAsync(
+        CancellationToken cancellationToken = default) =>
+        Summarize(await _tournaments.ListForCallerAsync(cancellationToken));
+
+    private static IReadOnlyList<TournamentSummary> Summarize(IReadOnlyList<Tournament> tournaments) =>
+        [.. tournaments.Select(t => new TournamentSummary(
+            t.Id, t.Name, t.StartsOn, t.EndsOn, t.State, t.SchedulingMode, t.AcceptedEntries.Count))];
 
     public async Task<TournamentDetail> GetAsync(Guid tournamentId, CancellationToken cancellationToken = default)
     {
@@ -251,8 +287,7 @@ public sealed class TournamentService : ITournamentService
         // Administrator des ausrichtenden Vereins.
         User.Require(
             Permission.ManageTournament,
-            ResourceScope.Tournament(tournamentId),
-            ResourceScope.Club(tournament.ClubId));
+            ResourceScope.Tournament(tournamentId));
 
         return tournament;
     }

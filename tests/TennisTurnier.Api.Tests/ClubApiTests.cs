@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Clubs;
+using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Clubs;
+using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Security;
 
 namespace TennisTurnier.Api.Tests;
@@ -40,6 +42,27 @@ public sealed class ClubApiTests : IClassFixture<TennisTurnierApiFactory>
         return await CreatedIdAsync(response);
     }
 
+    /// <summary>
+    /// Ein Turnier in diesem Verein. Es ist der einzige Weg, den Verein für
+    /// jemanden sichtbar zu machen, der nicht Systemadministrator ist: eine
+    /// Vereinsrolle gibt es nicht mehr, und die Plätze werden über das Turnier
+    /// erreicht, das sie bespielt.
+    /// </summary>
+    private async Task<Guid> TournamentInAsync(HttpClient admin, Guid clubId)
+    {
+        var templates = await admin.GetFromJsonAsync<List<FormatTemplateSummary>>(
+            $"/api/clubs/{clubId}/format-templates", Json);
+
+        return await CreatedIdAsync(await admin.PostAsJsonAsync(
+            $"/api/clubs/{clubId}/tournaments",
+            new CreateTournamentRequest(
+                "Clubmeisterschaft",
+                new DateOnly(2026, 5, 16),
+                new DateOnly(2026, 5, 17),
+                templates!.Single(t => t.Name == BuiltInFormats.Knockout.Name).Id),
+            Json));
+    }
+
     [Fact]
     public async Task Ein_SystemAdmin_kann_einen_Verein_anlegen_und_wieder_lesen()
     {
@@ -65,12 +88,14 @@ public sealed class ClubApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
-    public async Task Ein_ClubAdmin_darf_keine_Vereine_anlegen()
+    public async Task Ein_Turnierleiter_darf_keine_Vereine_anlegen()
     {
-        var subject = $"club-admin-{Guid.NewGuid():N}";
         var admin = await SystemAdminClientAsync();
         var clubId = await CreateClubAsync(admin, $"TC Rechte {Guid.NewGuid():N}");
-        await _factory.GrantAsync(subject, Role.ClubAdmin, ResourceScope.Club(clubId));
+        var tournamentId = await TournamentInAsync(admin, clubId);
+
+        var subject = $"director-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(subject, Role.TournamentDirector, ResourceScope.Tournament(tournamentId));
 
         var response = await _factory.CreateClientAs(subject).PostAsJsonAsync(
             "/api/clubs",
@@ -81,16 +106,17 @@ public sealed class ClubApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
-    public async Task Ein_ClubAdmin_sieht_einen_fremden_Verein_nicht()
+    public async Task Ein_Turnierleiter_sieht_einen_fremden_Verein_nicht()
     {
         // Der Kern von ADR-0004, an der Aussenkante geprüft: 404, nicht 403.
         // Ein 403 würde bestätigen, dass es diesen Verein gibt.
         var admin = await SystemAdminClientAsync();
         var ownClub = await CreateClubAsync(admin, $"TC Eigen {Guid.NewGuid():N}");
         var foreignClub = await CreateClubAsync(admin, $"TC Fremd {Guid.NewGuid():N}");
+        var tournamentId = await TournamentInAsync(admin, ownClub);
 
-        var subject = $"club-admin-{Guid.NewGuid():N}";
-        await _factory.GrantAsync(subject, Role.ClubAdmin, ResourceScope.Club(ownClub));
+        var subject = $"director-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(subject, Role.TournamentDirector, ResourceScope.Tournament(tournamentId));
         var client = _factory.CreateClientAs(subject);
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/clubs/{ownClub}")).StatusCode);
@@ -98,14 +124,15 @@ public sealed class ClubApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
-    public async Task Die_Liste_zeigt_nur_die_eigenen_Vereine()
+    public async Task Die_Liste_zeigt_nur_Vereine_mit_einem_eigenen_Turnier()
     {
         var admin = await SystemAdminClientAsync();
         var ownClub = await CreateClubAsync(admin, $"TC Liste {Guid.NewGuid():N}");
         await CreateClubAsync(admin, $"TC Unsichtbar {Guid.NewGuid():N}");
+        var tournamentId = await TournamentInAsync(admin, ownClub);
 
-        var subject = $"club-admin-{Guid.NewGuid():N}";
-        await _factory.GrantAsync(subject, Role.ClubAdmin, ResourceScope.Club(ownClub));
+        var subject = $"director-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(subject, Role.TournamentDirector, ResourceScope.Tournament(tournamentId));
 
         var clubs = await _factory.CreateClientAs(subject)
             .GetFromJsonAsync<List<ClubSummary>>("/api/clubs", Json);
@@ -115,14 +142,10 @@ public sealed class ClubApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
-    public async Task Ein_ClubAdmin_kann_Plaetze_und_Oeffnungszeiten_pflegen()
+    public async Task Ein_SystemAdmin_kann_Plaetze_und_Oeffnungszeiten_pflegen()
     {
-        var admin = await SystemAdminClientAsync();
-        var clubId = await CreateClubAsync(admin, $"TC Plätze {Guid.NewGuid():N}");
-
-        var subject = $"club-admin-{Guid.NewGuid():N}";
-        await _factory.GrantAsync(subject, Role.ClubAdmin, ResourceScope.Club(clubId));
-        var client = _factory.CreateClientAs(subject);
+        var client = await SystemAdminClientAsync();
+        var clubId = await CreateClubAsync(client, $"TC Plätze {Guid.NewGuid():N}");
 
         var courtId = await CreatedIdAsync(await client.PostAsJsonAsync(
             $"/api/clubs/{clubId}/courts",
@@ -149,12 +172,8 @@ public sealed class ClubApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Freie_Fenster_beruecksichtigen_die_Sperren()
     {
-        var admin = await SystemAdminClientAsync();
-        var clubId = await CreateClubAsync(admin, $"TC Fenster {Guid.NewGuid():N}");
-
-        var subject = $"club-admin-{Guid.NewGuid():N}";
-        await _factory.GrantAsync(subject, Role.ClubAdmin, ResourceScope.Club(clubId));
-        var client = _factory.CreateClientAs(subject);
+        var client = await SystemAdminClientAsync();
+        var clubId = await CreateClubAsync(client, $"TC Fenster {Guid.NewGuid():N}");
 
         var courtId = await CreatedIdAsync(await client.PostAsJsonAsync(
             $"/api/clubs/{clubId}/courts",
@@ -198,9 +217,10 @@ public sealed class ClubApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Ein_Spieler_sieht_seinen_Verein_aber_nicht_die_internen_Notizen()
     {
-        // Wer im Verein irgendeine Rolle hat, sieht ihn — das ergibt sich aus dem
-        // Query-Filter. Die Notiz an einer Sperre gehört aber zu ViewInternals.
-        // Ohne diese Trennung wäre die Berechtigung bedeutungslos.
+        // Wer ein Turnier im Verein hat, sieht ihn — das ergibt sich aus dem
+        // Query-Filter. Die Notiz an einer Sperre gehört aber zu ViewInternals,
+        // und die hat ein Schiedsrichter nicht. Ohne diese Trennung wäre die
+        // Berechtigung bedeutungslos.
         var admin = await SystemAdminClientAsync();
         var clubId = await CreateClubAsync(admin, $"TC Notizen {Guid.NewGuid():N}");
         var courtId = await CreatedIdAsync(await admin.PostAsJsonAsync(
@@ -217,19 +237,21 @@ public sealed class ClubApiTests : IClassFixture<TennisTurnierApiFactory>
                 "Belag defekt, Reklamation läuft"),
             Json);
 
-        var player = $"player-{Guid.NewGuid():N}";
-        await _factory.GrantAsync(player, Role.Player, ResourceScope.Club(clubId));
+        var tournamentId = await TournamentInAsync(admin, clubId);
+        var referee = $"referee-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(referee, Role.Referee, ResourceScope.Tournament(tournamentId));
 
-        var seenByPlayer = await _factory.CreateClientAs(player)
+        var seenByReferee = await _factory.CreateClientAs(referee)
             .GetFromJsonAsync<ClubDetail>($"/api/clubs/{clubId}", Json);
         var seenByAdmin = await admin.GetFromJsonAsync<ClubDetail>($"/api/clubs/{clubId}", Json);
 
-        var blockForPlayer = Assert.Single(Assert.Single(seenByPlayer!.Courts).Blocks);
+        var blockForReferee = Assert.Single(Assert.Single(seenByReferee!.Courts).Blocks);
         var blockForAdmin = Assert.Single(Assert.Single(seenByAdmin!.Courts).Blocks);
 
-        // Dass der Platz gesperrt ist und warum, darf jeder im Verein wissen.
-        Assert.Equal(BlockReason.Maintenance, blockForPlayer.Reason);
-        Assert.Null(blockForPlayer.Note);
+        // Dass der Platz gesperrt ist und warum, darf jeder wissen, der am
+        // Turnier beteiligt ist — die interne Notiz dazu nicht.
+        Assert.Equal(BlockReason.Maintenance, blockForReferee.Reason);
+        Assert.Null(blockForReferee.Note);
         Assert.Equal("Belag defekt, Reklamation läuft", blockForAdmin.Note);
     }
 

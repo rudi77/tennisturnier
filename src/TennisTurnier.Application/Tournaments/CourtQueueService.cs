@@ -382,8 +382,7 @@ public sealed class CourtQueueService : ICourtQueueService
         // Aufrufen und Starten darf auch der Schiedsrichter — er steht am Platz.
         _userContext.Current.Require(
             Permission.EnterResults,
-            ResourceScope.Tournament(tournament.Id),
-            ResourceScope.Club(tournament.ClubId));
+            ResourceScope.Tournament(tournament.Id));
 
         RequireMatchDay(tournament);
 
@@ -419,8 +418,7 @@ public sealed class CourtQueueService : ICourtQueueService
     private void RequireManagePermission(Tournament tournament) =>
         _userContext.Current.Require(
             Permission.ManageTournament,
-            ResourceScope.Tournament(tournament.Id),
-            ResourceScope.Club(tournament.ClubId));
+            ResourceScope.Tournament(tournament.Id));
 
     // --- Abbildung ---------------------------------------------------------
 
