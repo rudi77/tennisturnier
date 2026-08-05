@@ -41,6 +41,37 @@ public sealed class UserDirectory : IUserDirectory
     public Task<UserAccount?> FindAsync(Guid userId, CancellationToken cancellationToken = default) =>
         _db.UserAccounts.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
+    /// <summary>
+    /// Sucht über die E-Mail-Adresse.
+    ///
+    /// Der Vergleich läuft über <c>EF.Functions.Like</c> ohne Platzhalter und
+    /// nicht über <c>ToLower</c>: eine Funktion auf der Spalte machte den Index
+    /// unbrauchbar, und LIKE ist in SQLite für ASCII ohnehin unempfindlich
+    /// gegen Groß-/Kleinschreibung. Der Restvergleich im Speicher stimmt auch
+    /// außerhalb von ASCII.
+    /// </summary>
+    public async Task<UserAccount?> FindByEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        var candidates = await _db.UserAccounts
+            .AsNoTracking()
+            .Where(u => u.Email != null && EF.Functions.Like(u.Email, email))
+            .Take(10)
+            .ToListAsync(cancellationToken);
+
+        return candidates.FirstOrDefault(u =>
+            string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public async Task<IReadOnlyList<UserAccount>> FindManyAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken = default) =>
+        await _db.UserAccounts
+            .AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<RoleAssignment>> GetAssignmentsAsync(
         Guid userId,
         CancellationToken cancellationToken = default) =>

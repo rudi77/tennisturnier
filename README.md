@@ -48,8 +48,13 @@ curl -s -X POST http://localhost:8080/realms/tennisturnier/protocol/openid-conne
   -d username=systemadmin -d password=systemadmin | jq -r .access_token
 ```
 
-Die Rollen selbst vergibt die Anwendung, nicht Keycloak (siehe ADR-0007) — ein
-frisch angemeldeter Benutzer hat zunächst keine.
+Die Rollen selbst vergibt die Anwendung, nicht Keycloak (siehe ADR-0007). Wer
+sich anmeldet, wird `Organizer` und darf damit Turniere ausschreiben; wer eines
+anlegt, wird dessen Turnierleiter. Alles Weitere — Schiedsrichter, weitere
+Turnierleiter — berufen die Turnierleitungen selbst über
+`/api/tournaments/{id}/roles`. Der Selbstservice lässt sich über
+`Security:SelfServiceOrganizers` abschalten, wenn eine Instanz geschlossen
+laufen soll.
 
 ## Architektur
 
@@ -78,10 +83,14 @@ Die tragenden Entscheidungen samt verworfener Alternativen stehen in
   Planungsmodus, Court-Queues am Turniertag — weil Matchdauern unbekannt sind.
 - [ADR-0003](docs/adr/0003-getrenntes-read-modell.md): eigene Projektion für die
   öffentliche Ansicht.
-- [ADR-0004](docs/adr/0004-club-scoped-autorisierung.md): Rollen sind an Verein oder
-  Turnier gebunden, durchgesetzt per Query-Filter.
-- [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler existieren
-  vereinsübergreifend — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
+- [ADR-0009](docs/adr/0009-turnier-als-wurzelaggregat.md): das Turnier ist die
+  Wurzel, der Verein ist entfallen; Rollen hängen am Turnier, durchgesetzt per
+  Query-Filter. Ersetzt ADR-0004.
+- [ADR-0010](docs/adr/0010-oeffentliche-selbstmeldung.md): Melden über einen
+  Token-Link, ohne Konto — samt den drei Regeln, ohne die der Endpunkt still
+  scheitert.
+- [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler gehören keinem Turnier
+  — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
 
 ## Spielplan
 
@@ -178,16 +187,16 @@ Vorlage — neue Phasenfolge, neue Parameter, kein Deployment.
 
 Umgesetzt sind K.-o.-System, Round Robin und das Schweizer System.
 Mitgeliefert sind `ko-single`, `group-then-ko`, `liga-round-robin` und `swiss`.
-Sie lassen sich nicht ändern, aber kopieren; die Kopie gehört dem Verein und ist
-frei bearbeitbar.
+Sie lassen sich nicht ändern, aber kopieren; die Kopie gehört dem, der sie
+angelegt hat, und ist frei bearbeitbar.
 
 Beim Auslosen wird die Definition in das Turnier kopiert und eingefroren. Wer die
 Vorlage danach nachschärft, verändert damit kein laufendes Turnier.
 
-Ein Turnier nimmt nur die mitgelieferten Vorlagen und die seines eigenen
-Vereins. Sichtbar heißt nicht verwendbar: wer zwei Vereine verwaltet, sieht die
-Vorlagen beider, und ein Turnier des einen hinge sonst bis zur Auslosung an
-einer Definition, die jemand aus dem anderen noch ändern kann.
+Ein Turnier nimmt nur die mitgelieferten Vorlagen und die eigenen seines
+Anlegers. Sichtbar heißt nicht verwendbar: die mitgelieferten sieht jeder, und
+ein Turnier hinge sonst bis zur Auslosung an einer Definition, die ein Fremder
+noch ändern kann.
 
 ### Von der Gruppe in die Endrunde
 

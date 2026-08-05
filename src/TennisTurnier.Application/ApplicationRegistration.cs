@@ -29,6 +29,7 @@ public static class ApplicationRegistration
         services.AddScoped<OrganizerBootstrap>();
 
         services.AddScoped<IMeService, MeService>();
+        services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IPostCommitQueue, PostCommitQueue>();
         services.AddScoped<DrawBuilder>();
         services.AddScoped<ITournamentService, TournamentService>();

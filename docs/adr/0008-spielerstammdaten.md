@@ -1,6 +1,22 @@
 # ADR-0008 — Spieler existieren vereinsübergreifend
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0009](0009-turnier-als-wurzelaggregat.md)
+
+> Die Entscheidung selbst hat sich als richtig erwiesen und ist geblieben: ein
+> Spieler gehört keinem Verein. Überholt ist nur der Rahmen — es gibt keinen
+> Verein mehr, dem er nicht gehören könnte. Aus „vereinsübergreifend" ist
+> „turnierübergreifend" geworden, `ClubMembership` wurde nie gebaut und
+> entfällt ersatzlos.
+>
+> Die drei Regeln unten, die den fehlenden Query-Filter ersetzen, gelten
+> unverändert und lauten jetzt:
+>
+> - Die Spielersuche liefert nur den Anzeigenamen, nie Kontaktdaten.
+> - Kontaktdaten sieht, wer `ViewInternals` in einem Turnier hat, für das der
+>   Spieler gemeldet ist — beides zusammen, nicht eines davon
+>   (`GET /api/tournaments/{t}/players/{p}`).
+> - Die öffentliche Projektion (ADR-0003) enthält von einem Spieler
+>   ausschließlich den Anzeigenamen.
 
 ## Kontext
 

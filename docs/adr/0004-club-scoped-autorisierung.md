@@ -1,6 +1,17 @@
 # ADR-0004 — Autorisierung ist club-scoped
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0009](0009-turnier-als-wurzelaggregat.md)
+
+> Der Verein ist als Aggregat entfallen; das Turnier ist an seine Stelle
+> getreten. Was diese Entscheidung ausmacht, gilt weiter und steht in ADR-0009:
+> der Query-Filter ist die Sicherheitsgrenze, die Endpunkt-Prüfung die zweite
+> Verteidigungslinie, und ein Zugriff außerhalb des eigenen Scopes wird als 404
+> beantwortet. Ersetzt ist allein der Schlüssel — Turnier statt Verein — und
+> damit die Rollentabelle unten: `ClubAdmin` und `Player` gibt es nicht mehr,
+> `Organizer` ist hinzugekommen.
+>
+> Der Text bleibt stehen, weil die Begründung für den Filter selbst hier steht
+> und weiterhin trägt.
 
 ## Kontext
 

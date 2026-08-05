@@ -27,7 +27,9 @@ npm run dev                                      # http://localhost:5000
 ```
 
 Anmelden mit einem der Testbenutzer aus dem Realm (`systemadmin`, `clubadmin`,
-`referee`; Passwort jeweils gleich dem Benutzernamen).
+`referee`; Passwort jeweils gleich dem Benutzernamen). Die Namen stammen aus der
+Zeit des Vereins und sagen nichts mehr über Rollen: die vergibt die Anwendung.
+Wer sich anmeldet, darf Turniere ausschreiben und führt, was er anlegt.
 
 > **Der Port 5000 ist nicht verhandelbar.** Der Test-Realm
 > (`deploy/keycloak/tennisturnier-realm.json`) trägt für den öffentlichen Client
@@ -90,8 +92,9 @@ src/
                 endpoints.ts (Endpunkte 1:1) · realtime.ts (SignalR)
   auth/         oidc.ts · AuthProvider.tsx · LoginScreen.tsx
   components/   core/ · layout/ · tournament/
-  screens/      BoardScreen · DrawScreen · ClubScreen · WizardScreen · PublicScreen
-  hooks/        useResource · useToast · usePublicView
+  screens/      TournamentsScreen · EntriesScreen · DrawScreen · BoardScreen
+                WizardScreen · RegistrationScreen · PublicScreen
+  hooks/        useResource · useToast · usePublicView · useRoute
   lib/          time.ts (Zeitzone, TimeSpan) · labels.ts (deutsche Beschriftungen)
   styles/       tokens/ (unverändert aus dem Design System) · app.css
 ```
@@ -118,7 +121,7 @@ Sorte Fehler, die sich als „der Status zeigt nie *läuft*" äußert.
 ### Fehler
 
 `ApiError` bildet die Abbildung des `DomainExceptionHandler` ab und ebnet sie nicht
-ein: 404 heißt „nicht gefunden **oder** fremder Verein" (ADR-0004 — die Oberfläche
+ein: 404 heißt „nicht gefunden **oder** fremdes Turnier" (ADR-0009 — die Oberfläche
 darf den Unterschied nicht erfinden), 409 heißt „jemand war schneller" und ist am
 Turniertag der Normalfall, 422 trägt die Meldung der Domäne und wird unverändert
 angezeigt.
@@ -130,20 +133,21 @@ angezeigt.
 Der Prototyp kannte genau ein Turnier und keine API. Vier Stellen mussten deshalb
 anders geschnitten werden; jede ist im Screen selbst benannt, nicht nur hier.
 
-1. **Turnierauswahl.** Die API ist mandantenfähig und club-scoped, also steht in der
-   Kopfzeile eine Auswahl für Verein und Turnier. Der Entwurf hatte sie nicht, weil
-   er nur ein Turnier kannte.
+1. **Turnierauswahl.** Die API ist mandantenfähig — ein Turnier sieht nur, wer
+   eine Rolle daran hat —, also steht in der Kopfzeile eine Auswahl. Der Entwurf
+   hatte sie nicht, weil er nur ein Turnier kannte. Ein Verein stand hier einmal
+   daneben; er ist mit ADR-0009 entfallen.
 2. **Der Moduswechsel Planung ↔ Turniertag ruft die API** (`scheduling/match-day`
    bzw. `…/planning`) statt ein lokales Flag zu setzen. Er ändert die Bedeutung jeder
    angezeigten Uhrzeit — das ist ein Zustandsübergang, kein Schalter.
 3. **Wizard, Schritt „Parameter".** Satzformat, Gruppen und Qualifikanten gehören zur
    *Formatvorlage*, nicht zum Turnier. Eingebaute Vorlagen sind nicht editierbar; wer
-   etwas ändert, legt beim Anlegen eine Kopie des Vereins an. Genau das tut der
+   etwas ändert, bekommt beim Anlegen eine eigene Kopie. Genau das tut der
    Schritt, und die Vorschau sagt es an.
-4. **Wizard, Schritt „Plätze".** Eine Auswahl der Plätze *pro Turnier* gibt es in der
-   API nicht — Plätze gehören dem Verein, der Solver nimmt die aktiven. Der Schritt
-   zeigt deshalb die freien Fenster aus `…/free-windows`, statt eine Auswahl
-   vorzutäuschen, die nirgends ankommt.
+4. **Wizard, Schritt „Plätze".** Hier stand einmal, eine Auswahl der Plätze *pro
+   Turnier* kenne die API nicht — Plätze gehörten dem Verein. Genau diese Lücke
+   ist mit ADR-0009 zugegangen: der Schritt legt die Plätze an und bucht ihre
+   Zeiten, beide Plätze, alle Turniertage, eine Uhrzeitspanne, in einem Aufruf.
 
 Dazu eine Ergänzung, die der Entwurf nicht hatte, die die API aber braucht: bei
 `Retirement`, `Walkover` und `Disqualification` fragt die Ergebniseingabe nach der
@@ -158,23 +162,29 @@ unbenutzt), Schweizer System als eigener Screen. Die Endpunkte dafür stehen; es
 fehlt die Gestaltung.
 
 **Nachgereicht**, weil eine frische Installation sonst nicht bis zum ersten
-Turnier kommt — beides hatte im Entwurf keine Vorlage, beides fehlt trotzdem
-nicht *optional*:
+Turnier kommt — nichts davon hatte im Entwurf eine Vorlage, nichts davon fehlt
+trotzdem *optional*:
 
-- `ClubScreen` — Verein anlegen, Plätze anlegen, Öffnungszeiten setzen. Das
-  Turnier hängt am Verein, und der Spielplan entsteht aus den Öffnungszeiten
-  seiner Plätze. Ohne Verein kein Turnier, ohne Zeitfenster kein Spielplan.
-  Weiterhin ohne Oberfläche: Sperren (Training, Liga, Wetter), Plätze umbenennen
-  und deaktivieren, Öffnungszeiten wieder entfernen.
+- `TournamentsScreen` — der Einstieg: die eigenen Turniere, und die Schaltfläche,
+  mit der das erste entsteht. Hier stand einmal ein `ClubScreen`, auf dem jemand
+  einen Verein anlegen musste, bevor irgendetwas ging. Er ist mit ADR-0009
+  entfallen; Plätze und ihre Zeiten legt jetzt der Wizard an.
+- `RegistrationScreen` — die öffentliche Anmeldung, erreichbar über `?r=<token>`
+  und **vor** der Anmeldemaske. Wer über einen Aushang kommt, soll kein Konto
+  brauchen; eine Anmeldemaske davor nähme dem Link seinen Zweck (ADR-0010).
+- `EntriesScreen` — die Meldungsverwaltung: Anmeldelink samt Kapazität und
+  Meldeschluss, Meldungen annehmen oder auf die Warteliste, dazu das Panel, über
+  das Schiedsrichter und weitere Turnierleiter berufen werden. Kontaktdaten
+  stehen nur darin, wenn das Backend sie mitschickt — ein Ausblenden im Frontend
+  wäre kein Schutz, sondern eine Behauptung.
 - `DrawPreparation` (im `DrawScreen`, solange kein Draw steht) — Meldung öffnen,
   Teilnehmer melden, Meldeschluss, auslosen. Die Endpunkte dafür lagen in
   `endpoints.ts`, aber kein Screen rief sie auf: ein angelegtes Turnier blieb im
   Zustand `Draft` stehen, und der Turniertag antwortete zu Recht mit „setzt eine
-  Auslosung voraus", ohne den Weg dorthin zu zeigen. Eine Meldung wird gleich
-  angenommen — die Warteliste, wegen der die Domäne beides trennt, hat noch
-  keine Oberfläche, und eine stumm nicht im Feld stehende Meldung wäre die
-  schlechtere Überraschung. Ebenfalls offen: Setzpositionen und Doppel
-  (`participants` mit zwei Spielern).
+  Auslosung voraus", ohne den Weg dorthin zu zeigen. Eine hier erfasste Meldung
+  wird gleich angenommen; Warteliste, Setzpositionen und Rückzug stehen im
+  `EntriesScreen`, wo sie hingehören — dort kommen seit ADR-0010 auch die
+  Meldungen an, die niemand erfasst hat.
 
 ---
 

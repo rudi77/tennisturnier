@@ -6,8 +6,8 @@ import { useResource } from '../hooks/useResource'
 import { useToast } from '../hooks/useToast'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { tournaments as tournamentApi } from '../api/endpoints'
-import { EntryOrigin, EntryStatus, type EntryOverview } from '../api/types'
-import { entryStatusLabel } from '../lib/labels'
+import { EntryOrigin, EntryStatus, Role, type EntryOverview } from '../api/types'
+import { entryStatusLabel, roleLabel } from '../lib/labels'
 
 /**
  * Die Meldungen.
@@ -98,6 +98,8 @@ export function EntriesScreen() {
           detail={registration.data}
           onChanged={() => void registration.reload()}
         />
+
+        <RolePanel tournamentId={tournament.id} />
 
         {entries.error ? (
           <ErrorBlock error={entries.error} onRetry={() => void entries.reload()} />
@@ -271,6 +273,130 @@ function LinkPanel({
           style={{ alignSelf: 'flex-end' }}
         >
           Bedingungen speichern
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Wer dieses Turnier führt und wer Ergebnisse einträgt.
+ *
+ * Berufen wird über die E-Mail-Adresse eines bestehenden Kontos — Identitäten
+ * legt der Identity Provider an, nicht diese Anwendung (ADR-0007). Wen es hier
+ * noch nicht gibt, muss sich einmal anmelden; die Einladung eines Unbekannten
+ * ist ein benannter offener Punkt.
+ *
+ * Zwei Auswahlmöglichkeiten und nicht vier: eine globale Rolle wiese die API
+ * ohnehin ab. Sie hier anzubieten hieße, eine Schaltfläche zu zeigen, die
+ * nichts als einen Fehler auslösen kann.
+ */
+function RolePanel({ tournamentId }: { tournamentId: string }) {
+  const { show, showError } = useToast()
+  const roles = useResource(() => tournamentApi.roles(tournamentId), [tournamentId])
+
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState<Role>(Role.Referee)
+  const [busy, setBusy] = useState(false)
+
+  const run = async (what: string, action: () => Promise<unknown>) => {
+    setBusy(true)
+    try {
+      await action()
+      await roles.reload()
+      show(what)
+    } catch (cause) {
+      showError(cause, what)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const directors = (roles.data ?? []).filter((r) => r.role === Role.TournamentDirector).length
+
+  return (
+    <div className="md-panel" style={{ padding: 'var(--sp-10)', marginBottom: 'var(--sp-8)' }}>
+      <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 'var(--fw-bold)', marginBottom: 3 }}>
+        Wer mitarbeitet
+      </div>
+      <div className="md-hint" style={{ marginBottom: 'var(--sp-8)' }}>
+        Turnierleitung führt das Turnier, Schiedsrichter tragen Ergebnisse ein. Beide Rollen
+        gelten nur für dieses Turnier.
+      </div>
+
+      {roles.error ? (
+        <ErrorBlock error={roles.error} onRetry={() => void roles.reload()} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+          {(roles.data ?? []).map((entry) => (
+            <div
+              key={entry.assignmentId}
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}
+            >
+              <div style={{ flex: 1, minWidth: 200, fontSize: 'var(--fs-sm)' }}>
+                {entry.displayName ?? entry.email ?? entry.userId}
+                {entry.email && entry.displayName ? (
+                  <span style={{ color: 'var(--fg-3)' }}> · {entry.email}</span>
+                ) : null}
+              </div>
+
+              <span className="md-pill" aria-pressed={false} style={{ pointerEvents: 'none' }}>
+                {roleLabel[entry.role]}
+              </span>
+
+              <button
+                type="button"
+                className="md-btn"
+                disabled={busy || (entry.role === Role.TournamentDirector && directors === 1)}
+                title={
+                  entry.role === Role.TournamentDirector && directors === 1
+                    ? 'Die letzte Turnierleitung lässt sich nicht entziehen — ohne sie sähe niemand mehr dieses Turnier.'
+                    : undefined
+                }
+                onClick={() =>
+                  void run('Rolle entzogen', () =>
+                    tournamentApi.revokeRole(tournamentId, entry.assignmentId),
+                  )
+                }
+              >
+                Entziehen
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 'var(--sp-4)', marginTop: 'var(--sp-8)', flexWrap: 'wrap' }}>
+        <input
+          className="md-input"
+          type="email"
+          value={email}
+          aria-label="E-Mail-Adresse"
+          placeholder="name@example.org"
+          onChange={(event) => setEmail(event.target.value)}
+          style={{ flex: 1, minWidth: 220 }}
+        />
+        <select
+          className="md-input"
+          value={role}
+          aria-label="Rolle"
+          onChange={(event) => setRole(Number(event.target.value) as Role)}
+        >
+          <option value={Role.Referee}>{roleLabel[Role.Referee]}</option>
+          <option value={Role.TournamentDirector}>{roleLabel[Role.TournamentDirector]}</option>
+        </select>
+        <button
+          type="button"
+          className="md-btn"
+          disabled={busy || !email.trim()}
+          onClick={() =>
+            void run('Berufen', async () => {
+              await tournamentApi.grantRole(tournamentId, { email: email.trim(), role })
+              setEmail('')
+            })
+          }
+        >
+          Berufen
         </button>
       </div>
     </div>

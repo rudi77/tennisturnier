@@ -23,6 +23,23 @@ public interface IUserDirectory
     /// <summary>Das lokale Konto zur Benutzerkennung, oder <c>null</c>.</summary>
     Task<UserAccount?> FindAsync(Guid userId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Das Konto zu einer E-Mail-Adresse, ohne Rücksicht auf
+    /// Groß-/Kleinschreibung.
+    ///
+    /// Der Weg, jemanden zu berufen: die Turnierleitung kennt ihren
+    /// Schiedsrichter unter seiner Adresse und nicht unter einer Kennung, die
+    /// erst beim ersten Login entsteht. Ein Konto gibt es deshalb nur, wenn
+    /// derjenige sich schon einmal angemeldet hat — die Einladung eines noch
+    /// nicht angemeldeten Benutzers bleibt ein offener Punkt (ADR-0007).
+    /// </summary>
+    Task<UserAccount?> FindByEmailAsync(string email, CancellationToken cancellationToken = default);
+
+    /// <summary>Die Konten zu den genannten Kennungen — für die Anzeige einer Rollenliste.</summary>
+    Task<IReadOnlyList<UserAccount>> FindManyAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<RoleAssignment>> GetAssignmentsAsync(
         Guid userId,
         CancellationToken cancellationToken = default);

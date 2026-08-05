@@ -26,12 +26,14 @@ import type {
   PublicRegistrationView,
   PublicTournamentView,
   RegistrationDetail,
+  Role,
   SchedulePlanResult,
   SelfRegistrationRequest,
   SelfRegistrationResult,
   SetScore,
   StandingsDetail,
   TournamentDetail,
+  TournamentRoleSummary,
   TournamentSummary,
 } from './types'
 
@@ -152,6 +154,20 @@ export const tournaments = {
   /** Neues Token; das alte ist damit sofort wertlos — jeder ausgehängte Zettel ist Makulatur. */
   rotateRegistrationLink: (id: string) =>
     http.post<void>(`/api/tournaments/${id}/registration/link/rotate`),
+
+  // --- Rollen ---
+  // Vergeben lassen sich ausschließlich TournamentDirector und Referee, und nur
+  // an diesem Turnier. Eine globale Rolle weist die API mit 422 ab — die
+  // Eskalationssperre steht dort und nicht hier.
+
+  roles: (id: string) => http.get<TournamentRoleSummary[]>(`/api/tournaments/${id}/roles`),
+
+  /** Berufen wird über die E-Mail-Adresse eines bestehenden Kontos. */
+  grantRole: (id: string, body: { email: string; role: Role }) =>
+    http.post<{ id: string }>(`/api/tournaments/${id}/roles`, body),
+
+  revokeRole: (id: string, assignmentId: string) =>
+    http.del<void>(`/api/tournaments/${id}/roles/${assignmentId}`),
 }
 
 // --- Öffentliche Selbstmeldung ----------------------------------------------

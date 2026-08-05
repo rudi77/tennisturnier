@@ -365,6 +365,18 @@ export interface SelfRegistrationResult {
   status: EntryStatus
 }
 
+// ---------------------------------------------------------------------------
+// Rollen an einem Turnier
+// ---------------------------------------------------------------------------
+
+export interface TournamentRoleSummary {
+  assignmentId: string
+  userId: string
+  displayName: string | null
+  email: string | null
+  role: Role
+}
+
 /**
  * FormatDefinition geht laut TournamentContracts.cs unverändert über die
  * Schnittstelle — sie *ist* das Austauschformat aus ADR-0001, und eine

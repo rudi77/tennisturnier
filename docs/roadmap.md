@@ -14,9 +14,19 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M6 | Auto-Scheduling | Spielplanvorschlag mit Diff und Bestätigung | ✅ |
 | M7 | Turniertag-Queue | Betrieb ohne starres Zeitraster | ✅ |
 | M8 | SwissFormat | Schweizer System ohne Wiederholungspaarungen | ✅ |
+| M9 | Turnier als Wurzel | Verein abgeschafft, Ort/Disziplin/Plätze am Turnier | ✅ |
+| M10 | Öffentliche Selbstmeldung | Melden über einen Link, ohne Konto | ✅ |
 
 M0–M4 ergeben die erste vorführbare Version. M5–M8 bauen darauf auf, ohne die
 bestehenden Verträge zu brechen.
+
+M9 bricht sie: der Verein entfällt als Aggregat, und das Turnier tritt an seine
+Stelle ([ADR-0009](adr/0009-turnier-als-wurzelaggregat.md)). Er war der einzige
+Baustein, den die Wirklichkeit nicht hergab — reserviert wird außerhalb dieser
+Anwendung, und was zugesagt ist, gilt für ein Turnier. M10 schließt die letzte
+der vier Lücken, die den Umbau ausgelöst haben: bis dahin war „Meldung offen"
+eine Behauptung, denn melden konnte nur die Turnierleitung
+([ADR-0010](adr/0010-oeffentliche-selbstmeldung.md)).
 
 ## Bewusst nicht gebaut
 
@@ -102,15 +112,38 @@ bestehenden Verträge zu brechen.
   Wiederholung entstehen. Sie ganz auszuschließen hieße, die Überkreuzung an
   anderer Stelle aufzugeben — das wäre eine Verschlechterung, keine Lösung.
 
-- **Es gibt keinen Weg, Rollen zu vergeben.** `RoleAssignment` ist modelliert,
-  der Query-Filter aus ADR-0004 arbeitet darauf, und die Tests setzen Rollen über
-  `IUserDirectory.AssignAsync` — einen Endpunkt dafür gibt es nicht. Auf einer
-  frischen Datenbank hat damit niemand eine Rolle, und weil das Anlegen des
-  ersten Vereins `ManageClubs` verlangt, kommt eine neue Instanz ohne Eingriff in
-  die SQLite-Datei nicht in Gang. Es fehlt beides: die Rollenverwaltung als
-  Anwendungsfall und ein abgesicherter Weg für den ersten Systemadministrator.
-  Beides ist eine Festlegung — wer darf wem welche Rolle geben, und woran
-  erkennt die erste Instanz ihren Eigentümer.
+- ~~**Es gibt keinen Weg, Rollen zu vergeben.**~~ Geschlossen in M9/M10. Die
+  erste Rolle kommt aus dem Selbstservice: wer sich anmeldet, wird
+  `Organizer`, und wer ein Turnier anlegt, wird dessen Turnierleiter — in
+  derselben Arbeitseinheit. Alles Weitere geht über `RoleService` und
+  `/api/tournaments/{t}/roles`. Zwei Sperren tragen ihn: eine globale Rolle
+  lässt sich dort **nicht** vergeben (sonst machte sich ein Turnierleiter über
+  ein zweites Konto zum Systemadministrator), und die letzte
+  Turnierleiter-Zuweisung ist nicht entfernbar (sonst sähe niemand mehr das
+  Turnier, und es gäbe keinen Weg zurück).
+
+- **Melder ohne Konto sind unverifiziert.** Die Selbstmeldung nimmt Namen und
+  E-Mail-Adressen entgegen, ohne die Adresse zu bestätigen. Wer eine fremde
+  einträgt, meldet damit jemand anderen. Die Turnierleitung sieht die Adresse
+  und kann nachfragen; mehr gibt es in diesem Stand nicht. Eine Verifikation
+  hieße: eine E-Mail verschicken — also ein Postfach konfigurieren, eine
+  Zustellung überwachen und dem Melder eine zweite Hürde zumuten, die genau die
+  Niederschwelligkeit kostet, um derentwillen der Link existiert. Die
+  Entscheidung steht aus.
+- **Für Kontaktdaten gibt es keine Aufbewahrungsfrist.** Was über die
+  Selbstmeldung hereinkommt, bleibt unbegrenzt stehen. Das ist bei
+  personenbezogenen Daten von Menschen ohne Konto der Punkt, an dem eine Regel
+  fehlt — nicht ein Feature. `TournamentEntry.Origin` und `RegisteredAt` sind
+  die Felder, an denen eine Löschregel ansetzen wird; sie stehen deshalb schon
+  jetzt da. Offen ist die Frist selbst und die Frage, was mit einem Spieler
+  geschieht, der in einem abgeschlossenen Turnier in der Tabelle steht.
+- **Ein noch nicht angemeldeter Benutzer lässt sich nicht berufen.** Berufen
+  wird über die E-Mail-Adresse eines bestehenden Kontos — Identitäten legt der
+  Identity Provider an, nicht diese Anwendung (ADR-0007). Wer als
+  Schiedsrichter vorgesehen ist, muss sich also einmal anmelden, bevor die
+  Turnierleitung ihn eintragen kann. Eine Einladung, die auf eine noch nicht
+  vorhandene Identität wartet, wäre ein eigener Zustand mit eigenem Ablauf und
+  eigenem Verfall; er ist nicht gebaut.
 - **Grenze der Deklarativität.** Ein genuin neuer Paarungsalgorithmus, den keines der
   vier Formate abbildet, braucht weiterhin eine neue `IPhaseFormat`-Implementierung
   und ein Deployment (siehe ADR-0001).

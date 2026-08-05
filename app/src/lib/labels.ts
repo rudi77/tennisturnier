@@ -18,6 +18,7 @@ import {
   MatchOutcome,
   MatchStatus,
   ProposalChange,
+  Role,
   ScheduleConstraint,
   SchedulingMode,
   TournamentState,
@@ -121,6 +122,13 @@ export const surfaceLabel: Record<CourtSurface, string> = {
 export const locationLabel: Record<CourtLocation, string> = {
   [CourtLocation.Outdoor]: 'Freiplatz',
   [CourtLocation.Indoor]: 'Halle',
+}
+
+export const roleLabel: Record<Role, string> = {
+  [Role.SystemAdmin]: 'Systemadministrator',
+  [Role.Organizer]: 'Veranstalter',
+  [Role.TournamentDirector]: 'Turnierleitung',
+  [Role.Referee]: 'Schiedsrichter',
 }
 
 export const disciplineLabel: Record<Discipline, string> = {

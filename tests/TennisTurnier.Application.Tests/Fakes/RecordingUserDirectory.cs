@@ -15,6 +15,18 @@ public sealed class RecordingUserDirectory : IUserDirectory
 
     public IReadOnlyList<RoleAssignment> Assigned => _assigned;
 
+    /// <summary>Die Konten, die dieser Verzeichnisdienst kennt — vom Test gesetzt.</summary>
+    public List<UserAccount> Accounts { get; } = [];
+
+    public UserAccount Seed(string email, string displayName)
+    {
+        var account = new UserAccount(
+            Guid.NewGuid(), "https://test.local", $"sub-{Guid.NewGuid():N}", email, displayName);
+
+        Accounts.Add(account);
+        return account;
+    }
+
     public Task<UserAccount> EnsureAccountAsync(
         string issuer,
         string subjectId,
@@ -24,7 +36,19 @@ public sealed class RecordingUserDirectory : IUserDirectory
         Task.FromResult(new UserAccount(Guid.NewGuid(), issuer, subjectId, email, displayName));
 
     public Task<UserAccount?> FindAsync(Guid userId, CancellationToken cancellationToken = default) =>
-        Task.FromResult<UserAccount?>(null);
+        Task.FromResult(Accounts.FirstOrDefault(a => a.Id == userId));
+
+    public Task<UserAccount?> FindByEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(Accounts.FirstOrDefault(a =>
+            a.Email is { } stored && string.Equals(stored, email, StringComparison.OrdinalIgnoreCase)));
+
+    public Task<IReadOnlyList<UserAccount>> FindManyAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<UserAccount>>(
+            [.. Accounts.Where(a => userIds.Contains(a.Id))]);
 
     public Task<IReadOnlyList<RoleAssignment>> GetAssignmentsAsync(
         Guid userId,
