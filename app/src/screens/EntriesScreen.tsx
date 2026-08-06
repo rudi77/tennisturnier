@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
+import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
 import { TournamentPicker } from '../components/layout/TournamentPicker'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { useResource } from '../hooks/useResource'
@@ -97,6 +98,15 @@ export function EntriesScreen() {
           tournamentId={tournament.id}
           detail={registration.data}
           onChanged={() => void registration.reload()}
+        />
+
+        <CsvImportPanel
+          tournamentId={tournament.id}
+          discipline={tournament.discipline}
+          onImported={async () => {
+            await entries.reload()
+            await reloadTournament()
+          }}
         />
 
         <RolePanel tournamentId={tournament.id} />

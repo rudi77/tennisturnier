@@ -171,6 +171,16 @@ internal static class TournamentEndpoints
             return Results.Created($"/api/tournaments/{tournamentId}/entries/{id}", new { id });
         });
 
+        // Der zweite Weg ins Feld, neben dem Anmeldelink. Eigener Endpunkt und
+        // kein Sonderfall von POST /entries: er nimmt eine ganze Liste entgegen
+        // und antwortet mit einem Bericht statt mit einer Id.
+        entries.MapPost("/import", async (
+            Guid tournamentId,
+            ImportEntriesRequest request,
+            IEntryImportService service,
+            CancellationToken ct) =>
+            Results.Ok(await service.ImportAsync(tournamentId, request, ct)));
+
         entries.MapPost("/{entryId:guid}/accept", async (
             Guid tournamentId, Guid entryId, ITournamentService service, CancellationToken ct) =>
         {

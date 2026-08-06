@@ -18,6 +18,7 @@ import type {
   FormatDefinition,
   FormatTemplateDetail,
   FormatTemplateSummary,
+  ImportEntriesResult,
   MatchOutcome,
   MeResponse,
   ParticipantSummary,
@@ -130,6 +131,14 @@ export const tournaments = {
 
   enter: (id: string, body: { participantId: string; seed: number | null }) =>
     http.post<{ id: string }>(`/api/tournaments/${id}/entries`, body),
+
+  /**
+   * Eine ganze Teilnehmerliste. Der Inhalt und nicht die Datei: das Formular
+   * liest sie im Browser, und ein Multipart-Upload brächte hier nichts, was ihn
+   * aufwöge.
+   */
+  importEntries: (id: string, csv: string) =>
+    http.post<ImportEntriesResult>(`/api/tournaments/${id}/entries/import`, { csv }),
   accept: (id: string, entryId: string) =>
     http.post<void>(`/api/tournaments/${id}/entries/${entryId}/accept`),
   moveToWaitingList: (id: string, entryId: string) =>

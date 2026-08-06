@@ -717,3 +717,22 @@ export interface PublicCourtSlotView {
   earliestStart: string | null
   plannedStart: string | null
 }
+
+/** Eine Zeile der hochgeladenen Liste, die nicht durchging. */
+export interface ImportProblem {
+  line: number
+  text: string
+  reason: string
+}
+
+/**
+ * Der Bericht eines Teilnehmer-Imports.
+ *
+ * `skipped` ist kein Fehler: dieselbe Liste ein zweites Mal hochzuladen ist der
+ * Normalfall nach einer Korrektur und soll nichts verdoppeln.
+ */
+export interface ImportEntriesResult {
+  imported: number
+  skipped: number
+  problems: ImportProblem[]
+}

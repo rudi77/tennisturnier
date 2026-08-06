@@ -519,7 +519,16 @@ public sealed class Tournament : Entity
         }
     }
 
-    private void RequireRegistrationOpen()
+    /// <summary>
+    /// Weist ein Turnier ab, das gerade keine Meldungen annimmt.
+    ///
+    /// Öffentlich, weil ein Aufrufer die Frage vor einer ganzen Liste stellen
+    /// können muss: der CSV-Import prüft einmal vorn statt je Zeile, sonst
+    /// stünde derselbe Satz fünfzigmal im Bericht und der Grund ginge darin
+    /// unter. <see cref="Enter"/> fragt weiterhin selbst — die Schranke hängt
+    /// nicht daran, dass jemand vorher nachgesehen hat.
+    /// </summary>
+    public void RequireRegistrationOpen()
     {
         if (State != TournamentState.RegistrationOpen)
         {

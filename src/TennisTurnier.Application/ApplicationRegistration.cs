@@ -32,6 +32,7 @@ public static class ApplicationRegistration
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IPostCommitQueue, PostCommitQueue>();
         services.AddScoped<DrawBuilder>();
+        services.AddScoped<ParticipantResolver>();
         services.AddScoped<ITournamentService, TournamentService>();
         services.AddScoped<IMatchService, MatchService>();
         services.AddScoped<IPlayerService, PlayerService>();
@@ -40,6 +41,7 @@ public static class ApplicationRegistration
         services.AddScoped<ISchedulingService, SchedulingService>();
         services.AddScoped<ICourtQueueService, CourtQueueService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
+        services.AddScoped<IEntryImportService, EntryImportService>();
 
         return services;
     }
