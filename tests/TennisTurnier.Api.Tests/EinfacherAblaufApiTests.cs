@@ -51,7 +51,7 @@ public sealed class EinfacherAblaufApiTests : IClassFixture<TennisTurnierApiFact
     /// Termin ist eine gewöhnliche Nachricht und kein Sonderfall.
     /// </summary>
     [Fact]
-    public async Task Ein_Termin_laesst_sich_nachtragen_und_wieder_loeschen()
+    public async Task Ein_Termin_lässt_sich_nachtragen_und_wieder_loeschen()
     {
         var aufbau = await _factory.NeuesTurnierAsync("ablauf-2", OhneTermin(2, auslosen: false));
         var vorher = await TurnierAsync(aufbau.Admin, aufbau.TournamentId);
@@ -108,7 +108,7 @@ public sealed class EinfacherAblaufApiTests : IClassFixture<TennisTurnierApiFact
     /// ausgelostes Turnier vor sich hatte, fand keinen Weg weiter.
     /// </summary>
     [Fact]
-    public async Task Ein_ausgelostes_Turnier_laesst_sich_ausdruecklich_starten()
+    public async Task Ein_ausgelostes_Turnier_lässt_sich_ausdruecklich_starten()
     {
         var aufbau = await _factory.NeuesTurnierAsync("ablauf-4", OhneTermin(4, auslosen: true));
 
@@ -126,11 +126,32 @@ public sealed class EinfacherAblaufApiTests : IClassFixture<TennisTurnierApiFact
     }
 
     /// <summary>
+    /// Ohne Termin gibt es keinen Spielplan — und das ist keine Bequemlichkeit,
+    /// sondern die Schranke.
+    ///
+    /// RequireScheduledWithin lässt ohne Termin jeden Zeitpunkt durch; es gibt
+    /// keinen Zeitraum, gegen den zu prüfen wäre. Ohne diese Absage weiter
+    /// vorn ließe sich ein Spielplan mit „1. Juni 2099“ bestätigen, und er
+    /// stünde danach öffentlich im Aushang.
+    /// </summary>
+    [Fact]
+    public async Task Ohne_Termin_gibt_es_keinen_Spielplanvorschlag()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync("ablauf-7", OhneTermin(4, auslosen: true));
+
+        var antwort = await aufbau.Admin.PostAsync(
+            $"/api/tournaments/{aufbau.TournamentId}/schedule/proposal", null);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
+        Assert.Contains("Termin", await antwort.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Der Abbruch ist kein Löschen: das Turnier bleibt mit allem, was gespielt
     /// wurde, lesbar — es wird nur nicht mehr fortgesetzt.
     /// </summary>
     [Fact]
-    public async Task Ein_Turnier_laesst_sich_abbrechen()
+    public async Task Ein_Turnier_lässt_sich_abbrechen()
     {
         var aufbau = await _factory.NeuesTurnierAsync("ablauf-5", OhneTermin(4, auslosen: true));
 
@@ -150,7 +171,7 @@ public sealed class EinfacherAblaufApiTests : IClassFixture<TennisTurnierApiFact
     /// Bestätigung für etwas, das nicht stattgefunden hat.
     /// </summary>
     [Fact]
-    public async Task Ein_abgebrochenes_Turnier_laesst_sich_nicht_erneut_abbrechen()
+    public async Task Ein_abgebrochenes_Turnier_lässt_sich_nicht_erneut_abbrechen()
     {
         var aufbau = await _factory.NeuesTurnierAsync("ablauf-6", OhneTermin(2, auslosen: false));
 

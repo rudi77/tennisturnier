@@ -697,9 +697,12 @@ public sealed class Tournament : Entity
     /// </summary>
     public void RequireScheduledWithin(DateTimeOffset when)
     {
-        // Ohne Termin gibt es keine Schranke, gegen die zu prüfen wäre. Das ist
-        // kein Loch: wer ohne Termin ansetzt, bekommt die Absage bereits von
-        // RequireDatesRecorded, und zwar mit dem Satz, der ihm weiterhilft.
+        // Ohne Termin gibt es keine Schranke, gegen die zu prüfen wäre — hier
+        // ist schlicht nichts zu sagen. Dass daraus kein Loch wird, ist Sache
+        // der Aufrufer: der Spielplan verlangt den Termin über
+        // RequireDatesRecorded, bevor er überhaupt so weit kommt. Dieser
+        // Kommentar behauptete das einmal für die Domäne — und die Prüfung, auf
+        // die er verwies, stand damals an einer einzigen, ganz anderen Stelle.
         if (StartsOn is not { } starts || EndsOn is not { } ends)
         {
             return;

@@ -317,6 +317,15 @@ public sealed class SchedulingService : ISchedulingService
         RequireManagePermission(tournament);
         RequirePlanningMode(tournament);
 
+        // Ohne Termin gibt es keinen Zeitraum, in dem eine Ansetzung liegen
+        // müsste — und damit auch keine Schranke gegen einen vertippten. Genau
+        // das war die Lücke, die der optionale Termin aufgerissen hat:
+        // RequireScheduledWithin lässt ohne Termin jeden Zeitpunkt durch, und
+        // eine Bestätigung mit „1. Juni 2099" stand danach öffentlich im
+        // Aushang. Der Spielplan ist die eine Stelle, an der der Termin
+        // gebraucht wird; hier verlangt er ihn.
+        tournament.RequireDatesRecorded();
+
         // Ohne Platzzeiten gäbe es nichts, worin ein Spielplan liegen könnte.
         // Der Vorschlag käme leer zurück, jedes Match stünde als „nicht
         // angesetzt", und nirgends stünde, warum.

@@ -25,7 +25,11 @@ public sealed class TournamentRepository : ITournamentRepository
     public async Task<IReadOnlyList<Tournament>> ListForCallerAsync(
         CancellationToken cancellationToken = default) =>
         await _db.Tournaments
-            .OrderByDescending(t => t.StartsOn)
+            // Ohne Termin nach vorn: seit er optional ist, hat ein frisch angelegtes
+            // Turnier keinen — und SQLite sortiert NULL unter jeden Wert. Es stand
+            // damit hinter jedem vergangenen, und die Oberfläche wählt den ersten
+            // Eintrag vor.
+            .OrderByDescending(t => t.StartsOn ?? DateOnly.MaxValue)
             .ToListAsync(cancellationToken);
 
     /// <summary>

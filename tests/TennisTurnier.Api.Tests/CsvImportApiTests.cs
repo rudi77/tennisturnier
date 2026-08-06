@@ -218,6 +218,79 @@ public sealed class CsvImportApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     /// <summary>
+    /// Eine abgewiesene Zeile hinterlässt keine Spieler.
+    ///
+    /// Aufgelöst wird vor dem Prüfen — anders geht es nicht, denn ob zwei
+    /// Namen dasselbe Doppel ergeben, weiß man erst mit beiden Spielern in der
+    /// Hand. Wurden sie dabei sofort angelegt, blieben die Kontaktdaten einer
+    /// krummen Zeile in der Datenbank stehen: ohne Teilnehmer, ohne Meldung, und
+    /// bei jedem erneuten Hochladen einer mehr.
+    /// </summary>
+    [Fact]
+    public async Task Eine_abgewiesene_Zeile_hinterlässt_keinen_Spieler()
+    {
+        var (admin, id) = await TurnierAsync(Discipline.Doubles);
+
+        // Der Partner hat keinen Nachnamen — auffallen kann das erst, nachdem
+        // die erste Hälfte der Zeile aufgelöst wurde. Die gute Zeile danach ist
+        // der eigentliche Test: erst ihre Annahme nimmt an, was liegen geblieben
+        // ist. Ohne sie bewiese der Test nichts.
+        var result = await ImportAsync(admin, id, """
+            Carla;Christl;Dora;;carla@example.invalid
+            Anna;Müller;Bea;Berger
+            """);
+
+        Assert.Equal(1, result.Imported);
+        Assert.Single(result.Problems);
+
+        var gefunden = await admin.GetFromJsonAsync<List<PlayerSummary>>(
+            "/api/players?q=Christl", Json);
+
+        Assert.Empty(gefunden!);
+    }
+
+    /// <summary>
+    /// Im Einzel steht in der dritten Spalte eine E-Mail. Ein Name dort heißt
+    /// fast immer: hier wurde eine Doppelliste in ein Einzelturnier geladen.
+    /// Ungeprüft wurde „Bea“ als E-Mail gespeichert — und damit zum Schlüssel,
+    /// nach dem jede spätere Meldung diesen Menschen sucht.
+    /// </summary>
+    [Fact]
+    public async Task Eine_Doppelliste_im_Einzelturnier_faellt_auf()
+    {
+        var (admin, id) = await TurnierAsync();
+
+        var result = await ImportAsync(admin, id, "Anna;Müller;Bea;Berger");
+
+        Assert.Equal(0, result.Imported);
+        Assert.Contains("E-Mail", result.Problems[0].Reason, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Zwei gleiche Namen ohne E-Mail sind zwei Menschen.
+    ///
+    /// Die Datenbank sucht aus demselben Grund nicht nach Namensgleichheit
+    /// allein: sie führte zwei Menschen zusammen, und das ist der teurere
+    /// Fehler. Der Merkzettel des Imports darf diese Regel nicht unterlaufen —
+    /// sonst wäre der zweite Hans Müller wortlos als „steht schon im Feld“
+    /// übersprungen worden.
+    /// </summary>
+    [Fact]
+    public async Task Zwei_gleiche_Namen_ohne_Mail_bleiben_zwei_Meldungen()
+    {
+        var (admin, id) = await TurnierAsync();
+
+        var result = await ImportAsync(admin, id, """
+            Hans;Müller
+            Hans;Müller
+            """);
+
+        Assert.Equal(2, result.Imported);
+        Assert.Equal(0, result.Skipped);
+        Assert.Equal(2, (await EntriesAsync(admin, id)).Count);
+    }
+
+    /// <summary>
     /// Der Zustand wird einmal vorn geprüft und nicht je Zeile — sonst stünde
     /// derselbe Satz fünfzigmal im Bericht und der Grund ginge darin unter.
     /// </summary>

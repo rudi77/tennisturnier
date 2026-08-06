@@ -180,7 +180,7 @@ function Actions({
   onChanged: () => Promise<void>
   onNavigate: (id: ScreenId) => void
 }) {
-  const { busy, run } = useAction()
+  const { busy, run } = useAction(onChanged)
 
   const registration = useResource(
     () => tournamentApi.registration(tournament.id),
@@ -205,10 +205,11 @@ function Actions({
               className="md-btn md-btn--accent"
               disabled={busy}
               onClick={() =>
-                void run('Meldung öffnen', async () => {
-                    await tournamentApi.openRegistration(tournament.id)
-                    await onChanged()
-                  }, 'Meldung ist offen')
+                void run(
+                  'Meldung öffnen',
+                  () => tournamentApi.openRegistration(tournament.id),
+                  'Meldung ist offen',
+                )
               }
             >
               Meldung öffnen
@@ -270,10 +271,9 @@ function Actions({
             type="button"
             className="md-btn md-btn--accent"
             disabled={busy || !enough}
-            onClick={() => void run('Auslosen', async () => {
-                    await tournamentApi.generateDraw(tournament.id)
-                    await onChanged()
-                  }, 'Ausgelost')}
+            onClick={() =>
+              void run('Auslosen', () => tournamentApi.generateDraw(tournament.id), 'Ausgelost')
+            }
           >
             Auslosen
           </button>

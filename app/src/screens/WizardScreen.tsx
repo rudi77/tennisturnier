@@ -327,8 +327,12 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                           type="date"
                           value={startsOn}
                           onChange={(event) => {
-                            setStartsOn(event.target.value)
-                            if (event.target.value > endsOn) setEndsOn(event.target.value)
+                            const next = event.target.value
+                            setStartsOn(next)
+                            // Ein Ende ohne Beginn ergibt keinen Zeitraum — die
+                            // Domäne weist es ab. Wer den Beginn löscht, meint
+                            // „Termin steht wieder offen" und nicht „nur das Ende".
+                            if (next === '' || next > endsOn) setEndsOn(next)
                           }}
                         />
                       </Field>

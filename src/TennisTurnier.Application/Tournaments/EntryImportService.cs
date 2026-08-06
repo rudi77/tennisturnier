@@ -168,6 +168,11 @@ public sealed class EntryImportService : IEntryImportService
             }
             catch (DomainException failure)
             {
+                // Was diese Zeile angelegt hat, zählt nicht: sonst blieben ihre
+                // Spieler samt Kontaktdaten in der Datenbank stehen — ohne
+                // Teilnehmer, ohne Meldung, und bei jedem neuen Versuch einer mehr.
+                _participants.Discard();
+
                 // Nur die fachliche Absage wird zur Zeile gemeldet. Alles andere
                 // ist ein Fehler dieses Systems und darf nicht als „Zeile 12 ist
                 // krumm" beim Hochladenden landen.
@@ -187,6 +192,23 @@ public sealed class EntryImportService : IEntryImportService
     }
 
     /// <summary>
+    /// Eine E-Mail-Spalte enthält eine E-Mail oder nichts.
+    ///
+    /// Bewusst nur das @-Zeichen und keine Adressprüfung: geprüft wird hier
+    /// nicht die Zustellbarkeit, sondern ob die Spalte das ist, wofür die
+    /// Zuordnung sie hält.
+    /// </summary>
+    private static void RequireEmailOrNothing(string value, string column)
+    {
+        if (value.Length > 0 && !value.Contains('@', StringComparison.Ordinal))
+        {
+            throw new DomainException(
+                $"In der Spalte {column} steht „{value}“ und damit keine E-Mail-Adresse. " +
+                "Stimmt die Spaltenreihenfolge — ist das vielleicht eine Doppelliste?");
+        }
+    }
+
+    /// <summary>
     /// Eine Zeile. Gibt zurück, ob daraus eine neue Meldung entstanden ist —
     /// <c>false</c> heißt: dieselbe Aufstellung steht bereits im Feld.
     /// </summary>
@@ -199,6 +221,14 @@ public sealed class EntryImportService : IEntryImportService
         // Die Ausschreibung entscheidet, ob ein Partner dazugehört — dieselbe
         // Prüfung wie bei der Selbstmeldung und bei der Handeingabe.
         tournament.RequireMatchesDiscipline(columns.HasPartner);
+
+        // Im Einzel steht in der dritten Spalte eine E-Mail. Ein Name dort heißt
+        // fast immer: hier wurde eine Doppelliste in ein Einzelturnier geladen.
+        // Ungeprüft landete „Bea“ als E-Mail und „Berger“ als Telefonnummer am
+        // Spieler — und „Bea“ wurde damit zum Schlüssel, nach dem jede spätere
+        // Meldung diesen Menschen sucht.
+        RequireEmailOrNothing(columns.Email, "E-Mail");
+        RequireEmailOrNothing(columns.PartnerEmail, "Partner-E-Mail");
 
         var self = await _participants.ResolveAsync(
             columns.FirstName, columns.LastName, columns.Email, columns.Phone, cancellationToken);
@@ -214,6 +244,9 @@ public sealed class EntryImportService : IEntryImportService
 
         if (lineups.Find(self, partner) is not null)
         {
+            // Auch die übersprungene Zeile hinterlässt nichts: sie hat unter
+            // Umständen einen Spieler aufgeloest, der noch nicht existierte.
+            _participants.Discard();
             return false;
         }
 
@@ -225,6 +258,7 @@ public sealed class EntryImportService : IEntryImportService
         tournament.Accept(entry.Id);
 
         lineups.Remember(self, partner, entry);
+        _participants.Commit();
 
         return true;
     }

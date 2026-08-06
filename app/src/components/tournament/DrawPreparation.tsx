@@ -31,7 +31,7 @@ export function DrawPreparation({
   tournament: TournamentDetail
   onChanged: () => Promise<void>
 }) {
-  const { busy, run } = useAction()
+  const { busy, run } = useAction(onChanged)
 
   const entries = tournament.entries.filter((entry) => entry.status !== EntryStatus.Withdrawn)
 
@@ -45,10 +45,7 @@ export function DrawPreparation({
           onAccept={(entryId) =>
             void run(
               'Annehmen',
-              async () => {
-                await tournamentApi.accept(tournament.id, entryId)
-                await onChanged()
-              },
+              () => tournamentApi.accept(tournament.id, entryId),
               'Meldung angenommen',
             )
           }
@@ -70,7 +67,7 @@ export function DrawPreparation({
             <div className="md-hint">
               {tournament.state === TournamentState.Draft
                 ? 'Zuerst die Meldung öffnen.'
-                : 'Die Meldung ist geschlossen. „Zurück zur Meldung" öffnet sie wieder.'}
+                : 'Die Meldung ist geschlossen. Im Ablauf lässt sie sich wieder öffnen.'}
             </div>
           </Panel>
         )}

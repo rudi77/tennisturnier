@@ -80,6 +80,23 @@ public sealed class ParticipantResolver
     /// </summary>
     private readonly Dictionary<(string First, string Last, string Mail), Player> _resolved = [];
 
+    /// <summary>
+    /// Was aus der laufenden Zeile entstanden ist und noch nicht zählt.
+    ///
+    /// Aufgelöst wird vor dem Prüfen — anders geht es nicht, denn ob zwei
+    /// Namen dasselbe Doppel ergeben, weiß man erst mit beiden Spielern in der
+    /// Hand. Wurden sie dabei sofort angelegt, hinterließ jede abgewiesene
+    /// Zeile ihre Spieler samt Kontaktdaten in der Datenbank: ohne Teilnehmer,
+    /// ohne Meldung, und bei jedem erneuten Hochladen einen mehr.
+    ///
+    /// Sie warten deshalb hier, bis <see cref="Commit"/> sie annimmt. Wer die
+    /// Zeile verwirft, ruft es nicht auf, und mit dem Ende der Anfrage sind sie
+    /// vergessen.
+    /// </summary>
+    private readonly List<Player> _pendingPlayers = [];
+
+    private readonly List<Participant> _pendingParticipants = [];
+
     public ParticipantResolver(IPlayerRepository players) => _players = players;
 
     /// <summary>
@@ -131,8 +148,17 @@ public sealed class ParticipantResolver
                 // und was nicht erhoben wird, ist weder zu schützen noch zu löschen.
                 DateOfBirth: null));
 
-        _players.Add(player);
-        _resolved[key] = player;
+        _pendingPlayers.Add(player);
+
+        // Ohne E-Mail wird nicht gemerkt. Die Datenbank sucht aus demselben
+        // Grund nicht: „gleicher Name" allein führt zwei Menschen zusammen, und
+        // das ist der teurere Fehler (Risiko 6). Zwei Hans Müller ohne Adresse
+        // in einer Vereinsliste bleiben zwei — sonst wäre der zweite als
+        // „steht schon im Feld" übersprungen worden, wortlos.
+        if (mail.Length > 0)
+        {
+            _resolved[key] = player;
+        }
 
         return player;
     }
@@ -157,8 +183,58 @@ public sealed class ParticipantResolver
                 partner.Id,
                 PlayerService.TeamDisplayName(teamName, self, partner));
 
-        _players.Add(participant);
+        _pendingParticipants.Add(participant);
         return participant;
+    }
+
+    /// <summary>
+    /// Nimmt an, was die laufende Zeile ergeben hat. Danach zählt es und wird
+    /// mit der nächsten Arbeitseinheit gespeichert.
+    /// </summary>
+    public void Commit()
+    {
+        foreach (var player in _pendingPlayers)
+        {
+            _players.Add(player);
+        }
+
+        foreach (var participant in _pendingParticipants)
+        {
+            _players.Add(participant);
+        }
+
+        _pendingPlayers.Clear();
+        _pendingParticipants.Clear();
+    }
+
+    /// <summary>
+    /// Verwirft, was die laufende Zeile ergeben hat.
+    ///
+    /// Auch der Merkzettel wird geleert: ein Spieler, der nie angelegt wurde,
+    /// darf einer späteren Zeile nicht als „schon aufgeloest" angeboten werden.
+    /// </summary>
+    public void Discard()
+    {
+        foreach (var player in _pendingPlayers)
+        {
+            // Gemerkt wird nur mit E-Mail; ohne sie steht der Spieler ohnehin
+            // nicht im Merkzettel.
+            if (player.Contact.Email is not { } mail)
+            {
+                continue;
+            }
+
+            var key = (player.FirstName.ToLowerInvariant(), player.LastName.ToLowerInvariant(),
+                mail.ToLowerInvariant());
+
+            if (_resolved.TryGetValue(key, out var seen) && ReferenceEquals(seen, player))
+            {
+                _resolved.Remove(key);
+            }
+        }
+
+        _pendingPlayers.Clear();
+        _pendingParticipants.Clear();
     }
 
     /// <summary>

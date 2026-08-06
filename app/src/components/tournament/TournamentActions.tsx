@@ -60,9 +60,11 @@ export function TournamentActions({
     setBusy(action)
     try {
       await call(tournament.id)
-      show(done)
-      setConfirming(false)
+      // Erst nachladen, dann melden — wer die Meldung liest, schaut auf den
+      // Bildschirm. Dieselbe Reihenfolge wie in useAction.
       await onChanged()
+      setConfirming(false)
+      show(done)
     } catch (cause) {
       showError(cause, label)
     } finally {

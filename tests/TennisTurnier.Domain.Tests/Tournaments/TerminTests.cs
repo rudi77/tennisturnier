@@ -109,9 +109,14 @@ public sealed class TerminTests
     }
 
     /// <summary>
-    /// Ohne Termin gibt es keine Schranke, gegen die zu prüfen wäre. Das ist kein
-    /// Loch: wer ohne Termin ansetzt, wird bereits von RequireDatesRecorded
-    /// abgewiesen, und zwar mit dem Satz, der ihm weiterhilft.
+    /// Ohne Termin gibt es hier keine Schranke, gegen die zu prüfen wäre — es
+    /// ist schlicht nichts zu sagen.
+    ///
+    /// Dass daraus kein Loch wird, ist Sache der Aufrufer und nicht dieser
+    /// Methode: der Spielplan verlangt den Termin über RequireDatesRecorded,
+    /// bevor er überhaupt so weit kommt. Dieser Kommentar behauptete einmal das
+    /// Gegenteil, und die Prüfung, auf die er verwies, stand damals an einer
+    /// einzigen, ganz anderen Stelle — die Lücke war echt.
     /// </summary>
     [Fact]
     public void Ohne_Termin_schraenkt_kein_Zeitpunkt_ein()

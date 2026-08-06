@@ -108,6 +108,9 @@ public sealed class RegistrationService : IRegistrationService
 
         var participant = _participants.CreateParticipant(self, partner, request.TeamName);
 
+        // Ab hier ist die Meldung beschlossen — was bis dahin entstand, wartete.
+        _participants.Commit();
+
         // Vor dem Melden gezählt: danach zählt die eigene Meldung mit, und ein
         // Feld mit genau einem freien Platz wäre plötzlich voll.
         var full = tournament.Registration.IsFull(tournament.CountAgainstCapacity());
