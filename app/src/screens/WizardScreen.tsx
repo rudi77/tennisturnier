@@ -223,7 +223,7 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
         className="md-section"
         style={{ display: 'flex', gap: 'var(--sp-14)', alignItems: 'flex-start', flexWrap: 'wrap' }}
       >
-        <div style={{ flex: 1, minWidth: 420, maxWidth: 720 }}>
+        <div style={{ flex: '1 1 420px', maxWidth: 720 }}>
           <div style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-10)', flexWrap: 'wrap' }}>
             {STEPS.map((label, index) => (
               <button

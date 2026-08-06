@@ -232,7 +232,7 @@ function LinkPanel({
           readOnly
           value={url}
           aria-label="Anmeldelink"
-          style={{ flex: 1, minWidth: 260 }}
+          style={{ flex: '1 1 260px' }}
           onFocus={(event) => event.currentTarget.select()}
         />
         <ShareLink token={detail.token} tournamentName={tournamentName} className="md-btn" />
@@ -339,7 +339,7 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
               key={entry.assignmentId}
               style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}
             >
-              <div style={{ flex: 1, minWidth: 200, fontSize: 'var(--fs-sm)' }}>
+              <div style={{ flex: '1 1 200px', fontSize: 'var(--fs-sm)' }}>
                 {entry.displayName ?? entry.email ?? entry.userId}
                 {entry.email && entry.displayName ? (
                   <span style={{ color: 'var(--fg-3)' }}> · {entry.email}</span>
@@ -380,7 +380,7 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
           aria-label="E-Mail-Adresse"
           placeholder="name@example.org"
           onChange={(event) => setEmail(event.target.value)}
-          style={{ flex: 1, minWidth: 220 }}
+          style={{ flex: '1 1 220px' }}
         />
         <select
           className="md-input"
@@ -431,7 +431,7 @@ function Row({
       className="md-checkrow"
       style={{ cursor: 'default', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sp-4)' }}
     >
-      <div style={{ flex: 1, minWidth: 200 }}>
+      <div style={{ flex: '1 1 200px' }}>
         <div style={{ fontSize: 'var(--fs-md)', fontWeight: 'var(--fw-semibold)' }}>
           {entry.participantName}
         </div>

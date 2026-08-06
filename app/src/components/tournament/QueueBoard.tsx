@@ -30,8 +30,8 @@ export function QueueBoard({
   const [dragMatchId, setDragMatchId] = useState<string | null>(null)
 
   return (
-    <div style={{ overflowX: 'auto', paddingBottom: 'var(--sp-4)' }}>
-      <div style={{ display: 'flex', gap: 'var(--sp-6)', minWidth: 1180, alignItems: 'flex-start' }}>
+    <div className="md-queue">
+      <div className="md-queue__row">
         {boards.map((board) => {
           const head = board.current ?? board.queue[0] ?? null
           const live = board.current?.status === AssignmentStatus.Running

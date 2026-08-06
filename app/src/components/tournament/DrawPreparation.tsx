@@ -37,7 +37,7 @@ export function DrawPreparation({
 
   return (
     <div style={{ display: 'flex', gap: 'var(--sp-14)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-      <div style={{ flex: 1, minWidth: 380, maxWidth: 620, display: 'grid', gap: 'var(--sp-8)' }}>
+      <div style={{ flex: '1 1 380px', maxWidth: 620, display: 'grid', gap: 'var(--sp-8)' }}>
 
         <EntryList
           entries={entries}
@@ -55,7 +55,7 @@ export function DrawPreparation({
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 340 }}>
+      <div style={{ flex: '1 1 340px' }}>
         {tournament.state === TournamentState.RegistrationOpen ? (
           <AddEntryPanel
             tournamentId={tournament.id}

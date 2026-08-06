@@ -365,7 +365,7 @@ function PhoneView({
         </div>
       </div>
 
-      <div className="md-panel" style={{ flex: 1, minWidth: 300, maxWidth: 460, padding: 18 }}>
+      <div className="md-panel" style={{ flex: '1 1 300px', maxWidth: 460, padding: 18 }}>
         <div style={{ fontSize: 'var(--fs-md)', fontWeight: 'var(--fw-bold)', marginBottom: 'var(--sp-5)' }}>
           Projektion · GET /public/tournaments/{'{id}'}
         </div>

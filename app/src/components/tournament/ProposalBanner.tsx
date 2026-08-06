@@ -41,7 +41,7 @@ export function ProposalBanner({
       }}
     >
       <div style={{ display: 'flex', gap: 'var(--sp-8)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 260 }}>
+        <div style={{ flex: '1 1 260px' }}>
           <div style={{ fontSize: 'var(--fs-md)', fontWeight: 'var(--fw-bold)', marginBottom: 4 }}>
             ScheduleProposal · Diff{' '}
             <span className="md-num">

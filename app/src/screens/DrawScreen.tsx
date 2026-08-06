@@ -11,6 +11,7 @@ import { bracket as bracketApi } from '../api/endpoints'
 import { MatchStatus, TournamentState, type MatchDetail, type PhaseDetail } from '../api/types'
 import { timeSpanToMinutes } from '../lib/time'
 import { matchFormatOf } from '../lib/matchFormat'
+import { isNarrow } from '../lib/breakpoints'
 
 type BracketStyle = 'tree' | 'cols' | 'list'
 
@@ -68,7 +69,12 @@ function toRounds(phase: PhaseDetail | null): Round[] {
 
 export function DrawScreen() {
   const { tournament, timeZone, reloadTournament } = useWorkspace()
-  const [style, setStyle] = useState<BracketStyle>('tree')
+  // Auf einem schmalen Schirm ist der Baum unbenutzbar — die Rundenliste ist
+  // die einzige Darstellung, die ohne Zoom trägt, und das steht seit jeher in
+  // ihrem eigenen Hinweistext. Einmal beim Aufbau gelesen und nicht bei jeder
+  // Größenänderung: wer danach umschaltet, hat sich entschieden, und ein
+  // Drehen des Geräts soll ihn nicht zurücksetzen.
+  const [style, setStyle] = useState<BracketStyle>(() => (isNarrow() ? 'list' : 'tree'))
   const [phaseId, setPhaseId] = useState<string | null>(null)
   const [editing, setEditing] = useState<MatchDetail | null>(null)
 

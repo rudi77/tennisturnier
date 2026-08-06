@@ -422,6 +422,25 @@ body {
 
 /* --- Queue -------------------------------------------------------------- */
 
+/* Nebeneinander, solange Platz ist: am Turniertag will die Turnierleitung alle
+   Plätze auf einen Blick. Reicht die Breite nicht, wird gescrollt — aber nur
+   hier drinnen, nicht mit der ganzen Seite.
+
+   Keine Mindestbreite an der Reihe: die Spalten bringen ihre eigene mit, und
+   ihre Summe ist genau die Breite, die es braucht. Eine Zahl daneben wäre
+   dieselbe Aussage ein zweites Mal — und stünde falsch da, sobald jemand
+   --court-col-width anfasst. */
+.md-queue {
+  overflow-x: auto;
+  padding-bottom: var(--sp-4);
+}
+
+.md-queue__row {
+  display: flex;
+  gap: var(--sp-6);
+  align-items: flex-start;
+}
+
 .md-queue__col {
   flex: 1 0 var(--court-col-width);
   min-width: var(--court-col-width);
@@ -743,6 +762,19 @@ body {
   .md-header__title { font-size: var(--fs-lg); }
 
   .md-kpi { flex: 1; }
+
+  /* Die Plätze stapeln sich, statt seitwärts zu scrollen. Am Turniertag steht
+     man mit einer Hand am Platz — ein Wisch nach unten geht, einer zur Seite
+     trifft die Karte darunter. Die Spalte gibt ihre Breite selbst auf; sie von
+     außen mit einem Nachfahrenselektor zu überschreiben hieße, sie zweimal zu
+     besitzen. */
+  .md-queue { overflow-x: visible; }
+  .md-queue__row { flex-direction: column; }
+  .md-queue__col { flex-basis: auto; min-width: 0; }
+
+  /* Ein Dialog nimmt am Handy die Breite, die da ist — die Ergebniseingabe ist
+     der eine Bildschirm, an dem es auf jeden Millimeter ankommt. */
+  .md-scrim { padding: var(--sp-10) var(--sp-5) var(--sp-5); align-items: flex-start; }
 }
 
 /* Der Ablauf ist die eine Ansicht, die auf jeder Breite dieselbe bleibt — er
