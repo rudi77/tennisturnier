@@ -7,26 +7,22 @@ import {
   type PlayerSummary,
   type TournamentDetail,
 } from '../../api/types'
-import { disciplineLabel, entryStatusLabel, tournamentStateLabel } from '../../lib/labels'
+import { disciplineLabel, entryStatusLabel } from '../../lib/labels'
 import { useResource } from '../../hooks/useResource'
+import { useAction } from '../../hooks/useAction'
 import { useToast } from '../../hooks/useToast'
 
 /**
- * Der Weg vom Entwurf zur Auslosung.
+ * Die Meldeliste und die Handeingabe — was vor der Auslosung am Feld zu tun ist.
  *
- * Bis hierher war das die Lücke: Ein frisch angelegtes Turnier steht im Zustand
- * `Draft`, und die Oberfläche bot keinen einzigen Schritt weiter — die
- * Endpunkte dafür lagen im Client, aber kein Screen rief sie auf. Wer den
- * Turniertag einschaltete, bekam zu Recht „setzt eine Auslosung voraus" und
- * keinen Hinweis, wie er dorthin kommt.
+ * Die Zustandsübergänge standen einmal hier; sie sind in den Ablauf-Screen
+ * gewandert. Der ist seit dem Umbau die Antwort auf „was ist als Nächstes zu
+ * tun“, und zwei Orte für dieselbe Leiter liefen bei der nächsten Änderung
+ * auseinander — sie taten es bereits, in der Beschriftung.
  *
- * Die Reihenfolge ist die der Domäne, nicht eine der Anzeige:
- *
- *     Draft → RegistrationOpen → RegistrationClosed → DrawGenerated → InProgress
- *
- * Jeder Übergang ist ein eigener Endpunkt, weil jeder Folgen hat. Die Auslosung
- * friert Feld und Format ein; sie verlangt mindestens zwei **angenommene**
- * Meldungen und eindeutige Setzpositionen.
+ * Was hier bleibt, hat anderswo kein Zuhause: die Liste der Meldungen mit dem
+ * Annehmen und das Formular, mit dem die Turnierleitung jemanden von Hand
+ * einträgt.
  */
 export function DrawPreparation({
   tournament,
@@ -35,122 +31,13 @@ export function DrawPreparation({
   tournament: TournamentDetail
   onChanged: () => Promise<void>
 }) {
-  const { show, showError } = useToast()
-  const [busy, setBusy] = useState(false)
+  const { busy, run } = useAction()
 
   const entries = tournament.entries.filter((entry) => entry.status !== EntryStatus.Withdrawn)
-  const accepted = entries.filter((entry) => entry.status === EntryStatus.Accepted)
-
-  const run = async (label: string, action: () => Promise<unknown>, done: string) => {
-    setBusy(true)
-    try {
-      await action()
-      await onChanged()
-      show(done)
-    } catch (cause) {
-      showError(cause, label)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
     <div style={{ display: 'flex', gap: 'var(--sp-14)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
       <div style={{ flex: 1, minWidth: 380, maxWidth: 620, display: 'grid', gap: 'var(--sp-8)' }}>
-        <Panel
-          title={`Zustand · ${tournamentStateLabel[tournament.state]}`}
-          hint="Jeder Übergang ist eine eigene Handlung, kein Feld an einem Formular — die Auslosung friert Teilnehmerfeld und Format ein."
-        >
-          <Steps state={tournament.state} />
-
-          <div style={{ marginTop: 'var(--sp-8)', display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
-            {tournament.state === TournamentState.Draft && (
-              <button
-                type="button"
-                className="md-btn md-btn--primary"
-                disabled={busy}
-                onClick={() =>
-                  void run(
-                    'Meldung öffnen',
-                    () => tournamentApi.openRegistration(tournament.id),
-                    'Meldung geöffnet — jetzt Teilnehmer melden',
-                  )
-                }
-              >
-                Meldung öffnen
-              </button>
-            )}
-
-            {/*
-              Der Meldeschluss ist ausdrücklich nicht an das Feld gebunden. Hier
-              stand einmal dieselbe Sperre wie beim Auslosen — und damit kam ein
-              Turnier mit einer Meldung keinen Schritt weiter, obwohl die Domäne
-              den Schritt erlaubt. Wer zu früh schließt, öffnet wieder.
-            */}
-            {tournament.state === TournamentState.RegistrationOpen && (
-              <button
-                type="button"
-                className="md-btn md-btn--primary"
-                disabled={busy}
-                onClick={() =>
-                  void run(
-                    'Meldung schließen',
-                    () => tournamentApi.closeRegistration(tournament.id),
-                    'Meldeschluss — jetzt auslosen',
-                  )
-                }
-              >
-                Meldung schließen
-              </button>
-            )}
-
-            {tournament.state === TournamentState.RegistrationClosed && (
-              <>
-                <button
-                  type="button"
-                  className="md-btn md-btn--accent"
-                  disabled={busy || accepted.length < 2}
-                  title={
-                    accepted.length < 2
-                      ? 'Die Auslosung braucht mindestens zwei angenommene Meldungen.'
-                      : undefined
-                  }
-                  onClick={() =>
-                    void run(
-                      'Auslosen',
-                      () => tournamentApi.generateDraw(tournament.id),
-                      'Ausgelost — Feld und Format sind eingefroren',
-                    )
-                  }
-                >
-                  Auslosen
-                </button>
-                <button
-                  type="button"
-                  className="md-btn"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(
-                      'Meldung wieder öffnen',
-                      () => tournamentApi.reopenRegistration(tournament.id),
-                      'Meldung wieder offen',
-                    )
-                  }
-                >
-                  Zurück zur Meldung
-                </button>
-              </>
-            )}
-          </div>
-
-          {accepted.length < 2 && tournament.state === TournamentState.RegistrationClosed && (
-            <div className="md-hint" style={{ marginTop: 'var(--sp-6)' }}>
-              Die Auslosung verlangt mindestens zwei <em>angenommene</em> Meldungen — derzeit{' '}
-              <span className="md-num">{accepted.length}</span>. Eine bloß gemeldete Teilnahme steht
-              nicht im Feld. „Zurück zur Meldung" öffnet sie wieder.
-            </div>
-          )}
-        </Panel>
 
         <EntryList
           entries={entries}
@@ -158,7 +45,10 @@ export function DrawPreparation({
           onAccept={(entryId) =>
             void run(
               'Annehmen',
-              () => tournamentApi.accept(tournament.id, entryId),
+              async () => {
+                await tournamentApi.accept(tournament.id, entryId)
+                await onChanged()
+              },
               'Meldung angenommen',
             )
           }
@@ -185,43 +75,6 @@ export function DrawPreparation({
           </Panel>
         )}
       </div>
-    </div>
-  )
-}
-
-// --- Zustandsleiste ---------------------------------------------------------
-
-const STEPS: { state: TournamentState; label: string }[] = [
-  { state: TournamentState.Draft, label: 'Entwurf' },
-  { state: TournamentState.RegistrationOpen, label: 'Meldung offen' },
-  { state: TournamentState.RegistrationClosed, label: 'Meldeschluss' },
-  { state: TournamentState.DrawGenerated, label: 'Ausgelost' },
-]
-
-function Steps({ state }: { state: TournamentState }) {
-  return (
-    <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-      {STEPS.map((step) => {
-        const done = state > step.state
-        const current = state === step.state
-        return (
-          <div
-            key={step.state}
-            style={{
-              padding: '5px 11px',
-              borderRadius: 'var(--radius-pill)',
-              fontSize: 'var(--fs-xs)',
-              fontWeight: current ? 'var(--fw-bold)' : 'var(--fw-semibold)',
-              background: current ? 'var(--court-900)' : done ? 'var(--surface-muted)' : 'transparent',
-              color: current ? 'var(--fg-on-dark)' : done ? 'var(--fg-2)' : 'var(--fg-3)',
-              border: current ? 0 : 'var(--border)',
-            }}
-          >
-            {done && '✓ '}
-            {step.label}
-          </div>
-        )
-      })}
     </div>
   )
 }

@@ -3,19 +3,23 @@ import { MatchdayMark } from '../core/MatchdayMark'
 import { displayName, initials } from '../../auth/oidc'
 import type { TournamentDetail } from '../../api/types'
 
-export type ScreenId = 'tournaments' | 'entries' | 'board' | 'draw' | 'create' | 'public'
+export type ScreenId = 'flow' | 'tournaments' | 'entries' | 'board' | 'draw' | 'create' | 'public'
 
 // „Meine Turniere" steht voran, weil es der Einstieg ist: hier stand einmal ein
 // Verein, den jemand anlegen musste, bevor irgendetwas ging. „Meldungen" steht
 // vor dem Draw, weil sie ihm vorausgehen — seit der Selbstmeldung kommen sie
 // herein, ohne dass jemand sie erfasst.
-const ITEMS: { id: ScreenId; label: string; tag: string }[] = [
-  { id: 'tournaments', label: 'Meine Turniere', tag: '01' },
-  { id: 'entries', label: 'Meldungen', tag: '02' },
-  { id: 'draw', label: 'Draw & Bracket', tag: '03' },
-  { id: 'board', label: 'Spielplan', tag: '04' },
-  { id: 'create', label: 'Turnier anlegen', tag: '05' },
-  { id: 'public', label: 'Live-Ansicht', tag: '06' },
+// Die Nummer wird gezählt und nicht gepflegt: sie war siebenmal von Hand
+// eingetragen, und ein neuer Eintrag an zweiter Stelle verschob alle folgenden.
+// short nur dort, wo die lange Beschriftung in einer Fußleiste nicht trägt.
+const ITEMS: { id: ScreenId; label: string; short?: string }[] = [
+  { id: 'flow', label: 'Ablauf' },
+  { id: 'tournaments', label: 'Meine Turniere', short: 'Turniere' },
+  { id: 'entries', label: 'Meldungen' },
+  { id: 'draw', label: 'Draw & Bracket', short: 'Draw' },
+  { id: 'board', label: 'Spielplan', short: 'Plan' },
+  { id: 'create', label: 'Turnier anlegen', short: 'Neu' },
+  { id: 'public', label: 'Live-Ansicht', short: 'Live' },
 ]
 
 export function SideNav({
@@ -41,7 +45,7 @@ export function SideNav({
         </div>
       </div>
 
-      {ITEMS.map((item) => (
+      {ITEMS.map((item, index) => (
         <button
           key={item.id}
           type="button"
@@ -49,8 +53,9 @@ export function SideNav({
           aria-current={screen === item.id ? 'page' : undefined}
           onClick={() => onNavigate(item.id)}
         >
-          <span className="md-nav__tag">{item.tag}</span>
-          <span>{item.label}</span>
+          <span className="md-nav__tag">{String(index + 1).padStart(2, '0')}</span>
+          <span className="md-nav__label">{item.label}</span>
+          <span className="md-nav__label--short">{item.short ?? item.label}</span>
         </button>
       ))}
 

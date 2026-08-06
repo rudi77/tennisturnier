@@ -5,7 +5,6 @@ import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { BracketMatch } from '../components/tournament/BracketMatch'
 import { DrawPreparation } from '../components/tournament/DrawPreparation'
 import { ResultEditor } from '../components/tournament/ResultEditor'
-import { TournamentActions } from '../components/tournament/TournamentActions'
 import { useResource } from '../hooks/useResource'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { bracket as bracketApi } from '../api/endpoints'
@@ -123,9 +122,6 @@ export function DrawScreen() {
         kpis={kpis}
       >
         <TournamentPicker />
-        {tournament && (
-          <TournamentActions tournament={tournament} onChanged={reloadTournament} />
-        )}
       </PageHeader>
 
       <section className="md-section">

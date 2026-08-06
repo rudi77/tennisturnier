@@ -15,10 +15,11 @@ import { DrawScreen } from './screens/DrawScreen'
 import { EntriesScreen } from './screens/EntriesScreen'
 import { RegistrationScreen } from './screens/RegistrationScreen'
 import { TournamentsScreen } from './screens/TournamentsScreen'
+import { FlowScreen } from './screens/FlowScreen'
 import { WizardScreen } from './screens/WizardScreen'
 import { PublicScreen } from './screens/PublicScreen'
 
-const SCREENS: ScreenId[] = ['tournaments', 'draw', 'entries', 'board', 'create', 'public']
+const SCREENS: ScreenId[] = ['flow', 'tournaments', 'draw', 'entries', 'board', 'create', 'public']
 
 export function App() {
   return (
@@ -60,11 +61,12 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
   const { user, logout } = useAuth()
   const route = useRoute()
 
-  // Der Einstieg ist die Turnierliste und nicht mehr der Spielplan: wer sich
-  // anmeldet, hat vielleicht noch gar kein Turnier — und legt hier eines an.
+  // Der Einstieg ist der Ablauf: er beantwortet die Frage, mit der man
+  // hierherkommt — „was ist als Nächstes zu tun". Ohne Turnier zeigt er den
+  // Weg zum ersten; die Turnierliste steht daneben, nicht davor.
   const screen: ScreenId = publicOnly
     ? 'public'
-    : (SCREENS.find((id) => id === route.screen) ?? 'tournaments')
+    : (SCREENS.find((id) => id === route.screen) ?? 'flow')
 
   const tournamentId = route.tournamentId
 
@@ -162,8 +164,10 @@ function Screen({
 }) {
   if (publicOnly) return <PublicScreen standalone />
   switch (screen) {
+    case 'flow':
+      return <FlowScreen onNavigate={onNavigate} />
     case 'tournaments':
-      return <TournamentsScreen onCreate={() => onNavigate('create')} onOpen={() => onNavigate('draw')} />
+      return <TournamentsScreen onCreate={() => onNavigate('create')} onOpen={() => onNavigate('flow')} />
     case 'entries':
       return <EntriesScreen />
     case 'board':
@@ -171,7 +175,7 @@ function Screen({
     case 'draw':
       return <DrawScreen />
     case 'create':
-      return <WizardScreen onCreated={() => onNavigate('entries')} />
+      return <WizardScreen onCreated={() => onNavigate('flow')} />
     case 'public':
       return <PublicScreen />
   }

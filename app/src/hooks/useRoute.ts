@@ -43,6 +43,17 @@ function read(): Route {
 }
 
 /**
+ * Die Adresse, unter der sich jemand ohne Konto zu diesem Turnier meldet.
+ *
+ * Sie steht hier, weil `read()` daneben das andere Ende desselben Parameters
+ * liest. Gebaut wurde sie vorher an zwei Stellen von Hand — und wer `?r=`
+ * ändert, findet hier beide Enden nebeneinander statt einer davon.
+ */
+export function registrationUrl(token: string): string {
+  return `${window.location.origin}${window.location.pathname}?r=${encodeURIComponent(token)}`
+}
+
+/**
  * Liest die Adresszeile und schreibt sie zurück.
  *
  * `navigate` ersetzt nur die genannten Parameter; was nicht genannt ist, bleibt

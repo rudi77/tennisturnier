@@ -100,6 +100,12 @@ body {
   border-left-color: var(--acc);
 }
 
+/* Zwei Beschriftungen, eine sichtbar: „Draw & Bracket" trägt am Schreibtisch,
+   in einer Fußleiste mit sieben Einträgen trägt nur „Draw". Beide stehen im
+   Markup — die verborgene kostet nichts und die Umschaltung bleibt beim
+   Stylesheet, wo auch die Breite bekannt ist. */
+.md-nav__label--short { display: none; }
+
 .md-nav__tag {
   font-family: var(--font-num);
   font-size: 10px;
@@ -133,6 +139,16 @@ body {
   font-size: var(--fs-xl);
   font-weight: var(--fw-bold);
   letter-spacing: var(--ls-tight);
+}
+
+/* Der rechte Teil der Kopfzeile. Benannt und nicht „letztes div“: eine Regel
+   nach Position trifft beim nächsten Kind stillschweigend das falsche. */
+.md-header__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
 }
 
 .md-header__tag {
@@ -598,27 +614,144 @@ body {
   .md-kiosk__grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* --- Ablauf ------------------------------------------------------------- */
+
+.md-flow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 720px;
+}
+
+.md-flow__step {
+  display: flex;
+  gap: var(--sp-6);
+  padding-bottom: var(--sp-8);
+  position: relative;
+}
+
+/* Die Linie verbindet die Marken und endet am letzten Schritt — sonst zeigte
+   sie ins Leere und sähe aus, als käme noch etwas. */
+.md-flow__step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 32px;
+  bottom: 0;
+  width: 2px;
+  background: var(--line);
+}
+
+.md-flow__marker {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-num);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  background: var(--surface-muted);
+  color: var(--fg-3);
+  border: 1px solid var(--line);
+  position: relative;
+  z-index: 1;
+}
+
+.md-flow__step[data-state="done"] .md-flow__marker {
+  background: var(--acc);
+  color: var(--fg-on-ball);
+  border-color: transparent;
+}
+
+.md-flow__step[data-state="current"] .md-flow__marker {
+  background: var(--court-900);
+  color: var(--fg-on-dark);
+  border-color: transparent;
+}
+
+.md-flow__body { flex: 1; min-width: 0; padding-top: 5px; }
+
+.md-flow__title {
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-md);
+}
+
+.md-flow__step[data-state="todo"] .md-flow__title { color: var(--fg-3); }
+
+.md-flow__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  margin-top: var(--sp-5);
+}
+
+.md-flow__row { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
+
+.md-flow__count { font-size: var(--fs-lg); }
+
 /* --- Mobil -------------------------------------------------------------- */
 
+/* Handy zuerst: die Navigation wandert an den unteren Rand, wo der Daumen ist,
+   und bleibt dort stehen. Oben säße sie außerhalb der Reichweite und würde beim
+   Scrollen entweder mitgeschoben oder klebte über dem Inhalt. */
 @media (max-width: 860px) {
-  .md-app { flex-direction: column; }
+  .md-app { flex-direction: column; padding-bottom: var(--nav-bar-height); }
 
   .md-nav {
     width: 100%;
     height: auto;
-    position: static;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    z-index: 60;
     flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    padding: var(--sp-6);
-    gap: var(--sp-2);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    align-items: stretch;
+    padding: var(--sp-2) var(--sp-3) calc(var(--sp-2) + env(safe-area-inset-bottom, 0px));
+    gap: var(--sp-1);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
   }
 
-  .md-nav__brand { padding: 0 var(--sp-4) 0 0; }
-  .md-nav__item { width: auto; }
-  .md-nav__footer { display: none; }
+  .md-nav__brand,
+  .md-nav__footer,
+  .md-nav__tag { display: none; }
+
+  .md-nav__item {
+    width: auto;
+    flex: 1 0 auto;
+    justify-content: center;
+    text-align: center;
+    min-height: var(--hit-target);
+    padding: var(--sp-3) var(--sp-4);
+    font-size: var(--fs-xs);
+  }
+
+  .md-nav__label { display: none; }
+  .md-nav__label--short { display: inline; }
+
   .md-section { padding: var(--sp-8) var(--sp-6) var(--sp-16); }
-  .md-header { padding: var(--sp-6); }
+  .md-header { padding: var(--sp-6); gap: var(--sp-5); }
+
+  /* Die Kopfzeile trägt am Handy den Titel, nicht eine Werkzeugleiste: was
+     rechts stand, rutscht darunter und darf die volle Breite nehmen. */
+  .md-header__actions { margin-left: 0; width: 100%; }
+  .md-header__title { font-size: var(--fs-lg); }
+
+  .md-kpi { flex: 1; }
+}
+
+/* Der Ablauf ist die eine Ansicht, die auf jeder Breite dieselbe bleibt — er
+   ist von vornherein eine Spalte. Nur die Marken rücken enger zusammen. */
+@media (max-width: 480px) {
+  .md-flow__step { gap: var(--sp-5); }
+  /* Auf schmalen Geräten füllen die Schaltflaechen einer Reihe die Breite —
+     nebeneinander wären sie schmaler als ein Daumen. */
+  .md-flow__row .md-btn { flex: 1 0 auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,0 +1,332 @@
+import { type ReactNode } from 'react'
+import { PageHeader } from '../components/layout/PageHeader'
+import { TournamentPicker } from '../components/layout/TournamentPicker'
+import { Empty, Loading } from '../components/layout/StateBlock'
+import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
+import { ShareLink } from '../components/tournament/ShareLink'
+import { TournamentActions } from '../components/tournament/TournamentActions'
+import { useResource } from '../hooks/useResource'
+import { useAction } from '../hooks/useAction'
+import { useWorkspace } from '../state/WorkspaceContext'
+import { tournaments as tournamentApi } from '../api/endpoints'
+import { EntryStatus, TournamentState, type TournamentDetail } from '../api/types'
+import { formatDateRange } from '../lib/time'
+import type { ScreenId } from '../components/layout/SideNav'
+
+/**
+ * Der Ablauf eines Turniers auf einem Bildschirm.
+ *
+ * Fünf Schritte, von oben nach unten, und nur der aktuelle zeigt seine
+ * Handlungen. Bis hierher war der Weg über vier Screens verteilt: Wer ein
+ * frisch angelegtes Turnier vor sich hatte, musste wissen, dass „Meldung
+ * öffnen" im Draw-Screen steht, der Anmeldelink unter „Meldungen" und das
+ * Starten nirgends. Das war auf dem Schreibtisch schon zäh und auf dem Handy
+ * unbenutzbar.
+ *
+ * Die anderen Screens bleiben, sie sind nur nicht mehr der Weg. Wer Setzliste,
+ * Bracket oder Spielplan will, findet sie weiterhin — hier steht, was als
+ * Nächstes zu tun ist.
+ */
+
+type StepId = 'created' | 'entries' | 'draw' | 'play' | 'done'
+
+/**
+ * Wo im Ablauf ein Zustand steht.
+ *
+ * Abgeleitet und nicht gespeichert: der Zustand des Turniers ist die Wahrheit,
+ * diese Zahl nur ihre Lesart. Ein abgebrochenes Turnier steht am Ende, ohne
+ * dass einer der Schritte davor erledigt wäre — deshalb wird es getrennt
+ * behandelt.
+ */
+const POSITION: Record<TournamentState, number> = {
+  [TournamentState.Draft]: 1,
+  [TournamentState.RegistrationOpen]: 1,
+  [TournamentState.RegistrationClosed]: 2,
+  [TournamentState.DrawGenerated]: 3,
+  [TournamentState.InProgress]: 3,
+  [TournamentState.Completed]: 4,
+  [TournamentState.Abandoned]: 4,
+}
+
+const STEPS: { id: StepId; title: string }[] = [
+  { id: 'created', title: 'Turnier angelegt' },
+  { id: 'entries', title: 'Teilnehmer sammeln' },
+  { id: 'draw', title: 'Auslosen' },
+  { id: 'play', title: 'Spielen' },
+  { id: 'done', title: 'Fertig' },
+]
+
+export function FlowScreen({ onNavigate }: { onNavigate: (id: ScreenId) => void }) {
+  const { tournament, tournaments, loading, reloadTournament } = useWorkspace()
+
+  if (!tournament) {
+    return (
+      <>
+        <PageHeader title="Ablauf" tag="—" subtitle="Kein Turnier ausgewählt">
+          <TournamentPicker />
+        </PageHeader>
+        <section className="md-section">
+          {loading && tournaments.length === 0 ? (
+            <Loading label="Turniere werden geladen …" />
+          ) : (
+            <Empty
+              title="Noch kein Turnier"
+              hint="Ein Turnier braucht einen Namen, einen Ort und eine Disziplin — mehr nicht. Termin, Plätze und Meldungen kommen danach."
+            />
+          )}
+        </section>
+      </>
+    )
+  }
+
+  const position = POSITION[tournament.state]
+  const abandoned = tournament.state === TournamentState.Abandoned
+
+  return (
+    <>
+      <PageHeader
+        title={tournament.name}
+        tag={tournament.id.slice(0, 8)}
+        subtitle={`${tournament.venue.name} · ${formatDateRange(tournament.startsOn, tournament.endsOn)}`}
+      >
+        <TournamentPicker />
+      </PageHeader>
+
+      <section className="md-section">
+        <ol className="md-flow">
+          {STEPS.map((step, index) => (
+            <Step
+              key={step.id}
+              index={index}
+              title={step.title}
+              state={stateOf(index, position, abandoned)}
+            >
+              {index === position &&
+                (abandoned ? (
+                  <div className="md-hint">
+                    Dieses Turnier wurde abgebrochen. Was gespielt wurde, bleibt lesbar; fortgesetzt
+                    wird es nicht mehr.
+                  </div>
+                ) : (
+                  <Actions
+                    tournament={tournament}
+                    step={step.id}
+                    onChanged={reloadTournament}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+            </Step>
+          ))}
+        </ol>
+
+        <TournamentActions tournament={tournament} onChanged={reloadTournament} />
+      </section>
+    </>
+  )
+}
+
+/**
+ * Wie ein Schritt dasteht.
+ *
+ * Der Abbruch geht durch dieselbe Rechnung wie alles andere: er steht am Ende
+ * (POSITION), aber nichts davor ist erledigt — ein abgebrochenes Turnier hat
+ * seine Schritte nicht durchlaufen, es hat aufgehört. Vorher stand das als
+ * Sonderfall im Markup, mit der 4 als Zahl an drei Stellen.
+ */
+function stateOf(index: number, position: number, abandoned: boolean): 'done' | 'current' | 'todo' {
+  if (index === position) return 'current'
+  return index < position && !abandoned ? 'done' : 'todo'
+}
+
+function Step({
+  index,
+  title,
+  state,
+  children,
+}: {
+  index: number
+  title: string
+  state: 'done' | 'current' | 'todo'
+  children?: ReactNode
+}) {
+  return (
+    <li className="md-flow__step" data-state={state}>
+      <div className="md-flow__marker" aria-hidden="true">
+        {state === 'done' ? '✓' : index + 1}
+      </div>
+      <div className="md-flow__body">
+        <div className="md-flow__title">{title}</div>
+        {children}
+      </div>
+    </li>
+  )
+}
+
+/**
+ * Was im aktuellen Schritt zu tun ist.
+ *
+ * Bewusst je Schritt und nicht als eine Liste aller Schaltflächen mit
+ * Sperren: eine gesperrte Schaltfläche erklärt nicht, warum sie gesperrt ist,
+ * und fünf davon untereinander erklären es noch weniger.
+ */
+function Actions({
+  tournament,
+  step,
+  onChanged,
+  onNavigate,
+}: {
+  tournament: TournamentDetail
+  step: StepId
+  onChanged: () => Promise<void>
+  onNavigate: (id: ScreenId) => void
+}) {
+  const { busy, run } = useAction()
+
+  const registration = useResource(
+    () => tournamentApi.registration(tournament.id),
+    [tournament.id],
+    { enabled: step === 'entries' && tournament.state === TournamentState.RegistrationOpen },
+  )
+
+  const entries = tournament.entries.filter((entry) => entry.status !== EntryStatus.Withdrawn)
+  const accepted = entries.filter((entry) => entry.status === EntryStatus.Accepted)
+
+  if (step === 'entries') {
+    return (
+      <div className="md-flow__actions">
+        {tournament.state === TournamentState.Draft ? (
+          <>
+            <div className="md-hint">
+              Solange die Meldung nicht offen ist, nimmt der Anmeldelink nichts an. Öffnen kostet
+              nichts — schließen lässt sie sich jederzeit wieder.
+            </div>
+            <button
+              type="button"
+              className="md-btn md-btn--accent"
+              disabled={busy}
+              onClick={() =>
+                void run('Meldung öffnen', async () => {
+                    await tournamentApi.openRegistration(tournament.id)
+                    await onChanged()
+                  }, 'Meldung ist offen')
+              }
+            >
+              Meldung öffnen
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="md-flow__count">
+              <strong>{accepted.length}</strong> im Feld
+              {entries.length !== accepted.length && ` · ${entries.length - accepted.length} offen`}
+            </div>
+
+            <div className="md-flow__row">
+              {registration.data && (
+                <ShareLink token={registration.data.token} tournamentName={tournament.name} />
+              )}
+              <button type="button" className="md-btn" onClick={() => onNavigate('entries')}>
+                Meldungen verwalten
+              </button>
+              <button
+                type="button"
+                className="md-btn md-btn--primary"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    'Meldung schließen',
+                    () => tournamentApi.closeRegistration(tournament.id),
+                    'Meldeschluss gesetzt',
+                  )
+                }
+              >
+                Meldung schließen
+              </button>
+            </div>
+
+            <CsvImportPanel
+              tournamentId={tournament.id}
+              discipline={tournament.discipline}
+              onImported={onChanged}
+            />
+          </>
+        )}
+      </div>
+    )
+  }
+
+  if (step === 'draw') {
+    const enough = accepted.length >= 2
+
+    return (
+      <div className="md-flow__actions">
+        <div className="md-hint">
+          {enough
+            ? `${accepted.length} angenommene Meldungen. Die Auslosung friert Feld und Format ein — eine Nachmeldung verlangt danach, sie ausdrücklich zurückzunehmen.`
+            : `Auslosen braucht mindestens zwei angenommene Meldungen, es sind ${accepted.length}. Zurück zur Meldung, oder Meldungen annehmen.`}
+        </div>
+        <div className="md-flow__row">
+          <button
+            type="button"
+            className="md-btn md-btn--accent"
+            disabled={busy || !enough}
+            onClick={() => void run('Auslosen', async () => {
+                    await tournamentApi.generateDraw(tournament.id)
+                    await onChanged()
+                  }, 'Ausgelost')}
+          >
+            Auslosen
+          </button>
+          <button
+            type="button"
+            className="md-btn"
+            disabled={busy}
+            onClick={() =>
+              void run(
+                'Meldung öffnen',
+                () => tournamentApi.reopenRegistration(tournament.id),
+                'Meldung wieder offen',
+              )
+            }
+          >
+            Meldung wieder öffnen
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'play') {
+    return (
+      <div className="md-flow__actions">
+        <div className="md-hint">
+          {tournament.state === TournamentState.DrawGenerated
+            ? 'Der Draw steht. Mit dem Start beginnt die Ergebniserfassung — das letzte Ergebnis schließt das Turnier von selbst ab.'
+            : 'Ergebnisse werden im Bracket erfasst. Der Sieger rückt automatisch weiter.'}
+        </div>
+        <div className="md-flow__row">
+          <button type="button" className="md-btn md-btn--primary" onClick={() => onNavigate('draw')}>
+            {tournament.state === TournamentState.DrawGenerated ? 'Bracket ansehen' : 'Ergebnisse erfassen'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="md-flow__actions">
+      <div className="md-hint">
+        Alle Partien sind entschieden. Die Ergebnisse bleiben lesbar, und die Live-Ansicht zeigt sie
+        weiterhin öffentlich.
+      </div>
+      <div className="md-flow__row">
+        <button type="button" className="md-btn md-btn--primary" onClick={() => onNavigate('draw')}>
+          Endstand ansehen
+        </button>
+        <button type="button" className="md-btn" onClick={() => onNavigate('public')}>
+          Live-Ansicht
+        </button>
+      </div>
+    </div>
+  )
+}

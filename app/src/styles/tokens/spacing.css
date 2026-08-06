@@ -16,6 +16,8 @@
 
   /* Layout constants lifted from the working prototype */
   --nav-width: 212px;
+  /* Hoehe der Fussleiste am Handy — der Inhalt haelt sie sich frei. */
+  --nav-bar-height: 62px;
   --header-height: 62px;
   --gutter-page: var(--sp-14);      /* 26px page padding */
   --court-col-width: 176px;         /* matchday queue column */

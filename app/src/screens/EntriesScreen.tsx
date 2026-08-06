@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
+import { ShareLink } from '../components/tournament/ShareLink'
+import { registrationUrl } from '../hooks/useRoute'
 import { TournamentPicker } from '../components/layout/TournamentPicker'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { useResource } from '../hooks/useResource'
@@ -96,6 +98,7 @@ export function EntriesScreen() {
       <section className="md-section">
         <LinkPanel
           tournamentId={tournament.id}
+          tournamentName={tournament.name}
           detail={registration.data}
           onChanged={() => void registration.reload()}
         />
@@ -165,10 +168,12 @@ export function EntriesScreen() {
  */
 function LinkPanel({
   tournamentId,
+  tournamentName,
   detail,
   onChanged,
 }: {
   tournamentId: string
+  tournamentName: string
   detail: import('../api/types').RegistrationDetail | null
   onChanged: () => void
 }) {
@@ -179,7 +184,7 @@ function LinkPanel({
 
   if (!detail) return null
 
-  const url = `${window.location.origin}${window.location.pathname}?r=${encodeURIComponent(detail.token)}`
+  const url = registrationUrl(detail.token)
 
   const save = async () => {
     setBusy(true)
@@ -230,16 +235,7 @@ function LinkPanel({
           style={{ flex: 1, minWidth: 260 }}
           onFocus={(event) => event.currentTarget.select()}
         />
-        <button
-          type="button"
-          className="md-btn"
-          onClick={() => {
-            void navigator.clipboard?.writeText(url)
-            show('Anmeldelink kopiert')
-          }}
-        >
-          Kopieren
-        </button>
+        <ShareLink token={detail.token} tournamentName={tournamentName} className="md-btn" />
         <button type="button" className="md-btn" disabled={busy} onClick={() => void rotate()}>
           Erneuern
         </button>

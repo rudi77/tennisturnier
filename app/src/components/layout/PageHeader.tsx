@@ -38,15 +38,7 @@ export function PageHeader({
         </div>
       </div>
 
-      <div
-        style={{
-          marginLeft: 'auto',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--sp-5)',
-          flexWrap: 'wrap',
-        }}
-      >
+      <div className="md-header__actions">
         {children}
         {kpis.map((kpi) => (
           <div className="md-kpi" key={kpi.label}>
