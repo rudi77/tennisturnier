@@ -109,17 +109,30 @@ public sealed class TournamentCourt : Entity
     /// und Nachmittag desselben Platzes — nicht als zwei Fenster erscheinen, in
     /// die ein Match über die Grenze hinweg nicht mehr passte.
     /// </summary>
-    public IReadOnlyList<TimeSlot> FreeWindows(TimeSlot range)
+    /// <param name="range">
+    /// Der Turnierzeitraum, auf den zugeschnitten wird. Leer, solange der Termin
+    /// nicht feststeht — dann gibt es nichts zuzuschneiden, und die Fenster
+    /// stehen für sich. Das ist keine Ausnahme, sondern der Normalfall eines
+    /// frisch angelegten Turniers.
+    /// </param>
+    public IReadOnlyList<TimeSlot> FreeWindows(TimeSlot? range)
     {
         if (!IsActive)
         {
             return [];
         }
 
+        var merged = TimeSlot.Merge(_windows.Select(w => w.Period));
+
+        if (range is not { } window)
+        {
+            return [.. merged];
+        }
+
         return
         [
-            .. TimeSlot.Merge(_windows.Select(w => w.Period))
-                .Select(slot => slot.Intersect(range))
+            .. merged
+                .Select(slot => slot.Intersect(window))
                 .Where(slot => slot is not null)
                 .Select(slot => slot!.Value)
         ];

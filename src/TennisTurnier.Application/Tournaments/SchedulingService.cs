@@ -295,19 +295,14 @@ public sealed class SchedulingService : ISchedulingService
     /// nach jeder Seite für Zeitzonen und einen Abend, der über Mitternacht
     /// hinausgeht. Ohne diese Schranke wanderte ein vertippter Termin
     /// unbemerkt ins Jahr 2099 und stünde dort öffentlich.
+    ///
+    /// Die Rechnung stand hier ein zweites Mal, Zeile für Zeile wie in
+    /// <c>Tournament.RequireScheduledWithin</c>. Zwei Fassungen derselben
+    /// Schranke sind eine zu viel: als die Termine optional wurden, wäre nur
+    /// eine von beiden nachgezogen worden.
     /// </summary>
-    private static void RequireWithinTournament(Tournament tournament, ConfirmedAssignment confirmed)
-    {
-        var from = new DateTimeOffset(tournament.StartsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(-1);
-        var until = new DateTimeOffset(tournament.EndsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(2);
-
-        if (confirmed.PlannedStart < from || confirmed.PlannedStart >= until)
-        {
-            throw new DomainException(
-                $"Der Beginn {confirmed.PlannedStart:g} liegt außerhalb des Turnierzeitraums " +
-                $"({tournament.StartsOn:d} bis {tournament.EndsOn:d}).");
-        }
-    }
+    private static void RequireWithinTournament(Tournament tournament, ConfirmedAssignment confirmed) =>
+        tournament.RequireScheduledWithin(confirmed.PlannedStart);
 
     // --- Aufbau der Aufgabe ------------------------------------------------
 

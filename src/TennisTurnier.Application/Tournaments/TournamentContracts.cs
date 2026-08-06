@@ -1,4 +1,4 @@
-using TennisTurnier.Domain.Formats;
+﻿using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Application.Tournaments;
@@ -22,8 +22,8 @@ public sealed record CreateTournamentRequest(
     string? VenueCity,
     string TimeZoneId,
     Discipline Discipline,
-    DateOnly StartsOn,
-    DateOnly EndsOn,
+    DateOnly? StartsOn,
+    DateOnly? EndsOn,
     Guid FormatTemplateId);
 
 public sealed record UpdateTournamentRequest(
@@ -33,8 +33,8 @@ public sealed record UpdateTournamentRequest(
     string? VenueCity,
     string TimeZoneId,
     Discipline Discipline,
-    DateOnly StartsOn,
-    DateOnly EndsOn);
+    DateOnly? StartsOn,
+    DateOnly? EndsOn);
 
 // --- Plätze -----------------------------------------------------------------
 
@@ -78,8 +78,8 @@ public sealed record TournamentSummary(
     string Name,
     string VenueName,
     Discipline Discipline,
-    DateOnly StartsOn,
-    DateOnly EndsOn,
+    DateOnly? StartsOn,
+    DateOnly? EndsOn,
     TournamentState State,
     SchedulingMode SchedulingMode,
     int AcceptedEntries);
@@ -89,8 +89,8 @@ public sealed record TournamentDetail(
     string Name,
     VenueDetail Venue,
     Discipline Discipline,
-    DateOnly StartsOn,
-    DateOnly EndsOn,
+    DateOnly? StartsOn,
+    DateOnly? EndsOn,
     TournamentState State,
     SchedulingMode SchedulingMode,
     Guid FormatTemplateId,

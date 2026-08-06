@@ -1,4 +1,4 @@
-using TennisTurnier.Domain.Tournaments;
+﻿using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Application.Registration;
 
@@ -18,8 +18,8 @@ public sealed record PublicRegistrationView(
     string TournamentName,
     string VenueName,
     string? City,
-    DateOnly StartsOn,
-    DateOnly EndsOn,
+    DateOnly? StartsOn,
+    DateOnly? EndsOn,
     Discipline Discipline,
     bool NeedsPartner,
     bool IsOpen,

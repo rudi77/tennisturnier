@@ -1,4 +1,4 @@
-using TennisTurnier.Domain.Matches;
+﻿using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Scheduling;
 using TennisTurnier.Domain.Tournaments;
@@ -27,8 +27,8 @@ public sealed record PublicTournamentView(
     Guid Id,
     string Name,
     string VenueName,
-    DateOnly StartsOn,
-    DateOnly EndsOn,
+    DateOnly? StartsOn,
+    DateOnly? EndsOn,
     TournamentState State,
     SchedulingMode SchedulingMode,
     IReadOnlyList<PublicPhaseView> Phases,

@@ -298,10 +298,14 @@ public sealed class TournamentService : ITournamentService
             throw new DomainException("Das Turnier hat keinen Platz, für den sich eine Zeit anlegen ließe.");
         }
 
+        // „An jedem Turniertag" setzt voraus, dass es Turniertage gibt. Ohne
+        // Termin liefe die Schleife null Mal und legte wortlos nichts an.
+        tournament.RequireDatesRecorded();
+
         var local = new LocalTime(tournament.Venue.TimeZone);
         var created = 0;
 
-        for (var day = tournament.StartsOn; day <= tournament.EndsOn; day = day.AddDays(1))
+        for (var day = tournament.StartsOn!.Value; day <= tournament.EndsOn!.Value; day = day.AddDays(1))
         {
             var from = local.Resolve(day, request.From, LocalTime.Ambiguity.Earliest);
             var to = local.Resolve(day, request.To, LocalTime.Ambiguity.Latest);

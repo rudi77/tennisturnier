@@ -21,8 +21,8 @@ public sealed class Tournament : Entity
         string name,
         Venue venue,
         Discipline discipline,
-        DateOnly startsOn,
-        DateOnly endsOn,
+        DateOnly? startsOn,
+        DateOnly? endsOn,
         Guid formatTemplateId)
         : base(id)
     {
@@ -76,9 +76,26 @@ public sealed class Tournament : Entity
     /// <summary>Der Weg, auf dem sich jemand ohne Konto zu diesem Turnier meldet.</summary>
     public RegistrationLink Registration { get; private set; }
 
-    public DateOnly StartsOn { get; private set; }
+    /// <summary>
+    /// Wann gespielt wird — oder leer, solange es noch nicht feststeht.
+    ///
+    /// Optional, weil ein Turnier meist entsteht, bevor der Termin steht: der
+    /// Veranstalter legt es an, sammelt Meldungen und ruft erst dann beim Verein
+    /// an. Ein Pflichtfeld zwänge ihn, an dieser Stelle etwas zu erfinden — und
+    /// eine erfundene Angabe ist schlechter als gar keine, weil ihr niemand
+    /// ansieht, dass sie erfunden ist.
+    ///
+    /// Leer heißt für den Spielplan: es gibt noch kein Fenster, in dem eine
+    /// Ansetzung liegen könnte. Er verlangt die Termine deshalb und sagt das
+    /// auch (<see cref="RequireDatesRecorded"/>) — der übrige Ablauf kommt ohne
+    /// sie aus.
+    /// </summary>
+    public DateOnly? StartsOn { get; private set; }
 
-    public DateOnly EndsOn { get; private set; }
+    public DateOnly? EndsOn { get; private set; }
+
+    /// <summary>Steht der Termin fest?</summary>
+    public bool HasDates => StartsOn is not null && EndsOn is not null;
 
     public TournamentState State { get; private set; }
 
@@ -127,7 +144,12 @@ public sealed class Tournament : Entity
         Touch();
     }
 
-    public void Reschedule(DateOnly startsOn, DateOnly endsOn)
+    /// <summary>
+    /// Setzt oder entfernt den Termin. Beide Angaben leer heißt: er steht wieder
+    /// offen — das ist ausdrücklich erlaubt, denn ein abgesagter Termin ist eine
+    /// gewöhnliche Nachricht und kein Sonderfall.
+    /// </summary>
+    public void Reschedule(DateOnly? startsOn, DateOnly? endsOn)
     {
         RequireNotFinished();
         SetDates(startsOn, endsOn);
@@ -568,15 +590,39 @@ public sealed class Tournament : Entity
         }
     }
 
-    private void SetDates(DateOnly startsOn, DateOnly endsOn)
+    /// <summary>
+    /// Die drei zulässigen Formen: gar kein Termin, ein einzelner Tag, ein
+    /// Zeitraum.
+    ///
+    /// Ein Beginn ohne Ende ist der eintägige Fall und wird als solcher gelesen
+    /// — das ist die häufigste Ausschreibung eines Vereins und soll nicht
+    /// verlangen, dasselbe Datum zweimal einzutragen. Ein Ende ohne Beginn wird
+    /// dagegen abgewiesen: es gibt keine Lesart, unter der das etwas bedeutet.
+    /// </summary>
+    private void SetDates(DateOnly? startsOn, DateOnly? endsOn)
     {
-        if (endsOn < startsOn)
+        if (startsOn is null && endsOn is not null)
         {
-            throw new DomainException($"Das Turnierende ({endsOn}) liegt vor dem Beginn ({startsOn}).");
+            throw new DomainException(
+                $"Ein Turnierende ({endsOn}) ohne Beginn ergibt keinen Zeitraum.");
+        }
+
+        if (startsOn is null)
+        {
+            StartsOn = null;
+            EndsOn = null;
+            return;
+        }
+
+        var end = endsOn ?? startsOn.Value;
+
+        if (end < startsOn.Value)
+        {
+            throw new DomainException($"Das Turnierende ({end}) liegt vor dem Beginn ({startsOn}).");
         }
 
         StartsOn = startsOn;
-        EndsOn = endsOn;
+        EndsOn = end;
     }
 
     /// <summary>
@@ -600,11 +646,36 @@ public sealed class Tournament : Entity
     /// einer Stelle — sonst hielte die Spielplanprüfung eine Ansetzung für
     /// zulässig, die der Solver nie vorgeschlagen hätte, oder umgekehrt.
     /// </summary>
-    public TimeSlot Period()
+    public TimeSlot? Period()
     {
+        if (StartsOn is not { } starts || EndsOn is not { } ends)
+        {
+            return null;
+        }
+
         var local = new LocalTime(Venue.TimeZone);
 
-        return new TimeSlot(local.Midnight(StartsOn.AddDays(-1)), local.Midnight(EndsOn.AddDays(2)));
+        return new TimeSlot(local.Midnight(starts.AddDays(-1)), local.Midnight(ends.AddDays(2)));
+    }
+
+    /// <summary>
+    /// Weist ein Turnier ab, dessen Termin noch nicht feststeht.
+    ///
+    /// Das Gegenstück zu <see cref="RequireCourtTimesRecorded"/> und aus
+    /// demselben Grund da: seit der Termin optional ist, ist ein Turnier ohne
+    /// ihn der Normalfall eines frisch angelegten. Ohne diese Prüfung liefe die
+    /// Platzzeitanlage über einen leeren Zeitraum und legte wortlos nichts an —
+    /// der Veranstalter stünde vor einem Spielplan ohne Zeiten, ohne dass
+    /// irgendwo stünde, warum.
+    /// </summary>
+    public void RequireDatesRecorded()
+    {
+        if (!HasDates)
+        {
+            throw new DomainException(
+                "Für dieses Turnier steht noch kein Termin fest. Ein Spielplan braucht Tage, an denen " +
+                "gespielt wird — zuerst Beginn und Ende eintragen.");
+        }
     }
 
     /// <summary>
@@ -617,8 +688,16 @@ public sealed class Tournament : Entity
     /// </summary>
     public void RequireScheduledWithin(DateTimeOffset when)
     {
-        var from = new DateTimeOffset(StartsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(-1);
-        var until = new DateTimeOffset(EndsOn.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(2);
+        // Ohne Termin gibt es keine Schranke, gegen die zu prüfen wäre. Das ist
+        // kein Loch: wer ohne Termin ansetzt, bekommt die Absage bereits von
+        // RequireDatesRecorded, und zwar mit dem Satz, der ihm weiterhilft.
+        if (StartsOn is not { } starts || EndsOn is not { } ends)
+        {
+            return;
+        }
+
+        var from = new DateTimeOffset(starts.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(-1);
+        var until = new DateTimeOffset(ends.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(2);
 
         if (when < from || when >= until)
         {
