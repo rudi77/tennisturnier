@@ -56,8 +56,8 @@ export interface TournamentBody {
   venueCity: string | null
   timeZoneId: string
   discipline: Discipline
-  startsOn: string
-  endsOn: string
+  startsOn: string | null
+  endsOn: string | null
 }
 
 export const tournaments = {

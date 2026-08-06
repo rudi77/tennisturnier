@@ -256,7 +256,11 @@ body {
 
 .md-btn--primary { border: 0; background: var(--court-900); color: var(--fg-on-dark); }
 .md-btn--accent { border: 0; background: var(--acc); color: var(--fg-on-ball); font-weight: var(--fw-bold); }
-.md-btn--call { border: 0; background: var(--call-400); color: var(--court-900); font-weight: var(--fw-bold); }
+/* Ein Aufruf am Platz und ein Zug, den man nicht zurücknimmt, sehen bewusst
+   gleich aus: Rot heißt hier durchgehend „das hat Folgen". Zwei Namen, eine
+   Regel — als zwei Regeln liefen sie beim nächsten Farbwechsel auseinander. */
+.md-btn--call,
+.md-btn--danger { border: 0; background: var(--call-400); color: var(--court-900); font-weight: var(--fw-bold); }
 .md-btn--info { border: 0; background: var(--blue-400); color: var(--fg-on-dark); }
 
 /* Am Platz wird mit dem Daumen bedient — nie kleiner als --hit-target. */

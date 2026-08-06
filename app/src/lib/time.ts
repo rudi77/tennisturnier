@@ -97,3 +97,79 @@ export function toDateOnly(date: Date): string {
     date.getDate(),
   ).padStart(2, '0')}`
 }
+
+/**
+ * Ohne Parameter und deshalb einmal gebaut. Ein ICU-Formatierer ist nicht
+ * billig, und der Termin steht auf jeder Turnierkarte — er entstünde sonst je
+ * Karte und Neuzeichnung neu.
+ */
+const LONG_DATE = new Intl.DateTimeFormat('de-AT', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
+/** "yyyy-MM-dd" → Date, oder null, wenn nichts Brauchbares dasteht. */
+function fromDateOnly(value: string | null | undefined): Date | null {
+  if (!value) return null
+  const date = new Date(`${value}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/**
+ * Der Termin eines Turniers in einer Zeile — „16. Mai 2026", „16.–17. Mai 2026"
+ * oder, solange er nicht feststeht, „Termin offen".
+ *
+ * Der offene Fall ist seit der Migration `TerminOptional` der Normalfall eines
+ * frisch angelegten Turniers und keine Ausnahme. Er gehört deshalb hierher und
+ * nicht in jede Ansicht einzeln: „null – null" hat sonst genau so lange auf dem
+ * Bildschirm gestanden, bis es jemandem auffiel.
+ *
+ * Das Zusammenziehen gleicher Monate und Jahre macht `formatRange` selbst —
+ * „16.–17. Mai 2026" statt zweimal desselben Monatsnamens. Von Hand nachgebaut
+ * wäre es eine Regel je Sprache.
+ */
+export function formatDateRange(
+  startsOn: string | null | undefined,
+  endsOn: string | null | undefined,
+): string {
+  const start = fromDateOnly(startsOn)
+  if (!start) return 'Termin offen'
+
+  const end = fromDateOnly(endsOn)
+
+  return end ? LONG_DATE.formatRange(start, end) : LONG_DATE.format(start)
+}
+
+/**
+ * Die Turniertage als "yyyy-MM-dd", beide Ränder eingeschlossen. Ohne Termin
+ * sind es keine.
+ *
+ * Die Frage „welche Tage hat dieses Turnier" wurde an zwei Stellen beantwortet
+ * — im Spielplan als Tageswähler, im Wizard als Anzahl —, und beide mussten
+ * getrennt lernen, was ein fehlender Termin bedeutet. Sie gaben dabei
+ * verschiedene Antworten.
+ *
+ * Ein leeres Ende heißt eintägig, wie in `Tournament.SetDates`. Die Regel steht
+ * hier ein zweites Mal, und das ist Absicht: eine Vorschau, die eine andere
+ * Zahl nennt als die, die entsteht, ist schlimmer als gar keine.
+ */
+export function tournamentDays(
+  startsOn: string | null | undefined,
+  endsOn: string | null | undefined,
+): string[] {
+  const start = fromDateOnly(startsOn)
+  if (!start) return []
+
+  const end = fromDateOnly(endsOn) ?? start
+  if (end < start) return []
+
+  const days: string[] = []
+  for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
+    days.push(toDateOnly(day))
+    // Ein vertippter Zeitraum über Jahrzehnte soll die Anzeige nicht aufhängen.
+    if (days.length > 60) break
+  }
+
+  return days
+}

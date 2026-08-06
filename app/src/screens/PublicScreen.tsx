@@ -7,7 +7,7 @@ import { StatusChip } from '../components/core/StatusChip'
 import { usePublicView } from '../hooks/usePublicView'
 import { useWorkspaceOptional } from '../state/WorkspaceContext'
 import { publicAssignmentStatusLabel, publicAssignmentTone } from '../lib/labels'
-import { formatClock } from '../lib/time'
+import { formatClock, formatDateRange } from '../lib/time'
 import type { PublicMatchView, PublicTournamentView } from '../api/types'
 
 /**
@@ -175,7 +175,7 @@ function PhoneView({
               <span style={{ fontSize: 'var(--fs-md)', fontWeight: 'var(--fw-bold)' }}>{view.name}</span>
             </div>
             <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-on-dark-2)', marginTop: 4 }}>
-              {view.venueName} · {view.startsOn} – {view.endsOn}
+              {view.venueName} · {formatDateRange(view.startsOn, view.endsOn)}
             </div>
           </div>
 

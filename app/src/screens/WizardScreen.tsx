@@ -15,7 +15,7 @@ import {
   type FormatDefinition,
 } from '../api/types'
 import { disciplineLabel, surfaceLabel } from '../lib/labels'
-import { toDateOnly } from '../lib/time'
+import { formatDateRange, tournamentDays } from '../lib/time'
 
 const STEPS = ['Eckdaten', 'Format', 'Parameter', 'Plätze', 'Zusammenfassung'] as const
 
@@ -66,8 +66,11 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
   const [venueCity, setVenueCity] = useState('')
   const [timeZoneId, setTimeZoneId] = useState('Europe/Vienna')
   const [discipline, setDiscipline] = useState<Discipline>(Discipline.Singles)
-  const [startsOn, setStartsOn] = useState(() => toDateOnly(new Date()))
-  const [endsOn, setEndsOn] = useState(() => toDateOnly(new Date()))
+  // Leer und nicht "heute": ein Turnier entsteht meist, bevor der Termin
+  // steht. Ein vorbelegtes Datum wäre eine Behauptung, die niemand geprüft hat
+  // — und der Spielplan rechnete anschließend damit.
+  const [startsOn, setStartsOn] = useState('')
+  const [endsOn, setEndsOn] = useState('')
 
   // --- Format
   const [templateId, setTemplateId] = useState<string | null>(null)
@@ -104,7 +107,11 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
     return JSON.stringify(draft) !== JSON.stringify(template.data.definition)
   }, [draft, template.data])
 
-  const days = useMemo(() => countDays(startsOn, endsOn), [startsOn, endsOn])
+  // Ein leeres Ende heißt eintägig — dieselbe Regel wie in Tournament.SetDates.
+  // Sie steht hier einmal und nicht an jeder Verwendung, sonst nennt die
+  // Vorschau eine andere Zahl als die, die entsteht.
+  const effectiveEnd = endsOn || startsOn
+  const days = useMemo(() => tournamentDays(startsOn, effectiveEnd).length, [startsOn, effectiveEnd])
 
   const firstPhase = draft?.phases?.[0] ?? null
   const knockoutPhase = draft?.phases?.find((phase) => phase.format === PhaseFormatKind.Knockout)
@@ -153,8 +160,10 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
         venueCity: venueCity.trim() || null,
         timeZoneId,
         discipline,
-        startsOn,
-        endsOn,
+        startsOn: startsOn || null,
+        // Das leere Ende füllt die Domäne — sie ist die einzige Stelle, an der
+        // die drei zulässigen Formen des Termins definiert sind.
+        endsOn: endsOn || null,
         formatTemplateId: effectiveTemplateId,
       })
 
@@ -170,7 +179,11 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
       }
 
       let windows = 0
-      if (wanted.length > 0) {
+      // Ohne Termin gibt es keine Turniertage, auf die eine Zeitspanne fiele —
+      // die Domäne weist die Massenanlage dann ausdrücklich ab. Sie hier gar
+      // nicht erst aufzurufen ist kein Verstecken des Fehlers, sondern die
+      // Anerkennung, dass es nichts anzulegen gibt.
+      if (wanted.length > 0 && days > 0) {
         // Die Massenanlage: dieselbe Uhrzeitspanne an jedem Turniertag. Sie ist
         // ein Aufruf und nicht einer je Platz und Tag — genau das, was am
         // Telefon vereinbart wurde.
@@ -573,7 +586,7 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                           zeitzone: timeZoneId,
                         },
                         disziplin: disciplineLabel[discipline],
-                        zeitraum: `${startsOn} – ${endsOn}`,
+                        zeitraum: formatDateRange(startsOn, effectiveEnd),
                         plaetze: courts
                           .filter((court) => court.name.trim())
                           .map((court) => court.name.trim()),
@@ -638,7 +651,7 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
             <Fact k="Ort" v={venueName || '—'} />
             <Fact k="Zeitzone" v={timeZoneId} />
             <Fact k="Disziplin" v={disciplineLabel[discipline]} />
-            <Fact k="Zeitraum" v={`${startsOn} – ${endsOn}`} />
+            <Fact k="Termin" v={formatDateRange(startsOn, effectiveEnd)} />
             <Fact k="Format" v={draft?.id ?? '—'} />
             <Fact k="Satzformat" v={draft?.matchFormat ? `best of ${draft.matchFormat.bestOf}` : '—'} />
             <Fact
@@ -825,22 +838,24 @@ function CourtsStep({
       </div>
 
       <div className="md-hint" style={{ marginTop: 'var(--sp-6)', fontSize: 'var(--fs-xs)' }}>
-        {courts.filter((court) => court.name.trim()).length * days} Platzzeiten —{' '}
-        {courts.filter((court) => court.name.trim()).length} Plätze an {days}{' '}
-        {days === 1 ? 'Turniertag' : 'Turniertagen'}, jeweils {opensAt}–{closesAt} Ortszeit
-        ({timeZoneId}). Ohne mindestens eine weist der Spielplan den Vorschlag ausdrücklich ab,
-        statt ein leeres Board zu liefern.
+        {days === 0 ? (
+          <>
+            Solange kein Termin feststeht, gibt es keine Turniertage — und damit nichts, worauf
+            eine Platzzeit fiele. Die Plätze werden angelegt, ihre Zeiten trägst du nach, sobald
+            der Termin steht. Der Ablauf bis zur Auslosung kommt ohne sie aus.
+          </>
+        ) : (
+          <>
+            {courts.filter((court) => court.name.trim()).length * days} Platzzeiten —{' '}
+            {courts.filter((court) => court.name.trim()).length} Plätze an {days}{' '}
+            {days === 1 ? 'Turniertag' : 'Turniertagen'}, jeweils {opensAt}–{closesAt} Ortszeit
+            ({timeZoneId}). Ohne mindestens eine weist der Spielplan den Vorschlag ausdrücklich ab,
+            statt ein leeres Board zu liefern.
+          </>
+        )}
       </div>
     </Panel>
   )
-}
-
-/** Turniertage einschließlich beider Ränder. */
-function countDays(startsOn: string, endsOn: string): number {
-  const start = new Date(`${startsOn}T00:00:00Z`).getTime()
-  const end = new Date(`${endsOn}T00:00:00Z`).getTime()
-  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return 0
-  return Math.round((end - start) / 86_400_000) + 1
 }
 
 function Panel({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {

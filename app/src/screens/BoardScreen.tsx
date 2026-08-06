@@ -28,7 +28,7 @@ import {
   type SchedulePlanResult,
 } from '../api/types'
 import { constraintLabel } from '../lib/labels'
-import { dateKey, minutesToTimeSpan, timeSpanToMinutes, toDateOnly } from '../lib/time'
+import { dateKey, minutesToTimeSpan, timeSpanToMinutes, toDateOnly, tournamentDays } from '../lib/time'
 import { matchFormatOf } from '../lib/matchFormat'
 
 /**
@@ -76,17 +76,13 @@ export function BoardScreen() {
     [allMatches],
   )
 
-  const days = useMemo(() => {
-    if (!tournament) return []
-    const result: string[] = []
-    const start = new Date(`${tournament.startsOn}T00:00:00`)
-    const end = new Date(`${tournament.endsOn}T00:00:00`)
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      result.push(toDateOnly(d))
-      if (result.length > 60) break
-    }
-    return result
-  }, [tournament])
+  // Ohne Termin gibt es keine Turniertage. Das Raster hat dann nichts zu
+  // zeichnen — der Ablauf kommt aber ohne Spielplan aus, und deshalb ist das
+  // kein Fehler, sondern ein leerer Tageswähler.
+  const days = useMemo(
+    () => tournamentDays(tournament?.startsOn, tournament?.endsOn),
+    [tournament?.startsOn, tournament?.endsOn],
+  )
 
   const activeDay = useMemo(() => {
     if (day && days.includes(day)) return day

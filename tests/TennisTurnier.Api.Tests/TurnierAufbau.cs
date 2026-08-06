@@ -39,9 +39,14 @@ internal sealed record TurnierWunsch
     /// </summary>
     public Discipline? Disziplin { get; init; }
 
-    public DateOnly Beginn { get; init; } = new(2026, 5, 16);
+    /// <summary>
+    /// Der Termin. Beide Angaben leer heißt: er steht noch nicht fest — der
+    /// Normalfall eines frisch angelegten Turniers, seit er optional ist. Wer
+    /// Platzzeiten will, braucht ihn allerdings.
+    /// </summary>
+    public DateOnly? Beginn { get; init; } = new(2026, 5, 16);
 
-    public DateOnly Ende { get; init; } = new(2026, 5, 17);
+    public DateOnly? Ende { get; init; } = new(2026, 5, 17);
 
     /// <summary>Einzelteilnehmer. Bei <see cref="Teams"/> ohne Bedeutung.</summary>
     public int Teilnehmer { get; init; }

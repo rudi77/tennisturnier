@@ -218,8 +218,8 @@ export interface TournamentSummary {
   name: string
   venueName: string
   discipline: Discipline
-  startsOn: string
-  endsOn: string
+  startsOn: string | null
+  endsOn: string | null
   state: TournamentState
   schedulingMode: SchedulingMode
   acceptedEntries: number
@@ -230,8 +230,8 @@ export interface TournamentDetail {
   name: string
   venue: VenueDetail
   discipline: Discipline
-  startsOn: string
-  endsOn: string
+  startsOn: string | null
+  endsOn: string | null
   state: TournamentState
   schedulingMode: SchedulingMode
   formatTemplateId: string
@@ -339,8 +339,8 @@ export interface PublicRegistrationView {
   tournamentName: string
   venueName: string
   city: string | null
-  startsOn: string
-  endsOn: string
+  startsOn: string | null
+  endsOn: string | null
   discipline: Discipline
   needsPartner: boolean
   isOpen: boolean
@@ -647,8 +647,8 @@ export interface PublicTournamentView {
   name: string
   /** Der Name der Anlage. Mehr vom Ort steht bewusst nicht darin. */
   venueName: string
-  startsOn: string
-  endsOn: string
+  startsOn: string | null
+  endsOn: string | null
   state: PublicTournamentState
   schedulingMode: PublicSchedulingMode
   phases: PublicPhaseView[]

@@ -5,6 +5,7 @@ import { publicRegistration } from '../api/endpoints'
 import { useResource } from '../hooks/useResource'
 import { EntryStatus, type SelfRegistrationResult } from '../api/types'
 import { disciplineLabel } from '../lib/labels'
+import { formatDateRange } from '../lib/time'
 import { ApiError } from '../api/client'
 
 /**
@@ -52,7 +53,7 @@ export function RegistrationScreen({ token }: { token: string }) {
               {view.data.city ? ` · ${view.data.city}` : ''}
             </div>
             <div className="md-num" style={{ fontSize: 'var(--fs-sm)', color: 'var(--fg-3)', marginTop: 3 }}>
-              {view.data.startsOn} – {view.data.endsOn} · {disciplineLabel[view.data.discipline]}
+              {formatDateRange(view.data.startsOn, view.data.endsOn)} · {disciplineLabel[view.data.discipline]}
             </div>
 
             {view.data.freeSlots === 0 && view.data.isOpen && (

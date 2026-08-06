@@ -2,6 +2,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Empty, Loading } from '../components/layout/StateBlock'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { disciplineLabel, tournamentStateLabel } from '../lib/labels'
+import { formatDateRange } from '../lib/time'
 import { TournamentState, type TournamentSummary } from '../api/types'
 
 /**
@@ -52,8 +53,8 @@ export function TournamentsScreen({
           <Empty
             title="Noch kein Turnier"
             hint={
-              'Ein Turnier braucht einen Namen, einen Ort, einen Zeitraum und eine Disziplin — ' +
-              'mehr nicht. Plätze und Meldungen kommen danach.'
+              'Ein Turnier braucht einen Namen, einen Ort und eine Disziplin — mehr nicht. ' +
+              'Termin, Plätze und Meldungen kommen danach.'
             }
           />
         ) : (
@@ -115,7 +116,7 @@ function Card({
       </div>
 
       <div className="md-num" style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)' }}>
-        {entry.startsOn} – {entry.endsOn}
+        {formatDateRange(entry.startsOn, entry.endsOn)}
       </div>
 
       <div
