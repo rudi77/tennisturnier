@@ -220,9 +220,20 @@ public sealed class CourtAssignment : Entity
         Touch();
     }
 
+    /// <summary>
+    /// Gibt den Platz frei.
+    ///
+    /// Auch aus <see cref="AssignmentStatus.Called"/>, und das ist kein
+    /// Schlupfloch: ein aufgerufenes Match, das nie begonnen hat, ist der
+    /// Normalfall des Nichtantretens. Ohne diesen Weg bliebe seine Zuweisung
+    /// aufgerufen stehen, belegte den Platz für alles dahinter und wäre nicht
+    /// mehr loszuwerden — starten lässt sich ein entschiedenes Match nicht.
+    /// <see cref="ActualStart"/> bleibt dabei leer; genau das sagt aus, dass
+    /// gespielt nie wurde.
+    /// </summary>
     public void Finish(DateTimeOffset at)
     {
-        RequireStatus(AssignmentStatus.Running, AssignmentStatus.Suspended);
+        RequireStatus(AssignmentStatus.Called, AssignmentStatus.Running, AssignmentStatus.Suspended);
 
         if (ActualStart is { } start && at < start)
         {

@@ -112,14 +112,19 @@ export function BoardScreen() {
     [scheduled, activeDay, timeZone],
   )
 
+  // Die drei Zahlen teilen alle Matches unter sich auf — jedes zählt in genau
+  // einer. Vorher zählte „läuft" den Zuweisungsstatus und „fertig" den
+  // Matchstatus: ein entschiedenes Match, dessen Platz noch belegt war, stand in
+  // beiden, und die Summe überstieg die Zahl der Matches. „offen" ließ zudem die
+  // noch nicht feststehenden Matches ganz aus.
   const kpis = useMemo(() => {
-    const running = allMatches.filter(
-      (match) => match.assignment?.status === AssignmentStatus.Running,
-    ).length
-    const open = allMatches.filter(
-      (match) => match.status !== MatchStatus.Finished && match.status === MatchStatus.Ready,
-    ).length
     const finished = allMatches.filter((match) => match.status === MatchStatus.Finished).length
+    const running = allMatches.filter(
+      (match) =>
+        match.status !== MatchStatus.Finished &&
+        match.assignment?.status === AssignmentStatus.Running,
+    ).length
+    const open = allMatches.length - finished - running
     return [
       { value: running, label: 'läuft', color: 'var(--court-900)' },
       { value: open, label: 'offen', color: 'var(--court-700)' },

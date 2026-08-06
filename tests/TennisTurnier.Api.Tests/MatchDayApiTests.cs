@@ -97,6 +97,73 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.DoesNotContain(after.Queue, q => q.AssignmentId == first.AssignmentId);
     }
 
+    /// <summary>
+    /// Regression: Ein Ergebnis ließ die laufende Platzbelegung stehen.
+    ///
+    /// „Platz frei" und „Ergebnis" sind bewusst getrennt — der Platz ist frei,
+    /// sobald die Spieler ihn verlassen, und nicht erst, wenn jemand Zeit hatte,
+    /// den Zettel auszufüllen. Wer aber zuerst das Ergebnis eintrug, hinterließ
+    /// eine Zuweisung, die dauerhaft auf „läuft" stand: das Turnier zeigte noch
+    /// nach seinem letzten Ergebnis eine laufende Partie, und der Platz galt bis
+    /// zum Ende des Turniertags als belegt.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Ergebnis_gibt_den_Platz_frei()
+    {
+        var (admin, tournamentId) = await MatchDayAsync();
+        var court = (await BoardAsync(admin, tournamentId))[0];
+        var laufend = court.Queue[0];
+
+        await admin.PostAsync($"/api/assignments/{laufend.AssignmentId}/start", null);
+        _factory.Clock.Advance(TimeSpan.FromMinutes(80));
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await admin.PutAsJsonAsync(
+                $"/api/matches/{laufend.MatchId}/result",
+                new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 3), new SetScore(6, 4)]),
+                Json)).StatusCode);
+
+        var after = (await BoardAsync(admin, tournamentId))[0];
+
+        Assert.Null(after.Current);
+        Assert.DoesNotContain(after.Queue, q => q.AssignmentId == laufend.AssignmentId);
+
+        // Und der Platz ist wirklich frei, nicht bloß in der Anzeige: das nächste
+        // Match lässt sich aufrufen. Genau daran scheiterte es vorher.
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await admin.PostAsync($"/api/assignments/{after.Queue[0].AssignmentId}/call", null)).StatusCode);
+    }
+
+    /// <summary>
+    /// Dasselbe für den Aufruf, dem niemand gefolgt ist: ein Nichtantreten wird
+    /// eingetragen, ohne dass je gespielt wurde. Beendet werden konnte eine
+    /// aufgerufene Zuweisung bislang gar nicht — sie war weder zu starten (das
+    /// Match ist entschieden) noch loszuwerden.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Nichtantreten_raeumt_den_aufgerufenen_Platz()
+    {
+        var (admin, tournamentId) = await MatchDayAsync();
+        var court = (await BoardAsync(admin, tournamentId))[0];
+        var aufgerufen = court.Queue[0];
+
+        await admin.PostAsync($"/api/assignments/{aufgerufen.AssignmentId}/call", null);
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await admin.PutAsJsonAsync(
+                $"/api/matches/{aufgerufen.MatchId}/result",
+                new RecordResultRequest(MatchOutcome.Walkover, AffectedSide: 2),
+                Json)).StatusCode);
+
+        var after = (await BoardAsync(admin, tournamentId))[0];
+
+        Assert.Null(after.Current);
+        Assert.DoesNotContain(after.Queue, q => q.AssignmentId == aufgerufen.AssignmentId);
+    }
+
     [Fact]
     public async Task Nach_einem_beendeten_Match_rueckt_die_Warteschlange_nach()
     {

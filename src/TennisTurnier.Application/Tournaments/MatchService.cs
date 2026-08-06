@@ -169,16 +169,27 @@ public sealed class MatchService : IMatchService
     /// <summary>
     /// Gibt den Platz frei, den ein entschiedenes Match noch belegt.
     ///
-    /// Nicht jedes Match wird am Platz aufgerufen: ein Nichtantreten wird
-    /// eingetragen, ohne dass jemand hingeht. Bliebe die Zuweisung stehen,
-    /// behielte sie ihre Nummer in der Warteschlange, blockierte anderthalb
-    /// Stunden für alles dahinter und stünde öffentlich als wartendes Match —
-    /// und wäre über den Turniertag nicht mehr loszuwerden, weil sich weder
-    /// aufrufen noch beenden lässt, was schon entschieden ist.
+    /// Zwei Fälle, und sie enden verschieden:
     ///
-    /// Aufgerufene, laufende und unterbrochene Zuweisungen bleiben unangetastet:
-    /// sie gehören dem Tagesbetrieb, und ihre Historie ist der Grund, warum die
-    /// Zuweisung eine eigene Entität ist (ADR-0002).
+    ///  - Eine <em>wartende</em> Zuweisung fällt weg. Nicht jedes Match wird am
+    ///    Platz aufgerufen: ein Nichtantreten wird eingetragen, ohne dass jemand
+    ///    hingeht. Bliebe sie stehen, behielte sie ihre Nummer in der
+    ///    Warteschlange, blockierte anderthalb Stunden für alles dahinter und
+    ///    stünde öffentlich als wartendes Match.
+    ///  - Eine <em>lebende</em> Zuweisung — aufgerufen, laufend, unterbrochen —
+    ///    wird abgeschlossen und bleibt als Historie stehen. Sie zu löschen
+    ///    hieße zu behaupten, auf diesem Platz sei nie gespielt worden
+    ///    (ADR-0002).
+    ///
+    /// Sie stehen zu lassen wäre beides nicht. Wenn ein Ergebnis eingetragen
+    /// ist, ist das Match vorbei — die Spieler stehen dann nicht mehr am Platz.
+    /// Vorher blieb die Zuweisung auf „läuft": das Turnier zeigte nach seinem
+    /// letzten Ergebnis eine laufende Partie, und schlimmer, der Platz galt als
+    /// belegt und ließ sich für das nächste Match nicht mehr aufrufen. Beenden
+    /// von Hand über „Platz frei" gibt es weiterhin — es ist der übliche Weg,
+    /// weil der Platz frei ist, sobald die Spieler ihn verlassen, und nicht
+    /// erst, wenn jemand Zeit hatte, den Zettel auszufüllen. Es ist nur nicht
+    /// mehr der einzige.
     /// </summary>
     private async Task ReleaseQueueAsync(
         Guid tournamentId,
@@ -191,18 +202,29 @@ public sealed class MatchService : IMatchService
         }
 
         var all = await _assignments.ListByTournamentAsync(tournamentId, cancellationToken);
-        var waiting = all
-            .Where(a => matchIds.Contains(a.MatchId) && a.Status == AssignmentStatus.Planned)
-            .ToList();
+        var affected = all.Where(a => matchIds.Contains(a.MatchId)).ToList();
+
+        var waiting = affected.Where(a => a.Status == AssignmentStatus.Planned).ToList();
 
         foreach (var assignment in waiting)
         {
             _assignments.Remove(assignment);
         }
 
+        var live = affected
+            .Where(a => a.Status is AssignmentStatus.Called or AssignmentStatus.Running
+                or AssignmentStatus.Suspended)
+            .ToList();
+
+        foreach (var assignment in live)
+        {
+            assignment.Finish(_clock.Now);
+        }
+
         // Die betroffenen Plätze rücken nach: sonst bliebe eine Lücke in der
-        // Nummerierung, und die wird am Platz vorgelesen.
-        foreach (var courtId in waiting.Select(a => a.CourtId).Distinct())
+        // Nummerierung, und die wird am Platz vorgelesen. Ein eben abgeschlossener
+        // Platz ist dabei der wichtigere der beiden Fälle — dort wartet jemand.
+        foreach (var courtId in waiting.Concat(live).Select(a => a.CourtId).Distinct())
         {
             var onCourt = all
                 .Where(a => a.CourtId == courtId && !waiting.Contains(a))

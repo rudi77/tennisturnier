@@ -322,6 +322,16 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
                 Json),
             "Ergebnis eintragen");
 
+        // Und damit ist der Platz frei. Vorher blieb die Zuweisung auf „läuft"
+        // stehen: die Platzübersicht zeigte eine Partie, die längst entschieden
+        // war, und der Platz ließ sich für das nächste Match nicht aufrufen.
+        var nachDemErgebnis = await admin.GetFromJsonAsync<List<CourtBoard>>(
+            $"/api/tournaments/{tournamentId}/courts", Json);
+
+        Assert.All(
+            nachDemErgebnis!,
+            platz => Assert.NotEqual(spielbar.Id, platz.Current?.MatchId));
+
         // --- Die öffentliche Ansicht trägt das Ergebnis nach außen ------------
         var oeffentlich = await admin.GetAsync($"/public/tournaments/{tournamentId}");
         AssertOk(oeffentlich, "Öffentliche Ansicht");
