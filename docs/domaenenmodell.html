@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>domaenenmodell.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> or <div class="page"></div> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="das-domänenmodell">Das Domänenmodell</h1>
+<p>Stand <code>f355bae</code>, Branch <code>feature/erster-turnierablauf</code>.</p>
+<p>Diese Datei zeichnet nach, was in <code>src/TennisTurnier.Domain</code> steht. Sie ersetzt
+keine ADR — das <em>Warum</em> steht dort, hier steht das <em>Was</em>. Wenn beide sich
+widersprechen, gilt der Code.</p>
+<h2 id="lesehilfe">Lesehilfe</h2>
+<ul>
+<li><strong>Aggregatwurzeln</strong> sind fett benannt: <code>Tournament</code>, <code>Phase</code>, <code>Participant</code>,
+<code>Player</code>, <code>CourtAssignment</code>, <code>FormatTemplate</code>, <code>UserAccount</code>,
+<code>TournamentProjection</code>.</li>
+<li><strong>(VO)</strong> kennzeichnet ein Wertobjekt. Es hat keine eigene Identität und wird
+mit seinem Besitzer geschrieben — in der Datenbank meist als Spalten derselben
+Zeile oder als JSON.</li>
+<li>Beziehungen <strong>über eine Aggregatgrenze hinweg</strong> sind reine Id-Referenzen. Es
+gibt keine Objektnavigation von <code>Match</code> zu <code>TournamentEntry</code>; es gibt eine
+<code>Guid</code>.</li>
+<li><code>Phase</code>, <code>Match</code>, <code>CourtWindow</code> und <code>CourtAssignment</code> tragen alle eine eigene
+<code>TournamentId</code>, obwohl sie über ihren Vater erreichbar wären. Das ist Absicht:
+der Query-Filter aus ADR-0004 arbeitet auf der Menge der sichtbaren Turniere
+und bliebe sonst zweistufig.</li>
+</ul>
+<hr>
+<h2 id="1-der-turnierkern">1. Der Turnierkern</h2>
+<pre><code class="language-mermaid"><div class="mermaid">erDiagram
+    TOURNAMENT {
+        Guid Id PK
+        string Name
+        Discipline Discipline "Singles / Doubles / Mixed"
+        DateOnly StartsOn
+        DateOnly EndsOn
+        TournamentState State "Draft .. Completed / Abandoned"
+        SchedulingMode SchedulingMode "Planning / MatchDay"
+        Guid FormatTemplateId FK
+        int Version "optimistische Nebenlaeufigkeit"
+    }
+
+    VENUE {
+        string Name
+        string Address "optional"
+        string City "optional"
+        string TimeZoneId "IANA, z.B. Europe/Vienna"
+    }
+
+    REGISTRATION_LINK {
+        string Token "128 Bit Base64Url, rotierbar"
+        int Capacity "offen = unbegrenzt"
+        DateTimeOffset Deadline "offen = bis zum Meldeschluss von Hand"
+    }
+
+    FORMAT_SNAPSHOT {
+        Guid TemplateId
+        int TemplateVersion
+        FormatDefinition Definition "eingefrorene Kopie"
+    }
+
+    TOURNAMENT_COURT {
+        Guid Id PK
+        Guid TournamentId FK
+        string Name "eindeutig im Turnier"
+        CourtSurface Surface "Clay / Hard / Carpet / Grass / Artificial"
+        CourtLocation Location "Outdoor / Indoor"
+        bool IsCenterCourt "weiche Regel fuer Finalspiele"
+        bool IsActive "stillgelegt bleibt lesbar"
+    }
+
+    COURT_WINDOW {
+        Guid Id PK
+        Guid TournamentId FK
+        Guid CourtId FK
+        TimeSlot Period "das Fenster IST die Verfuegbarkeit"
+    }
+
+    TOURNAMENT_ENTRY {
+        Guid Id PK
+        Guid TournamentId FK
+        Guid ParticipantId FK
+        int Seed "leer = ungesetzt"
+        EntryStatus Status "Applied / Accepted / WaitingList / Withdrawn"
+        EntryOrigin Origin "Organiser / SelfService"
+        DateTimeOffset RegisteredAt
+        string ConfirmationCode "48 Bit, Rueckweg ohne Konto"
+    }
+
+    PARTICIPANT {
+        Guid Id PK
+        string DisplayName "beim Melden festgeschrieben"
+        bool IsTeam
+    }
+
+    PLAYER {
+        Guid Id PK
+        string FirstName
+        string LastName
+        string DisplayName "abgeleitet: Nachname, Vorname"
+    }
+
+    PLAYER_CONTACT {
+        string Email
+        string Phone
+        DateOnly DateOfBirth
+    }
+
+    PHASE {
+        Guid Id PK
+        Guid TournamentId FK
+        int Ordinal "beginnt bei 1"
+        PhaseFormatKind Format "Knockout / RoundRobin / Swiss"
+        string Name
+        PhaseStatus Status "abgeleitet aus den Matches"
+    }
+
+    MATCH {
+        Guid Id PK
+        Guid TournamentId FK
+        Guid PhaseId FK
+        int Round
+        int Position
+        string Label "Finale, Spiel um Platz 3"
+        string Group "nur in Gruppenphasen"
+        MatchStatus Status "abgeleitet: Pending / Ready / Finished"
+        int Version
+    }
+
+    MATCH_SIDE {
+        ParticipantRef Origin "Entry / WinnerOf / LoserOf / GroupPosition / Bye / Unassigned"
+        Guid EntryId "leer, solange nicht aufgeloest"
+    }
+
+    SCORE {
+        MatchOutcome Outcome "Normal / Retirement / Walkover / Disqualification / Bye"
+        int WinnerSide "1 oder 2"
+        SetScore AbandonedSet "getrennt, denn niemand hat ihn gewonnen"
+    }
+
+    SET_SCORE {
+        int Games1
+        int Games2
+        int TiebreakPoints "Stand des Unterlegenen"
+    }
+
+    COURT_ASSIGNMENT {
+        Guid Id PK
+        Guid TournamentId FK
+        Guid MatchId FK
+        Guid CourtId FK
+        int SequenceOnCourt "lueckenlos ab 1"
+        DateTimeOffset PlannedStart "Schaetzung, nur im Planungsmodus"
+        DateTimeOffset EarliestStart "Zusage, nur am Turniertag"
+        TimeSpan EstimatedDuration
+        DateTimeOffset ActualStart
+        DateTimeOffset ActualEnd
+        AssignmentSource Source "Auto / Manual / Pinned"
+        AssignmentStatus Status "Planned / Called / Running / Finished / Suspended"
+        int Version
+    }
+
+    TOURNAMENT_PROJECTION {
+        Guid Id PK "gleich der TournamentId"
+        string Json "nur Oeffentliches, ADR-0003"
+        string ETag "SHA-256 ueber den Inhalt"
+        DateTimeOffset UpdatedAt
+        int Version "zaehlt Aenderungen, nicht Neuaufbauten"
+    }
+
+    TOURNAMENT ||--|| VENUE : "(VO) eingebettet"
+    TOURNAMENT ||--|| REGISTRATION_LINK : "(VO) entsteht mit dem Turnier"
+    TOURNAMENT ||--o| FORMAT_SNAPSHOT : "(VO) eingefroren beim Auslosen"
+    TOURNAMENT ||--o{ TOURNAMENT_COURT : "stellt"
+    TOURNAMENT_COURT ||--o{ COURT_WINDOW : "steht zur Verfuegung"
+    TOURNAMENT ||--o{ TOURNAMENT_ENTRY : "nimmt an"
+    TOURNAMENT_ENTRY }o--|| PARTICIPANT : "meldet"
+    PARTICIPANT }o--|{ PLAYER : "1 im Einzel, 2 im Doppel"
+    PLAYER ||--|| PLAYER_CONTACT : "(VO) nie oeffentlich"
+    TOURNAMENT ||--o{ PHASE : "gliedert sich in"
+    PHASE ||--o{ MATCH : "enthaelt"
+    MATCH ||--|{ MATCH_SIDE : "(VO) Side1 und Side2"
+    MATCH_SIDE }o--o| TOURNAMENT_ENTRY : "aufgeloest zu"
+    MATCH ||--o| SCORE : "(VO) sobald entschieden"
+    SCORE ||--o{ SET_SCORE : "(VO) CompletedSets"
+    MATCH ||--o{ COURT_ASSIGNMENT : "wird angesetzt auf"
+    COURT_ASSIGNMENT }o--|| TOURNAMENT_COURT : "belegt"
+    TOURNAMENT ||--o| TOURNAMENT_PROJECTION : "Lesestand, 1:1"
+</div></code></pre>
+<h3 id="was-an-diesem-bild-wichtig-ist">Was an diesem Bild wichtig ist</h3>
+<p><strong><code>MatchSide</code> trägt Herkunft und Auflösung getrennt.</strong> <code>Origin</code> ist die Regel
+(„Sieger aus Match 7&quot;), <code>EntryId</code> ihr aktuelles Ergebnis. Würde die Auflösung die
+Herkunft überschreiben, ließe sich ein Ergebnis nicht mehr zurücknehmen, ohne den
+falschen Namen stehen zu lassen. <code>ParticipantRef</code> ist deshalb ein Summentyp und
+das Fundament des ganzen Baums (ADR-0001) — „Zweiter der Gruppe B&quot; und „Sieger
+aus Match 7&quot; sind derselbe Mechanismus.</p>
+<p><strong>Ein Match kann mehrere Platzzuweisungen haben.</strong> Unterbrochen und auf einem
+anderen Platz fortgesetzt: erst beide Zuweisungen zusammen erzählen, was an
+diesem Tag passiert ist (ADR-0002).</p>
+<p><strong>Der abgebrochene Satz steht getrennt von den gespielten.</strong> Läge er in derselben
+Liste, zählte ein Stand von 2:1 als gewonnener Satz, und die Tabelle wiese einen
+Satz aus, der nie zu Ende gespielt wurde.</p>
+<p><strong>Teilnahme in drei Schichten.</strong> <code>Player</code> ist die Person und existiert
+turnierübergreifend, <code>Participant</code> die antretende Einheit (einer oder ein Paar),
+<code>TournamentEntry</code> die Meldung mit Status und Setzposition. <code>Participant</code> von
+Anfang an einzuziehen ist der Grund, warum das Doppel kein Sonderfall in
+Setzliste, Spielplan und Ergebniseingabe ist.</p>
+<hr>
+<h2 id="2-formate">2. Formate</h2>
+<p>Ein Turniermodus ist eine Phasenfolge, kein Code (ADR-0001). „Gruppenphase mit
+anschließendem K.o.&quot; ist eine Komposition aus zwei <code>PhaseDefinition</code>.</p>
+<pre><code class="language-mermaid"><div class="mermaid">erDiagram
+    FORMAT_TEMPLATE {
+        Guid Id PK
+        Guid OwnerUserId FK "leer bei den mitgelieferten Vorlagen"
+        int Version "zaehlt bei jeder Aenderung hoch"
+        bool IsBuiltIn "abgeleitet: OwnerUserId ist leer"
+    }
+
+    FORMAT_DEFINITION {
+        string Id
+        string Name
+    }
+
+    PHASE_DEFINITION {
+        int Ordinal "lueckenlos ab 1"
+        PhaseFormatKind Format "Knockout / RoundRobin / Swiss"
+        string Name
+        int GroupCount "nur RoundRobin, hoechstens 26"
+        int Encounters "Hin- oder Hin- und Rueckrunde"
+        int Rounds "nur Swiss, leer = ceil(log2(n))"
+        bool ThirdPlaceMatch "nur Knockout"
+        Tiebreaker Tiebreakers "geordnet, Lot muss zuletzt stehen"
+    }
+
+    QUALIFICATION {
+        int FromPhase "muss auf eine fruehere Phase zeigen"
+        QualificationRule Rule "TopNPerGroup / BestThirds / All"
+        int N
+        SeedingRule Seeding "CrossGroup / ByRank"
+    }
+
+    MATCH_FORMAT {
+        int BestOf "1, 3 oder 5"
+        FinalSetMode FinalSetMode "Regular / MatchTiebreak10 / Advantage"
+        int TiebreakAt "1 bis 12"
+        int SetsToWin "abgeleitet"
+    }
+
+    SCORING_RULES {
+        int Win
+        int Loss
+        int Walkover
+    }
+
+    TOURNAMENT {
+        Guid Id PK
+        Guid FormatTemplateId FK
+    }
+
+    FORMAT_SNAPSHOT {
+        Guid TemplateId
+        int TemplateVersion
+    }
+
+    USER_ACCOUNT {
+        Guid Id PK
+    }
+
+    USER_ACCOUNT ||--o{ FORMAT_TEMPLATE : "besitzt"
+    FORMAT_TEMPLATE ||--|| FORMAT_DEFINITION : "(VO)"
+    FORMAT_DEFINITION ||--|{ PHASE_DEFINITION : "(VO) geordnete Folge"
+    FORMAT_DEFINITION ||--|| MATCH_FORMAT : "(VO) turnierweit"
+    PHASE_DEFINITION ||--o| MATCH_FORMAT : "(VO) ueberschreibt je Phase"
+    PHASE_DEFINITION ||--o| QUALIFICATION : "(VO) ab der zweiten Phase Pflicht"
+    PHASE_DEFINITION ||--|| SCORING_RULES : "(VO)"
+    TOURNAMENT }o--|| FORMAT_TEMPLATE : "waehlt"
+    TOURNAMENT ||--o| FORMAT_SNAPSHOT : "friert ein"
+    FORMAT_SNAPSHOT ||--|| FORMAT_DEFINITION : "Kopie zum Zeitpunkt der Auslosung"
+</div></code></pre>
+<p>Der <code>FormatSnapshot</code> ist der Grund, warum eine geänderte Vorlage ein laufendes
+Turnier nicht berührt. <code>TemplateVersion</code> hält fest, aus welchem Stand er stammt.</p>
+<p>Die Formate selbst — <code>KnockoutFormat</code>, <code>RoundRobinFormat</code>, <code>SwissFormat</code> —
+stehen hinter <code>IPhaseFormat</code> und sind zustandslos: sie bekommen einen
+<code>PhaseState</code> und rechnen. Deshalb lässt sich jede Paarungslogik ohne Aggregat und
+ohne Datenbank testen.</p>
+<hr>
+<h2 id="3-benutzer-und-rollen">3. Benutzer und Rollen</h2>
+<pre><code class="language-mermaid"><div class="mermaid">erDiagram
+    USER_ACCOUNT {
+        Guid Id PK
+        string Issuer "zusammen mit SubjectId eindeutig"
+        string SubjectId "der sub aus dem Token"
+        string Email
+        string DisplayName
+    }
+
+    ROLE_ASSIGNMENT {
+        Guid Id PK
+        Guid UserId FK
+        Role Role "SystemAdmin / Organizer / TournamentDirector / Referee"
+    }
+
+    RESOURCE_SCOPE {
+        ScopeType Type "Global / Tournament"
+        Guid ResourceId "leer genau dann, wenn Global"
+    }
+
+    TOURNAMENT {
+        Guid Id PK
+    }
+
+    USER_ACCOUNT ||--o{ ROLE_ASSIGNMENT : "hat"
+    ROLE_ASSIGNMENT ||--|| RESOURCE_SCOPE : "(VO) gilt in"
+    RESOURCE_SCOPE }o--o| TOURNAMENT : "bei Type = Tournament"
+</div></code></pre>
+<p>Die Rechte-Matrix steht an einer einzigen Stelle (<code>Security/Permissions.cs</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Rolle</th>
+<th>Scope</th>
+<th>Rechte</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SystemAdmin</code></td>
+<td>Global</td>
+<td>alle</td>
+</tr>
+<tr>
+<td><code>Organizer</code></td>
+<td>Global</td>
+<td><code>CreateTournament</code></td>
+</tr>
+<tr>
+<td><code>TournamentDirector</code></td>
+<td>Tournament</td>
+<td><code>ManageTournament</code>, <code>EnterResults</code>, <code>ViewInternals</code></td>
+</tr>
+<tr>
+<td><code>Referee</code></td>
+<td>Tournament</td>
+<td><code>EnterResults</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>Organizer</code> ist global und trotzdem harmlos: sein einziges Recht beantwortet
+„wer darf herein&quot;, nicht „wer sieht was&quot;. Wer ein Turnier anlegt, wird dessen
+<code>TournamentDirector</code>. <code>RoleAssignment</code> weist im Konstruktor jeden Scope ab, der
+nicht zur Rolle passt — eine globale Rolle lässt sich am Turnier nicht vergeben.</p>
+<hr>
+<h2 id="4-der-lebenszyklus-eines-turniers">4. Der Lebenszyklus eines Turniers</h2>
+<p>Kein ER, aber ohne ihn ist die Hälfte der Regeln oben unverständlich.</p>
+<pre><code class="language-mermaid"><div class="mermaid">stateDiagram-v2
+    [*] --> Draft
+    Draft --> RegistrationOpen : OpenRegistration
+    RegistrationOpen --> RegistrationClosed : CloseRegistration
+    RegistrationClosed --> RegistrationOpen : ReopenRegistration
+    RegistrationClosed --> DrawGenerated : GenerateDraw
+    DrawGenerated --> RegistrationOpen : ReopenRegistration (verwirft den Draw)
+    DrawGenerated --> InProgress : Start
+    InProgress --> Completed : Complete
+    Completed --> InProgress : Resume (kein Endpunkt)
+    Draft --> Abandoned : Abandon
+    RegistrationOpen --> Abandoned : Abandon
+    RegistrationClosed --> Abandoned : Abandon
+    DrawGenerated --> Abandoned : Abandon
+    InProgress --> Abandoned : Abandon
+    Completed --> [*]
+    Abandoned --> [*]
+</div></code></pre>
+<p>Ab <code>DrawGenerated</code> gilt <code>IsFrozen</code>: Teilnehmerfeld und Format sind eingefroren,
+eine Nachmeldung verlangt den ausdrücklichen Rückschritt. Der Weg aus
+<code>RegistrationClosed</code> zurück kostet nichts und muss es geben — sonst wäre ein zu
+früh geschlossenes Turnier mit weniger als zwei Meldungen eine Sackgasse.</p>
+<p><code>Resume</code> hat bewusst keinen Endpunkt. Er folgt aus der Rücknahme eines
+Ergebnisses, so wie <code>Complete</code> aus dem letzten Ergebnis folgt.</p>
+<p><code>SchedulingMode</code> (<code>Planning</code> / <code>MatchDay</code>) läuft <strong>orthogonal</strong> zu diesem
+Automaten: der Wechsel zum Turniertag setzt eine Auslosung voraus, ist aber kein
+Zustandsübergang des Turniers. Im Planungsmodus ist eine Uhrzeit eine Schätzung,
+am Turniertag eine Zusage (ADR-0002).</p>
+<hr>
+<h2 id="wo-man-weiterliest">Wo man weiterliest</h2>
+<table>
+<thead>
+<tr>
+<th>Frage</th>
+<th>Datei</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Warum Phasen und <code>ParticipantRef</code></td>
+<td><code>docs/adr/0001-turnierformate-als-phasen.md</code></td>
+</tr>
+<tr>
+<td>Warum Warteschlange statt Zeitraster</td>
+<td><code>docs/adr/0002-scheduling-planungsraster-und-queue.md</code></td>
+</tr>
+<tr>
+<td>Warum die öffentliche Sicht ein eigener Lesestand ist</td>
+<td><code>docs/adr/0003-getrenntes-read-modell.md</code></td>
+</tr>
+<tr>
+<td>Warum Rollen einen Scope tragen</td>
+<td><code>docs/adr/0004-club-scoped-autorisierung.md</code> (Superseded)</td>
+</tr>
+<tr>
+<td>Warum der Spieler keine Vereinsbindung hat</td>
+<td><code>docs/adr/0008-spielerstammdaten.md</code> (Superseded)</td>
+</tr>
+<tr>
+<td>Warum der Zähler fachlich und nicht <code>rowversion</code> ist</td>
+<td><code>docs/adr/0006-sqlite-als-startdatenbank.md</code></td>
+</tr>
+<tr>
+<td>Warum der Verein weg ist</td>
+<td><code>docs/adr/0009-turnier-als-wurzelaggregat.md</code></td>
+</tr>
+<tr>
+<td>Wie der Meldeweg ohne Konto funktioniert</td>
+<td><code>docs/adr/0010-oeffentliche-selbstmeldung.md</code></td>
+</tr>
+</tbody>
+</table>
+
+</body>
+</html>
