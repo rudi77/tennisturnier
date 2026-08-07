@@ -1,4 +1,4 @@
-import { AssignmentStatus, MatchStatus, type MatchDetail } from '../../api/types'
+import { AssignmentStatus, MatchOutcome, MatchStatus, type MatchDetail } from '../../api/types'
 import { sideName } from '../../lib/labels'
 
 /**
@@ -9,7 +9,14 @@ import { sideName } from '../../lib/labels'
  * ersten Ball wertlos.
  *
  * Anklickbar ist nur, was auch eingetragen werden kann: beide Seiten müssen
- * feststehen.
+ * feststehen, und ein Freilos gehört ausdrücklich nicht dazu. Es war
+ * anklickbar, weil es als entschieden gilt — die Maske ging auf und konnte
+ * nichts speichern, denn die Domäne weist ein Ergebnis für ein Freilos ab.
+ *
+ * Ein Freilos wird außerdem gedämpft gezeichnet. Es sieht sonst aus wie eine
+ * gespielte Partie, und wer den Namen des Freilosgegners eine Runde weiter
+ * stehen sieht, hält das für ein Ergebnis. Gespielt wurde nichts — er ist
+ * kampflos durch, und genau das soll die Karte sagen.
  */
 export function BracketMatch({
   match,
@@ -22,7 +29,8 @@ export function BracketMatch({
 }) {
   const finished = match.status === MatchStatus.Finished
   const running = match.assignment?.status === AssignmentStatus.Running
-  const clickable = match.status === MatchStatus.Ready || finished
+  const bye = match.score?.outcome === MatchOutcome.Bye
+  const clickable = !bye && (match.status === MatchStatus.Ready || finished)
 
   const winner = match.score?.winnerSide ?? null
   const setsFor = (side: 1 | 2) =>
@@ -33,6 +41,7 @@ export function BracketMatch({
   const className = [
     'md-bracket__match',
     running ? 'md-bracket__match--running' : '',
+    bye ? 'md-bracket__match--bye' : '',
     clickable ? 'md-bracket__match--clickable' : '',
   ]
     .filter(Boolean)
@@ -49,7 +58,13 @@ export function BracketMatch({
         cursor: clickable ? 'pointer' : 'default',
         background: 'var(--surface)',
       }}
-      title={clickable ? 'Ergebnis erfassen' : 'Teilnehmer stehen noch nicht fest'}
+      title={
+        bye
+          ? 'Freilos — hier wird nicht gespielt, der Gegner ist kampflos eine Runde weiter'
+          : clickable
+            ? 'Ergebnis erfassen'
+            : 'Teilnehmer stehen noch nicht fest'
+      }
     >
       <Side
         name={sideName(match.side1.participantName, match.side1.origin)}

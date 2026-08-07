@@ -3,19 +3,57 @@ import { useToast } from '../../hooks/useToast'
 import { registrationUrl } from '../../hooks/useRoute'
 
 /**
+ * Legt Text in die Zwischenablage und sagt ehrlich, ob es geklappt hat.
+ *
+ * Zwei Wege, weil der erste öfter fehlt als man denkt: `navigator.clipboard`
+ * gibt es nur im sicheren Kontext, und selbst dort scheitert `writeText`, wenn
+ * das Fenster gerade nicht den Fokus hat. Der zweite Weg über ein kurzlebiges
+ * Textfeld ist veraltet und funktioniert überall.
+ *
+ * Der Rückgabewert ist der Punkt. Vorher wurde „kopiert" gemeldet, sobald der
+ * Aufruf nicht geworfen hatte — und wer danach einfügen wollte, hatte nichts.
+ */
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // Kein Grund zur Meldung: es gibt einen zweiten Weg.
+  }
+
+  const area = document.createElement('textarea')
+  area.value = text
+  area.setAttribute('readonly', '')
+  area.style.position = 'fixed'
+  area.style.top = '-1000px'
+  document.body.appendChild(area)
+  area.select()
+  area.setSelectionRange(0, text.length)
+
+  try {
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    document.body.removeChild(area)
+  }
+}
+
+/**
  * Den Anmeldelink weitergeben.
  *
- * Auf dem Handy über das Teilen-Blatt des Systems: dort steht die
- * WhatsApp-Gruppe des Vereins, und genau dorthin geht dieser Link. Ihn erst in
- * die Zwischenablage zu legen und den Benutzer dann selbst eine App suchen zu
- * lassen wäre ein Umweg über zwei zusätzliche Handgriffe.
+ * Kopieren steht immer da, Teilen nur zusätzlich. Zuerst war es ein Knopf, der
+ * je nach Gerät das eine <em>oder</em> das andere tat — und das ging schief:
+ * Chrome kennt `navigator.share` auch am Schreibtisch, also öffnete sich dort
+ * das Teilen-Blatt des Systems. Wer es zumachte, hatte nichts in der
+ * Zwischenablage und bekam auch keine Meldung darüber, weil ein Abbruch kein
+ * Fehler ist.
  *
- * `navigator.share` gibt es nicht überall — am Schreibtisch fast nirgends.
- * Deshalb ist Kopieren kein Notnagel, sondern der gleichwertige zweite Weg, und
- * die Beschriftung sagt vorher, welcher es sein wird.
- *
- * Ein Abbruch im Teilen-Blatt ist kein Fehler: wer es wieder zumacht, hat sich
- * umentschieden und braucht keine Meldung darüber.
+ * Zwei Handlungen, zwei Knöpfe. Der eine tut immer dasselbe, der andere ist ein
+ * Angebot — auf dem Handy führt er in die WhatsApp-Gruppe des Vereins, und
+ * genau dorthin geht dieser Link.
  */
 export function ShareLink({
   token,
@@ -31,22 +69,35 @@ export function ShareLink({
 
   const canShare = typeof navigator.share === 'function'
 
-  const share = async () => {
-    const url = registrationUrl(token)
+  const copy = async () => {
     setBusy(true)
     try {
-      if (canShare) {
-        await navigator.share({
-          title: tournamentName,
-          text: `Melde dich zu „${tournamentName}" an:`,
-          url,
-        })
-        return
-      }
+      const done = await copyToClipboard(registrationUrl(token))
 
-      await navigator.clipboard.writeText(url)
-      show('Anmeldelink kopiert')
+      if (done) {
+        show('Anmeldelink kopiert')
+      } else {
+        showError(
+          new Error('Der Browser hat das Kopieren abgelehnt. Der Link lässt sich von Hand markieren.'),
+          'Kopieren',
+        )
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const share = async () => {
+    setBusy(true)
+    try {
+      await navigator.share({
+        title: tournamentName,
+        text: `Melde dich zu „${tournamentName}" an:`,
+        url: registrationUrl(token),
+      })
     } catch (cause) {
+      // Wer das Teilen-Blatt zumacht, hat sich umentschieden. Das ist kein
+      // Fehler und bekommt keine Meldung.
       if (cause instanceof DOMException && cause.name === 'AbortError') return
       showError(cause, 'Teilen')
     } finally {
@@ -55,8 +106,16 @@ export function ShareLink({
   }
 
   return (
-    <button type="button" className={className} disabled={busy} onClick={() => void share()}>
-      {canShare ? 'Anmeldelink teilen' : 'Anmeldelink kopieren'}
-    </button>
+    <>
+      <button type="button" className={className} disabled={busy} onClick={() => void copy()}>
+        Link kopieren
+      </button>
+
+      {canShare && (
+        <button type="button" className="md-btn" disabled={busy} onClick={() => void share()}>
+          Teilen
+        </button>
+      )}
+    </>
   )
 }

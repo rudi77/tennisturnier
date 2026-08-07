@@ -16,13 +16,23 @@
 
   /* Layout constants lifted from the working prototype */
   --nav-width: 212px;
-  /* Hoehe der Fussleiste am Handy — der Inhalt haelt sie sich frei. */
+  /* Höhe der Fussleiste am Handy — der Inhalt haelt sie sich frei. */
   --nav-bar-height: 62px;
   --header-height: 62px;
   --gutter-page: var(--sp-14);      /* 26px page padding */
   --court-col-width: 176px;         /* matchday queue column */
   --gantt-col-width: 138px;         /* planning-mode court column */
   --bracket-card-width: 196px;
+  /* Die Höhe steht fest, weil der Baum mit ihr rechnet: der Abstand zwischen
+     zwei Karten ist Teilung minus Kartenhöhe. Wäre sie vom Schriftbild
+     abhängig, verschoebe sich jede Runde gegen die vorige — und zwar
+     kumulativ, sodass es erst im Halbfinale auffällt. */
+  --bracket-card-height: 56px;
+  /* Die Teilung der ersten Runde. Jede weitere verdoppelt sie. */
+  --bracket-pitch: 60px;
+  /* Platz links der Karte für den Verbindungsbügel: seine Breite plus der
+     Abstand auf beiden Seiten. */
+  --bracket-connector-space: 34px;
   --phone-width: 392px;
   --hit-target: 44px;               /* never smaller on court-side controls */
 }

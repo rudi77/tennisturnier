@@ -1,0 +1,5 @@
+Vorname;Nachname;Partner-Vorname;Partner-Nachname;E-Mail;Partner-E-Mail;Teamname
+Anna;Reiter;Bernhard;Steiner;anna.reiter@example.invalid;bernhard.steiner@example.invalid;Die Netzroller
+Carla;Hofer;Daniel;Gruber;carla.hofer@example.invalid;;Ass im Ärmel
+Eva;Wallner;Florian;Aigner;;;
+Gudrun;Moser;Hannes;Pichler;gudrun.moser@example.invalid;hannes.pichler@example.invalid;Doppelfehler

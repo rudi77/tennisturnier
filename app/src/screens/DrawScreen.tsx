@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { TournamentPicker } from '../components/layout/TournamentPicker'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
@@ -225,39 +225,62 @@ export function DrawScreen() {
   )
 }
 
-/** Der klassische Baum. Der Abstand verdoppelt sich je Runde — sonst treffen
- *  sich die Bügel nicht auf der Mitte des Folgematches. */
+/**
+ * Wie viele Matches eine Runde als Baumknoten trägt.
+ *
+ * Die erste so viele, wie sie hat; jede weitere die Hälfte der vorigen. Was
+ * darüber hinaus in derselben Runde liegt, hängt nicht am Baum — das Spiel um
+ * Platz 3 folgt aus den Halbfinals und nicht aus dem Finale, steht aber in
+ * dessen Runde.
+ */
+function withSlots(rounds: Round[]): { round: Round; inTree: MatchDetail[]; aside: MatchDetail[] }[] {
+  let slots = rounds[0]?.matches.length ?? 0
+
+  return rounds.map((round, index) => {
+    if (index > 0) slots = Math.ceil(slots / 2)
+
+    return {
+      round,
+      inTree: round.matches.filter((match) => match.position <= slots),
+      aside: round.matches.filter((match) => match.position > slots),
+    }
+  })
+}
+
+/**
+ * Der klassische Baum.
+ *
+ * Die Teilung verdoppelt sich je Runde, damit ein Match auf der Mitte seiner
+ * beiden Vorgänger sitzt. Gerechnet wird in CSS mit `--pitch` und der festen
+ * Kartenhöhe: die Zahlen standen einmal hier als 60 und 52, und die 52 stimmte
+ * nicht — die Karte war 56 hoch. Vier Pixel je Runde, kumulativ, und im
+ * Halbfinale sah man es.
+ *
+ * Der zweite Grund für den Versatz war die Überschrift: sie stand im selben
+ * Behälter wie die Karten und bekam damit deren Abstand als Abstand zu sich
+ * selbst — und der wächst je Runde. Sie steht jetzt daneben.
+ */
 function TreeView({ rounds, onOpen }: { rounds: Round[]; onOpen: (match: MatchDetail) => void }) {
-  const PITCH = 60
+  const columns = useMemo(() => withSlots(rounds), [rounds])
 
   return (
-    <div
-      className="md-panel"
-      style={{ overflow: 'auto', padding: 18 }}
-    >
-      <div style={{ display: 'flex', alignItems: 'stretch', minWidth: 1240 }}>
-        {rounds.map((round, index) => {
-          const pitch = PITCH * Math.pow(2, index)
-          return (
-            <div
-              key={round.index}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: pitch - 52,
-                paddingTop: pitch / 2 - 26,
-                flex: '0 0 auto',
-              }}
-            >
-              <div className="md-eyebrow" style={{ marginBottom: 'var(--sp-5)' }}>
-                {round.label}
-              </div>
-              {round.matches.map((match) => (
-                <div key={match.id} style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="md-panel" style={{ overflow: 'auto', padding: 18 }}>
+      <div className="md-bracket__rounds">
+        {columns.map(({ round, inTree, aside }, index) => (
+          <div
+            key={round.index}
+            className="md-bracket__round"
+            style={{ '--pitch': `calc(var(--bracket-pitch) * ${2 ** index})` } as CSSProperties}
+          >
+            <div className="md-eyebrow">{roundLabel(inTree, index)}</div>
+
+            <div className="md-bracket__slots">
+              {inTree.map((match) => (
+                <div key={match.id} className="md-bracket__slot">
                   {index > 0 && (
                     <div
                       className="md-bracket__connector"
-                      style={{ height: PITCH * Math.pow(2, index - 1) }}
+                      style={{ height: `calc(var(--pitch) / 2)` }}
                       aria-hidden="true"
                     />
                   )}
@@ -265,8 +288,17 @@ function TreeView({ rounds, onOpen }: { rounds: Round[]; onOpen: (match: MatchDe
                 </div>
               ))}
             </div>
-          )
-        })}
+
+            {aside.length > 0 && (
+              <div className="md-bracket__aside">
+                <div className="md-eyebrow">{roundLabel(aside, index)}</div>
+                {aside.map((match) => (
+                  <BracketMatch key={match.id} match={match} onOpen={onOpen} />
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )

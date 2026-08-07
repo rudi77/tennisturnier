@@ -11,6 +11,7 @@ import { useWorkspace } from '../state/WorkspaceContext'
 import { tournaments as tournamentApi } from '../api/endpoints'
 import { EntryStatus, TournamentState, type TournamentDetail } from '../api/types'
 import { formatDateRange } from '../lib/time'
+import { registrationUrl } from '../hooks/useRoute'
 import type { ScreenId } from '../components/layout/SideNav'
 
 /**
@@ -221,6 +222,20 @@ function Actions({
               <strong>{accepted.length}</strong> im Feld
               {entries.length !== accepted.length && ` · ${entries.length - accepted.length} offen`}
             </div>
+
+            {/* Der Link steht sichtbar da und nicht nur hinter einem Knopf: wenn
+                der Browser das Kopieren ablehnt — und das tut er öfter als man
+                denkt —, bleibt Markieren und Abtippen der Weg, der immer geht. */}
+            {registration.data && (
+              <input
+                className="md-input"
+                readOnly
+                value={registrationUrl(registration.data.token)}
+                aria-label="Anmeldelink"
+                style={{ width: '100%', fontSize: 'var(--fs-xs)' }}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+            )}
 
             <div className="md-flow__row">
               {registration.data && (

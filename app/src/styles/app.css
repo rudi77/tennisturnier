@@ -481,13 +481,90 @@ body {
   text-align: left;
   font-family: inherit;
   width: 100%;
-  display: block;
+  /* Feste Höhe und zwei gleich hohe Hälften: der Baum rechnet mit dieser
+     Zahl, und ein Name, der eine Zeile mehr braucht, darf die Rechnung nicht
+     verschieben. */
+  height: var(--bracket-card-height);
+  display: flex;
+  flex-direction: column;
+}
+
+.md-bracket__match .md-bracket__side {
+  flex: 1;
+  min-height: 0;
+}
+
+/* --- Der Baum ------------------------------------------------------------ */
+
+.md-bracket__rounds {
+  display: flex;
+  align-items: flex-start;
+  min-width: 1240px;
+}
+
+.md-bracket__round {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Eine Zeile, immer. Bricht eine Überschrift um, ist ihre Spalte höher als
+   die anderen — und der ganze Baum dahinter versetzt. */
+.md-bracket__round .md-eyebrow {
+  white-space: nowrap;
+  margin-bottom: var(--sp-5);
+}
+
+/* Die Karten der Runde, und nur sie.
+   Die Überschrift stand einmal in diesem Behälter — und bekam damit den
+   Abstand zwischen zwei Karten als Abstand zu sich selbst. Der wächst je
+   Runde, also sackte jede Runde weiter ab als die vorige. Genau das war der
+   versetzte Baum. */
+.md-bracket__slots {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--pitch) - var(--bracket-card-height));
+  padding-top: calc(var(--pitch) / 2 - var(--bracket-card-height) / 2);
+}
+
+/* Die Zeile ist genau so hoch wie die Karte — sonst stimmt die Rechnung nicht.
+   Der Bügel ist höher als sie (eine halbe Teilung) und würde die Zeile
+   aufblähen; er hängt deshalb absolut daneben statt im Fluss. Gemessen war
+   das der Rest des Versatzes: vier Pixel je Karte im Viertelfinale, und im
+   Halbfinale vierundachtzig. */
+.md-bracket__slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--bracket-card-height);
+  padding-left: var(--bracket-connector-space);
+}
+
+/* Was in der Runde liegt, aber nicht am Baum hängt — das Spiel um Platz 3.
+   Es folgt aus den Halbfinals und nicht aus dem Finale; auf der Teilung der
+   letzten Runde säße es eine halbe Bildschirmhöhe darunter. */
+.md-bracket__aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  margin-top: var(--sp-8);
 }
 
 .md-bracket__match--running {
   border-color: var(--acc);
   box-shadow: var(--shadow-sm);
 }
+
+/* Ein Freilos ist keine Partie. Gedämpft und ohne Zeiger, damit niemand es
+   für ein Ergebnis hält — der Gegner steht eine Runde weiter, ohne gespielt
+   zu haben, und das ist der Normalfall bei jedem Feld, das keine Zweierpotenz
+   ist. */
+.md-bracket__match--bye {
+  background: var(--surface-muted);
+  border-style: dashed;
+}
+
+.md-bracket__match--bye .md-bracket__side--winner { font-weight: var(--fw-semibold); }
 
 .md-bracket__match--clickable { cursor: pointer; }
 .md-bracket__match--clickable:hover { border-color: var(--blue-400); }
@@ -538,7 +615,15 @@ body {
   border-bottom: 1px solid var(--line-strong);
   border-right: 1px solid var(--line-strong);
   border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
-  margin: 0 var(--sp-5);
+}
+
+/* Im Baum hängt er absolut und mittig an der Karte. Außerhalb — etwa in der
+   Rundenliste — bleibt er ein gewöhnliches Element im Fluss. */
+.md-bracket__slot > .md-bracket__connector {
+  position: absolute;
+  left: var(--sp-5);
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 /* --- Formulare ---------------------------------------------------------- */

@@ -209,6 +209,23 @@ public sealed class EntryImportService : IEntryImportService
     }
 
     /// <summary>
+    /// Eine Namensspalte ist kein Postfach.
+    ///
+    /// Dieselbe Sorte Prüfung wie <see cref="RequireEmailOrNothing"/>, aus
+    /// derselben Sorte Unfall: hier wurde eine Liste in die falsche
+    /// Ausschreibung geladen, und die Spalten verrutschten um zwei.
+    /// </summary>
+    private static void RequireNameNotEmail(string value, string column)
+    {
+        if (value.Contains('@', StringComparison.Ordinal))
+        {
+            throw new DomainException(
+                $"In der Spalte {column} steht „{value}“ und damit kein Name. " +
+                "Stimmt die Spaltenreihenfolge — ist das vielleicht eine Einzelliste?");
+        }
+    }
+
+    /// <summary>
     /// Eine Zeile. Gibt zurück, ob daraus eine neue Meldung entstanden ist —
     /// <c>false</c> heißt: dieselbe Aufstellung steht bereits im Feld.
     /// </summary>
@@ -229,6 +246,15 @@ public sealed class EntryImportService : IEntryImportService
         // Meldung diesen Menschen sucht.
         RequireEmailOrNothing(columns.Email, "E-Mail");
         RequireEmailOrNothing(columns.PartnerEmail, "Partner-E-Mail");
+
+        // Und die Gegenrichtung: eine Einzelliste in einem Doppelturnier schiebt
+        // E-Mail und Telefonnummer in die Partnerspalten. Beide sind gültige
+        // Namen, soweit die Domäne das beurteilen kann — es entstand ein Paar,
+        // dessen zweite Hälfte „anna.reiter@example.invalid“ hieß.
+        RequireNameNotEmail(columns.FirstName, "Vorname");
+        RequireNameNotEmail(columns.LastName, "Nachname");
+        RequireNameNotEmail(columns.PartnerFirstName, "Partner-Vorname");
+        RequireNameNotEmail(columns.PartnerLastName, "Partner-Nachname");
 
         var self = await _participants.ResolveAsync(
             columns.FirstName, columns.LastName, columns.Email, columns.Phone, cancellationToken);
