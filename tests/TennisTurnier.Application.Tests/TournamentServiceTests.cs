@@ -16,6 +16,8 @@ public sealed class TournamentServiceTests
     private readonly InMemoryFormatTemplateRepository _templates;
     private readonly InMemoryPlayerRepository _players = new();
     private readonly InMemoryPhaseRepository _phaseRepository = new();
+    private readonly InMemoryCourtAssignmentRepository _assignments = new();
+    private readonly InMemoryProjectionStore _projections = new();
     private readonly InMemoryRoleAssignmentRepository _roles = new();
     private readonly CountingUnitOfWork _unitOfWork = new();
     private readonly RecordingPublicViewService _publicView = new();
@@ -32,6 +34,9 @@ public sealed class TournamentServiceTests
             _templates,
             _players,
             _roles,
+            _phaseRepository,
+            _assignments,
+            _projections,
             new DrawBuilder(_phaseRepository, _players),
             _publicView,
             _unitOfWork,
@@ -280,6 +285,9 @@ public sealed class TournamentServiceTests
             new InMemoryFormatTemplateRepository(),
             _players,
             _roles,
+            _phaseRepository,
+            _assignments,
+            _projections,
             new DrawBuilder(_phaseRepository, _players),
             _publicView,
             _unitOfWork,

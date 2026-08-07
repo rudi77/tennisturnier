@@ -126,6 +126,12 @@ export const tournaments = {
   start: (id: string) => http.post<void>(`/api/tournaments/${id}/start`),
   complete: (id: string) => http.post<void>(`/api/tournaments/${id}/complete`),
   abandon: (id: string) => http.post<void>(`/api/tournaments/${id}/abandon`),
+
+  /**
+   * Löschen, nicht abbrechen. Der Abbruch beendet und lässt lesbar, was
+   * gespielt wurde; dieses lässt nichts.
+   */
+  remove: (id: string) => http.del<void>(`/api/tournaments/${id}`),
   switchToMatchDay: (id: string) => http.post<void>(`/api/tournaments/${id}/scheduling/match-day`),
   switchToPlanning: (id: string) => http.post<void>(`/api/tournaments/${id}/scheduling/planning`),
 

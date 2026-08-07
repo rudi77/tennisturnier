@@ -120,7 +120,11 @@ export function FlowScreen({ onNavigate }: { onNavigate: (id: ScreenId) => void 
           ))}
         </ol>
 
-        <TournamentActions tournament={tournament} onChanged={reloadTournament} />
+        <TournamentActions
+          tournament={tournament}
+          onChanged={reloadTournament}
+          onDeleted={() => onNavigate('tournaments')}
+        />
       </section>
     </>
   )

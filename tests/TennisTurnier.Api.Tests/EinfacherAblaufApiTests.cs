@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Tournaments;
+using TennisTurnier.Domain.Security;
 using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Api.Tests;
@@ -51,7 +52,7 @@ public sealed class EinfacherAblaufApiTests : IClassFixture<TennisTurnierApiFact
     /// Termin ist eine gewöhnliche Nachricht und kein Sonderfall.
     /// </summary>
     [Fact]
-    public async Task Ein_Termin_lässt_sich_nachtragen_und_wieder_loeschen()
+    public async Task Ein_Termin_lässt_sich_nachtragen_und_wieder_löschen()
     {
         var aufbau = await _factory.NeuesTurnierAsync("ablauf-2", OhneTermin(2, auslosen: false));
         var vorher = await TurnierAsync(aufbau.Admin, aufbau.TournamentId);
@@ -163,6 +164,73 @@ public sealed class EinfacherAblaufApiTests : IClassFixture<TennisTurnierApiFact
 
         Assert.Equal(TournamentState.Abandoned, turnier.State);
         Assert.NotEmpty(turnier.Entries);
+    }
+
+    /// <summary>
+    /// Löschen ist das Gegenteil des Abbruchs: der beendet und lässt lesbar,
+    /// dieses lässt nichts. Auch ein gespieltes Turnier geht — es ist der Weg
+    /// für das, was gar nicht hätte entstehen sollen, und der Probelauf ist
+    /// genau das.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Turnier_lässt_sich_löschen()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync("ablauf-8", OhneTermin(4, auslosen: true));
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await aufbau.Admin.DeleteAsync($"/api/tournaments/{aufbau.TournamentId}")).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await aufbau.Admin.GetAsync($"/api/tournaments/{aufbau.TournamentId}")).StatusCode);
+
+        var meine = await aufbau.Admin.GetFromJsonAsync<List<TournamentSummary>>("/api/tournaments", Json);
+        Assert.DoesNotContain(meine!, t => t.Id == aufbau.TournamentId);
+    }
+
+    /// <summary>
+    /// Was die Datenbank nicht als Abhängigkeit kennt, muss der Anwendungsfall
+    /// räumen: die öffentliche Projektion trägt die Turnierkennung als eigene
+    /// Id und hat keinen Fremdschlüssel. Bliebe sie stehen, wäre das Turnier
+    /// nach dem Löschen öffentlich weiter abrufbar.
+    /// </summary>
+    [Fact]
+    public async Task Nach_dem_Löschen_gibt_es_auch_die_öffentliche_Ansicht_nicht_mehr()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync("ablauf-9", OhneTermin(4, auslosen: true));
+
+        // Die Projektion entsteht mit der Auslosung.
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await aufbau.Admin.GetAsync($"/public/tournaments/{aufbau.TournamentId}")).StatusCode);
+
+        await aufbau.Admin.DeleteAsync($"/api/tournaments/{aufbau.TournamentId}");
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await aufbau.Admin.GetAsync($"/public/tournaments/{aufbau.TournamentId}")).StatusCode);
+    }
+
+    /// <summary>
+    /// Ergebnisse eintragen heißt nicht, das Turnier abschaffen zu dürfen.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Schiedsrichter_loescht_kein_Turnier()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync("ablauf-10", OhneTermin(2, auslosen: false));
+
+        var referee = $"referee-{Guid.NewGuid():N}";
+        await _factory.GrantAsync(referee, Role.Referee, ResourceScope.Tournament(aufbau.TournamentId));
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await _factory.CreateClientAs(referee)
+                .DeleteAsync($"/api/tournaments/{aufbau.TournamentId}")).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await aufbau.Admin.GetAsync($"/api/tournaments/{aufbau.TournamentId}")).StatusCode);
     }
 
     /// <summary>

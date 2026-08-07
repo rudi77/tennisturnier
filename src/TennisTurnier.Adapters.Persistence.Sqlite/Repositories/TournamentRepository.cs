@@ -48,6 +48,8 @@ public sealed class TournamentRepository : ITournamentRepository
             .FirstOrDefaultAsync(t => t.Registration.Token == token, cancellationToken);
 
     public void Add(Tournament tournament) => _db.Tournaments.Add(tournament);
+
+    public void Remove(Tournament tournament) => _db.Tournaments.Remove(tournament);
 }
 
 public sealed class FormatTemplateRepository : IFormatTemplateRepository

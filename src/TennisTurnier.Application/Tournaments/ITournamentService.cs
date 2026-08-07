@@ -81,6 +81,16 @@ public interface ITournamentService
 
     Task AbandonAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Löscht ein Turnier mit allem, was daran hängt.
+    ///
+    /// Der Unterschied zum Abbruch ist der Zweck: <see cref="AbandonAsync"/>
+    /// beendet ein Turnier und lässt lesbar, was gespielt wurde. Löschen
+    /// lässt nichts. Es ist der Weg für das, was gar nicht hätte entstehen
+    /// sollen — der Probelauf, der Tippfehler, das doppelt angelegte Turnier.
+    /// </summary>
+    Task DeleteAsync(Guid tournamentId, CancellationToken cancellationToken = default);
+
     Task SwitchToMatchDayAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
     Task SwitchToPlanningAsync(Guid tournamentId, CancellationToken cancellationToken = default);

@@ -46,6 +46,16 @@ internal static class TournamentEndpoints
             return Results.NoContent();
         });
 
+        // Eigener Verb-Endpunkt und kein Zustandsübergang: Löschen ist keine
+        // Station im Lebenszyklus, sondern sein Ende ohne Spur. Der Abbruch
+        // daneben ist das Gegenteil — er beendet und lässt lesbar.
+        tournaments.MapDelete("/", async (
+            Guid tournamentId, ITournamentService service, CancellationToken ct) =>
+        {
+            await service.DeleteAsync(tournamentId, ct);
+            return Results.NoContent();
+        });
+
         MapTransitions(tournaments);
         MapEntries(tournaments);
         MapCourts(tournaments);

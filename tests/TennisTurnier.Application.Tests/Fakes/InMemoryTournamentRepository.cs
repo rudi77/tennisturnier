@@ -43,6 +43,8 @@ public sealed class InMemoryTournamentRepository : ITournamentRepository
 
     public void Add(Tournament tournament) => _tournaments[tournament.Id] = tournament;
 
+    public void Remove(Tournament tournament) => _tournaments.Remove(tournament.Id);
+
     private IEnumerable<Tournament> Visible()
     {
         var user = _userContext.Current;

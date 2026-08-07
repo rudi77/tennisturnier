@@ -14,6 +14,9 @@ public sealed class TournamentService : ITournamentService
     private readonly IFormatTemplateRepository _templates;
     private readonly IPlayerRepository _players;
     private readonly IRoleAssignmentRepository _roles;
+    private readonly IPhaseRepository _phases;
+    private readonly ICourtAssignmentRepository _assignments;
+    private readonly ITournamentProjectionStore _projections;
     private readonly DrawBuilder _drawBuilder;
     private readonly IPublicViewService _publicView;
     private readonly IUnitOfWork _unitOfWork;
@@ -24,6 +27,9 @@ public sealed class TournamentService : ITournamentService
         IFormatTemplateRepository templates,
         IPlayerRepository players,
         IRoleAssignmentRepository roles,
+        IPhaseRepository phases,
+        ICourtAssignmentRepository assignments,
+        ITournamentProjectionStore projections,
         DrawBuilder drawBuilder,
         IPublicViewService publicView,
         IUnitOfWork unitOfWork,
@@ -33,6 +39,9 @@ public sealed class TournamentService : ITournamentService
         _templates = templates;
         _players = players;
         _roles = roles;
+        _phases = phases;
+        _assignments = assignments;
+        _projections = projections;
         _drawBuilder = drawBuilder;
         _publicView = publicView;
         _unitOfWork = unitOfWork;
@@ -388,6 +397,54 @@ public sealed class TournamentService : ITournamentService
 
     public Task AbandonAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
         MutateAsync(tournamentId, t => t.Abandon(), cancellationToken);
+
+    /// <summary>
+    /// Löscht ein Turnier mit allem, was daran hängt.
+    ///
+    /// Die Reihenfolge ist keine Geschmacksfrage. Platzzuweisungen zeigen mit
+    /// Restrict auf ihren Platz — käme die Kaskade des Turniers zuerst an die
+    /// Plätze, scheiterte die Löschung an einem Fremdschluessel, den niemand
+    /// erwartet hat. Sie gehen deshalb zuerst.
+    ///
+    /// Drei Dinge kennt die Datenbank überhaupt nicht als Abhängigkeit: die
+    /// öffentliche Projektion trägt die Turnierkennung als eigene Id und hat
+    /// keinen Fremdschluessel, und eine Rolle am Turnier steht in einem
+    /// Wertobjekt aus Typ und Kennung. Beides bliebe stehen und zeigte ins
+    /// Leere — die Rollen sogar sichtbar, denn sie erscheinen weiter in der
+    /// Auskunft über den Benutzer.
+    ///
+    /// Was bleibt, sind Spieler: sie existieren turnierübergreifend (ADR-0008)
+    /// und gehören keinem Turnier. Ihre Teilnehmer bleiben ebenfalls stehen —
+    /// ein Teilnehmer kann von einer Meldung eines anderen Turniers benutzt
+    /// werden, und ihn hier zu löschen hieße, das nicht zu prüfen. Sie sind
+    /// danach unerreichbar; das ist als offener Punkt notiert und keine stille
+    /// Annahme.
+    /// </summary>
+    public async Task DeleteAsync(Guid tournamentId, CancellationToken cancellationToken = default)
+    {
+        var tournament = await LoadForManagement(tournamentId, cancellationToken);
+
+        foreach (var assignment in await _assignments.ListByTournamentAsync(tournamentId, cancellationToken))
+        {
+            _assignments.Remove(assignment);
+        }
+
+        _phases.RemoveRange(await _phases.ListByTournamentAsync(tournamentId, cancellationToken));
+
+        if (await _projections.FindAsync(tournamentId, cancellationToken) is { } projection)
+        {
+            _projections.Remove(projection);
+        }
+
+        foreach (var role in await _roles.ListByTournamentAsync(tournamentId, cancellationToken))
+        {
+            _roles.Remove(role);
+        }
+
+        _tournaments.Remove(tournament);
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
 
     public Task SwitchToMatchDayAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
         MutateAsync(tournamentId, t => t.SwitchToMatchDay(), cancellationToken);

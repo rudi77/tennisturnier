@@ -31,6 +31,15 @@ public interface ITournamentRepository
         CancellationToken cancellationToken = default);
 
     void Add(Tournament tournament);
+
+    /// <summary>
+    /// Entfernt ein Turnier. Plätze, Platzzeiten und Meldungen gehen per
+    /// Kaskade mit; was an eigenen Aggregaten daran hängt — Phasen,
+    /// Platzzuweisungen, die öffentliche Projektion und die Rollen an diesem
+    /// Turnier — räumt der Anwendungsfall, weil die Datenbank es teils nicht
+    /// weiß und teils in der falschen Reihenfolge täte.
+    /// </summary>
+    void Remove(Tournament tournament);
 }
 
 /// <summary>
