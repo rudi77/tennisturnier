@@ -5,8 +5,12 @@
      Drifting them apart draws availability at the wrong time of day. */
   --px-per-hour: 90px;
   --gantt-hour-line: #eef1f6;
-  --gantt-day-start: 9;   /* 09:00 — row 0 of the grid */
-  --gantt-day-hours: 12;  /* 09:00–21:00 */
+
+  /* No day-start/day-hours here on purpose: which slice of the day the grid
+     shows is derived from the booked court windows and the cards themselves
+     (see GanttBoard.dayRange). A fixed 09:00 start clipped every match a
+     tournament had scheduled before it — off the top edge, behind the court
+     header, with nothing to scroll to. */
 
   /* Default duration estimates (minutes) used before a match has a history. */
   --est-best-of-3: 75;

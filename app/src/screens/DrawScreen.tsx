@@ -218,7 +218,15 @@ export function DrawScreen() {
           } · ${timeZone}`}
           nextRoundName={nextRoundName}
           onClose={() => setEditing(null)}
-          onSaved={phases.reload}
+          // Auch das Turnier neu laden, nicht nur das Bracket: sein Zustand
+          // folgt aus den Ergebnissen. Das erste macht aus einem ausgelosten
+          // ein laufendes Turnier, das letzte aus einem laufenden ein
+          // abgeschlossenes. Ohne diesen Aufruf stand das Finale eingetragen
+          // im Baum, während der Ablauf weiter auf „Spielen" zeigte — der
+          // Server war weiter, die Oberfläche hielt eine Kopie von vorher.
+          onSaved={async () => {
+            await Promise.all([phases.reload(), reloadTournament()])
+          }}
         />
       )}
     </>

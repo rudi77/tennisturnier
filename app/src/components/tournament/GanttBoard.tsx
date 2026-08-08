@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AssignmentStatus,
   type CourtDetail,
@@ -8,10 +8,16 @@ import { courtMeta, sideName } from '../../lib/labels'
 import { dateKey, formatClock, minutesOfDay, timeSpanToMinutes } from '../../lib/time'
 import { TimeLabel } from './TimeLabel'
 
-/** Das Raster: 09:00–21:00, wie tokens/scheduling.css es festlegt. */
-const DAY_START_HOUR = 9
-const DAY_HOURS = 12
+/** Das Raster, solange nichts anderes bekannt ist: 09:00–21:00. */
+const DEFAULT_START_HOUR = 9
+const DEFAULT_END_HOUR = 21
 const PX_PER_HOUR = 90
+
+/** Unter zwei Stunden ist das Raster keine Zeitachse mehr, sondern ein Streifen. */
+const MIN_HOURS = 2
+
+/** Voreinstellung für eine Dauer, die niemand geschätzt hat. */
+const DEFAULT_DURATION_MINUTES = 75
 
 export interface ScheduledMatch {
   match: MatchDetail
@@ -19,16 +25,90 @@ export interface ScheduledMatch {
   courtId: string
 }
 
-function topFor(minutes: number): number {
-  return ((minutes - DAY_START_HOUR * 60) / 60) * PX_PER_HOUR
+/** Der gezeigte Ausschnitt des Tages, in ganzen Stunden. */
+interface DayRange {
+  startHour: number
+  endHour: number
+}
+
+function topFor(minutes: number, range: DayRange): number {
+  return ((minutes - range.startHour * 60) / 60) * PX_PER_HOUR
+}
+
+function laneHeight(range: DayRange): number {
+  return (range.endHour - range.startHour) * PX_PER_HOUR
+}
+
+/** Anfang und Ende einer Karte in Minuten seit Mitternacht, oder null ohne Uhrzeit. */
+function span(entry: ScheduledMatch, timeZone: string): { from: number; to: number } | null {
+  const assignment = entry.match.assignment
+  if (!assignment) return null
+
+  const from = minutesOfDay(
+    assignment.actualStart ?? assignment.plannedStart ?? assignment.earliestStart,
+    timeZone,
+  )
+  if (from === null) return null
+
+  return {
+    from,
+    to: from + (timeSpanToMinutes(assignment.estimatedDuration) || DEFAULT_DURATION_MINUTES),
+  }
+}
+
+/**
+ * Welchen Ausschnitt des Tages das Raster zeigt.
+ *
+ * Abgeleitet und nicht festgelegt. Hier standen 09:00–21:00 als Konstanten, und
+ * ein Turnier, dessen Plätze ab 08:00 gebucht sind, zeichnete seine ersten
+ * Matches mit negativem Abstand nach oben: sie lagen über der Platzzeile,
+ * verdeckten die Platznamen und wurden am oberen Rand abgeschnitten. Es war
+ * nichts verloren — es war nur nicht zu sehen, und zwar genau das, was zuerst
+ * gespielt wird.
+ *
+ * Maßgeblich sind die gebuchten Platzzeiten *und* die Karten. Die Karten
+ * deshalb, weil eine Ansetzung von Hand ausdrücklich außerhalb der Platzzeiten
+ * liegen darf — sie fällt dann als Verstoß auf und muss dafür sichtbar sein.
+ */
+function dayRange(
+  courts: CourtDetail[],
+  scheduled: ScheduledMatch[],
+  day: string,
+  timeZone: string,
+): DayRange {
+  const marks: number[] = []
+
+  for (const court of courts) {
+    for (const window of court.windows) {
+      if (dateKey(window.from, timeZone) !== day) continue
+      const from = minutesOfDay(window.from, timeZone)
+      const to = minutesOfDay(window.to, timeZone)
+      if (from !== null) marks.push(from)
+      // Ein Fenster bis Mitternacht endet als 00:00 des Folgetags.
+      if (to !== null) marks.push(to === 0 ? 24 * 60 : to)
+    }
+  }
+
+  for (const entry of scheduled) {
+    const range = span(entry, timeZone)
+    if (range) marks.push(range.from, range.to)
+  }
+
+  if (marks.length === 0) return { startHour: DEFAULT_START_HOUR, endHour: DEFAULT_END_HOUR }
+
+  const startHour = Math.min(24 - MIN_HOURS, Math.max(0, Math.floor(Math.min(...marks) / 60)))
+  const endHour = Math.min(24, Math.max(Math.ceil(Math.max(...marks) / 60), startHour + MIN_HOURS))
+
+  return { startHour, endHour }
 }
 
 /**
  * Der Spielplan im Planungsmodus.
  *
  * Alles, was hier absolut positioniert wird — Karten, geschlossene Zeiten, die Stundenspalte
- * und die Hintergrundstreifen —, leitet sich aus derselben Zahl ab. Driften sie
- * auseinander, zeichnet das Raster Verfügbarkeit zur falschen Tageszeit.
+ * und die Hintergrundstreifen —, leitet sich aus derselben Zahl und demselben
+ * `DayRange` ab. Driften sie auseinander, zeichnet das Raster Verfügbarkeit zur
+ * falschen Tageszeit.
  *
  * Die Uhrzeit auf einer Karte ist eine Schätzung, solange keine Zusage
  * hinterlegt ist. Deshalb steht dort `TimeLabel` und keine formatierte Zahl.
@@ -52,7 +132,15 @@ export function GanttBoard({
   const [dragId, setDragId] = useState<string | null>(null)
   const [overCourt, setOverCourt] = useState<string | null>(null)
 
-  const hours = Array.from({ length: DAY_HOURS }, (_, index) => DAY_START_HOUR + index)
+  const range = useMemo(
+    () => dayRange(courts, scheduled, day, timeZone),
+    [courts, scheduled, day, timeZone],
+  )
+
+  const hours = Array.from(
+    { length: range.endHour - range.startHour },
+    (_, index) => range.startHour + index,
+  )
 
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 'var(--sp-4)' }}>
@@ -94,7 +182,7 @@ export function GanttBoard({
 
         {courts.map((court) => {
           const cards = scheduled.filter((entry) => entry.courtId === court.id)
-          const closed = closedRanges(court, day, timeZone)
+          const closed = closedRanges(court, day, timeZone, range)
 
           return (
             <div
@@ -153,15 +241,16 @@ export function GanttBoard({
                 </div>
               </div>
 
-              <div className="md-gantt__lane" style={{ height: DAY_HOURS * PX_PER_HOUR }}>
-                {closed.map((range) => (
-                  <Closed key={`${range.from}-${range.to}`} from={range.from} to={range.to} />
+              <div className="md-gantt__lane" style={{ height: laneHeight(range) }}>
+                {closed.map((gap) => (
+                  <Closed key={`${gap.from}-${gap.to}`} from={gap.from} to={gap.to} range={range} />
                 ))}
                 {cards.map((entry) => (
                   <Card
                     key={entry.match.id}
                     entry={entry}
                     timeZone={timeZone}
+                    range={range}
                     onDragStart={() => setDragId(entry.match.id)}
                     onOpen={() => onOpenResult(entry.match)}
                   />
@@ -189,17 +278,18 @@ function closedRanges(
   court: CourtDetail,
   day: string,
   timeZone: string,
+  range: DayRange,
 ): { from: number; to: number }[] {
   const open = court.windows
     .map((window) => ({
       from: dateKey(window.from, timeZone) === day ? minutesOfDay(window.from, timeZone) : null,
       to: dateKey(window.from, timeZone) === day ? minutesOfDay(window.to, timeZone) : null,
     }))
-    .filter((range): range is { from: number; to: number } => range.from !== null && range.to !== null)
+    .filter((entry): entry is { from: number; to: number } => entry.from !== null && entry.to !== null)
     .sort((a, b) => a.from - b.from)
 
-  const dayStart = DAY_START_HOUR * 60
-  const dayEnd = (DAY_START_HOUR + DAY_HOURS) * 60
+  const dayStart = range.startHour * 60
+  const dayEnd = range.endHour * 60
 
   // Kein Fenster an diesem Tag heißt: der ganze Tag ist zu. Das ist der
   // Normalfall eines Turniers, dessen Plätze noch nicht gebucht sind — und es
@@ -219,11 +309,11 @@ function closedRanges(
   return gaps.filter((gap) => gap.to > gap.from)
 }
 
-function Closed({ from, to }: { from: number; to: number }) {
+function Closed({ from, to, range }: { from: number; to: number; range: DayRange }) {
   return (
     <div
       className="md-gantt__block"
-      style={{ top: topFor(from), height: ((to - from) / 60) * PX_PER_HOUR }}
+      style={{ top: topFor(from, range), height: ((to - from) / 60) * PX_PER_HOUR }}
       title="Der Platz steht dem Turnier zu dieser Zeit nicht zur Verfügung."
     >
       keine Platzzeit
@@ -234,11 +324,13 @@ function Closed({ from, to }: { from: number; to: number }) {
 function Card({
   entry,
   timeZone,
+  range,
   onDragStart,
   onOpen,
 }: {
   entry: ScheduledMatch
   timeZone: string
+  range: DayRange
   onDragStart: () => void
   onOpen: () => void
 }) {
@@ -249,12 +341,20 @@ function Card({
   const running = assignment.status === AssignmentStatus.Running
   const called = assignment.status === AssignmentStatus.Called
 
-  const startIso = assignment.actualStart ?? assignment.plannedStart ?? assignment.earliestStart
-  const startMinutes = minutesOfDay(startIso, timeZone)
-  if (startMinutes === null) return null
+  const minutes = span(entry, timeZone)
+  if (!minutes) return null
 
-  const durationMinutes = timeSpanToMinutes(assignment.estimatedDuration) || 75
-  const height = Math.max(74, (durationMinutes / 60) * PX_PER_HOUR - 5)
+  const durationMinutes = minutes.to - minutes.from
+
+  // Auf das Raster begrenzt: eine Karte, die über Mitternacht hinausliefe,
+  // stünde sonst unter der letzten Stundenzeile und würde vom Rahmen
+  // abgeschnitten. Sie ist dann kürzer gezeichnet als geschätzt — sichtbar
+  // falsch ist besser als unsichtbar richtig.
+  const top = topFor(minutes.from, range)
+  const height = Math.min(
+    Math.max(74, (durationMinutes / 60) * PX_PER_HOUR - 5),
+    laneHeight(range) - top,
+  )
 
   const className = `md-gantt__card${running ? ' md-gantt__card--running' : called ? ' md-gantt__card--called' : ''}`
 
@@ -272,7 +372,7 @@ function Card({
           onOpen()
         }
       }}
-      style={{ top: topFor(startMinutes), height }}
+      style={{ top, height }}
       title={`${sideName(match.side1.participantName, match.side1.origin)} vs ${sideName(
         match.side2.participantName,
         match.side2.origin,

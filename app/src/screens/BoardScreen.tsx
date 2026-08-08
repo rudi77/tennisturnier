@@ -461,7 +461,11 @@ export function BoardScreen() {
           )} min`}
           nextRoundName={nextRoundName}
           onClose={() => setEditing(null)}
-          onSaved={reloadAll}
+          // Wie im Draw-Screen: der Turnierzustand folgt aus den Ergebnissen,
+          // und der Kopf dieser Seite zeigt ihn an.
+          onSaved={async () => {
+            await Promise.all([reloadAll(), reloadTournament()])
+          }}
         />
       )}
     </>
