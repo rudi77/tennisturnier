@@ -11,7 +11,7 @@ import { useWorkspace } from '../state/WorkspaceContext'
 import { tournaments as tournamentApi } from '../api/endpoints'
 import { EntryStatus, TournamentState, type TournamentDetail } from '../api/types'
 import { formatDateRange } from '../lib/time'
-import { registrationUrl } from '../hooks/useRoute'
+import { publicUrl, registrationUrl } from '../hooks/useRoute'
 import type { ScreenId } from '../components/layout/SideNav'
 
 /**
@@ -243,7 +243,13 @@ function Actions({
 
             <div className="md-flow__row">
               {registration.data && (
-                <ShareLink token={registration.data.token} tournamentName={tournament.name} />
+                <ShareLink
+                  url={registrationUrl(registration.data.token)}
+                  label="Link kopieren"
+                  shareTitle={tournament.name}
+                  shareText={`Melde dich zu „${tournament.name}" an:`}
+                  copiedMessage="Anmeldelink kopiert"
+                />
               )}
               <button type="button" className="md-btn" onClick={() => onNavigate('entries')}>
                 Meldungen verwalten
@@ -328,6 +334,8 @@ function Actions({
             {tournament.state === TournamentState.DrawGenerated ? 'Bracket ansehen' : 'Ergebnisse erfassen'}
           </button>
         </div>
+
+        <SpectatorLink tournament={tournament} />
       </div>
     )
   }
@@ -345,6 +353,54 @@ function Actions({
         <button type="button" className="md-btn" onClick={() => onNavigate('public')}>
           Live-Ansicht
         </button>
+      </div>
+
+      <SpectatorLink tournament={tournament} />
+    </div>
+  )
+}
+
+/**
+ * Der Link für alle anderen.
+ *
+ * Er steht erst ab dem Draw, weil es vorher nichts zu sehen gibt: die
+ * Projektion entsteht mit der Auslosung, und ein Link, der auf „noch keine
+ * öffentliche Ansicht" führt, wäre ein Versprechen, das die Turnierleitung
+ * einlösen müsste. Anders als der Anmeldelink braucht er kein Token — die
+ * Turnier-Id genügt, und mehr als Namen, Ergebnisse und Zeiten gibt die
+ * Projektion ohnehin nicht her.
+ */
+function SpectatorLink({ tournament }: { tournament: TournamentDetail }) {
+  const url = publicUrl(tournament.id)
+
+  return (
+    <div style={{ marginTop: 'var(--sp-8)' }}>
+      <div className="md-eyebrow" style={{ marginBottom: 'var(--sp-4)' }}>
+        Zuschauer
+      </div>
+      <div className="md-hint" style={{ marginBottom: 'var(--sp-5)' }}>
+        Wer diesen Link hat, sieht Bracket, Tabellen, Ergebnisse und die Plätze — live, ohne Konto,
+        am Handy wie am Bildschirm.
+      </div>
+
+      <input
+        className="md-input"
+        readOnly
+        value={url}
+        aria-label="Link zur Live-Ansicht"
+        style={{ width: '100%', fontSize: 'var(--fs-xs)' }}
+        onFocus={(event) => event.currentTarget.select()}
+      />
+
+      <div className="md-flow__row" style={{ marginTop: 'var(--sp-5)' }}>
+        <ShareLink
+          url={url}
+          label="Zuschauerlink kopieren"
+          shareTitle={tournament.name}
+          shareText={`Live dabei bei „${tournament.name}":`}
+          copiedMessage="Zuschauerlink kopiert"
+          className="md-btn"
+        />
       </div>
     </div>
   )

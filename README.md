@@ -178,6 +178,27 @@ Verbotsliste — sonst rutscht das erste zusätzliche Feld unbemerkt hinaus.
 Vor der Auslosung gibt es keine öffentliche Ansicht, und eine zurückgenommene
 Auslosung lässt sie wieder verschwinden.
 
+### Zuschauen
+
+Zusehen darf jeder, der den Link hat: `?t=<turnier-id>` führt ohne Konto direkt
+auf die Zuschauerseite — kein Login davor, keine Navigation daneben, die
+ohnehin nur in eine Anmeldemaske führte. Die Turnierleitung findet den Link im
+Ablauf, sobald ausgelost ist, zum Kopieren und zum Teilen; anders als der
+Anmeldelink trägt er kein Token, weil es an dieser Antwort nichts zu schützen
+gibt.
+
+Die Seite ist nach den Fragen geteilt, mit denen jemand herkommt, und nicht
+nach den Datenstrukturen der Antwort: was jetzt am Platz läuft und was als
+Nächstes kommt, der vollständige Draw, die Tabellen, alle Ergebnisse, und was
+auf jedem Platz los ist. Am Handy stehen die Reiter unten am Rand, wo der
+Daumen ist, die Runden untereinander statt nebeneinander und die Tabelle ohne
+Satz- und Spielverhältnis — am Bildschirm dieselbe Seite in Spalten. Ein
+eigener Aushangmodus für den Monitor im Vereinsheim steht daneben
+(`&kiosk=1`): aus vier Metern lesbar, ohne Bedienung.
+
+Ein Turnier lässt sich nicht suchen — es gibt keinen öffentlichen Index. Wer
+den Link nicht hat, findet es nicht, und das ist die Absicht.
+
 ## Turnierformate
 
 Ein Turniermodus ist eine geordnete Folge von Phasen. „Gruppenphase mit

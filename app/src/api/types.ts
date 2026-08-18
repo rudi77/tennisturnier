@@ -647,6 +647,14 @@ export interface PublicTournamentView {
   name: string
   /** Der Name der Anlage. Mehr vom Ort steht bewusst nicht darin. */
   venueName: string
+  /**
+   * Die Zone, in der die Zeiten dieser Antwort zu lesen sind.
+   *
+   * Nullable, obwohl die Projektion sie immer schreibt: ein Stand, der vor
+   * dieser Erweiterung gebaut wurde, liegt gespeichert vor und wird erst beim
+   * nächsten Anlass neu gebaut. Bis dahin fehlt das Feld.
+   */
+  timeZoneId: string | null
   startsOn: string | null
   endsOn: string | null
   state: PublicTournamentState

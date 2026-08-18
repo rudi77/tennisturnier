@@ -33,6 +33,5 @@
   /* Platz links der Karte für den Verbindungsbügel: seine Breite plus der
      Abstand auf beiden Seiten. */
   --bracket-connector-space: 34px;
-  --phone-width: 392px;
   --hit-target: 44px;               /* never smaller on court-side controls */
 }

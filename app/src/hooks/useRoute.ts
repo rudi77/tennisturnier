@@ -54,6 +54,18 @@ export function registrationUrl(token: string): string {
 }
 
 /**
+ * Die Adresse, unter der jeder ohne Konto diesem Turnier zusehen kann.
+ *
+ * Derselbe Parameter, den `read()` als gewähltes Turnier liest — angemeldet
+ * wählt er aus, ohne Anmeldung ist er die ganze Auskunft. Das ist Absicht: der
+ * Link, den die Turnierleitung in die WhatsApp-Gruppe stellt, ist damit
+ * derselbe, den sie selbst in der Adresszeile stehen hat.
+ */
+export function publicUrl(tournamentId: string): string {
+  return `${window.location.origin}${window.location.pathname}?t=${encodeURIComponent(tournamentId)}`
+}
+
+/**
  * Liest die Adresszeile und schreibt sie zurück.
  *
  * `navigate` ersetzt nur die genannten Parameter; was nicht genannt ist, bleibt

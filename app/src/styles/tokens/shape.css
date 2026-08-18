@@ -5,7 +5,6 @@
   --radius-md: 8px;     /* match cards, queue cards */
   --radius-lg: 10px;    /* panels, court columns */
   --radius-xl: 12px;    /* modal, kiosk canvas */
-  --radius-phone: 38px; /* device shell */
   --radius-pill: 9999px;
 
   --border: 1px solid var(--line);
@@ -17,7 +16,6 @@
   --shadow-md: 0 4px 12px rgba(0, 27, 72, 0.10);
   --shadow-panel: 0 12px 32px rgba(0, 27, 72, 0.08);
   --shadow-modal: 0 24px 60px rgba(0, 27, 72, 0.30);
-  --shadow-phone: 0 18px 50px rgba(0, 27, 72, 0.22);
 
   --scrim: rgba(0, 27, 72, 0.42);
   --header-blur: blur(10px) saturate(140%);

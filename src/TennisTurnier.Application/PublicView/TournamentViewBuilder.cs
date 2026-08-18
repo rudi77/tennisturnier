@@ -47,6 +47,7 @@ public static class TournamentViewBuilder
             tournament.Id,
             tournament.Name,
             tournament.Venue.Name,
+            tournament.Venue.TimeZoneId,
             tournament.StartsOn,
             tournament.EndsOn,
             tournament.State,

@@ -23,10 +23,20 @@ namespace TennisTurnier.Application.PublicView;
 /// ausrichtende Verein; sie steht jetzt am Turnier selbst — mehr als ihr Name
 /// gehört auch weiterhin nicht in eine öffentliche Antwort.
 /// </param>
+/// <param name="TimeZoneId">
+/// Die Zone, in der die Zeiten dieser Antwort zu lesen sind. Sie steht darin,
+/// weil die Antwort sonst unvollständig ist: alle Zeiten sind UTC, und ein
+/// Zuschauer ohne Anmeldung hat keine zweite Quelle für die Zone der Anlage —
+/// seine eigene ist es gerade nicht, sonst stünde am Handy eines Angereisten
+/// eine andere Uhrzeit als am Aushang.
+///
+/// Verraten wird damit nichts, was der Name der Anlage nicht schon sagt.
+/// </param>
 public sealed record PublicTournamentView(
     Guid Id,
     string Name,
     string VenueName,
+    string TimeZoneId,
     DateOnly? StartsOn,
     DateOnly? EndsOn,
     TournamentState State,

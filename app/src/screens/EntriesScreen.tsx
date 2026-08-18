@@ -235,7 +235,14 @@ function LinkPanel({
           style={{ flex: '1 1 260px' }}
           onFocus={(event) => event.currentTarget.select()}
         />
-        <ShareLink token={detail.token} tournamentName={tournamentName} className="md-btn" />
+        <ShareLink
+          url={url}
+          label="Link kopieren"
+          shareTitle={tournamentName}
+          shareText={`Melde dich zu „${tournamentName}" an:`}
+          copiedMessage="Anmeldelink kopiert"
+          className="md-btn"
+        />
         <button type="button" className="md-btn" disabled={busy} onClick={() => void rotate()}>
           Erneuern
         </button>

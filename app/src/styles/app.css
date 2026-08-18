@@ -688,16 +688,403 @@ body {
   outline-offset: 2px;
 }
 
-/* --- Live-Ansicht ------------------------------------------------------- */
+/* --- Zuschauer-Ansicht --------------------------------------------------- */
 
-.md-phone {
-  width: var(--phone-width);
-  max-width: 100%;
-  flex: none;
+/* Die Seite für alle anderen. Sie ist die einzige, die jemand am Handy im
+   Stehen liest, während er auf den Platz wartet — deshalb ist die Schrift hier
+   größer als im Arbeitsbereich und die Trefferfläche nie kleiner als der
+   Daumen. Am Schreibtisch wird daraus dieselbe Seite in mehreren Spalten; ein
+   zweites Layout gäbe es sonst zweimal zu pflegen. */
+.md-public {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.md-public--standalone {
+  min-height: 100vh;
+  background: var(--page);
+}
+
+/* Der Kopf bleibt stehen: das Turnier, um das es geht, ist die Auskunft, die
+   beim Scrollen nicht verlorengehen darf. */
+.md-public__bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--gutter-page);
   background: var(--court-950);
-  border-radius: var(--radius-phone);
-  padding: 11px;
-  box-shadow: var(--shadow-phone);
+  color: var(--fg-on-dark);
+}
+
+.md-public__title {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-public__meta {
+  font-size: var(--fs-xs);
+  color: var(--fg-on-dark-2);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-public__status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex: none;
+  font-size: var(--fs-sm);
+  color: var(--fg-on-dark-2);
+}
+
+.md-public__bar-actions {
+  display: flex;
+  gap: var(--sp-4);
+  flex: none;
+}
+
+/* Knöpfe auf dunklem Grund. Die Leiste bestimmt das Aussehen dessen, was in
+   ihr steht — sonst müsste jeder Aufrufer daran denken, und der eine, der es
+   vergisst, schlägt mit einer weißen Fläche ein Loch hinein. */
+.md-public__bar .md-btn {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--fg-on-dark);
+}
+
+.md-public__bar .md-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  filter: none;
+}
+
+.md-public__body {
+  padding: var(--sp-8) var(--gutter-page) var(--sp-20);
+}
+
+/* Im angemeldeten Bereich steht der Inhalt schon in einer .md-section — sonst
+   säße der Abstand zweimal. */
+.md-public .md-section > .md-public__body { padding: 0; }
+
+.md-public__tools {
+  display: flex;
+  gap: var(--sp-6);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-8);
+}
+
+.md-public__section { margin-bottom: var(--sp-16); }
+
+.md-public__section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-5);
+  margin-bottom: var(--sp-6);
+}
+
+.md-public__section-title {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  margin: 0;
+}
+
+.md-public__section-count { font-size: var(--fs-xs); color: var(--fg-3); }
+
+/* Die Reiter. Am Schreibtisch stehen sie unter dem Kopf, am Handy unten am
+   Rand, wo der Daumen ist — dieselbe Entscheidung wie bei der Navigation des
+   Arbeitsbereichs, und aus demselben Grund. */
+.md-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  overflow-x: auto;
+  background: var(--surface);
+  border-bottom: var(--border);
+  padding: 0 var(--gutter-page);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.md-public--standalone .md-tabs { top: 62px; }
+
+.md-tabs__item {
+  flex: 0 0 auto;
+  min-height: var(--hit-target);
+  padding: var(--sp-5) var(--sp-7);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-family: inherit;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  color: var(--fg-3);
+  cursor: pointer;
+}
+
+.md-tabs__item[aria-current="page"] {
+  color: var(--fg);
+  border-bottom-color: var(--acc);
+}
+
+/* Karten, die sich selbst umbrechen: eine Spalte am Handy, so viele wie
+   passen am Bildschirm. */
+.md-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: var(--sp-6);
+}
+
+.md-live-card {
+  background: var(--surface);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-7);
+}
+
+.md-live-card--running {
+  border-color: var(--acc);
+  box-shadow: var(--shadow-sm);
+}
+
+.md-live-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+}
+
+.md-live-card__court {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.md-live-card__label {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-live-card__side {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-5);
+  padding: var(--sp-3) 0;
+  font-size: 14px;
+  font-weight: var(--fw-semibold);
+}
+
+.md-live-card__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-live-card__foot {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--fs-xs);
+  color: var(--fg-2);
+  line-height: var(--lh-normal);
+}
+
+/* Die Warteschlange eines Platzes. Die Nummer ist die Aussage, die Uhrzeit
+   daneben nur eine Schätzung (ADR-0002). */
+.md-queue-list {
+  list-style: none;
+  margin: var(--sp-5) 0 0;
+  padding: var(--sp-5) 0 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.md-queue-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) 0;
+  font-size: var(--fs-sm);
+}
+
+.md-queue-list__no { flex: none; color: var(--fg-3); width: 18px; }
+
+.md-queue-list__pair {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Zeilen: Ansetzungen und Ergebnisse. Eine Liste und keine Tabelle — es gibt
+   nichts zu vergleichen, was in Spalten stünde. */
+.md-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.md-rows__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-7);
+  min-height: var(--hit-target);
+}
+
+.md-rows__row:not(:last-child) { border-bottom: 1px solid var(--line-hairline); }
+
+.md-rows__lead { flex: none; width: 62px; }
+
+.md-rows__court {
+  font-size: var(--fs-micro);
+  color: var(--fg-3);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-rows__main { flex: 1; min-width: 0; }
+
+.md-rows__pair {
+  font-size: 13.5px;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+}
+
+.md-rows__meta { font-size: var(--fs-xs); color: var(--fg-3); margin-top: 2px; }
+
+.md-rows__score {
+  flex: none;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tabellen. Die Zahlen rechtsbündig und in der Ziffernschrift, damit Spalten
+   von Ranglisten untereinander stehen. */
+.md-tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-8);
+  align-items: start;
+}
+
+.md-table-wrap { padding: var(--sp-7); overflow-x: auto; }
+
+.md-table-wrap__title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  margin-bottom: var(--sp-5);
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.md-table th {
+  text-align: left;
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  font-weight: var(--fw-semibold);
+  padding: 0 var(--sp-4) var(--sp-4);
+}
+
+.md-table td {
+  padding: var(--sp-5) var(--sp-4);
+  border-top: 1px solid var(--line-hairline);
+}
+
+.md-table__rank { width: 26px; color: var(--fg-3); }
+
+/* Der Name bricht um, statt abgeschnitten zu werden. Im Doppel steht dort
+   „Die Netzroller · Reiter, Anna / Steiner, Bernhard" — mit Auslassungspunkten
+   nach dem halben Namen ist die Tabelle für genau die unbrauchbar, die in ihr
+   stehen. Eine Zeile mehr kostet nichts, eine unkenntliche Zeile alles. */
+.md-table__name {
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.md-table__num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.md-table__points { font-weight: var(--fw-bold); }
+
+/* Der Draw. Spalten am Bildschirm, Runden untereinander am Handy — ein Baum,
+   den man seitwärts schieben muss, ist auf einem Telefon keine Übersicht. */
+.md-draw__columns {
+  display: flex;
+  gap: var(--sp-7);
+  align-items: flex-start;
+}
+
+/* Die Spalten behalten ihre Breite und der Behälter scrollt, statt dass sie
+   sich zusammenschieben: ein Name, der nicht mehr hineinpasst, ist keine
+   Platzersparnis. Eine feste Mindestbreite am Behälter wäre der andere Weg —
+   und erzwänge das Scrollen auch bei zwei Runden, die längst hineinpassen. */
+.md-draw__column { flex: 0 0 260px; }
+
+.md-draw__stack { display: flex; flex-direction: column; gap: var(--sp-4); }
+
+.md-draw__column .md-eyebrow { margin-bottom: var(--sp-5); white-space: nowrap; }
+
+.md-draw__list { display: flex; flex-direction: column; gap: var(--sp-6); }
+
+.md-draw__round { padding: var(--sp-7); }
+
+.md-draw__round-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-5);
+  margin-bottom: var(--sp-6);
+}
+
+.md-draw__round-title { font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.md-draw__round-count { font-size: var(--fs-xs); color: var(--fg-3); }
+
+/* Was seitwärts scrollen darf, tut es in seinem eigenen Behälter — die Seite
+   selbst nie. */
+.md-scroll-x { overflow-x: auto; }
+
+/* --- Clubhaus-Monitor ---------------------------------------------------- */
+
+/* Am Monitor im Vereinsheim füllt der Aushang den Schirm. Als abgerundete
+   Tafel mit heller Fläche darunter sähe er aus wie ein Fenster, das jemand
+   zumachen kann — dort steht aber niemand, der etwas bedient. */
+.md-public--kiosk .md-kiosk {
+  flex: 1;
+  border-radius: 0;
 }
 
 .md-kiosk {
@@ -860,6 +1247,60 @@ body {
   /* Ein Dialog nimmt am Handy die Breite, die da ist — die Ergebniseingabe ist
      der eine Bildschirm, an dem es auf jeden Millimeter ankommt. */
   .md-scrim { padding: var(--sp-10) var(--sp-5) var(--sp-5); align-items: flex-start; }
+
+  /* --- Zuschauer am Handy --- */
+
+  /* Was am Schreibtisch nebenher steht, hat hier keinen Platz: der Umschalter
+     auf den Clubhaus-Monitor, der Link zum Teilen, die zweite Darstellung des
+     Draws. Sie sind nicht wichtiger als die Auskunft selbst. */
+  .md-only-wide { display: none; }
+
+  .md-public__body { padding: var(--sp-7) var(--sp-6) var(--sp-16); }
+  .md-public__bar { padding: var(--sp-5) var(--sp-6); gap: var(--sp-5); }
+
+  /* Die Reiter wandern an den unteren Rand, wo der Daumen ist — dieselbe
+     Entscheidung wie bei der Navigation, und aus demselben Grund. Sie gilt nur
+     für die Seite ohne Anmeldung: im Arbeitsbereich steht dort schon die
+     Navigation, und zwei Leisten übereinander sind keine. */
+  .md-public--standalone { padding-bottom: var(--nav-bar-height); }
+
+  .md-public--standalone .md-tabs {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 60;
+    padding: 0 var(--sp-3) env(safe-area-inset-bottom, 0px);
+    border-bottom: 0;
+    border-top: var(--border);
+    justify-content: space-between;
+  }
+
+  .md-public--standalone .md-tabs__item {
+    flex: 1 0 auto;
+    padding: var(--sp-4) var(--sp-3);
+    font-size: var(--fs-tiny);
+    text-align: center;
+    border-bottom: 0;
+    border-top: 2px solid transparent;
+  }
+
+  .md-public--standalone .md-tabs__item[aria-current="page"] {
+    border-top-color: var(--acc);
+    border-bottom-color: transparent;
+  }
+
+  /* Der Monitor braucht keine Fußleiste — er hat keine Bedienung. */
+  .md-public--kiosk { padding-bottom: 0; }
+
+  /* Sätze und Spiele entscheiden die Reihenfolge, aber wer am Platz nachsieht,
+     sucht seinen Rang und seine Punkte. Die vollständige Tabelle steht auf
+     jedem breiteren Schirm. */
+  .md-table__col--wide { display: none; }
+
+  .md-cards { grid-template-columns: 1fr; }
+  .md-tables { grid-template-columns: 1fr; }
 }
 
 /* Der Ablauf ist die eine Ansicht, die auf jeder Breite dieselbe bleibt — er

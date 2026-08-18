@@ -33,8 +33,8 @@ export function App() {
 }
 
 function Root() {
-  const { status, configured } = useAuth()
-  const { registrationToken } = useRoute()
+  const { status, configured, login } = useAuth()
+  const { registrationToken, tournamentId } = useRoute()
   const [publicOnly, setPublicOnly] = useState(false)
 
   // Der Anmeldelink steht vor der Anmeldemaske — und vor der Ladeanzeige. Wer
@@ -48,46 +48,83 @@ function Root() {
     return <Loading label="Anmeldung wird geprüft …" />
   }
 
+  // Wer mit einem Turnier in der Adresse kommt, will zusehen — und zwar sofort.
+  // Die Anmeldemaske stand hier auch vor diesem Fall und machte aus einem Link,
+  // der in der WhatsApp-Gruppe des Vereins herumgeht, eine Aufforderung zur
+  // Anmeldung. Wer sich anmelden will, tut es aus der Zuschauerseite heraus;
+  // sein Turnier bleibt dabei gewählt, weil es in der Adresse steht.
+  //
+  // Ohne Turnier bleibt es bei der Maske: die öffentliche Ansicht ohne Id wäre
+  // eine leere Seite mit einem Hinweis auf einen Link, den der Besucher nicht
+  // hat.
+  const spectator = publicOnly || tournamentId !== null
+
   // Die öffentliche Ansicht ist der andere Teil ohne Anmeldung — sie steht
   // deshalb auch ohne konfigurierte Authority offen.
-  if (status === 'anonymous' && !publicOnly) {
+  if (status === 'anonymous' && !spectator) {
     return <LoginScreen onPublicView={() => setPublicOnly(true)} />
   }
 
-  return <AppShell publicOnly={status === 'anonymous' || !configured} onExitPublic={() => setPublicOnly(false)} />
+  // Wer zusieht, bekommt die Zuschauerseite und sonst nichts: kein Arbeitsbereich,
+  // keine Navigation. Sie stand hier einmal mit — und jeder ihrer Punkte warf
+  // zurück auf die Anmeldemaske, weil hinter keinem von ihnen etwas Abrufbares
+  // liegt. Eine Navigation, die nur wegführt, ist keine.
+  if (status === 'anonymous' || !configured) {
+    // „Anmelden" führt zum Identity Provider und nicht zurück auf die Maske:
+    // die Maske hat genau diesen einen Knopf, und ein Zwischenschritt, der
+    // nichts fragt, ist keiner.
+    return (
+      <PublicScreen
+        standalone
+        action={configured ? { label: 'Anmelden', onClick: login } : undefined}
+      />
+    )
+  }
+
+  return <AppShell />
 }
 
-function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPublic: () => void }) {
+function AppShell() {
   const { user, logout } = useAuth()
   const route = useRoute()
 
   // Der Einstieg ist der Ablauf: er beantwortet die Frage, mit der man
   // hierherkommt — „was ist als Nächstes zu tun". Ohne Turnier zeigt er den
   // Weg zum ersten; die Turnierliste steht daneben, nicht davor.
-  const screen: ScreenId = publicOnly
-    ? 'public'
-    : (SCREENS.find((id) => id === route.screen) ?? 'flow')
+  const screen: ScreenId = SCREENS.find((id) => id === route.screen) ?? 'flow'
 
   const tournamentId = route.tournamentId
 
-  // Ohne Anmeldung gibt es keine Turnierliste — /api ist geschützt. Dann bleibt
-  // nur die öffentliche Ansicht, die ihre Turnier-Id aus der Adresszeile nimmt.
-  const me = useResource(() => meApi.get(), [], { enabled: !publicOnly })
+  const me = useResource(() => meApi.get(), [])
 
-  const tournamentList = useResource(() => tournamentApi.listMine(), [], { enabled: !publicOnly })
+  const tournamentList = useResource(() => tournamentApi.listMine(), [])
 
   const { navigate } = route
 
+  // Die Turnier-Id, mit der jemand hereinkam. Sie unterscheidet den Zuschauer,
+  // der einem geteilten Link folgt, von der Auswahl im Arbeitsbereich — und
+  // zwar dauerhaft: einmal beim Aufbau gelesen und nicht bei jedem Wechsel.
+  const linked = useMemo(() => new URLSearchParams(window.location.search).get('t'), [])
+
+  const mine = tournamentList.data?.some((t) => t.id === tournamentId) ?? null
+
+  // Ein geteilter Link auf ein fremdes Turnier. Auch ein Angemeldeter kann ihm
+  // folgen, und dann will er dieses Turnier sehen und nicht seines: die
+  // Auswahl stillschweigend auf das erste eigene umzustellen, hieße den Link
+  // zu verwerfen und dem Empfänger etwas anderes zu zeigen, als der Absender
+  // geschickt hat.
+  const foreign = mine === false && tournamentId !== null && tournamentId === linked
+
   useEffect(() => {
-    if (publicOnly || !tournamentList.data) return
+    if (!tournamentList.data || foreign) return
     const stillThere = tournamentList.data.some((t) => t.id === tournamentId)
     if (!stillThere) navigate({ tournamentId: tournamentList.data[0]?.id ?? null })
-  }, [publicOnly, tournamentList.data, tournamentId, navigate])
+  }, [tournamentList.data, tournamentId, foreign, navigate])
 
   const tournament = useResource<TournamentDetail>(
     () => tournamentApi.get(tournamentId as string),
     [tournamentId],
-    { enabled: !publicOnly && !!tournamentId },
+    { enabled: !!tournamentId },
   )
 
   const reloadTournament = useCallback(async () => {
@@ -123,12 +160,19 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
     ],
   )
 
-  const goTo = (next: ScreenId) => {
-    if (publicOnly && next !== 'public') {
-      onExitPublic()
-      return
-    }
-    navigate({ screen: next })
+  const goTo = (next: ScreenId) => navigate({ screen: next })
+
+  // Das fremde Turnier steht für sich, ohne Arbeitsbereich: an ihm gibt es für
+  // diesen Benutzer nichts zu tun — die API gäbe ihm zu jedem seiner Schirme
+  // ein 404 (ADR-0009). Der Weg zurück steht in der Leiste.
+  if (foreign) {
+    return (
+      <PublicScreen
+        standalone
+        tournamentId={tournamentId}
+        action={{ label: 'Meine Turniere', onClick: () => navigate({ tournamentId: null }) }}
+      />
+    )
   }
 
   return (
@@ -142,10 +186,10 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
           onLogout={logout}
         />
         <main className="md-main">
-          {tournamentList.error && !publicOnly ? (
+          {tournamentList.error ? (
             <ErrorBlock error={tournamentList.error} onRetry={() => void tournamentList.reload()} />
           ) : (
-            <Screen screen={screen} publicOnly={publicOnly} onNavigate={goTo} />
+            <Screen screen={screen} onNavigate={goTo} />
           )}
         </main>
       </div>
@@ -155,14 +199,11 @@ function AppShell({ publicOnly, onExitPublic }: { publicOnly: boolean; onExitPub
 
 function Screen({
   screen,
-  publicOnly,
   onNavigate,
 }: {
   screen: ScreenId
-  publicOnly: boolean
   onNavigate: (id: ScreenId) => void
 }) {
-  if (publicOnly) return <PublicScreen standalone />
   switch (screen) {
     case 'flow':
       return <FlowScreen onNavigate={onNavigate} />

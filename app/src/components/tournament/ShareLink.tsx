@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useToast } from '../../hooks/useToast'
-import { registrationUrl } from '../../hooks/useRoute'
 
 /**
  * Legt Text in die Zwischenablage und sagt ehrlich, ob es geklappt hat.
@@ -42,7 +41,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * Den Anmeldelink weitergeben.
+ * Einen Link weitergeben.
  *
  * Kopieren steht immer da, Teilen nur zusätzlich. Zuerst war es ein Knopf, der
  * je nach Gerät das eine <em>oder</em> das andere tat — und das ging schief:
@@ -53,15 +52,27 @@ async function copyToClipboard(text: string): Promise<boolean> {
  *
  * Zwei Handlungen, zwei Knöpfe. Der eine tut immer dasselbe, der andere ist ein
  * Angebot — auf dem Handy führt er in die WhatsApp-Gruppe des Vereins, und
- * genau dorthin geht dieser Link.
+ * genau dorthin gehen diese Links.
+ *
+ * Die Adresse kommt von außen und wird hier nicht mehr gebaut: es sind zwei
+ * geworden — der Anmeldelink für die Meldung und der Zuschauerlink für die
+ * Live-Ansicht. Sie unterscheiden sich in nichts, was das Teilen anginge.
  */
 export function ShareLink({
-  token,
-  tournamentName,
+  url,
+  label,
+  shareTitle,
+  shareText,
+  copiedMessage,
   className = 'md-btn md-btn--accent',
 }: {
-  token: string
-  tournamentName: string
+  url: string
+  /** Die Beschriftung des Knopfes — „Anmeldelink kopieren". */
+  label: string
+  shareTitle: string
+  shareText: string
+  /** Die Meldung nach dem Kopieren. Sie benennt, was in der Ablage liegt. */
+  copiedMessage: string
   className?: string
 }) {
   const { show, showError } = useToast()
@@ -72,10 +83,10 @@ export function ShareLink({
   const copy = async () => {
     setBusy(true)
     try {
-      const done = await copyToClipboard(registrationUrl(token))
+      const done = await copyToClipboard(url)
 
       if (done) {
-        show('Anmeldelink kopiert')
+        show(copiedMessage)
       } else {
         showError(
           new Error('Der Browser hat das Kopieren abgelehnt. Der Link lässt sich von Hand markieren.'),
@@ -90,11 +101,7 @@ export function ShareLink({
   const share = async () => {
     setBusy(true)
     try {
-      await navigator.share({
-        title: tournamentName,
-        text: `Melde dich zu „${tournamentName}" an:`,
-        url: registrationUrl(token),
-      })
+      await navigator.share({ title: shareTitle, text: shareText, url })
     } catch (cause) {
       // Wer das Teilen-Blatt zumacht, hat sich umentschieden. Das ist kein
       // Fehler und bekommt keine Meldung.
@@ -108,7 +115,7 @@ export function ShareLink({
   return (
     <>
       <button type="button" className={className} disabled={busy} onClick={() => void copy()}>
-        Link kopieren
+        {label}
       </button>
 
       {canShare && (

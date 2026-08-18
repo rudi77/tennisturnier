@@ -136,6 +136,20 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
+    public async Task Die_Zeitzone_der_Anlage_steht_darin()
+    {
+        // Ohne sie ist jede Uhrzeit der Antwort mehrdeutig. Ein Zuschauer ohne
+        // Anmeldung kann sie nirgends sonst herbekommen — und die Zone seines
+        // Geräts ist die falsche Antwort, sobald er angereist ist.
+        var (_, tournamentId) = await DrawnTournamentAsync();
+
+        var view = await Spectator().GetFromJsonAsync<JsonElement>(
+            $"/public/tournaments/{tournamentId}", Json);
+
+        Assert.Equal("Europe/Vienna", view.GetProperty("timeZoneId").GetString());
+    }
+
+    [Fact]
     public async Task Ein_zweiter_Abruf_mit_dem_ETag_liefert_304()
     {
         var (_, tournamentId) = await DrawnTournamentAsync();
