@@ -236,6 +236,14 @@ export interface TournamentDetail {
   schedulingMode: SchedulingMode
   formatTemplateId: string
   format: FormatSnapshot | null
+  /** Das am Turnier eingestellte Satzformat — leer, wenn das der Vorlage gilt. */
+  matchFormat: MatchFormat | null
+  /**
+   * Das Satzformat, unter dem gespielt wird: eingefroren, sobald ausgelost ist,
+   * sonst das des Turniers und sonst das der Vorlage. Der Server rechnet die
+   * Reihenfolge aus, damit die Oberfläche sie nicht ein drittes Mal nachbaut.
+   */
+  effectiveMatchFormat: MatchFormat
   courts: CourtDetail[]
   entries: EntryDetail[]
   version: number

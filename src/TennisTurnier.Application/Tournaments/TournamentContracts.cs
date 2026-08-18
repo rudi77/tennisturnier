@@ -1,4 +1,4 @@
-﻿using TennisTurnier.Domain.Formats;
+using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Application.Tournaments;
@@ -24,7 +24,14 @@ public sealed record CreateTournamentRequest(
     Discipline Discipline,
     DateOnly? StartsOn,
     DateOnly? EndsOn,
-    Guid FormatTemplateId);
+    Guid FormatTemplateId,
+    MatchFormat? MatchFormat = null);
+
+/// <summary>
+/// Das Satzformat des Turniers. <c>null</c> nimmt es zurück — dann gilt wieder
+/// das der Vorlage.
+/// </summary>
+public sealed record SetMatchFormatRequest(MatchFormat? MatchFormat);
 
 public sealed record UpdateTournamentRequest(
     string Name,
@@ -84,6 +91,14 @@ public sealed record TournamentSummary(
     SchedulingMode SchedulingMode,
     int AcceptedEntries);
 
+/// <param name="MatchFormat">
+/// Das am Turnier eingestellte Satzformat, sofern eines eingestellt ist.
+/// </param>
+/// <param name="EffectiveMatchFormat">
+/// Das Satzformat, unter dem gespielt wird — eingefroren, wenn ausgelost ist,
+/// sonst das des Turniers und sonst das der Vorlage. Die Oberfläche soll diese
+/// Reihenfolge nicht ein drittes Mal nachbauen müssen.
+/// </param>
 public sealed record TournamentDetail(
     Guid Id,
     string Name,
@@ -95,6 +110,8 @@ public sealed record TournamentDetail(
     SchedulingMode SchedulingMode,
     Guid FormatTemplateId,
     FormatSnapshot? Format,
+    MatchFormat? MatchFormat,
+    MatchFormat EffectiveMatchFormat,
     IReadOnlyList<CourtDetail> Courts,
     IReadOnlyList<EntryDetail> Entries,
     int Version);

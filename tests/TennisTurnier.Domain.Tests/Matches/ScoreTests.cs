@@ -14,6 +14,13 @@ public sealed class ScoreTests
 
     private static readonly MatchFormat SingleSet = new(BestOf: 1, FinalSetMode.Regular, TiebreakAt: 6);
 
+    /// <summary>
+    /// Der kurze Nachmittag: Sätze bis vier, Champions-Tiebreak statt des
+    /// dritten. Genau die Einstellung, die ein Turnier in die Platzzeiten
+    /// bringt, die zugesagt sind.
+    /// </summary>
+    private static readonly MatchFormat Kurz = new(BestOf: 3, FinalSetMode.MatchTiebreak10, TiebreakAt: 4);
+
     private static SetScore Set(int a, int b, int? tiebreak = null) => new(a, b, tiebreak);
 
     [Fact]
@@ -321,5 +328,91 @@ public sealed class ScoreTests
 
         Assert.NotEqual(a, b);
         Assert.NotEqual(a, Score.Retired([Set(6, 4)], null, retiringSide: 2, Standard));
+    }
+
+    // --- Kurze Sätze ------------------------------------------------------
+
+    [Fact]
+    public void Ein_Satz_bis_vier_endet_bei_vier()
+    {
+        var score = Score.Played([Set(4, 1), Set(4, 2)], Kurz);
+
+        Assert.Equal(1, score.WinnerSide);
+        Assert.Equal(2, score.SetsWonBy(1));
+    }
+
+    [Fact]
+    public void Ein_Satz_bis_vier_braucht_bei_vier_zwei_Spiele_Vorsprung()
+    {
+        // 4:3 ist kein Satzgewinn — es geht weiter, bis zwei Spiele Abstand
+        // stehen oder der Tiebreak bei 5:4 entscheidet.
+        Assert.Throws<DomainException>(() => Score.Played([Set(4, 3), Set(4, 0)], Kurz));
+
+        var verlaengert = Score.Played([Set(5, 3), Set(4, 0)], Kurz);
+        Assert.Equal(1, verlaengert.WinnerSide);
+    }
+
+    [Fact]
+    public void Der_Tiebreak_eines_kurzen_Satzes_steht_bei_fuenf_zu_vier()
+    {
+        var score = Score.Played([Set(5, 4, 5), Set(4, 1)], Kurz);
+
+        Assert.Equal(5, score.CompletedSets[0].TiebreakPoints);
+    }
+
+    /// <summary>
+    /// Der Grund, warum <see cref="Score.Rehydrate"/> nichts nachprüft: ein
+    /// 6:1 ist in einem Turnier mit Sätzen bis vier ungültig und in einem mit
+    /// Sätzen bis sechs der Normalfall. Das Format entscheidet, nicht die Zahl.
+    /// </summary>
+    [Fact]
+    public void Dasselbe_Satzergebnis_ist_je_nach_Satzlaenge_gueltig_oder_nicht()
+    {
+        Assert.Throws<DomainException>(() => Score.Played([Set(6, 1), Set(6, 1)], Kurz));
+
+        Score.Played([Set(6, 1), Set(6, 1)], Standard);
+    }
+
+    /// <summary>
+    /// Die Verlängerung gilt auch für den kurzen Satz: bis vier mit zwei
+    /// Spielen Vorsprung, danach weiter um genau zwei. 6:4 ist deshalb auch
+    /// unter Sätzen bis vier ein gültiger Satz — nur eben ein langer.
+    /// </summary>
+    [Fact]
+    public void Auch_ein_kurzer_Satz_kennt_die_Verlaengerung()
+    {
+        Score.Played([Set(6, 4), Set(4, 1)], Kurz);
+
+        Assert.Throws<DomainException>(() => Score.Played([Set(6, 3), Set(4, 1)], Kurz));
+    }
+
+    // --- Champions-Tiebreak statt des Entscheidungssatzes ------------------
+
+    [Fact]
+    public void Der_dritte_Satz_ist_ein_Champions_Tiebreak_bis_zehn()
+    {
+        var score = Score.Played([Set(4, 1), Set(2, 4), Set(10, 7)], Kurz);
+
+        Assert.Equal(1, score.WinnerSide);
+        Assert.Equal(3, score.CompletedSets.Count);
+    }
+
+    [Fact]
+    public void Ein_kurzer_Satz_an_dritter_Stelle_waere_kein_Champions_Tiebreak()
+    {
+        // 4:1 im dritten ist unter diesem Format kein gültiger Entscheidungs-
+        // satz: dort wird bis 10 gespielt.
+        Assert.Throws<DomainException>(() => Score.Played([Set(4, 1), Set(2, 4), Set(4, 1)], Kurz));
+    }
+
+    [Fact]
+    public void Wer_den_Entscheidungssatz_ausspielen_will_stellt_ihn_auf_regulaer()
+    {
+        var voll = Kurz with { FinalSetMode = FinalSetMode.Regular };
+
+        var score = Score.Played([Set(4, 1), Set(2, 4), Set(4, 2)], voll);
+
+        Assert.Equal(1, score.WinnerSide);
+        Assert.Throws<DomainException>(() => Score.Played([Set(4, 1), Set(2, 4), Set(10, 7)], voll));
     }
 }

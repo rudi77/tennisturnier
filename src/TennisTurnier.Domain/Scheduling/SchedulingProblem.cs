@@ -52,12 +52,20 @@ public static class MatchDuration
 {
     public static readonly TimeSpan Default = TimeSpan.FromMinutes(90);
 
+    /// <summary>Ein Satz bis sechs — das Maß, an dem die Schätzung hängt.</summary>
+    private const int RegularSetTarget = 6;
+
     /// <summary>
     /// Aus dem Satzformat und der Bedeutung des Matches.
     ///
     /// Zwei Gewinnsätze mit Match-Tiebreak sind in gut einer Stunde vorbei, drei
     /// volle Sätze dauern deutlich länger, und ein Finale zieht sich — dort wird
     /// um jeden Punkt gespielt.
+    ///
+    /// Die Zahl der Spiele je Satz geht mit ein und ist kein Beiwerk: Sätze bis
+    /// vier werden gespielt, weil der Nachmittag nicht länger ist, und ein
+    /// Plan, der sie wie Sätze bis sechs veranschlagt, gibt genau die Zeit
+    /// wieder aus, die damit gewonnen werden sollte.
     /// </summary>
     public static TimeSpan Estimate(MatchFormat format, bool isFinal = false)
     {
@@ -66,6 +74,8 @@ public static class MatchDuration
         var perSet = format.FinalSetMode == FinalSetMode.Advantage
             ? TimeSpan.FromMinutes(45)
             : TimeSpan.FromMinutes(40);
+
+        perSet *= (double)format.TiebreakAt / RegularSetTarget;
 
         // Gerechnet wird mit der Zahl der Sätze, die zum Sieg nötig sind, plus
         // einem halben weiteren: die wenigsten Matches gehen über die volle

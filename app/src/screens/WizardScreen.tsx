@@ -9,11 +9,13 @@ import {
   CourtLocation,
   CourtSurface,
   Discipline,
-  FinalSetMode,
   PhaseFormatKind,
   QualificationRule,
   type FormatDefinition,
+  type MatchFormat,
 } from '../api/types'
+import { MatchFormatPicker } from '../components/tournament/MatchFormatPicker'
+import { DEFAULT_MATCH_FORMAT, matchFormatSummary } from '../lib/matchFormat'
 import { disciplineLabel, surfaceLabel } from '../lib/labels'
 import { formatDateRange, tournamentDays } from '../lib/time'
 
@@ -76,6 +78,12 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
   const [templateId, setTemplateId] = useState<string | null>(null)
   const [draft, setDraft] = useState<FormatDefinition | null>(null)
 
+  // Das Satzformat gehört zum Turnier und nicht zur Vorlage: „Sätze bis vier,
+  // weil um sechs Schluss ist" sagt nichts über den Modus, und läge es in der
+  // Vorlage, entstünde für jede solche Absprache eine eigene Vorlagenkopie.
+  // Solange niemand daran dreht, bleibt es leer und die Vorlage gilt.
+  const [matchFormat, setMatchFormat] = useState<MatchFormat | null>(null)
+
   // --- Plätze
   const [courts, setCourts] = useState<CourtDraft[]>(DEFAULT_COURTS)
   const [opensAt, setOpensAt] = useState('08:00')
@@ -112,6 +120,12 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
   // Vorschau eine andere Zahl als die, die entsteht.
   const effectiveEnd = endsOn || startsOn
   const days = useMemo(() => tournamentDays(startsOn, effectiveEnd).length, [startsOn, effectiveEnd])
+
+  // Was gälte, wenn niemand mehr etwas einstellt: die eigene Angabe, sonst die
+  // der Vorlage, sonst die Vorgabe der Domäne. Dieselbe Reihenfolge, die der
+  // Server nach dem Anlegen zurückgibt.
+  const effectiveMatchFormat: MatchFormat =
+    matchFormat ?? draft?.matchFormat ?? DEFAULT_MATCH_FORMAT
 
   const firstPhase = draft?.phases?.[0] ?? null
   const knockoutPhase = draft?.phases?.find((phase) => phase.format === PhaseFormatKind.Knockout)
@@ -165,6 +179,10 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
         // die drei zulässigen Formen des Termins definiert sind.
         endsOn: endsOn || null,
         formatTemplateId: effectiveTemplateId,
+        // Nur, wenn jemand daran gedreht hat. Sonst bleibt das Turnier bei dem
+        // der Vorlage — und eine spätere Änderung dort gilt auch für dieses
+        // Turnier, solange es nicht ausgelost ist.
+        matchFormat,
       })
 
       // Erst danach die Plätze: sie gehören diesem Turnier und keinem anderen.
@@ -417,42 +435,18 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
               {step === 3 && (
                 <Panel
                   title="Parameter"
-                  hint="Satzformat, Gruppengröße und Qualifikanten sind Parameter der Vorlage — keine eigene Turnierart. Eine Änderung an einer eingebauten Vorlage legt beim Anlegen eine eigene Kopie an."
+                  hint="Das Satzformat gehört dem Turnier — es lässt sich bis zur Auslosung ändern und legt keine Vorlagenkopie an. Gruppengröße und Qualifikanten sind Parameter der Vorlage; wer sie an einer eingebauten ändert, bekommt beim Anlegen eine eigene Kopie."
                 >
                   {!draft ? (
                     <Loading label="Vorlage wird geladen …" />
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
-                      <Row label="Satzformat" hint="validiert den Score gegen MatchFormat">
-                        {[
-                          { label: '2 Gewinnsätze', bestOf: 3, mode: FinalSetMode.Advantage },
-                          { label: '3 Sätze, Match-Tiebreak', bestOf: 3, mode: FinalSetMode.MatchTiebreak10 },
-                          { label: '5 Sätze', bestOf: 5, mode: FinalSetMode.Regular },
-                        ].map((option) => {
-                          const current = draft.matchFormat
-                          const active =
-                            current?.bestOf === option.bestOf && current?.finalSetMode === option.mode
-                          return (
-                            <button
-                              key={option.label}
-                              type="button"
-                              className="md-pill"
-                              aria-pressed={active}
-                              onClick={() =>
-                                patchDefinition((next) => {
-                                  next.matchFormat = {
-                                    bestOf: option.bestOf,
-                                    finalSetMode: option.mode,
-                                    tiebreakAt: next.matchFormat?.tiebreakAt ?? 6,
-                                  }
-                                })
-                              }
-                            >
-                              {option.label}
-                            </button>
-                          )
-                        })}
-                      </Row>
+                      <MatchFormatPicker
+                        value={effectiveMatchFormat}
+                        onChange={setMatchFormat}
+                      />
+
+                      <div style={{ height: 1, background: 'var(--line)' }} />
 
                       {firstPhase?.format === PhaseFormatKind.RoundRobin && (
                         <>
@@ -597,6 +591,7 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                         platzzeiten: `${opensAt} – ${closesAt} an ${days} ${days === 1 ? 'Tag' : 'Tagen'}`,
                         formatTemplateId: templateId,
                         eigeneKopie: dirty,
+                        satzformat: matchFormatSummary(effectiveMatchFormat),
                         definition: draft,
                       },
                       null,
@@ -657,7 +652,7 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
             <Fact k="Disziplin" v={disciplineLabel[discipline]} />
             <Fact k="Termin" v={formatDateRange(startsOn, effectiveEnd)} />
             <Fact k="Format" v={draft?.id ?? '—'} />
-            <Fact k="Satzformat" v={draft?.matchFormat ? `best of ${draft.matchFormat.bestOf}` : '—'} />
+            <Fact k="Satzformat" v={matchFormatSummary(effectiveMatchFormat)} />
             <Fact
               k="Plätze"
               v={`${courts.filter((court) => court.name.trim()).length} · ${opensAt}–${closesAt}`}

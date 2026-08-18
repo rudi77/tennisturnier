@@ -74,9 +74,15 @@ public sealed class TournamentApiTests : IClassFixture<TennisTurnierApiFactory>
             "/api/format-templates", Json);
 
         Assert.NotNull(templates);
-        Assert.Equal(4, templates.Count);
+
+        // Gegen die Liste und nicht gegen eine Zahl: eine neue mitgelieferte
+        // Vorlage ist eine Ergänzung und kein Fehler — der Test soll prüfen,
+        // dass jede von ihnen ankommt, nicht wie viele es sind.
+        Assert.Equal(BuiltInFormats.All.Count, templates.Count);
         Assert.All(templates, t => Assert.True(t.IsBuiltIn));
-        Assert.Contains(templates, t => t.Name == BuiltInFormats.GroupThenKnockout.Name);
+        Assert.All(
+            BuiltInFormats.All,
+            definition => Assert.Contains(templates, t => t.Name == definition.Name));
     }
 
     [Fact]

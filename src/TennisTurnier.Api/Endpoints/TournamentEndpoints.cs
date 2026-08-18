@@ -46,6 +46,19 @@ internal static class TournamentEndpoints
             return Results.NoContent();
         });
 
+        // Eigener Endpunkt und kein Feld im PUT darüber: hier bedeutet ein
+        // leeres Satzformat „zurück zur Vorlage", und im gemeinsamen Aufruf
+        // wäre dieses Leer nicht von „nicht mitgeschickt" zu unterscheiden.
+        tournaments.MapPut("/match-format", async (
+            Guid tournamentId,
+            SetMatchFormatRequest request,
+            ITournamentService service,
+            CancellationToken ct) =>
+        {
+            await service.SetMatchFormatAsync(tournamentId, request, ct);
+            return Results.NoContent();
+        });
+
         // Eigener Verb-Endpunkt und kein Zustandsübergang: Löschen ist keine
         // Station im Lebenszyklus, sondern sein Ende ohne Spur. Der Abbruch
         // daneben ist das Gegenteil — er beendet und lässt lesbar.

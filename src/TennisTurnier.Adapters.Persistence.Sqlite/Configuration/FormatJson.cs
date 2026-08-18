@@ -49,6 +49,35 @@ public sealed class FormatSnapshotConverter : ValueConverter<FormatSnapshot, str
     }
 }
 
+/// <summary>
+/// Das Satzformat des Turniers, ebenfalls als eine JSON-Spalte.
+///
+/// Drei kleine Spalten täten es auch — bis zur ersten Erweiterung des
+/// Satzformats, die dann eine Migration je Feld bedeutete. Die Spalte wird nie
+/// durchsucht (ADR-0006), und das Format ist dasselbe unveränderliche
+/// Wertobjekt, das im Snapshot ohnehin als JSON liegt.
+/// </summary>
+public sealed class MatchFormatConverter : ValueConverter<MatchFormat, string>
+{
+    public MatchFormatConverter()
+        : base(
+            format => FormatJson.Serialize(format),
+            json => FormatJson.Deserialize<MatchFormat>(json, "Satzformat"))
+    {
+    }
+}
+
+public sealed class MatchFormatComparer : ValueComparer<MatchFormat>
+{
+    public MatchFormatComparer()
+        : base(
+            (left, right) => FormatJson.Serialize(left) == FormatJson.Serialize(right),
+            format => FormatJson.Serialize(format).GetHashCode(StringComparison.Ordinal),
+            format => FormatJson.Deserialize<MatchFormat>(FormatJson.Serialize(format), "Satzformat"))
+    {
+    }
+}
+
 public sealed class FormatDefinitionConverter : ValueConverter<FormatDefinition, string>
 {
     public FormatDefinitionConverter()

@@ -3,14 +3,16 @@ namespace TennisTurnier.Domain.Formats;
 /// <summary>
 /// Die mitgelieferten Standardvorlagen.
 ///
-/// Sie sind zugleich die lesbarste Beschreibung dessen, was ADR-0001 meint: alle
-/// vier geforderten Modi entstehen aus denselben Bausteinen, und
-/// „Gruppenphase mit anschließendem K.o." ist kein eigenes Format, sondern eine
-/// Folge aus zwei Phasen.
+/// Sie sind zugleich die lesbarste Beschreibung dessen, was ADR-0001 meint:
+/// jeder dieser Modi entsteht aus denselben Bausteinen, und „Gruppenphase mit
+/// anschließendem K.o." ist kein eigenes Format, sondern eine Folge aus zwei
+/// Phasen. „Jeder gegen jeden" und die Liga unterscheiden sich um einen
+/// einzigen Parameter — die Zahl der Begegnungen.
 /// </summary>
 public static class BuiltInFormats
 {
     public const string KnockoutId = "ko-single";
+    public const string RoundRobinId = "jeder-gegen-jeden";
     public const string GroupThenKnockoutId = "group-then-ko";
     public const string LeagueId = "liga-round-robin";
     public const string SwissId = "swiss";
@@ -67,6 +69,39 @@ public static class BuiltInFormats
         ],
     };
 
+    /// <summary>
+    /// Jeder gegen jeden, einmal, in einem Feld.
+    ///
+    /// Die Liga daneben spielt Hin- und Rückrunde und ist damit doppelt so lang.
+    /// Für ein Vereinsturnier an einem Tag ist das der Unterschied zwischen
+    /// „geht sich aus" und „geht sich nicht aus" — deshalb steht die einfache
+    /// Runde als eigene Vorlage da und nicht als Parameter, den jemand finden
+    /// muss.
+    ///
+    /// Die Disziplin steht am Turnier und nicht hier: Einzel, Doppel und Mixed
+    /// spielen dieselbe Runde, nur mit anderen Teilnehmern.
+    /// </summary>
+    public static FormatDefinition RoundRobin { get; } = new()
+    {
+        Id = RoundRobinId,
+        Name = "Jeder gegen jeden",
+        MatchFormat = new MatchFormat(BestOf: 3, FinalSetMode.MatchTiebreak10, TiebreakAt: 6),
+        Phases =
+        [
+            new PhaseDefinition
+            {
+                Ordinal = 1,
+                Format = PhaseFormatKind.RoundRobin,
+                Name = "Jeder gegen jeden",
+                GroupCount = 1,
+                Encounters = 1,
+                Scoring = new ScoringRules(Win: 2, Loss: 0, Walkover: 0),
+                Tiebreakers =
+                    [Tiebreaker.DirectEncounter, Tiebreaker.SetRatio, Tiebreaker.GameRatio, Tiebreaker.Lot],
+            },
+        ],
+    };
+
     public static FormatDefinition League { get; } = new()
     {
         Id = LeagueId,
@@ -108,5 +143,5 @@ public static class BuiltInFormats
     };
 
     public static IReadOnlyList<FormatDefinition> All { get; } =
-        [Knockout, GroupThenKnockout, League, Swiss];
+        [Knockout, GroupThenKnockout, RoundRobin, League, Swiss];
 }

@@ -48,6 +48,13 @@ internal sealed record TurnierWunsch
 
     public DateOnly? Ende { get; init; } = new(2026, 5, 17);
 
+    /// <summary>
+    /// Das Satzformat des Turniers. Ohne Angabe gilt das der Vorlage — der
+    /// Normalfall, denn kurze Sätze sind eine Entscheidung über den Nachmittag
+    /// und nicht über den Modus.
+    /// </summary>
+    public MatchFormat? Satzformat { get; init; }
+
     /// <summary>Einzelteilnehmer. Bei <see cref="Teams"/> ohne Bedeutung.</summary>
     public int Teilnehmer { get; init; }
 
@@ -174,7 +181,8 @@ internal static class TurnierAufbau
                 w.Disziplin ?? (w.Teams is null ? Discipline.Singles : Discipline.Doubles),
                 w.Beginn,
                 w.Ende,
-                templateId),
+                templateId,
+                w.Satzformat),
             Json));
 
         var courtIds = await PlaetzeAsync(admin, tournamentId, w);

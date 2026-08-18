@@ -155,3 +155,32 @@ export function whyNotSaveable(
 
   return null
 }
+
+/**
+ * Das Satzformat in einem Satz — „2 Gewinnsätze bis 6, Champions-Tiebreak im
+ * dritten".
+ *
+ * Es steht an mehreren Stellen (Ablauf, Anlegen, Zusammenfassung), und eine
+ * Turnierleitung, die dieselbe Einstellung dreimal anders beschrieben sieht,
+ * prüft nach, ob es dreimal dasselbe ist.
+ */
+export function matchFormatSummary(format: MatchFormat): string {
+  // Der Match-Tiebreak ersetzt den letzten Satz. Ist es der einzige, wird gar
+  // kein Satz gespielt — „ein Satz bis 6, Champions-Tiebreak im letzten" wäre
+  // dann schlicht falsch.
+  if (format.bestOf === 1 && format.finalSetMode === FinalSetMode.MatchTiebreak10) {
+    return 'nur ein Champions-Tiebreak bis 10'
+  }
+
+  const sets = format.bestOf === 1 ? 'ein Satz' : `${setsToWin(format)} Gewinnsätze`
+  const base = `${sets} bis ${format.tiebreakAt}`
+
+  switch (format.finalSetMode) {
+    case FinalSetMode.MatchTiebreak10:
+      return `${base}, Champions-Tiebreak statt des letzten`
+    case FinalSetMode.Advantage:
+      return `${base}, letzter Satz ohne Tiebreak`
+    default:
+      return base
+  }
+}

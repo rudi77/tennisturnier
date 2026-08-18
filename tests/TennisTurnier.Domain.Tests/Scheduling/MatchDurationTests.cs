@@ -39,6 +39,20 @@ public sealed class MatchDurationTests
         Assert.True(MatchDuration.Estimate(FullSets) < MatchDuration.Estimate(Long));
     }
 
+    /// <summary>
+    /// Der eigentliche Zweck kurzer Sätze. Ein Plan, der sie wie volle Sätze
+    /// veranschlagt, gibt genau die Zeit wieder aus, die damit gewonnen werden
+    /// sollte — und die Turnierleitung sieht im Spielplan nicht, dass ihre
+    /// Umstellung etwas gebracht hat.
+    /// </summary>
+    [Fact]
+    public void Kuerzere_Saetze_bekommen_weniger_Zeit()
+    {
+        var kurz = new MatchFormat(BestOf: 3, FinalSetMode.MatchTiebreak10, TiebreakAt: 4);
+
+        Assert.True(MatchDuration.Estimate(kurz) < MatchDuration.Estimate(ShortSets));
+    }
+
     [Fact]
     public void Ein_Finale_bekommt_mehr_Zeit()
     {

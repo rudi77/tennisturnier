@@ -16,6 +16,7 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M8 | SwissFormat | Schweizer System ohne Wiederholungspaarungen | ✅ |
 | M9 | Turnier als Wurzel | Verein abgeschafft, Ort/Disziplin/Plätze am Turnier | ✅ |
 | M10 | Öffentliche Selbstmeldung | Melden über einen Link, ohne Konto | ✅ |
+| M11 | Jeder gegen jeden, kurze Sätze | Vorlage „Jeder gegen jeden", Satzformat am Turnier | ✅ |
 
 M0–M4 ergeben die erste vorführbare Version. M5–M8 bauen darauf auf, ohne die
 bestehenden Verträge zu brechen.
@@ -27,6 +28,14 @@ Anwendung, und was zugesagt ist, gilt für ein Turnier. M10 schließt die letzte
 der vier Lücken, die den Umbau ausgelöst haben: bis dahin war „Meldung offen"
 eine Behauptung, denn melden konnte nur die Turnierleitung
 ([ADR-0010](adr/0010-oeffentliche-selbstmeldung.md)).
+
+M11 kommt aus dem Durchklicken: „Jeder gegen jeden" fehlte als eigene Vorlage —
+die Liga daneben spielt Hin- und Rückrunde und ist damit doppelt so lang —, und
+das Satzformat ließ sich nur über eine Vorlagenkopie einstellen. Beides betrifft
+dasselbe: ein Vereinsturnier an einem Nachmittag muss in die zugesagten
+Platzzeiten passen. Sätze bis vier und ein Champions-Tiebreak statt des dritten
+sind die Stellschrauben dafür, und sie gehören dem Turnier
+([ADR-0011](adr/0011-satzformat-am-turnier.md)).
 
 ## Bewusst nicht gebaut
 

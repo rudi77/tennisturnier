@@ -105,6 +105,23 @@ public sealed class Tournament : Entity
     public Guid FormatTemplateId { get; private set; }
 
     /// <summary>
+    /// Das Satzformat dieses Turniers — oder leer, wenn das der Vorlage gilt.
+    ///
+    /// Es steht am Turnier und nicht in der Vorlage, weil es meist nichts über
+    /// den Modus aussagt, sondern über den Nachmittag: zwölf Meldungen, zwei
+    /// Plätze, um sechs ist Schluss — also Sätze bis vier und ein Champions-
+    /// Tiebreak statt des dritten. Dieselbe Vorlage trägt am Wochenende darauf
+    /// wieder volle Sätze. Läge die Angabe in der Vorlage, entstünde für jede
+    /// solche Absprache eine eigene Vorlagenkopie, und die Turnierleitung
+    /// verwaltete Vorlagen statt ihres Turniers.
+    ///
+    /// Beim Auslosen wird es in den <see cref="Format"/>-Snapshot geschrieben.
+    /// Ab dort ist es die eine Wahrheit — die Ergebniseingabe fragt niemals
+    /// hier, sondern immer den eingefrorenen Stand.
+    /// </summary>
+    public MatchFormat? MatchFormat { get; private set; }
+
+    /// <summary>
     /// Die beim Auslosen eingefrorene Kopie der Formatdefinition samt ihrer
     /// Version (ADR-0001). Leer, solange nicht ausgelost wurde.
     ///
@@ -182,6 +199,26 @@ public sealed class Tournament : Entity
         }
 
         Discipline = discipline;
+        Touch();
+    }
+
+    /// <summary>
+    /// Setzt das Satzformat des Turniers — oder nimmt es mit <c>null</c> zurück,
+    /// womit wieder das der Vorlage gilt.
+    ///
+    /// Nur bis zur Auslosung. Danach hinge an einem geänderten Satzformat ein
+    /// bereits eingetragenes Ergebnis, das gegen die alten Regeln geprüft wurde:
+    /// ein 6:4 aus dem Vormittag wäre am Nachmittag, nach der Umstellung auf
+    /// Sätze bis vier, plötzlich ungültig — und niemand könnte es mehr
+    /// berichtigen, ohne es zu verfälschen.
+    /// </summary>
+    public void ChangeMatchFormat(MatchFormat? matchFormat)
+    {
+        RequireMatchFormatChangeable();
+
+        matchFormat?.Validate("matchFormat");
+
+        MatchFormat = matchFormat;
         Touch();
     }
 
@@ -323,8 +360,33 @@ public sealed class Tournament : Entity
 
         RequireDistinctSeeds();
 
-        Format = new FormatSnapshot(FormatTemplateId, templateVersion, definition);
+        Format = new FormatSnapshot(FormatTemplateId, templateVersion, WithOwnMatchFormat(definition));
         TransitionTo(TournamentState.DrawGenerated, TournamentState.RegistrationClosed);
+    }
+
+    /// <summary>
+    /// Legt das Satzformat des Turniers über die Definition, die eingefroren
+    /// wird.
+    ///
+    /// Auch über die Phasen: eine Vorlage darf je Phase ein eigenes Satzformat
+    /// mitbringen („Gruppen über einen Satz, Finale über drei"), und eine
+    /// solche Angabe überlebte die Umstellung sonst unbemerkt. Wer am Turnier
+    /// Sätze bis vier einstellt, meint sein Turnier und nicht seine
+    /// Gruppenphase — ein Halbfinale, das weiter über volle Sätze ginge, wäre
+    /// genau die Überraschung, die niemand nachvollziehen kann.
+    /// </summary>
+    private FormatDefinition WithOwnMatchFormat(FormatDefinition definition)
+    {
+        if (MatchFormat is null)
+        {
+            return definition;
+        }
+
+        return definition with
+        {
+            MatchFormat = MatchFormat,
+            Phases = [.. definition.Phases.Select(phase => phase with { MatchFormat = null })],
+        };
     }
 
     /// <summary>
@@ -535,6 +597,19 @@ public sealed class Tournament : Entity
             throw new DomainException(
                 $"Meldungen nimmt nur ein Turnier im Zustand {TournamentState.RegistrationOpen} an, dieses war {State}.");
         }
+    }
+
+    private void RequireMatchFormatChangeable()
+    {
+        if (IsFrozen)
+        {
+            throw new DomainException(
+                $"Ab der Auslosung steht das Satzformat fest (Zustand {State}). " +
+                "Es ist in den Formatsnapshot eingefroren, und bereits eingetragene Ergebnisse " +
+                "wurden gegen genau dieses Format geprüft.");
+        }
+
+        RequireNotFinished();
     }
 
     private void RequireNotFrozen()

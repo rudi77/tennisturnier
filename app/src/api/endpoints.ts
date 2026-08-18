@@ -19,6 +19,7 @@ import type {
   FormatTemplateDetail,
   FormatTemplateSummary,
   ImportEntriesResult,
+  MatchFormat,
   MatchOutcome,
   MeResponse,
   ParticipantSummary,
@@ -69,11 +70,22 @@ export const tournaments = {
 
   // Wer anlegt, wird Turnierleiter seines Turniers — in derselben
   // Arbeitseinheit. Es braucht dafür keine Freischaltung.
-  create: (body: TournamentBody & { formatTemplateId: string }) =>
+  create: (body: TournamentBody & { formatTemplateId: string; matchFormat?: MatchFormat | null }) =>
     http.post<{ id: string }>('/api/tournaments', body),
 
   update: (tournamentId: string, body: TournamentBody) =>
     http.put<void>(`/api/tournaments/${tournamentId}`, body),
+
+  /**
+   * Das Satzformat des Turniers. `null` nimmt es zurück — dann gilt wieder das
+   * der Vorlage.
+   *
+   * Ein eigener Aufruf und kein Feld im `update` daneben: dort wäre das leere
+   * Format nicht von „nicht mitgeschickt" zu unterscheiden, und eine Maske, die
+   * nur den Namen ändert, löschte es mit.
+   */
+  setMatchFormat: (tournamentId: string, matchFormat: MatchFormat | null) =>
+    http.put<void>(`/api/tournaments/${tournamentId}/match-format`, { matchFormat }),
 
   // --- Plätze ---
   // Sie hingen am Verein und hängen jetzt am Turnier. Reserviert wird

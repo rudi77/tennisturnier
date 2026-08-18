@@ -3,6 +3,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { TournamentPicker } from '../components/layout/TournamentPicker'
 import { Empty, Loading } from '../components/layout/StateBlock'
 import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
+import { MatchFormatPanel } from '../components/tournament/MatchFormatPanel'
 import { ShareLink } from '../components/tournament/ShareLink'
 import { TournamentActions } from '../components/tournament/TournamentActions'
 import { useResource } from '../hooks/useResource'
@@ -119,6 +120,13 @@ export function FlowScreen({ onNavigate }: { onNavigate: (id: ScreenId) => void 
             </Step>
           ))}
         </ol>
+
+        {/* Außerhalb der Schritte, weil es zu jedem gehört: das Satzformat
+            entscheidet sich beim Anlegen, wird bis zur Auslosung noch
+            geändert — „wir kommen nicht durch, spielen wir Sätze bis vier" —
+            und ist danach die Regel, gegen die jedes Ergebnis geprüft wird.
+            In einem der fünf Schritte stünde es genau dort und sonst nirgends. */}
+        <MatchFormatPanel tournament={tournament} onChanged={reloadTournament} />
 
         <TournamentActions
           tournament={tournament}

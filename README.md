@@ -1,8 +1,10 @@
 # tennisturnier
 
 Turnierplattform für Tennisvereine: Platzverwaltung, Turniere in verschiedenen Modi
-(K.O., Gruppenphase + K.O., Liga, Schweizer System), automatischer und manuell
-korrigierbarer Spielplan sowie eine öffentliche Live-Ansicht.
+(K.O., Gruppenphase + K.O., jeder gegen jeden, Liga, Schweizer System) für Einzel,
+Doppel und Mixed, einstellbares Satzformat bis hinunter zu Kurzsätzen mit
+Champions-Tiebreak, automatischer und manuell korrigierbarer Spielplan sowie eine
+öffentliche Live-Ansicht.
 
 **Status:** im Aufbau. Der Fahrplan steht in [docs/roadmap.md](docs/roadmap.md).
 

@@ -37,6 +37,35 @@ public sealed class FormatDefinitionTests
         return data;
     }
 
+    /// <summary>
+    /// „Jeder gegen jeden" und die Liga trennt ein einziger Parameter. Genau
+    /// darum steht die einfache Runde als eigene Vorlage da: für ein Turnier an
+    /// einem Nachmittag ist die doppelte Rundenzahl der Unterschied zwischen
+    /// „geht sich aus" und „geht sich nicht aus".
+    /// </summary>
+    [Fact]
+    public void Jeder_gegen_jeden_spielt_eine_Runde_in_einem_Feld()
+    {
+        var definition = BuiltInFormats.RoundRobin;
+        var phase = Assert.Single(definition.Phases);
+
+        Assert.Equal(PhaseFormatKind.RoundRobin, phase.Format);
+        Assert.Equal(1, phase.GroupCount);
+        Assert.Equal(1, phase.Encounters);
+        Assert.Equal(2, BuiltInFormats.League.Phases[0].Encounters);
+    }
+
+    [Fact]
+    public void Jede_mitgelieferte_Vorlage_hat_ihre_eigene_Id()
+    {
+        var ids = BuiltInFormats.All.Select(definition => definition.Id).ToList();
+
+        // Die Id wird zur festen Guid gehasht (BuiltInFormatSeeder). Zwei
+        // Vorlagen mit derselben Id wären dieselbe Zeile — die zweite fehlte
+        // stillschweigend.
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+    }
+
     [Fact]
     public void Gruppenphase_und_Endrunde_sind_eine_Komposition_und_kein_eigenes_Format()
     {

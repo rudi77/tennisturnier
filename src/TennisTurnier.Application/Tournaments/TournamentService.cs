@@ -2,6 +2,7 @@ using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
 using TennisTurnier.Domain.Common;
+using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.Security;
 using TennisTurnier.Domain.Tournaments;
@@ -79,6 +80,16 @@ public sealed class TournamentService : ITournamentService
             request.EndsOn,
             template.Id);
 
+        // Das Satzformat kommt aus demselben Aufruf und nicht aus einem zweiten
+        // danach: „Sätze bis vier" ist Teil der Ausschreibung, und ein Turnier,
+        // das zwischen beiden Aufrufen mit dem falschen Format dasteht, gäbe
+        // genau in dem Augenblick eine falsche Auskunft, in dem der Anleger den
+        // Anmeldelink weiterreicht.
+        if (request.MatchFormat is not null)
+        {
+            tournament.ChangeMatchFormat(request.MatchFormat);
+        }
+
         _tournaments.Add(tournament);
         MakeCallerDirectorOf(tournament);
 
@@ -135,6 +146,7 @@ public sealed class TournamentService : ITournamentService
     {
         var tournament = await Load(tournamentId, cancellationToken);
         var names = await ParticipantNamesAsync(tournament, cancellationToken);
+        var matchFormat = await EffectiveMatchFormatAsync(tournament, cancellationToken);
 
         return new TournamentDetail(
             tournament.Id,
@@ -151,6 +163,8 @@ public sealed class TournamentService : ITournamentService
             tournament.SchedulingMode,
             tournament.FormatTemplateId,
             tournament.Format,
+            tournament.MatchFormat,
+            matchFormat,
             [.. tournament.Courts
                 .OrderBy(court => court.Name, StringComparer.CurrentCulture)
                 .Select(Describe)],
@@ -188,6 +202,59 @@ public sealed class TournamentService : ITournamentService
             tournament.ChangeDiscipline(request.Discipline);
             tournament.Reschedule(request.StartsOn, request.EndsOn);
         }, cancellationToken);
+
+    /// <summary>
+    /// Stellt das Satzformat des Turniers ein — getrennt von den Eckdaten.
+    ///
+    /// Getrennt, weil <c>null</c> hier etwas bedeutet: es nimmt die Einstellung
+    /// zurück. Im gemeinsamen Aufruf mit Name, Ort und Termin wäre dasselbe
+    /// <c>null</c> nicht von „nicht mitgeschickt" zu unterscheiden, und eine
+    /// Maske, die nur den Namen ändert, löschte das Satzformat gleich mit.
+    /// </summary>
+    public Task SetMatchFormatAsync(
+        Guid tournamentId,
+        SetMatchFormatRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return MutateAsync(
+            tournamentId,
+            tournament => tournament.ChangeMatchFormat(request.MatchFormat),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Das Satzformat, unter dem gespielt wird.
+    ///
+    /// Der eingefrorene Stand geht vor — ab der Auslosung ist er die einzige
+    /// Wahrheit, und die Vorlage darunter darf sich seither geändert haben.
+    /// Danach das des Turniers, und erst zuletzt wird die Vorlage überhaupt
+    /// geladen.
+    ///
+    /// Sie kann fehlen: eine eigene Vorlage sieht nur, wem sie gehört, und ein
+    /// Schiedsrichter dieses Turniers gehört nicht dazu. Dann steht hier die
+    /// Vorgabe der Domäne — falsch wäre nur, deshalb die ganze Antwort zu
+    /// verweigern.
+    /// </summary>
+    private async Task<MatchFormat> EffectiveMatchFormatAsync(
+        Tournament tournament,
+        CancellationToken cancellationToken)
+    {
+        if (tournament.Format is { } snapshot)
+        {
+            return snapshot.Definition.MatchFormat;
+        }
+
+        if (tournament.MatchFormat is { } own)
+        {
+            return own;
+        }
+
+        var template = await _templates.FindAsync(tournament.FormatTemplateId, cancellationToken);
+
+        return template?.Definition.MatchFormat ?? new MatchFormat();
+    }
 
     // --- Plätze -----------------------------------------------------------
 

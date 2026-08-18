@@ -23,6 +23,15 @@ public interface ITournamentService
         UpdateTournamentRequest request,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Stellt das Satzformat des Turniers ein oder nimmt es zurück. Nur bis zur
+    /// Auslosung — danach steht es im eingefrorenen Format.
+    /// </summary>
+    Task SetMatchFormatAsync(
+        Guid tournamentId,
+        SetMatchFormatRequest request,
+        CancellationToken cancellationToken = default);
+
     // --- Plätze ---
 
     Task<Guid> AddCourtAsync(

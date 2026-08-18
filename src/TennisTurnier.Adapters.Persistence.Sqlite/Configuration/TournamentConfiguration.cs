@@ -54,6 +54,14 @@ public sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournamen
             .HasConversion(new FormatSnapshotConverter(), new FormatSnapshotComparer())
             .IsRequired(false);
 
+        // Das Satzformat des Turniers, solange nicht ausgelost ist. Danach
+        // steht es im Snapshot — die Spalte bleibt stehen und ist der Stand,
+        // aus dem er hervorging.
+        builder.Property(t => t.MatchFormat!)
+            .HasColumnName("MatchFormat")
+            .HasConversion(new MatchFormatConverter(), new MatchFormatComparer())
+            .IsRequired(false);
+
         // Optimistische Nebenläufigkeit über einen fachlich gepflegten Zähler
         // statt rowversion — verhält sich auf SQLite und PostgreSQL gleich.
         builder.Property(t => t.Version).IsConcurrencyToken();
