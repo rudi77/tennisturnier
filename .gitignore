@@ -436,6 +436,14 @@ FodyWeavers.xsd
 *.sqlite
 *.sqlite3
 
+# Die Regel oben trifft unter Windows (core.ignorecase = true) auch das
+# Projektverzeichnis TennisTurnier.Adapters.Persistence.Sqlite — und damit jede
+# neue Datei darin, lautlos. Bereits verfolgte Dateien fallen dabei nicht auf,
+# neue schon: in 6045e1d verschwanden auf diesem Weg sämtliche EF-Migrationen
+# aus dem Index, und RoleAssignmentRepository.cs wurde nie aufgenommen. Ein
+# frischer Klon hätte weder Schema noch Übersetzung.
+!src/TennisTurnier.Adapters.Persistence.Sqlite/
+
 # Lokale Konfiguration mit Geheimnissen (Authority, Client Secrets)
 appsettings.Local.json
 appsettings.*.Local.json
