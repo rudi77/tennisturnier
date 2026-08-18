@@ -21,6 +21,14 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
+      // Auf allen Schnittstellen, nicht nur auf localhost: der Spielplan wird am
+      // Turniertag vom Handy aus geführt, und das steht nicht auf demselben
+      // Rechner. Die API bleibt trotzdem auf localhost — sie wird unten
+      // serverseitig weitergereicht, und der Browser sieht sie nie.
+      //
+      // Wer von außen kommt, braucht dieselbe Adresse auch im IdP: der
+      // Test-Realm führt Redirect-URI und Web-Origin je Herkunft einzeln auf.
+      host: true,
       port: 5000,
       strictPort: true,
       proxy: {
