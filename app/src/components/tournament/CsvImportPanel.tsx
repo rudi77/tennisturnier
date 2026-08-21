@@ -63,7 +63,6 @@ export function CsvImportPanel({
   }
 
   const upload = async () => {
-    if (empty) return
     setBusy(true)
     try {
       const report = await tournamentApi.importEntries(tournamentId, csv)
@@ -75,7 +74,9 @@ export function CsvImportPanel({
       if (report.imported > 0) {
         show('Liste übernommen')
         setCsv('')
-        if (fileInput.current) fileInput.current.value = ''
+        // Das Feld steht unbedingt im selben Baum — die Referenz ist gesetzt,
+        // solange dieser Code läuft.
+        fileInput.current!.value = ''
         await onImported()
       } else {
         show('Nichts Neues übernommen')
@@ -102,6 +103,10 @@ export function CsvImportPanel({
       <input
         ref={fileInput}
         type="file"
+        // Beide Wege tragen einen eigenen Namen: ohne ihn heißen sie für einen
+        // Screenreader „Datei auswählen" und „Textfeld", und welches der beiden
+        // die Teilnehmerliste ist, steht nur daneben auf dem Bildschirm.
+        aria-label="Teilnehmerliste als Datei"
         accept=".csv,.txt,text/csv,text/plain"
         className="md-input"
         style={{ width: '100%', marginBottom: 'var(--sp-5)' }}
@@ -114,6 +119,7 @@ export function CsvImportPanel({
       <textarea
         className="md-input"
         rows={5}
+        aria-label="Teilnehmerliste einfügen"
         value={csv}
         spellCheck={false}
         placeholder={layout.example}

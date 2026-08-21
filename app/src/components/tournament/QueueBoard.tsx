@@ -33,8 +33,12 @@ export function QueueBoard({
     <div className="md-queue">
       <div className="md-queue__row">
         {boards.map((board) => {
-          const head = board.current ?? board.queue[0] ?? null
-          const live = board.current?.status === AssignmentStatus.Running
+          // Einmal festgehalten: in einer Rückrufaktion ist `board.current`
+          // für den Compiler wieder „vielleicht nichts", und die Absicherung
+          // dagegen konnte nie ausschlagen.
+          const current = board.current
+          const head = current ?? board.queue[0] ?? null
+          const live = current?.status === AssignmentStatus.Running
 
           return (
             <div
@@ -87,28 +91,28 @@ export function QueueBoard({
                   minHeight: 120,
                 }}
               >
-                {board.current && (
+                {current && (
                   <QueueCard
-                    entry={board.current}
+                    entry={current}
                     position={0}
                     timeZone={timeZone}
-                    busy={busyAssignmentId === board.current.assignmentId}
+                    busy={busyAssignmentId === current.assignmentId}
                     onAction={onAction}
-                    onDragStart={() => setDragMatchId(board.current?.matchId ?? null)}
+                    onDragStart={() => setDragMatchId(current.matchId)}
                   />
                 )}
                 {board.queue.map((entry, index) => (
                   <QueueCard
                     key={entry.assignmentId}
                     entry={entry}
-                    position={board.current ? index + 1 : index}
+                    position={current ? index + 1 : index}
                     timeZone={timeZone}
                     busy={busyAssignmentId === entry.assignmentId}
                     onAction={onAction}
                     onDragStart={() => setDragMatchId(entry.matchId)}
                   />
                 ))}
-                {!board.current && board.queue.length === 0 && (
+                {!current && board.queue.length === 0 && (
                   <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', padding: 'var(--sp-4)' }}>
                     Keine Zuweisung. Karten lassen sich hierher ziehen.
                   </div>
