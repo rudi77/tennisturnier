@@ -12,6 +12,7 @@ import { isNarrow } from '../lib/breakpoints'
 import { publicAssignmentStatusLabel, publicAssignmentTone } from '../lib/labels'
 import { formatClock, formatDateRange } from '../lib/time'
 import type {
+  PublicAssignmentStatus,
   PublicCourtView,
   PublicMatchView,
   PublicPhaseView,
@@ -359,6 +360,21 @@ function sideGames(score: string | null): [string, string] | null {
   }
 
   return [side1.join(' '), side2.join(' ')]
+}
+
+/**
+ * Gehört dieser Zustand auf den Platz?
+ *
+ * „Aufgerufen" gehört dazu wie „läuft": ein Spieler muss gerade hin, und ein
+ * Platz, der dann „frei" zeigt, schickt ihn weg. „Unterbrochen" ebenso — die
+ * Partie ist nicht vorbei, sie wartet.
+ *
+ * Die Aufzählung stand zweimal da: einmal in der Platzkarte, einmal im
+ * Aushang. Zwei Abschriften derselben Regel driften auseinander, sobald ein
+ * Zustand dazukommt.
+ */
+function isOnCourt(status: PublicAssignmentStatus): boolean {
+  return status === 'Running' || status === 'Called' || status === 'Suspended'
 }
 
 /** Was am Ergebnis mehr sagt als der Spielstand. „Normal" sagt nichts. */
@@ -938,11 +954,7 @@ function CourtCard({
   byId: Map<string, PublicMatchView>
   timeZone: string
 }) {
-  // „Aufgerufen" gehört auf den Platz wie „läuft": ein Spieler muss gerade
-  // hin. Ein Platz, der dann „frei" zeigt, schickt ihn weg.
-  const current = court.queue.find(
-    (slot) => slot.status === 'Running' || slot.status === 'Called' || slot.status === 'Suspended',
-  )
+  const current = court.queue.find((slot) => isOnCourt(slot.status))
   const waiting = court.queue.filter((slot) => slot !== current && slot.status !== 'Finished')
   const match = current ? byId.get(current.matchId) : undefined
   const games = match ? sideGames(match.score) : null
@@ -1035,7 +1047,12 @@ function Section({
 function KioskView({ view, timeZone }: { view: PublicTournamentView; timeZone: string }) {
   const matches = allMatches(view)
   const byId = new Map(matches.map((match) => [match.id, match]))
-  const results = matches.filter((match) => match.status === 'Finished' && match.score)
+  // Mit Prädikat, damit der Spielstand unten feststeht: die Absicherung gegen
+  // „vielleicht keiner" konnte hinter diesem Filter nie ausschlagen.
+  const results = matches.filter(
+    (match): match is PublicMatchView & { score: string } =>
+      match.status === 'Finished' && !!match.score,
+  )
 
   return (
     <div className="md-kiosk">
@@ -1080,9 +1097,7 @@ function KioskView({ view, timeZone }: { view: PublicTournamentView; timeZone: s
 
       <div className="md-kiosk__grid">
         {view.courts.map((court) => {
-          const isCurrent = (status: string) =>
-            status === 'Running' || status === 'Called' || status === 'Suspended'
-          const currentSlot = court.queue.find((slot) => isCurrent(slot.status)) ?? null
+          const currentSlot = court.queue.find((slot) => isOnCourt(slot.status)) ?? null
           const current = currentSlot ? (byId.get(currentSlot.matchId) ?? null) : null
           const nextSlot = court.queue.find((slot) => slot !== currentSlot)
           const next = nextSlot ? (byId.get(nextSlot.matchId) ?? null) : null
@@ -1166,7 +1181,7 @@ function KioskView({ view, timeZone }: { view: PublicTournamentView; timeZone: s
             <div key={match.id} style={{ fontSize: 12.5, color: 'var(--fg-on-dark-2)' }}>
               {winnerLine(match)}{' '}
               <span className="md-num" style={{ color: 'var(--acc)', fontWeight: 'var(--fw-semibold)' }}>
-                {match.score ?? ''}
+                {match.score}
               </span>
             </div>
           ))}

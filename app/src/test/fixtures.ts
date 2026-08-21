@@ -531,7 +531,8 @@ export function publicPhase(over: Partial<PublicPhaseView> = {}): PublicPhaseVie
         status: 'Finished',
         outcome: 'Normal',
         winnerSide: 1,
-        score: '6:4 6:3',
+        // Wie die Projektion sie schreibt: Sätze durch Komma getrennt.
+        score: '6:4, 6:3',
         assignmentStatus: 'Finished',
       }),
       publicMatch({
