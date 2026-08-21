@@ -125,6 +125,16 @@ export async function turnierMitFeld(
   return { id, name, courtIds }
 }
 
+/**
+ * Die Meldung unten am Rand.
+ *
+ * Nicht über die Rolle `status`: die trägt auch jede Ladeanzeige, und beide
+ * stehen gleichzeitig da, sobald ein Zustandswechsel etwas nachlädt.
+ */
+export function meldung(page: Page) {
+  return page.locator('.md-toast')
+}
+
 /** Öffnet die Anwendung als angemeldete Turnierleitung. */
 export async function alsTurnierleitung(
   page: Page,
