@@ -86,10 +86,27 @@ export function DrawScreen() {
     { enabled: !!tournamentId },
   )
 
+  // Einmal entpackt und danach überall dieselbe Liste: `phases.data ?? []`
+  // stand fünfmal da, und vier davon konnten den leeren Fall gar nicht
+  // erreichen — sie standen hinter der Ladeanzeige.
+  const phaseList = phases.data ?? []
+
   const phase = useMemo(() => {
     const list = phases.data ?? []
     return list.find((entry) => entry.id === phaseId) ?? list[0] ?? null
   }, [phases.data, phaseId])
+
+  /**
+   * Das Satzformat des bearbeiteten Matches.
+   *
+   * Es steht an der Phase, in der das Match liegt — und das ist immer die
+   * gezeigte: bearbeitet wird nur, was im Baum steht, und im Baum steht nur
+   * diese Phase.
+   */
+  const editingFormat = useMemo(
+    () => matchFormatOf(tournament?.format?.definition, phase?.ordinal ?? null),
+    [tournament?.format?.definition, phase],
+  )
 
   const rounds = useMemo(() => toRounds(phase), [phase])
 
@@ -151,7 +168,9 @@ export function DrawScreen() {
           <ErrorBlock error={phases.error} onRetry={() => void phases.reload()} />
         ) : phases.loading && !phases.data ? (
           <Loading label="Bracket wird geladen …" />
-        ) : rounds.length === 0 ? (
+        ) : !phase || rounds.length === 0 ? (
+          // Beides führt zum selben leeren Zustand — und die Prüfung auf die
+          // Phase steht voran, damit weiter unten feststeht, dass es sie gibt.
           <Empty title="Keine Matches in dieser Phase" />
         ) : (
           <>
@@ -178,14 +197,14 @@ export function DrawScreen() {
                 ))}
               </div>
 
-              {(phases.data ?? []).length > 1 && (
+              {phaseList.length > 1 && (
                 <select
                   className="md-input"
                   aria-label="Phase"
-                  value={phase?.id ?? ''}
+                  value={phase.id}
                   onChange={(event) => setPhaseId(event.target.value)}
                 >
-                  {(phases.data ?? []).map((entry) => (
+                  {phaseList.map((entry) => (
                     <option key={entry.id} value={entry.id}>
                       {entry.ordinal}. {entry.name}
                     </option>
@@ -209,10 +228,7 @@ export function DrawScreen() {
         <ResultEditor
           match={editing}
           matchLabel={editing.label ?? editing.id.slice(0, 8)}
-          format={matchFormatOf(
-            tournament?.format?.definition,
-            (phases.data ?? []).find((phase) => phase.id === editing.phaseId)?.ordinal ?? null,
-          )}
+          format={editingFormat}
           meta={`${editing.assignment?.courtName ?? 'ohne Platz'}${
             editing.assignment ? ` · ≈ ${timeSpanToMinutes(editing.assignment.estimatedDuration)} min` : ''
           } · ${timeZone}`}
@@ -242,10 +258,10 @@ export function DrawScreen() {
  * dessen Runde.
  */
 function withSlots(rounds: Round[]): { round: Round; inTree: MatchDetail[]; aside: MatchDetail[] }[] {
-  let slots = rounds[0]?.matches.length ?? 0
+  let slots = 0
 
   return rounds.map((round, index) => {
-    if (index > 0) slots = Math.ceil(slots / 2)
+    slots = index === 0 ? round.matches.length : Math.ceil(slots / 2)
 
     return {
       round,
