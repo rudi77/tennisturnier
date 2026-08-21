@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { isAbortError, toError } from '../api/client'
 import { fetchPublicView } from '../api/endpoints'
 import { subscribeToTournament } from '../api/realtime'
 import type { PublicTournamentView } from '../api/types'
@@ -49,8 +50,8 @@ export function usePublicView(tournamentId: string | null): PublicViewState {
         }
         setError(null)
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return
-        setError(cause instanceof Error ? cause : new Error(String(cause)))
+        if (isAbortError(cause)) return
+        setError(toError(cause))
       } finally {
         setLoading(false)
       }

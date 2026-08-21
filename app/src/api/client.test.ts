@@ -1,7 +1,7 @@
 import { HttpResponse, http } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../test/server'
-import { ApiError, apiUrl, http as client, request, setTokenProvider } from './client'
+import { ApiError, apiUrl, http as client, isAbortError, request, setTokenProvider } from './client'
 
 afterEach(() => setTokenProvider(() => null))
 
@@ -153,6 +153,36 @@ describe('request', () => {
       ),
     )
     await expect(client.get('/api/probe')).resolves.toBeUndefined()
+  })
+})
+
+describe('isAbortError', () => {
+  it('erkennt den Abbruch am Namen — auch quer über Realm-Grenzen', () => {
+    expect(isAbortError(new DOMException('weg', 'AbortError'))).toBe(true)
+    expect(isAbortError({ name: 'AbortError' })).toBe(true)
+  })
+
+  it('hält alles andere für einen Fehler', () => {
+    expect(isAbortError(new Error('kaputt'))).toBe(false)
+    expect(isAbortError(new DOMException('weg', 'TimeoutError'))).toBe(false)
+    expect(isAbortError(null)).toBe(false)
+    expect(isAbortError('AbortError')).toBe(false)
+    expect(isAbortError(undefined)).toBe(false)
+  })
+
+  it('greift auf einem echten Abbruch', async () => {
+    const controller = new AbortController()
+    server.use(
+      http.get('/api/probe', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        return HttpResponse.json({})
+      }),
+    )
+
+    const laufend = client.get('/api/probe', { signal: controller.signal })
+    controller.abort()
+
+    await expect(laufend).rejects.toSatisfy(isAbortError)
   })
 })
 

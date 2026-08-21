@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError } from '../api/client'
+import { ApiError, isAbortError, toError } from '../api/client'
 
 export interface Resource<T> {
   data: T | null
@@ -56,8 +56,8 @@ export function useResource<T>(
         setError(null)
       } catch (cause) {
         if (controller.signal.aborted) return
-        if (cause instanceof DOMException && cause.name === 'AbortError') return
-        setError(cause instanceof Error ? cause : new Error(String(cause)))
+        if (isAbortError(cause)) return
+        setError(toError(cause))
       } finally {
         if (!controller.signal.aborted) setLoading(false)
       }

@@ -47,6 +47,40 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Wurde abgebrochen?
+ *
+ * Über den Namen und nicht über `instanceof DOMException`. Die Prüfung auf den
+ * Typ hält nur innerhalb desselben Realms: der Abbruch entsteht im Netzwerk-
+ * stapel, und dessen `DOMException` ist nicht zwangsläufig dieselbe Klasse wie
+ * die des Fensters. Sie war es im Testlauf nicht — und ein Abbruch, der die
+ * Prüfung nicht besteht, landet als Fehlermeldung auf dem Bildschirm, obwohl
+ * ihn der Wechsel der Ansicht selbst ausgelöst hat.
+ *
+ * Auch `instanceof Error` trägt hier nicht: jsdoms `DOMException` erbt nicht
+ * davon. Der Name dagegen ist von der Spezifikation vorgeschrieben und
+ * überquert jede Realm-Grenze unbeschadet — deshalb wird er gelesen und sonst
+ * nichts.
+ */
+export function isAbortError(cause: unknown): boolean {
+  return (
+    typeof cause === 'object' &&
+    cause !== null &&
+    (cause as { name?: unknown }).name === 'AbortError'
+  )
+}
+
+/**
+ * Was geworfen wurde, als Fehler.
+ *
+ * JavaScript lässt jeden Wert werfen, und `catch` bekommt deshalb `unknown`.
+ * Die Umwandlung stand an jeder Stelle, die einen Fehler anzeigt — dreimal
+ * dieselbe Zeile, und zwei davon konnten den Fall gar nicht erreichen.
+ */
+export function toError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error(String(cause))
+}
+
 /** Wird gesetzt, sobald die Anmeldung steht; siehe auth/AuthProvider.tsx. */
 let tokenProvider: () => string | null = () => null
 

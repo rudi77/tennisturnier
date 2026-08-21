@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isAbortError } from '../../api/client'
 import { useToast } from '../../hooks/useToast'
 
 /**
@@ -105,7 +106,7 @@ export function ShareLink({
     } catch (cause) {
       // Wer das Teilen-Blatt zumacht, hat sich umentschieden. Das ist kein
       // Fehler und bekommt keine Meldung.
-      if (cause instanceof DOMException && cause.name === 'AbortError') return
+      if (isAbortError(cause)) return
       showError(cause, 'Teilen')
     } finally {
       setBusy(false)
