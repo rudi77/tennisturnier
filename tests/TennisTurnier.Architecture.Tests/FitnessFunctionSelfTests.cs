@@ -25,7 +25,16 @@ public sealed class FitnessFunctionSelfTests
     [InlineData(typeof(SchedulingAssembly))]
     public void Geprüfte_Assemblies_enthalten_ueberhaupt_Typen(Type marker)
     {
-        var count = Types.InAssembly(marker.Assembly).GetTypes().Count();
+        // Auf den eigenen Namensraum eingegrenzt, und zwar auf der Ebene der
+        // Typdefinitionen: gezählt werden sollen die Typen dieses Projekts und
+        // nicht alles, was Compiler und Werkzeuge zusätzlich hineinlegen. Eine
+        // Abdeckungsmessung hängt ihren Zähltyp in jede Assembly, und der lässt
+        // sich anschließend nicht mehr laden — ohne diese Eingrenzung scheiterte
+        // die Positivkontrolle an ihm statt an dem, was sie prüft.
+        var count = Types.InAssembly(marker.Assembly)
+            .That().ResideInNamespaceStartingWith("TennisTurnier")
+            .GetTypes()
+            .Count();
 
         Assert.True(count > 0, $"{marker.Assembly.GetName().Name} enthält keine Typen — Regeln liefen ins Leere.");
     }
