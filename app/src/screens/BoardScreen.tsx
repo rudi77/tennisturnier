@@ -68,11 +68,31 @@ export function BoardScreen() {
     [phases.data],
   )
 
+  /** Die Phase des Matches, dessen Ergebnis gerade eingetragen wird. */
+  const editingPhase = useMemo(
+    () => (phases.data ?? []).find((entry) => entry.id === editing?.phaseId) ?? null,
+    [phases.data, editing],
+  )
+
+  /**
+   * Das Satzformat dieses Matches. Es steht an seiner Phase, und ohne sie gilt
+   * das der Definition — dieselbe Reihenfolge wie im Draw-Screen.
+   */
+  const editingFormat = useMemo(
+    () => matchFormatOf(tournament?.format?.definition, editingPhase?.ordinal ?? null),
+    [tournament?.format?.definition, editingPhase],
+  )
+
   const scheduled = useMemo<ScheduledMatch[]>(
     () =>
-      allMatches
-        .filter((match) => match.assignment && match.assignment.status !== AssignmentStatus.Finished)
-        .map((match) => ({ match, courtId: match.assignment?.courtId ?? '' })),
+      // Über `flatMap` und nicht über `filter` und `map`: nur so weiß der
+      // Compiler in der Abbildung noch, dass die Zuweisung da ist — sonst
+      // brauchte es einen Rückfall auf eine leere Platz-Id, den es nie gab.
+      allMatches.flatMap((match) =>
+        match.assignment && match.assignment.status !== AssignmentStatus.Finished
+          ? [{ match, courtId: match.assignment.courtId }]
+          : [],
+      ),
     [allMatches],
   )
 
@@ -153,11 +173,10 @@ export function BoardScreen() {
     }
   }
 
-  const runSolver = async () => {
-    if (!tournamentId) return
+  const runSolver = async (id: string) => {
     setBusy('solver')
     try {
-      const result = await scheduleApi.propose(tournamentId)
+      const result = await scheduleApi.propose(id)
       setProposal(result)
       if (result.assignments.length === 0) {
         show('Kein Vorschlag — es gibt nichts anzusetzen, was nicht schon läge')
@@ -169,13 +188,12 @@ export function BoardScreen() {
     }
   }
 
-  const confirmProposal = async () => {
-    if (!tournamentId || !proposal) return
+  const confirmProposal = async (id: string, plan: SchedulePlanResult) => {
     setBusy('confirm')
     try {
       const result = await scheduleApi.confirm(
-        tournamentId,
-        proposal.assignments.map((assignment) => ({
+        id,
+        plan.assignments.map((assignment) => ({
           matchId: assignment.matchId,
           courtId: assignment.courtId,
           sequenceOnCourt: assignment.sequenceOnCourt,
@@ -225,8 +243,8 @@ export function BoardScreen() {
         // Verstöße blockieren nicht — die Turnierleitung kennt Umstände, die das
         // System nicht kennt. Sie soll nur wissen, was sie tut.
         show(
-          `Zuweisung gesetzt & gepinnt — mit ${result.violations.length} Verstoß${
-            result.violations.length === 1 ? '' : 'en'
+          `Zuweisung gesetzt & gepinnt — mit ${result.violations.length} ${
+            result.violations.length === 1 ? 'Verstoß' : 'Verstößen'
           }: ${result.violations.map((v) => constraintLabel[v.constraint]).join(', ')}`,
         )
       } else {
@@ -281,12 +299,10 @@ export function BoardScreen() {
   }
 
   const nextRoundName = useMemo(() => {
-    if (!editing) return null
-    const phase = (phases.data ?? []).find((entry) => entry.id === editing.phaseId)
-    if (!phase) return null
-    const hasNext = phase.matches.some((match) => match.round > editing.round)
+    if (!editing || !editingPhase) return null
+    const hasNext = editingPhase.matches.some((match) => match.round > editing.round)
     return hasNext ? `Runde ${editing.round + 2}` : null
-  }, [editing, phases.data])
+  }, [editing, editingPhase])
 
   const beforeDraw =
     tournament != null &&
@@ -377,7 +393,7 @@ export function BoardScreen() {
                 <button
                   type="button"
                   className="md-btn md-btn--primary"
-                  onClick={() => void runSolver()}
+                  onClick={() => void runSolver(tournament.id)}
                   disabled={busy === 'solver' || matchDay}
                   title={
                     matchDay
@@ -398,7 +414,7 @@ export function BoardScreen() {
                 proposal={proposal}
                 timeZone={timeZone}
                 busy={busy === 'confirm'}
-                onConfirm={() => void confirmProposal()}
+                onConfirm={() => void confirmProposal(tournament.id, proposal)}
                 onDiscard={() => setProposal(null)}
               />
             )}
@@ -436,7 +452,7 @@ export function BoardScreen() {
               )
             ) : (
               <GanttBoard
-                courts={tournament?.courts ?? []}
+                courts={tournament.courts}
                 scheduled={scheduledToday}
                 day={activeDay}
                 timeZone={timeZone}
@@ -452,10 +468,7 @@ export function BoardScreen() {
         <ResultEditor
           match={editing}
           matchLabel={editing.label ?? editing.id.slice(0, 8)}
-          format={matchFormatOf(
-            tournament?.format?.definition,
-            (phases.data ?? []).find((phase) => phase.id === editing.phaseId)?.ordinal ?? null,
-          )}
+          format={editingFormat}
           meta={`${editing.assignment?.courtName ?? 'ohne Platz'} · ≈ ${timeSpanToMinutes(
             editing.assignment?.estimatedDuration ?? '',
           )} min`}
