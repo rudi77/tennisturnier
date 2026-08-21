@@ -120,11 +120,18 @@ export function MatchFormatPicker({
             value={value.tiebreakAt}
             disabled={disabled}
             aria-label="Spiele pro Satz"
-            onChange={(event) => {
-              const games = Number(event.target.value)
-              if (!Number.isFinite(games)) return
-              patch({ tiebreakAt: Math.min(MAX_GAMES, Math.max(MIN_GAMES, Math.round(games))) })
-            }}
+            // Ein Zahlenfeld gibt nur Zahlen oder eine leere Zeichenkette
+            // heraus — Unsinn verwirft der Browser selbst. Hier stand deshalb
+            // eine Prüfung auf `Number.isFinite`, die nie ausschlagen konnte;
+            // die leere Eingabe wird ohnehin auf die Untergrenze gehoben.
+            onChange={(event) =>
+              patch({
+                tiebreakAt: Math.min(
+                  MAX_GAMES,
+                  Math.max(MIN_GAMES, Math.round(Number(event.target.value))),
+                ),
+              })
+            }
             style={{ width: 62, minHeight: 'var(--hit-target)' }}
           />
         </label>
