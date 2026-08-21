@@ -176,17 +176,22 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
     try {
       let effectiveTemplateId = entry.templateId
 
+      let definition = entry.draft
+
       if (dirty) {
         // Eine eingebaute Vorlage bleibt unangetastet: geänderte Parameter
         // ergeben eine eigene Vorlage — sie gehört dem, der sie anlegt.
         if (template.data?.isBuiltIn) {
-          const copy = await templateApi.copy(
-            entry.templateId,
-            `${entry.draft.name} · ${entry.name}`,
-          )
+          // Der Name der Kopie steht in ihrer Definition; `FormatTemplate`
+          // führt keinen eigenen. Der Entwurf unverändert darübergespeichert
+          // hätte ihn gleich wieder überschrieben, und in der Vorlagenliste
+          // stünden zwei Einträge desselben Namens — einer „eingebaut", einer
+          // „eigene Vorlage".
+          definition = { ...entry.draft, name: `${entry.draft.name} · ${entry.name}` }
+          const copy = await templateApi.copy(entry.templateId, definition.name)
           effectiveTemplateId = copy.id
         }
-        await templateApi.save(effectiveTemplateId, entry.draft)
+        await templateApi.save(effectiveTemplateId, definition)
       }
 
       const created = await tournamentApi.create({
@@ -234,8 +239,14 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
         windows = result.created
       }
 
-      selectTournament(created.id)
+      // Erst nachladen, dann auswählen — nicht umgekehrt. Die Liste des
+      // Arbeitsbereichs kennt das neue Turnier sonst noch nicht, und sein
+      // Wächter stellt eine Auswahl, die er nicht wiederfindet, still auf das
+      // erste eigene zurück: der Assistent landete im Ablauf eines anderen
+      // Turniers, und beim ersten angelegten fiel es nicht auf, weil das
+      // erste eigene genau das neue war.
       await reloadTournament()
+      selectTournament(created.id)
 
       show(
         wanted.length === 0

@@ -20,8 +20,12 @@ const EIGENE = 'bbbbbbbb-9999-9999-9999-999999999999'
 
 function aufbau() {
   const onCreated = vi.fn()
-  const selectTournament = vi.fn()
-  const reloadTournament = vi.fn(() => Promise.resolve())
+  const reihenfolge: string[] = []
+  const selectTournament = vi.fn(() => void reihenfolge.push('ausgewählt'))
+  const reloadTournament = vi.fn(() => {
+    reihenfolge.push('nachgeladen')
+    return Promise.resolve()
+  })
 
   renderWithProviders(
     <>
@@ -31,7 +35,7 @@ function aufbau() {
     { workspace: workspace({ selectTournament, reloadTournament }) },
   )
 
-  return { onCreated, selectTournament, reloadTournament }
+  return { onCreated, selectTournament, reloadTournament, reihenfolge }
 }
 
 /** Zum Schritt mit dieser Beschriftung wechseln. */
@@ -483,7 +487,7 @@ describe('WizardScreen — Anlegen', () => {
   })
 
   it('legt Turnier und Plätze an und wählt es aus', async () => {
-    const { onCreated, selectTournament, reloadTournament } = aufbau()
+    const { onCreated, selectTournament, reihenfolge } = aufbau()
     await bisZurZusammenfassung()
 
     await user().click(screen.getByRole('button', { name: 'Turnier anlegen' }))
@@ -505,8 +509,11 @@ describe('WizardScreen — Anlegen', () => {
 
     expect(callsTo('POST', '/api/tournaments/new-2/courts')).toBe(2)
     expect(selectTournament).toHaveBeenCalledWith('new-2')
-    expect(reloadTournament).toHaveBeenCalled()
     expect(onCreated).toHaveBeenCalled()
+
+    // Erst nachladen, dann auswählen: die Liste des Arbeitsbereichs kennt das
+    // neue Turnier sonst noch nicht und stellt die Auswahl still zurück.
+    expect(reihenfolge).toEqual(['nachgeladen', 'ausgewählt'])
   })
 
   it('sagt ohne Termin, dass Platzzeiten fehlen', async () => {
@@ -626,7 +633,13 @@ describe('WizardScreen — Anlegen', () => {
         name: 'K.-o.-System · Clubmeisterschaft 2026',
       }),
     )
-    expect(callsTo('PUT', '/api/format-templates/copy-1')).toBe(1)
+
+    // Und der Entwurf geht unter demselben Namen hinaus: `FormatTemplate`
+    // führt keinen eigenen, der Name steht in der Definition. Unverändert
+    // gespeichert hieße die Kopie wieder wie ihre Vorlage.
+    expect(lastBody('PUT', '/api/format-templates/copy-1')).toMatchObject({
+      definition: { name: 'K.-o.-System · Clubmeisterschaft 2026' },
+    })
     expect(lastBody('POST', '/api/tournaments')).toMatchObject({ formatTemplateId: 'copy-1' })
   })
 
@@ -643,6 +656,11 @@ describe('WizardScreen — Anlegen', () => {
 
     await waitFor(() => expect(callsTo('PUT', `/api/format-templates/${EIGENE}`)).toBe(1))
     expect(callsTo('POST', `/api/format-templates/${EIGENE}/copy`)).toBe(0)
+
+    // Eine eigene Vorlage behält ihren Namen — umbenannt wird nur eine Kopie.
+    expect(lastBody('PUT', `/api/format-templates/${EIGENE}`)).toMatchObject({
+      definition: { name: 'Eigene Vorlage' },
+    })
   })
 
   it('meldet ein abgewiesenes Anlegen', async () => {

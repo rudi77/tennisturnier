@@ -450,12 +450,18 @@ export function formatTemplateSummary(
 export function formatTemplateDetail(
   over: Partial<FormatTemplateDetail> = {},
 ): FormatTemplateDetail {
+  const id = over.id ?? IDS.template
+  const name = over.name ?? 'K.-o.-System'
+
   return {
-    id: IDS.template,
-    name: 'K.-o.-System',
+    id,
+    name,
     version: 1,
     isBuiltIn: true,
-    definition: formatDefinition(),
+    // Der Name steht in der Definition und nicht daneben: `FormatTemplate`
+    // führt keinen eigenen, und eine Vorlage, deren beide Namen im Test
+    // auseinandergehen, verdeckt genau den Fehler, der daraus entsteht.
+    definition: formatDefinition({ id, name }),
     ...over,
   }
 }
