@@ -181,12 +181,9 @@ export function formatDefinition(over: Partial<FormatDefinition> = {}): FormatDe
     name: 'K.-o.-System',
     matchFormat: DEFAULT_FORMAT,
     phases: [
-      {
-        ordinal: 1,
-        format: PhaseFormatKind.Knockout,
-        name: 'Hauptfeld',
-        thirdPlaceMatch: false,
-      },
+      // Ohne `thirdPlaceMatch`: die Vorlage lässt das Feld offen, und die
+      // Oberfläche liest daraus „nein". Genau so kommt sie vom Server.
+      { ordinal: 1, format: PhaseFormatKind.Knockout, name: 'Hauptfeld' },
     ],
     ...over,
   }

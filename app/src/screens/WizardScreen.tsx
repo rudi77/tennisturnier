@@ -13,6 +13,7 @@ import {
   QualificationRule,
   type FormatDefinition,
   type MatchFormat,
+  type PhaseDefinition,
 } from '../api/types'
 import { MatchFormatPicker } from '../components/tournament/MatchFormatPicker'
 import { DEFAULT_MATCH_FORMAT, matchFormatSummary } from '../lib/matchFormat'
@@ -93,10 +94,13 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
 
   const templates = useResource(() => templateApi.list(), [])
 
+  // Einmal entpackt: hinter der Ladeanzeige kann die Liste nicht mehr fehlen,
+  // und `templates.data ?? []` behauptete es an zwei Stellen trotzdem.
+  const templateList = templates.data ?? []
+
   useEffect(() => {
-    if (!templateId && templates.data && templates.data.length > 0) {
-      setTemplateId(templates.data[0]?.id ?? null)
-    }
+    const first = templates.data?.[0]
+    if (!templateId && first) setTemplateId(first.id)
   }, [templates.data, templateId])
 
   const template = useResource(
@@ -131,45 +135,63 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
   const knockoutPhase = draft?.phases?.find((phase) => phase.format === PhaseFormatKind.Knockout)
   const qualifyingPhase = draft?.phases?.find((phase) => phase.qualification)
 
-  const patchDefinition = (mutate: (next: FormatDefinition) => void) => {
-    setDraft((current) => {
-      if (!current) return current
-      const next = structuredClone(current)
-      mutate(next)
-      return next
-    })
+  /**
+   * Ändert eine Phase des Entwurfs.
+   *
+   * Entwurf und Ordinalzahl kommen als Argumente und nicht aus dem Zustand:
+   * jeder Aufrufer steht hinter der Ladeanzeige und zeichnet seine Zeile nur,
+   * weil es diese Phase gibt. Die Absicherungen dagegen — „vielleicht kein
+   * Entwurf", „vielleicht keine Phase" — konnten nie ausschlagen.
+   */
+  const patchPhase = (
+    base: FormatDefinition,
+    ordinal: number,
+    mutate: (phase: PhaseDefinition) => void,
+  ) => {
+    const next = structuredClone(base)
+    mutate(next.phases.find((phase) => phase.ordinal === ordinal)!)
+    setDraft(next)
   }
 
-  const complete = name.trim().length > 0 && venueName.trim().length > 0 && !!templateId
+  /**
+   * Was angelegt würde — oder `null`, solange etwas fehlt.
+   *
+   * Ein Wert statt eines Wahrheitswerts. Vorher prüfte `create` Name und Ort
+   * ein zweites Mal und meldete einen Fehler, den der gesperrte Knopf gar nicht
+   * zuließ: zwei Meldungen für einen Fall, von denen niemand die zweite je zu
+   * sehen bekam.
+   */
+  const ready =
+    name.trim() && venueName.trim() && templateId && draft
+      ? { name: name.trim(), venueName: venueName.trim(), templateId, draft }
+      : null
 
-  const create = async () => {
-    if (!templateId || !draft) return
-    if (!name.trim()) {
-      showError(new Error('Ein Turnier braucht einen Namen.'), 'Anlegen')
-      return
-    }
-    if (!venueName.trim()) {
-      showError(new Error('Ein Turnier braucht einen Ort, an dem es stattfindet.'), 'Anlegen')
-      return
-    }
-
+  const create = async (entry: {
+    name: string
+    venueName: string
+    templateId: string
+    draft: FormatDefinition
+  }) => {
     setSaving(true)
     try {
-      let effectiveTemplateId = templateId
+      let effectiveTemplateId = entry.templateId
 
       if (dirty) {
         // Eine eingebaute Vorlage bleibt unangetastet: geänderte Parameter
         // ergeben eine eigene Vorlage — sie gehört dem, der sie anlegt.
         if (template.data?.isBuiltIn) {
-          const copy = await templateApi.copy(templateId, `${draft.name} · ${name.trim()}`)
+          const copy = await templateApi.copy(
+            entry.templateId,
+            `${entry.draft.name} · ${entry.name}`,
+          )
           effectiveTemplateId = copy.id
         }
-        await templateApi.save(effectiveTemplateId, draft)
+        await templateApi.save(effectiveTemplateId, entry.draft)
       }
 
       const created = await tournamentApi.create({
-        name: name.trim(),
-        venueName: venueName.trim(),
+        name: entry.name,
+        venueName: entry.venueName,
         venueAddress: venueAddress.trim() || null,
         venueCity: venueCity.trim() || null,
         timeZoneId,
@@ -380,7 +402,7 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                       gap: 'var(--sp-5)',
                     }}
                   >
-                    {(templates.data ?? []).map((entry) => {
+                    {templateList.map((entry) => {
                       const active = entry.id === templateId
                       return (
                         <button
@@ -458,9 +480,8 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                                 className="md-pill"
                                 aria-pressed={(firstPhase.groupCount ?? 1) === count}
                                 onClick={() =>
-                                  patchDefinition((next) => {
-                                    const phase = next.phases[0]
-                                    if (phase) phase.groupCount = count
+                                  patchPhase(draft, firstPhase.ordinal, (phase) => {
+                                    phase.groupCount = count
                                   })
                                 }
                               >
@@ -477,9 +498,8 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                                 className="md-pill"
                                 aria-pressed={(firstPhase.encounters ?? 1) === count}
                                 onClick={() =>
-                                  patchDefinition((next) => {
-                                    const phase = next.phases[0]
-                                    if (phase) phase.encounters = count
+                                  patchPhase(draft, firstPhase.ordinal, (phase) => {
+                                    phase.encounters = count
                                   })
                                 }
                               >
@@ -506,12 +526,9 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                                 className="md-pill"
                                 aria-pressed={active}
                                 onClick={() =>
-                                  patchDefinition((next) => {
-                                    const phase = next.phases.find((entry) => entry.qualification)
-                                    if (phase?.qualification) {
-                                      phase.qualification.rule = option.rule
-                                      phase.qualification.n = option.n
-                                    }
+                                  patchPhase(draft, qualifyingPhase.ordinal, (phase) => {
+                                    phase.qualification!.rule = option.rule
+                                    phase.qualification!.n = option.n
                                   })
                                 }
                               >
@@ -531,11 +548,8 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                               className="md-pill"
                               aria-pressed={(knockoutPhase.thirdPlaceMatch ?? false) === value}
                               onClick={() =>
-                                patchDefinition((next) => {
-                                  const phase = next.phases.find(
-                                    (entry) => entry.format === PhaseFormatKind.Knockout,
-                                  )
-                                  if (phase) phase.thirdPlaceMatch = value
+                                patchPhase(draft, knockoutPhase.ordinal, (phase) => {
+                                  phase.thirdPlaceMatch = value
                                 })
                               }
                             >
@@ -603,15 +617,17 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                     <button
                       type="button"
                       className="md-btn md-btn--accent"
-                      onClick={() => void create()}
-                      disabled={saving || !complete}
+                      onClick={() => void create(ready!)}
+                      disabled={saving || !ready}
                       style={{ minHeight: 'var(--hit-target)' }}
                     >
                       {saving ? 'Legt an …' : 'Turnier anlegen'}
                     </button>
-                    {!complete && (
+                    {!ready && (
                       <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', alignSelf: 'center' }}>
-                        Name und Anlage fehlen noch — beide stehen unter „Eckdaten".
+                        {draft
+                          ? 'Name und Anlage fehlen noch — beide stehen unter „Eckdaten".'
+                          : 'Die Formatvorlage ist noch nicht geladen.'}
                       </span>
                     )}
                   </div>
@@ -708,14 +724,15 @@ function CourtsStep({
   timeZoneId: string
 }) {
   const patch = (index: number, mutate: (court: CourtDraft) => void) => {
-    const next = courts.map((court) => ({ ...court }))
-    const target = next[index]
-    if (!target) return
-    mutate(target)
+    const next = courts.map((court, i) => {
+      const copy = { ...court }
+      if (i === index) mutate(copy)
+      return copy
+    })
 
     // Genau ein Center Court: er ist das bevorzugte Ziel für Finalspiele, und
     // zwei davon wären keine Bevorzugung.
-    if (target.isCenterCourt) {
+    if (next[index]?.isCenterCourt) {
       next.forEach((court, i) => {
         if (i !== index) court.isCenterCourt = false
       })
