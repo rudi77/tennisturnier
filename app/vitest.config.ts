@@ -25,6 +25,10 @@ export default defineConfig({
     // Playwright bringt eigene Dateien mit demselben Suffix mit; sie laufen
     // unter `npm run e2e` und nicht hier.
     exclude: ['e2e/**', 'node_modules/**'],
+    // Großzügiger als die Vorgabe von fünf Sekunden: die Ergebniseingabe wird
+    // über den Stepper bedient, und ein Match-Tiebreak sind dreißig Klicks —
+    // unter voller Parallelität reicht die Vorgabe dafür nicht verlässlich.
+    testTimeout: 20_000,
     restoreMocks: true,
     unstubEnvs: true,
     unstubGlobals: true,
