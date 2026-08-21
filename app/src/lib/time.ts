@@ -10,9 +10,15 @@
 /** "01:15:00" oder "1.02:30:00" → Minuten. */
 export function timeSpanToMinutes(span: string | null | undefined): number {
   if (!span) return 0
-  const [datePart, timePart] = span.includes('.') ? span.split('.') : [null, span]
-  const [h = '0', m = '0', s = '0'] = (timePart ?? '').split(':')
-  const days = datePart ? Number(datePart) : 0
+
+  // Der Punkt trennt Tage von der Uhrzeit. Ohne ihn steht `dot` auf -1, und
+  // `slice(0)` liefert genau die ganze Zeichenkette — deshalb hier ein Index
+  // und keine Fallunterscheidung, die anschließend beide Zweige gegen `null`
+  // absichern müsste.
+  const dot = span.indexOf('.')
+  const days = dot < 0 ? 0 : Number(span.slice(0, dot))
+  const [h = '0', m = '0', s = '0'] = span.slice(dot + 1).split(':')
+
   return days * 1440 + Number(h) * 60 + Number(m) + Math.round(Number(s) / 60)
 }
 

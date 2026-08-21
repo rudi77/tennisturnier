@@ -83,9 +83,14 @@ export function displayName(user: User | null): string {
 }
 
 export function initials(user: User | null): string {
-  const name = displayName(user)
-  if (!name) return '··'
-  const parts = name.split(/[\s.]+/).filter(Boolean)
-  if (parts.length === 1) return (parts[0] ?? '').slice(0, 2).toUpperCase()
-  return `${(parts[0] ?? '')[0] ?? ''}${(parts[parts.length - 1] ?? '')[0] ?? ''}`.toUpperCase()
+  // Nach `filter(Boolean)` ist jeder Bestandteil nichtleer — leer ist nur die
+  // Liste selbst, und zwar sowohl ohne Benutzer als auch bei einem Namen, der
+  // nur aus Trennzeichen besteht. Das ist der eine Fall, den es zu prüfen gibt.
+  const parts = displayName(user).split(/[\s.]+/).filter(Boolean)
+  if (parts.length === 0) return '··'
+
+  const first = parts[0]!
+  const last = parts[parts.length - 1]!
+
+  return (parts.length === 1 ? first.slice(0, 2) : first[0]! + last[0]!).toUpperCase()
 }

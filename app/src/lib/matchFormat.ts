@@ -70,9 +70,10 @@ export function openSetCount(format: MatchFormat, sets: readonly [number, number
   let one = 0
   let two = 0
 
-  for (let index = 0; index < sets.length && index < format.bestOf; index++) {
-    const [games1, games2] = sets[index] ?? [0, 0]
-
+  // Über `entries()` und nicht über einen Index: das Paar kommt so als Tupel
+  // und nicht als „vielleicht nicht da", und der Rückfall auf 0:0, den es nie
+  // brauchte, entfällt mit ihm.
+  for (const [index, [games1, games2]] of sets.slice(0, format.bestOf).entries()) {
     // Ein leerer oder unentschiedener Satz ist noch keiner — ab hier ist nichts
     // mehr entschieden, und weitere Sätze anzubieten hieße, Lücken zuzulassen.
     if (games1 === games2) return index + 1

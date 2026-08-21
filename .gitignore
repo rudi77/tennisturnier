@@ -450,3 +450,12 @@ appsettings.*.Local.json
 
 # Von `dotnet ef` beim Entwurfszeit-Zugriff angelegt
 design-time.db
+
+# --- Testberichte ---------------------------------------------------------
+# Coverage-Berichte und Playwright-Artefakte entstehen bei jedem Lauf neu.
+/TestResults/
+app/coverage/
+app/playwright-report/
+app/test-results/
+app/blob-report/
+app/.playwright/

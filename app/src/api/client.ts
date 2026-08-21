@@ -69,9 +69,19 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
+/**
+ * Trägt die Antwort JSON?
+ *
+ * Die Frage steht auf beiden Wegen — Fehler wie Erfolg — und stand zweimal
+ * dagestanden auch zweimal da. Zwei Abschriften derselben Prüfung driften
+ * auseinander, sobald eine davon um einen Medientyp erweitert wird.
+ */
+function isJson(response: Response): boolean {
+  return (response.headers.get('content-type') ?? '').includes('json')
+}
+
 async function toProblem(response: Response): Promise<ProblemDetails | null> {
-  const type = response.headers.get('content-type') ?? ''
-  if (!type.includes('json')) return null
+  if (!isJson(response)) return null
   try {
     return (await response.json()) as ProblemDetails
   } catch {
@@ -107,8 +117,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     return undefined as T
   }
 
-  const type = response.headers.get('content-type') ?? ''
-  if (!type.includes('json')) return undefined as T
+  if (!isJson(response)) return undefined as T
 
   return (await response.json()) as T
 }
