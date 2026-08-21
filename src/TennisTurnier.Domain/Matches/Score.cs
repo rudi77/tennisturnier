@@ -245,16 +245,15 @@ public sealed record Score
     /// Der beim Abbruch laufende Satz. Er muss möglich, aber gerade noch nicht
     /// zu Ende sein — sonst wäre er ein gespielter Satz und gehörte in die
     /// andere Liste.
+    ///
+    /// Dass überhaupt noch ein Satz begonnen haben kann, steht hier nicht mehr
+    /// zur Prüfung: der einzige Aufrufer weist ein entschiedenes Match vorher
+    /// ab, und ein unentschiedenes hat weniger gespielte Sätze als das Format
+    /// zulässt — ein Satz endet nie unentschieden.
     /// </summary>
     private static void ValidateAbandonedSet(SetScore set, int completedCount, MatchFormat format)
     {
         var position = $"Satz {completedCount + 1}";
-
-        if (completedCount >= format.BestOf)
-        {
-            throw new DomainException(
-                $"{position}: nach {completedCount} Sätzen kann kein weiterer begonnen haben.");
-        }
 
         if (set.Games1 < 0 || set.Games2 < 0)
         {
