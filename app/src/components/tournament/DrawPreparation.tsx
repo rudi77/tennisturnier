@@ -172,7 +172,16 @@ function AddEntryPanel({
   const [busy, setBusy] = useState(false)
 
   const isDouble = discipline !== Discipline.Singles
-  const ready = first != null && (!isDouble || second != null)
+
+  /**
+   * Was gemeldet würde — oder `null`, solange die Angaben nicht reichen.
+   *
+   * Ein Wert statt eines Wahrheitswerts: „reicht es" und „was geht hinaus"
+   * waren zwei Ausdrücke, und der Absendeweg prüfte anschließend ein zweites
+   * Mal, was der gesperrte Knopf schon verhindert hatte.
+   */
+  const lineup =
+    first && (!isDouble || second) ? { first, second: isDouble ? second : null } : null
 
   /**
    * Meldet den zusammengestellten Teilnehmer.
@@ -186,14 +195,12 @@ function AddEntryPanel({
    * eine Meldung, die stillschweigend nicht im Draw landet, aber die schlechtere
    * Überraschung.
    */
-  const submit = async () => {
-    if (!first || (isDouble && !second)) return
-
+  const submit = async (chosen: { first: PlayerSummary; second: PlayerSummary | null }) => {
     setBusy(true)
     try {
       const participant = await playerApi.createParticipant(
-        first.id,
-        isDouble ? (second?.id ?? null) : null,
+        chosen.first.id,
+        chosen.second?.id ?? null,
         // Den Teamnamen setzt die API den Spielernamen voran — im Einzel weist
         // sie ihn ab, deshalb geht er dort gar nicht erst mit.
         isDouble && teamName.trim() ? teamName.trim() : null,
@@ -268,8 +275,8 @@ function AddEntryPanel({
           <button
             type="button"
             className="md-btn md-btn--primary"
-            disabled={busy || !ready}
-            onClick={() => void submit()}
+            disabled={busy || !lineup}
+            onClick={() => void submit(lineup!)}
           >
             {busy ? 'Wird gemeldet …' : isDouble ? 'Doppel melden' : 'Melden'}
           </button>
@@ -278,7 +285,7 @@ function AddEntryPanel({
             Eine gesperrte Schaltfläche ohne Grund ist eine Sackgasse: sie sagt
             „geht nicht" und verschweigt, was fehlt.
           */}
-          {!ready && (
+          {!lineup && (
             <div className="md-hint" style={{ marginTop: 'var(--sp-4)' }}>
               {first == null
                 ? 'Zuerst einen Spieler suchen oder unten neu anlegen.'

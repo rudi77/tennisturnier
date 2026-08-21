@@ -10,7 +10,7 @@ import { CsvImportPanel } from './CsvImportPanel'
 
 const T = IDS.tournament
 
-function aufbau(discipline = Discipline.Singles) {
+function aufbau(discipline: Discipline = Discipline.Singles) {
   const onImported = vi.fn(() => Promise.resolve())
   renderWithProviders(
     <>

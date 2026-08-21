@@ -80,11 +80,16 @@ function dayRange(
 
   for (const court of courts) {
     for (const window of court.windows) {
-      if (dateKey(window.from, timeZone) !== day) continue
+      // Der Anfang trägt beide Prüfungen: unlesbar ist er genau dann, wenn auch
+      // sein Tag unlesbar ist. Danach steht er fest, und die frühere
+      // Absicherung gegen `null` konnte nie ausschlagen.
       const from = minutesOfDay(window.from, timeZone)
+      if (from === null || dateKey(window.from, timeZone) !== day) continue
+      marks.push(from)
+
+      // Das Ende kann für sich unlesbar sein; und ein Fenster bis Mitternacht
+      // endet als 00:00 des Folgetags.
       const to = minutesOfDay(window.to, timeZone)
-      if (from !== null) marks.push(from)
-      // Ein Fenster bis Mitternacht endet als 00:00 des Folgetags.
       if (to !== null) marks.push(to === 0 ? 24 * 60 : to)
     }
   }

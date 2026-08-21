@@ -10,7 +10,7 @@ import { TournamentActions } from './TournamentActions'
 
 const T = fx.IDS.tournament
 
-function aufbau(state = TournamentState.DrawGenerated, onDeleted?: () => void) {
+function aufbau(state: TournamentState = TournamentState.DrawGenerated, onDeleted?: () => void) {
   const onChanged = vi.fn(() => Promise.resolve())
   renderWithProviders(
     <>

@@ -172,7 +172,7 @@ describe('ResultEditor', () => {
     expect(screen.getByText('Betroffene Seite')).toBeInTheDocument()
     expect(screen.getByText('Wer nicht angetreten ist beziehungsweise disqualifiziert wurde.')).toBeInTheDocument()
 
-    await u.click(screen.getByRole('button', { name: 'L. Berger', selector: '.md-pill' }))
+    await u.click(screen.getByRole('button', { name: 'L. Berger' }))
     await u.click(screen.getByRole('button', { name: 'Speichern & propagieren' }))
 
     await waitFor(() =>
