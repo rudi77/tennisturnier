@@ -4,10 +4,11 @@ using TennisTurnier.Application.Ports;
 namespace TennisTurnier.Adapters.Scheduling;
 
 /// <summary>Ankertyp, über den Tests und Composition Root die Assembly finden.</summary>
-public sealed class SchedulingAssembly
-{
-    private SchedulingAssembly() { }
-}
+/// <remarks>
+/// Statisch und ohne Konstruktor: der Typ wird nie erzeugt, nur benannt. Ein
+/// privater Konstruktor stand hier und wurde von niemandem aufgerufen.
+/// </remarks>
+public static class SchedulingAssembly;
 
 public static class SchedulingRegistration
 {

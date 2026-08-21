@@ -1,7 +1,8 @@
 namespace TennisTurnier.Domain;
 
 /// <summary>Ankertyp, über den Tests und Composition Root die Assembly finden.</summary>
-public sealed class DomainAssembly
-{
-    private DomainAssembly() { }
-}
+/// <remarks>
+/// Statisch und ohne Konstruktor: der Typ wird nie erzeugt, nur benannt. Ein
+/// privater Konstruktor stand hier und wurde von niemandem aufgerufen.
+/// </remarks>
+public static class DomainAssembly;

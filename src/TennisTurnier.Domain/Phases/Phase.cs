@@ -406,7 +406,12 @@ public sealed class Phase : Entity
 
         foreach (var (round, matches) in byRound.Where(r => r.Key > 1))
         {
-            if (!byRound.TryGetValue(round - 1, out var previous))
+            // Ohne Vorrunde gibt es nichts zu verbinden — und ohne doppelt so
+            // viele Matches darin auch nicht. Ein K.-o.-Format erzeugt das nie;
+            // ein Format ist aber austauschbar (ADR-0001), und ein Zugriff über
+            // das Ende der Liste hinaus wäre ein 500 statt einer Absage.
+            if (!byRound.TryGetValue(round - 1, out var previous)
+                || previous.Count < matches.Count * 2)
             {
                 continue;
             }

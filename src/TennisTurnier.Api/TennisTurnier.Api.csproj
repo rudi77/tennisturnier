@@ -11,4 +11,10 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Damit die Systemuhr geprüft werden kann, ohne sie öffentlich zu machen:
+         sie ist Infrastruktur der Composition Root und geht niemanden sonst an. -->
+    <InternalsVisibleTo Include="TennisTurnier.Api.Tests" />
+  </ItemGroup>
+
 </Project>
