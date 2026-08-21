@@ -6,7 +6,7 @@ import { useResource } from '../hooks/useResource'
 import { EntryStatus, type SelfRegistrationResult } from '../api/types'
 import { disciplineLabel } from '../lib/labels'
 import { formatDateRange } from '../lib/time'
-import { ApiError } from '../api/client'
+import { ApiError, toError } from '../api/client'
 
 /**
  * Die öffentliche Anmeldung.
@@ -158,9 +158,7 @@ function Form({
       setProblem(
         cause instanceof ApiError && cause.isNotFound
           ? 'Über diesen Link lässt sich gerade nichts melden. Vielleicht ist der Meldeschluss vorbei.'
-          : cause instanceof Error
-            ? cause.message
-            : 'Die Meldung konnte nicht gespeichert werden.',
+          : toError(cause).message,
       )
     } finally {
       setBusy(false)
@@ -202,10 +200,18 @@ function Form({
             <div className="md-eyebrow" style={{ marginTop: 'var(--sp-4)' }}>
               Partner
             </div>
+            {/*
+              Sichtbar steht „Vorname" — darüber die Überschrift „Partner".
+              Vorgelesen wird der ganze Name: sonst hört jemand, der die
+              Überschrift nicht sieht, zweimal dasselbe Feld und trägt sich
+              selbst zweimal ein. Der sichtbare Text steckt im vorgelesenen
+              (WCAG 2.5.3), damit Spracheingabe weiter funktioniert.
+            */}
             <div style={{ display: 'flex', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
               <Field label="Vorname">
                 <input
                   className="md-input"
+                  aria-label="Vorname des Partners"
                   value={partnerFirstName}
                   onChange={(e) => setPartnerFirstName(e.target.value)}
                 />
@@ -213,6 +219,7 @@ function Form({
               <Field label="Nachname">
                 <input
                   className="md-input"
+                  aria-label="Nachname des Partners"
                   value={partnerLastName}
                   onChange={(e) => setPartnerLastName(e.target.value)}
                 />
