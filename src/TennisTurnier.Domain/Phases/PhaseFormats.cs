@@ -22,14 +22,16 @@ public static class PhaseFormats
 
     public static IPhaseFormat For(PhaseFormatKind kind)
     {
-        if (Implementations.GetValueOrDefault(kind) is { } format)
+        var format = Implementations.GetValueOrDefault(kind);
+
+        if (format is null)
         {
-            return format;
+            throw new DomainException(
+                $"Für das Format {kind} gibt es noch keine Implementierung. " +
+                "Ein genuin neues Paarungsverfahren braucht eine eigene IPhaseFormat-Klasse (ADR-0001).");
         }
 
-        throw new DomainException(
-            $"Für das Format {kind} gibt es noch keine Implementierung. " +
-            "Ein genuin neues Paarungsverfahren braucht eine eigene IPhaseFormat-Klasse (ADR-0001).");
+        return format;
     }
 
     public static bool IsSupported(PhaseFormatKind kind) => Implementations.ContainsKey(kind);

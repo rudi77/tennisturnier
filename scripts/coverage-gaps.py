@@ -1,17 +1,14 @@
 """Zeigt, was die Testläufe nicht erreicht haben.
 
-Gelesen wird der von ReportGenerator zusammengeführte Cobertura-Bericht. Jedes
-Testprojekt schreibt einen eigenen, in dem alles Fremde als ungetestet dasteht —
-wer die Dateien einzeln liest, misst deshalb zu wenig, und wer sie selbst
-zusammenzählt, verliert die Zweige: eine Zeile mit zwei Ausgängen steht in zwei
-Berichten mit je 50 Prozent, und aus zweimal der Hälfte lässt sich nicht ablesen,
-ob es dieselbe Hälfte war. Der lcov-Bericht taugt aus demselben Grund nicht.
+Gelesen wird der Bericht, den scripts/coverage.ps1 hinterlässt: ein einziger,
+in dem coverlet die Läufe aller Testprojekte selbst zusammengerechnet hat.
 
-    dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
-    dotnet tool run reportgenerator "-reports:TestResults/**/coverage.cobertura.xml"
-        "-targetdir:TestResults/merged" -reporttypes:Cobertura
-        "-filefilters:-*/obj/*;-*/Migrations/*"
-    python scripts/coverage-gaps.py [Namensfilter]
+Nachträglich zusammenführen geht nicht — weder mit ReportGenerator noch von
+Hand. Eine Zeile mit zwei Ausgängen steht in zwei Berichten mit je 50 Prozent,
+und aus zweimal der Hälfte lässt sich nicht ablesen, ob es dieselbe Hälfte war.
+Genau daran hat diese Auswertung eine Zeitlang Lücken gemeldet, die keine waren.
+
+    ./scripts/coverage.ps1 [-Filter TeilDesDateinamens]
 """
 
 import os

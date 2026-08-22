@@ -36,15 +36,8 @@ public sealed record SchedulingProblem(
         Courts.ToDictionary(court => court.Id, court => court.FreeWindows),
         MinimumRest);
 
-    public TimeSpan DurationOf(Guid matchId)
-    {
-        if (DurationByMatch.TryGetValue(matchId, out var duration))
-        {
-            return duration;
-        }
-
-        return MatchDuration.Default;
-    }
+    public TimeSpan DurationOf(Guid matchId) =>
+        DurationByMatch.GetValueOrDefault(matchId, MatchDuration.Default);
 }
 
 /// <summary>

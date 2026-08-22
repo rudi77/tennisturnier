@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Abdeckung über alle Testprojekte hinweg, in einem Bericht.
+
+  Der Grund für MergeWith: jedes Testprojekt schreibt sonst seinen eigenen
+  Bericht, und die lassen sich nachträglich nicht mehr sauber vereinen. Eine
+  Verzweigung mit zwei Ausgängen steht dort mit „50 Prozent" — welcher der
+  beiden Ausgänge genommen wurde, steht nirgends. Zwei solche Zeilen ergeben
+  zusammengezählt wieder 50 Prozent, obwohl beide Ausgänge gelaufen sind.
+
+  Coverlet selbst kann es: die json-Datei trägt die Trefferzahlen je Ausgang,
+  und jeder weitere Lauf rechnet seine hinzu. Der cobertura-Bericht des letzten
+  Laufs ist dann die Summe aller.
+
+  Deshalb müssen die Projekte nacheinander laufen — scripts/coverage.ps1 tut
+  das. Ein paralleler Lauf überschriebe die gemeinsame json-Datei.
+-->
+<RunSettings>
+  <RunConfiguration>
+    <CollectSourceInformation>true</CollectSourceInformation>
+  </RunConfiguration>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>json,cobertura</Format>
+          <MergeWith>TestResults/coverage.json</MergeWith>
+          <Exclude>[*]TennisTurnier.Adapters.Persistence.Sqlite.Migrations.*</Exclude>
+          <ExcludeByAttribute>GeneratedCodeAttribute</ExcludeByAttribute>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
