@@ -93,11 +93,13 @@ public sealed class RoleService : IRoleService
         [
             .. assignments
                 .OrderBy(a => a.Role)
+                // Zu jeder Zuweisung gibt es ihr Konto: der Fremdschlüssel
+                // lässt keine ohne zu, und gelöscht wird sie mit ihm.
                 .Select(a => new TournamentRoleSummary(
                     a.Id,
                     a.UserId,
-                    byId.GetValueOrDefault(a.UserId)?.DisplayName,
-                    byId.GetValueOrDefault(a.UserId)?.Email,
+                    byId[a.UserId].DisplayName,
+                    byId[a.UserId].Email,
                     a.Role))
         ];
     }

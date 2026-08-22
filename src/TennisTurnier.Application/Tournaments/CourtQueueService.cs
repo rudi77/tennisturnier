@@ -455,17 +455,19 @@ public sealed class CourtQueueService : ICourtQueueService
         IReadOnlyDictionary<Guid, string> labels,
         IReadOnlyList<TimeSlot> openingHours)
     {
-        var match = matches.FirstOrDefault(m => m.Id == assignment.MatchId);
+        // Zu jeder Zuweisung gibt es ihr Match: der Fremdschlüssel lässt keine
+        // ohne zu, und mit dem Match verschwindet auch sie.
+        var match = matches.First(m => m.Id == assignment.MatchId);
 
         return new QueuedMatch(
             assignment.Id,
             assignment.MatchId,
-            match?.Label,
-            NameOf(match?.Side1, names, labels),
-            NameOf(match?.Side2, names, labels),
+            match.Label,
+            NameOf(match.Side1, names, labels),
+            NameOf(match.Side2, names, labels),
             assignment.SequenceOnCourt,
             assignment.Status,
-            match?.Status ?? MatchStatus.Pending,
+            match.Status,
             assignment.EarliestStart,
             assignment.PlannedStart,
             assignment.ActualStart,
@@ -488,14 +490,12 @@ public sealed class CourtQueueService : ICourtQueueService
     /// die Karte hängt am Turniertag an der Platzwand.
     /// </summary>
     private static string? NameOf(
-        MatchSide? side,
+        MatchSide side,
         IReadOnlyDictionary<Guid, string> names,
         IReadOnlyDictionary<Guid, string> labels) =>
-        side is null
-            ? null
-            : side.EntryId is { } entryId
-                ? names.GetValueOrDefault(entryId)
-                : MatchOrigins.Describe(side.Origin, labels);
+        side.EntryId is { } entryId
+            ? names.GetValueOrDefault(entryId)
+            : MatchOrigins.Describe(side.Origin, labels);
 
     private async Task<IReadOnlyDictionary<Guid, string>> NamesByEntryAsync(
         Tournament tournament,

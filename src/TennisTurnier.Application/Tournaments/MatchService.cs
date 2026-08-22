@@ -458,15 +458,17 @@ public sealed class MatchService : IMatchService
         ?? throw new DomainException(
             $"Für den Ausgang {request.Outcome} muss angegeben werden, welche Seite betroffen ist.");
 
+    /// <summary>
+    /// Das Satzformat, unter dem dieses Match gespielt wird.
+    ///
+    /// Ein Match gibt es nur in einer Phase, und Phasen entstehen beim Auslosen
+    /// aus dem eingefrorenen Format. Beides ist hier also da.
+    /// </summary>
     private static MatchFormat MatchFormatOf(Tournament tournament, Phase phase)
     {
-        var definition = tournament.Format?.Definition
-            ?? throw new DomainException("Das Turnier hat kein eingefrorenes Format.");
+        var definition = tournament.Format!.Definition;
 
-        var phaseDefinition = definition.Phases.FirstOrDefault(p => p.Ordinal == phase.Ordinal)
-            ?? throw new DomainException($"Das Format kennt keine Phase {phase.Ordinal}.");
-
-        return definition.MatchFormatOf(phaseDefinition);
+        return definition.MatchFormatOf(definition.Phases.First(p => p.Ordinal == phase.Ordinal));
     }
 
     // --- Spielplanprüfung --------------------------------------------------
@@ -591,11 +593,10 @@ public sealed class MatchService : IMatchService
         Phase phase,
         CancellationToken cancellationToken)
     {
-        var definition = tournament.Format?.Definition
-            ?? throw new DomainException("Das Turnier hat kein eingefrorenes Format.");
-
-        var phaseDefinition = PhaseOrchestrator.DefinitionOf(definition, phase)
-            ?? throw new DomainException($"Das Format kennt keine Phase {phase.Ordinal}.");
+        // Wie in MatchFormatOf: eine Phase gibt es nur zu einem eingefrorenen
+        // Format, und ihre Definition steht darin.
+        var definition = tournament.Format!.Definition;
+        var phaseDefinition = PhaseOrchestrator.DefinitionOf(definition, phase)!;
 
         return PhaseOrchestrator.StateOf(
             tournament,
@@ -639,9 +640,12 @@ public sealed class MatchService : IMatchService
         return (tournament, phases, phase, phase.Matches.Single(m => m.Id == matchId));
     }
 
+    /// <summary>
+    /// Das Turnier zu einer Phase. Es ist da — die Phase gehört ihm, und der
+    /// Query-Filter zeigt beide oder keines von beiden (ADR-0004).
+    /// </summary>
     private async Task<Tournament> LoadTournament(Guid tournamentId, CancellationToken cancellationToken) =>
-        await _tournaments.FindAsync(tournamentId, cancellationToken)
-        ?? throw new NotFoundException("Turnier", tournamentId);
+        (await _tournaments.FindAsync(tournamentId, cancellationToken))!;
 
     /// <summary>
     /// Ergebnisse darf der Schiedsrichter des Turniers ebenso eintragen wie sein

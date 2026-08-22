@@ -94,10 +94,10 @@ public sealed class DrawBuilder
             return seeded;
         }
 
-        var source = created.FirstOrDefault(p => p.Ordinal == qualification.FromPhase)
-            ?? throw new DomainException(
-                $"Phase {phaseDefinition.Ordinal} bezieht ihre Teilnehmer aus Phase " +
-                $"{qualification.FromPhase}, die es nicht gibt.");
+        // Die Phasen entstehen der Reihe nach, und die Definition ist geprüft:
+        // eine Qualifikation zeigt immer auf eine Phase davor, die damit schon
+        // angelegt ist.
+        var source = created.First(p => p.Ordinal == qualification.FromPhase);
 
         var sourceDefinition = definition.Phases.First(p => p.Ordinal == qualification.FromPhase);
 

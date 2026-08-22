@@ -587,7 +587,7 @@ public sealed class TournamentService : ITournamentService
                 .Select(entry => new EntryOverview(
                     entry.Id,
                     entry.ParticipantId,
-                    byId.TryGetValue(entry.ParticipantId, out var p) ? p.DisplayName : "(unbekannt)",
+                    byId[entry.ParticipantId].DisplayName,
                     entry.Seed,
                     entry.Status,
                     entry.Origin,

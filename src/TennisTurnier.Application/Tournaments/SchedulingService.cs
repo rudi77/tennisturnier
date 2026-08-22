@@ -386,12 +386,12 @@ public sealed class SchedulingService : ISchedulingService
                 court.Id, court.Name, court.IsCenterCourt, court.FreeWindows(range)));
     }
 
-    private static MatchFormat MatchFormatOf(FormatDefinition definition, Phase phase)
-    {
-        var phaseDefinition = definition.Phases.FirstOrDefault(p => p.Ordinal == phase.Ordinal);
-
-        return phaseDefinition is null ? definition.MatchFormat : definition.MatchFormatOf(phaseDefinition);
-    }
+    /// <summary>
+    /// Das Satzformat einer Phase. Sie steht in der Definition, aus der sie
+    /// entstanden ist — beim Auslosen wird beides zusammen eingefroren.
+    /// </summary>
+    private static MatchFormat MatchFormatOf(FormatDefinition definition, Phase phase) =>
+        definition.MatchFormatOf(definition.Phases.First(p => p.Ordinal == phase.Ordinal));
 
     /// <summary>Das Endspiel: letzte Runde der letzten Phase.</summary>
     private static bool IsFinal(Phase phase, Match match, IReadOnlyList<Phase> phases) =>
@@ -484,14 +484,20 @@ public sealed class SchedulingService : ISchedulingService
         return candidate;
     }
 
+    /// <summary>
+    /// Eine eben übernommene Ansetzung in Worten.
+    ///
+    /// Platz und Beginn stehen fest: bestätigt wird nur auf einen aktiven Platz
+    /// des Turniers, und die Ansetzung hat ihre geplante Zeit gerade bekommen.
+    /// </summary>
     private static ProposedAssignmentDetail Describe(CourtAssignment assignment, Plan plan) => new(
             assignment.MatchId,
             plan.Labels.GetValueOrDefault(assignment.MatchId),
             assignment.CourtId,
-            plan.Problem.Courts.FirstOrDefault(court => court.Id == assignment.CourtId)?.Name ?? "(unbekannt)",
+            plan.Problem.Courts.First(court => court.Id == assignment.CourtId).Name,
             assignment.SequenceOnCourt,
-            assignment.PlannedStart ?? default,
-            (assignment.PlannedStart ?? default) + assignment.EstimatedDuration,
+            assignment.PlannedStart!.Value,
+            assignment.PlannedStart!.Value + assignment.EstimatedDuration,
             assignment.EstimatedDuration,
             ProposalChange.Unchanged,
             "Übernommen.");

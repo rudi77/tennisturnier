@@ -70,9 +70,13 @@ public static class TournamentViewBuilder
         var matches = phase.Matches.OrderBy(m => m.Round).ThenBy(m => m.Position).ToList();
         var labels = MatchLabels(matches);
 
-        var standings = standingsByPhase.TryGetValue(phase.Id, out var table)
-            ? table.Places.Select(Describe).ToList()
-            : [];
+        // Ohne Eintrag eine leere Tabelle: der Aufrufer legt für jede Phase eine
+        // an, und eine fehlende wäre kein Grund, die ganze Ansicht zu verweigern.
+        var standings = standingsByPhase
+            .GetValueOrDefault(phase.Id, Standings.Empty)
+            .Places
+            .Select(Describe)
+            .ToList();
 
         return new PublicPhaseView(
             phase.Id,

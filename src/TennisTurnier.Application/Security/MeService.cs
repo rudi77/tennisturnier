@@ -33,12 +33,14 @@ public sealed class MeService : IMeService
             return null;
         }
 
-        var account = await _directory.FindAsync(user.UserId, cancellationToken);
+        // Wer angemeldet ist, hat ein Konto: die Benutzerauflösung legt es an,
+        // bevor irgendein Anwendungsfall zum Zug kommt (ADR-0007).
+        var account = (await _directory.FindAsync(user.UserId, cancellationToken))!;
 
         return new MeResponse(
             user.UserId,
-            account?.DisplayName,
-            account?.Email,
+            account.DisplayName,
+            account.Email,
             user.IsSystemAdmin,
             [.. user.Assignments.Select(a =>
                 new RoleAssignmentSummary(a.Id, a.Role, a.Scope.Type, a.Scope.ResourceId))]);
