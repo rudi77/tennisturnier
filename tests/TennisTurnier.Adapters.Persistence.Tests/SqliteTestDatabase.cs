@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using TennisTurnier.Adapters.Persistence.Sqlite;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Domain.Security;
@@ -36,13 +37,21 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
     /// Kontexte eine Instanz, liefe der Test daran vorbei und prüfte nur, dass
     /// eine veränderliche Eigenschaft gelesen wird.
     /// </summary>
-    public TennisTurnierDbContext NewContext()
+    public TennisTurnierDbContext NewContext(IInterceptor? interceptor = null)
     {
-        var options = new DbContextOptionsBuilder<TennisTurnierDbContext>()
-            .UseSqlite($"Data Source={_path}")
-            .Options;
+        var builder = new DbContextOptionsBuilder<TennisTurnierDbContext>()
+            .UseSqlite($"Data Source={_path}");
 
-        return new TennisTurnierDbContext(options, new FixedUserContext(ActingAs));
+        // Für den einen Test, der einen Schreibkonflikt zuverlässig herstellen
+        // muss: ein Interceptor schiebt die konkurrierende Zeile genau zwischen
+        // Prüfung und Speichern ein. Zwei Aufrufe nacheinander träfen einander
+        // nie, und zwei nebenläufige nur manchmal.
+        if (interceptor is not null)
+        {
+            builder.AddInterceptors(interceptor);
+        }
+
+        return new TennisTurnierDbContext(builder.Options, new FixedUserContext(ActingAs));
     }
 
     public ValueTask DisposeAsync()
