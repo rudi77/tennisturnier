@@ -77,6 +77,17 @@ public sealed class TurnierRandfaelleTests
     }
 
     [Fact]
+    public void Einen_vorhandenen_Platz_findet_es_und_benennt_ihn_um()
+    {
+        var turnier = Turnier();
+        var platz = turnier.AddCourt(Guid.NewGuid(), "Platz 1", CourtSurface.Clay, CourtLocation.Outdoor);
+
+        turnier.RenameCourt(platz.Id, "Center Court");
+
+        Assert.Equal("Center Court", turnier.CourtOf(platz.Id).Name);
+    }
+
+    [Fact]
     public void Ein_Platzname_der_schon_vergeben_ist_wird_abgewiesen()
     {
         var turnier = Turnier();

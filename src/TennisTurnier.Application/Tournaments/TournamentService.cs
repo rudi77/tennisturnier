@@ -565,18 +565,20 @@ public sealed class TournamentService : ITournamentService
         CancellationToken cancellationToken = default)
     {
         var tournament = await Load(tournamentId, cancellationToken);
-        User.Require(Permission.ManageTournament, ResourceScope.Tournament(tournamentId));
 
-        var maySeeInternals = User.Can(Permission.ViewInternals, ResourceScope.Tournament(tournamentId));
+        // Die Meldungsverwaltung ist die Innenansicht: Kontaktdaten und
+        // Bestätigungscodes stehen darin. Wer sie verwaltet, darf sie auch sehen
+        // — in der Rollenmatrix hat jede Rolle mit ManageTournament auch
+        // ViewInternals, und ein zweiter Test darauf wäre einer, der nie
+        // ausschlägt. Wer nur Ergebnisse einträgt, kommt hier gar nicht herein.
+        User.Require(Permission.ManageTournament, ResourceScope.Tournament(tournamentId));
+        User.Require(Permission.ViewInternals, ResourceScope.Tournament(tournamentId));
 
         var participants = await _players.FindParticipantsAsync(
             [.. tournament.Entries.Select(e => e.ParticipantId)], cancellationToken);
 
         var byId = participants.ToDictionary(p => p.Id);
-
-        var contactsByParticipant = maySeeInternals
-            ? await ContactsAsync(participants, cancellationToken)
-            : [];
+        var contactsByParticipant = await ContactsAsync(participants, cancellationToken);
 
         return
         [
@@ -590,7 +592,7 @@ public sealed class TournamentService : ITournamentService
                     entry.Status,
                     entry.Origin,
                     entry.RegisteredAt,
-                    maySeeInternals ? entry.ConfirmationCode : null,
+                    entry.ConfirmationCode,
                     contactsByParticipant.GetValueOrDefault(entry.ParticipantId, [])))
         ];
     }

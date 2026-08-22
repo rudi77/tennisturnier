@@ -145,14 +145,15 @@ public sealed record EntryDetail(
 /// braucht, um über sie zu entscheiden.
 /// </summary>
 /// <param name="Contacts">
-/// Leer ohne <c>ViewInternals</c>. Kontaktdaten sind der Teil, der niemals
-/// öffentlich wird (ADR-0003/0008); wer nur Ergebnisse einträgt, braucht sie
-/// nicht.
+/// Kontaktdaten sind der Teil, der niemals öffentlich wird (ADR-0003/0008).
+/// Sie stehen hier, weil dieser Endpunkt die Innenansicht ist und nur
+/// hereinlässt, wer das Turnier verwaltet <em>und</em> die Innenansicht sehen
+/// darf; wer nur Ergebnisse einträgt, kommt gar nicht so weit.
 /// </param>
 /// <param name="ConfirmationCode">
-/// Ebenfalls nur mit <c>ViewInternals</c>. Er ist der Weg eines Melders ohne
-/// Konto zu seiner Meldung — die Turnierleitung braucht ihn, wenn jemand anruft
-/// und ihn verlegt hat.
+/// Aus demselben Grund hier: er ist der Weg eines Melders ohne Konto zu seiner
+/// Meldung — die Turnierleitung braucht ihn, wenn jemand anruft und ihn
+/// verlegt hat.
 /// </param>
 public sealed record EntryOverview(
     Guid Id,
