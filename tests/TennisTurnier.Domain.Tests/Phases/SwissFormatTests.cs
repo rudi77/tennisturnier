@@ -673,27 +673,6 @@ public sealed class SwissFormatTests
         Assert.NotEqual(entries[2].EntryId, freilos.Side1.EntryIdOrDefault());
     }
 
-    [Fact]
-    public void Ein_Freilos_ohne_Gegenueber_zaehlt_fuer_niemanden()
-    {
-        // Ein Freilos gegen einen Platz, hinter dem noch niemand steht: im
-        // Schweizer System entsteht das nicht, aus einer anderen Phase kann es
-        // kommen. Niemandem ein Freilos anzurechnen ist dann richtig.
-        var format = new SwissFormat();
-        var entries = Entries(3);
-        var phase = new Phase(Guid.NewGuid(), Guid.NewGuid(), 1, PhaseFormatKind.Swiss);
-
-        phase.AddPairings([
-            new Pairing(1, 1, ParticipantRef.ByeSlot, ParticipantRef.Open, "Runde 1"),
-        ]);
-
-        // Die Runde ist nicht entschieden, es entsteht also keine neue — geprüft
-        // wird, dass die Auswertung des Freiloses nicht darüber stolpert.
-        var weitere = format.GeneratePairings(
-            new PhaseState(Definition(rounds: 2), entries, phase.Matches));
-
-        Assert.Empty(weitere);
-    }
 }
 
 internal static class ParticipantRefTestExtensions

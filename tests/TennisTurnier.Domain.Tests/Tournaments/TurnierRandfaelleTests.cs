@@ -121,6 +121,13 @@ public sealed class TurnierRandfaelleTests
         turnier.SetSeed(zweite.Id, 1);
 
         Assert.Equal(1, zweite.Seed);
+
+        // Und eine Nachmeldung darf die frei gewordene Position ebenfalls
+        // bekommen — geprüft wird schon beim Melden, nicht erst danach.
+        turnier.Withdraw(zweite.Id);
+        var dritte = turnier.Enter(Guid.NewGuid(), Guid.NewGuid(), seed: 1);
+
+        Assert.Equal(1, dritte.Seed);
     }
 
     [Fact]

@@ -60,20 +60,34 @@ public sealed class BenutzeraufloesungTests : IClassFixture<TennisTurnierApiFact
     }
 
     [Fact]
-    public async Task Ohne_Namen_im_Token_bleibt_der_Anzeigename_leer()
+    public async Task Ohne_name_Claim_zaehlt_der_Anmeldename()
     {
-        // Lieber kein Name als ein erfundener: die Anzeige fällt dann auf die
-        // Adresse zurück, und niemand steht unter einer Kennung da, die er nie
-        // gewählt hat.
+        // Nicht jeder Aussteller legt „name" hinein. Dann steht der Anmeldename
+        // da — besser als gar nichts, und besser als ein erfundener.
+        var subject = $"ohne-name-{Guid.NewGuid():N}";
         var client = _factory.CreateClientAs(
-            $"ohne-name-{Guid.NewGuid():N}",
-            email: "ohne.name@example.invalid",
-            ohneClaims: "name");
+            subject, email: "ohne.name@example.invalid", ohneClaims: "name");
+
+        var me = await client.GetFromJsonAsync<MeResponse>("/api/me", Json);
+
+        Assert.NotNull(me);
+        Assert.Equal($"{subject}@kennung", me.DisplayName);
+        Assert.Equal("ohne.name@example.invalid", me.Email);
+    }
+
+    [Fact]
+    public async Task Ganz_ohne_Namen_bleibt_der_Anzeigename_leer()
+    {
+        // Entra ID stellt Token ohne beides aus. Eine leere Anzeige ist dann
+        // richtig — die Oberfläche zeigt die Adresse.
+        var client = _factory.CreateClientAs(
+            $"namenlos-{Guid.NewGuid():N}",
+            email: "namenlos@example.invalid",
+            ohneClaims: "name,preferred_username");
 
         var me = await client.GetFromJsonAsync<MeResponse>("/api/me", Json);
 
         Assert.NotNull(me);
         Assert.Null(me.DisplayName);
-        Assert.Equal("ohne.name@example.invalid", me.Email);
     }
 }

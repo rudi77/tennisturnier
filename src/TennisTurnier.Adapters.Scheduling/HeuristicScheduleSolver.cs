@@ -249,7 +249,9 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
                 .ThenBy(candidate => candidate.Court.Name, StringComparer.CurrentCulture)
                 .FirstOrDefault();
 
-            if (best.Court is null || best.Start is not { } start)
+            // Ein Kandidat ohne Beginn kommt hier nicht an — die Auswahl oben
+            // lässt nur die durch, für die einer gefunden wurde.
+            if (best.Court is null)
             {
                 _unscheduled.Add(new UnscheduledMatch(
                     match.Id,
@@ -257,6 +259,7 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
                 return;
             }
 
+            var start = best.Start!.Value;
             var slot = new TimeSlot(start, start + duration);
             Occupy(match.Id, best.Court.Id, slot);
 
@@ -472,8 +475,12 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
         /// Das Finale und das Spiel um Platz 3 gehören auf den Center Court, alles
         /// andere möglichst nicht.
         /// </summary>
+        /// <remarks>
+        /// Gefragt wird nur beim Ansetzen eines Matches — die Menge ist dabei
+        /// nicht leer, sonst gäbe es nichts anzusetzen.
+        /// </remarks>
         private bool IsShowcase(Match match) =>
-            _problem.Matches.Count > 0 && match.Round == _problem.Matches.Max(m => m.Round);
+            match.Round == _problem.Matches.Max(m => m.Round);
 
         private static ProposalChange ChangeAgainst(
             CourtAssignment? previous,

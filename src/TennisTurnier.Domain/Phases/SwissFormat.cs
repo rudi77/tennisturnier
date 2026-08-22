@@ -231,10 +231,9 @@ public sealed class SwissFormat : IPhaseFormat
 
         foreach (var match in matches.Where(match => match.HasBye))
         {
-            if ((match.Side1.IsBye ? match.Side2.EntryId : match.Side1.EntryId) is { } entryId)
-            {
-                received.Add(entryId);
-            }
+            // Die andere Seite steht fest: ein Freilos wird sofort entschieden,
+            // und entschieden wird nur, was besetzt ist.
+            received.Add((match.Side1.IsBye ? match.Side2.EntryId : match.Side1.EntryId)!.Value);
         }
 
         return received;

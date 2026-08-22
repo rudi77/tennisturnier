@@ -653,10 +653,19 @@ public sealed class Tournament : Entity
             return;
         }
 
-        var taken = _entries.Any(e => e.Status != EntryStatus.Withdrawn && e.Seed == seed);
-        if (taken)
+        foreach (var entry in _entries)
         {
-            throw new DomainException($"Die Setzposition {seed} ist bereits vergeben.");
+            // Eine zurückgezogene Meldung hält ihre Position nicht besetzt:
+            // sonst bliebe die Eins gesperrt, weil jemand abgesagt hat.
+            if (entry.Status == EntryStatus.Withdrawn)
+            {
+                continue;
+            }
+
+            if (entry.Seed == seed)
+            {
+                throw new DomainException($"Die Setzposition {seed} ist bereits vergeben.");
+            }
         }
     }
 

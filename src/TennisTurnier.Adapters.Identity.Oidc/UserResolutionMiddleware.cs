@@ -42,7 +42,9 @@ internal sealed class UserResolutionMiddleware : IMiddleware
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
-        if (context.User.Identity?.IsAuthenticated == true)
+        // HttpContext.User trägt immer eine Identität — auch ohne Anmeldung,
+        // dann eben eine unauthentifizierte.
+        if (context.User.Identity!.IsAuthenticated)
         {
             var principal = await ResolveAsync(context.User, context.RequestAborted);
             if (principal is not null)

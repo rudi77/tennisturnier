@@ -66,7 +66,7 @@ public sealed class TournamentService : ITournamentService
         // jeder — nähme ein Turnier die eigene Vorlage eines anderen Benutzers,
         // hinge sein eingefrorenes Format bis zur Auslosung an einer Definition,
         // die ein Fremder noch ändern kann.
-        if (!template.IsBuiltIn && template.OwnerUserId != User.UserId)
+        if (template.OwnerUserId is { } owner && owner != User.UserId)
         {
             throw new NotFoundException("Formatvorlage", request.FormatTemplateId);
         }

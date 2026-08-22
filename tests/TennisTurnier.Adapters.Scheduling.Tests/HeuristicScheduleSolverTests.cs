@@ -495,4 +495,301 @@ public sealed class HeuristicScheduleSolverTests
 
         Assert.Contains("Zyklus", fehler.Message, StringComparison.Ordinal);
     }
+
+    // --- Randfälle ---------------------------------------------------------
+
+    private CourtAssignment Bestehend(
+        Guid matchId,
+        Guid courtId,
+        DateTimeOffset? start = null,
+        AssignmentSource source = AssignmentSource.Auto,
+        int sequence = 1)
+    {
+        var assignment = new CourtAssignment(
+            Guid.NewGuid(), _tournamentId, matchId, courtId, sequence,
+            TimeSpan.FromMinutes(75), source);
+
+        if (start is { } geplant)
+        {
+            assignment.PlanFor(geplant);
+        }
+
+        return assignment;
+    }
+
+    [Fact]
+    public void Ohne_Matches_gibt_es_nichts_zu_planen()
+    {
+        var problem = new SchedulingProblem(
+            [],
+            new Dictionary<Guid, IReadOnlyList<Guid>>(),
+            Courts(2),
+            new Dictionary<Guid, TimeSpan>(),
+            Rest,
+            []);
+
+        var proposal = _solver.Solve(problem);
+
+        Assert.Empty(proposal.Assignments);
+        Assert.Empty(proposal.Unscheduled);
+    }
+
+    [Fact]
+    public void Ein_zu_kurzes_Fenster_nimmt_kein_Match_auf()
+    {
+        // Eine halbe Stunde Flutlicht reicht für kein Match. Das gehört gesagt,
+        // und zwar je Match — ein leerer Vorschlag ohne Begründung wäre für die
+        // Turnierleitung nicht zu deuten.
+        var (phase, players) = Knockout(4);
+        var kurz = new SchedulableCourt(
+            Guid.NewGuid(), "Platz 1", false, [new TimeSlot(At(16, 20), At(16, 20, 30))]);
+
+        var problem = Problem(phase, players, [kurz]);
+        var proposal = _solver.Solve(problem);
+
+        Assert.Empty(proposal.Assignments);
+        Assert.Equal(phase.Matches.Count, proposal.Unscheduled.Count);
+        Assert.All(proposal.Unscheduled, m => Assert.Contains("freies Fenster", m.Reason, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Ein_laufendes_Match_bleibt_stehen_wo_es_steht()
+    {
+        var (phase, players) = Knockout(4);
+        var courts = Courts(2);
+        var erstes = phase.Matches.First(m => m.Round == 1);
+
+        var laufend = Bestehend(erstes.Id, courts[0].Id, At(16, 9));
+        laufend.Call();
+        laufend.Start(At(16, 9, 5));
+
+        var problem = Problem(phase, players, courts, [laufend]);
+        var proposal = _solver.Solve(problem);
+
+        var unveraendert = proposal.Assignments.Single(a => a.MatchId == erstes.Id);
+
+        Assert.Equal(At(16, 9), unveraendert.PlannedStart);
+        Assert.Contains("Steht bereits am Platz", unveraendert.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Eine_Ansetzung_auf_einem_verschwundenen_Platz_wird_neu_gelegt()
+    {
+        // Der Platz ist stillgelegt worden, seit die Ansetzung entstand: sie
+        // lässt sich nicht behalten, das Match bekommt einen neuen Termin.
+        var (phase, players) = Knockout(4);
+        var courts = Courts(2);
+        var erstes = phase.Matches.First(m => m.Round == 1);
+
+        var problem = Problem(
+            phase,
+            players,
+            courts,
+            [Bestehend(erstes.Id, Guid.NewGuid(), At(16, 9))]);
+
+        var proposal = _solver.Solve(problem);
+
+        var neu = proposal.Assignments.Single(a => a.MatchId == erstes.Id);
+
+        Assert.Contains(neu.CourtId, courts.Select(c => c.Id));
+        Assert.Empty(Violations(proposal, problem));
+    }
+
+    [Fact]
+    public void Zwei_alte_Ansetzungen_desselben_Spielers_bleiben_nicht_beide()
+    {
+        // Beide sollen ihren Termin behalten, aber derselbe Mensch spielt in
+        // beiden: die zweite muss weichen, sonst stünde er zweimal gleichzeitig
+        // am Platz.
+        var (phase, players) = Knockout(4);
+        var courts = Courts(2);
+        var erste = phase.Matches.Where(m => m.Round == 1).ToList();
+
+        var doppelspieler = players[erste[0].Side1.EntryId!.Value][0];
+        var geteilt = players.ToDictionary(
+            paar => paar.Key,
+            paar => paar.Key == erste[1].Side1.EntryId
+                ? (IReadOnlyList<Guid>)[doppelspieler]
+                : paar.Value);
+
+        var problem = Problem(
+            phase,
+            geteilt,
+            courts,
+            [
+                Bestehend(erste[0].Id, courts[0].Id, At(16, 9)),
+                Bestehend(erste[1].Id, courts[1].Id, At(16, 9)),
+            ]);
+
+        var proposal = _solver.Solve(problem);
+
+        Assert.Empty(Violations(proposal, problem));
+        Assert.Contains(proposal.Assignments, a => a.Change == ProposalChange.Moved);
+    }
+
+    [Fact]
+    public void Ein_verschobenes_Match_wird_als_verschoben_ausgewiesen()
+    {
+        // Die Auskunft, auf die es der Turnierleitung ankommt: was ändert sich
+        // gegenüber dem Aushang, der schon hängt?
+        var (phase, players) = Knockout(4);
+        var courts = Courts(1);
+        var erste = phase.Matches.Where(m => m.Round == 1).ToList();
+
+        // Beide auf denselben Platz zur selben Zeit — eines muss weichen.
+        var problem = Problem(
+            phase,
+            players,
+            courts,
+            [Bestehend(erste[0].Id, courts[0].Id, At(16, 20), sequence: 1)]);
+
+        var proposal = _solver.Solve(problem);
+
+        Assert.Contains(proposal.Assignments, a => a.MatchId == erste[0].Id);
+        Assert.Empty(Violations(proposal, problem));
+        Assert.True(proposal.Diff.Added + proposal.Diff.Moved > 0);
+    }
+
+    [Theory]
+    // Ende 10:15, danach eine halbe Stunde Pause: 10:30 ist zu früh, 10:45 geht.
+    [InlineData(10, 30, false)]
+    [InlineData(10, 45, true)]
+    public void Zwischen_zwei_Matches_desselben_Spielers_liegt_die_Pause(
+        int stunde,
+        int minute,
+        bool bleibt)
+    {
+        var (phase, players) = Knockout(4);
+        var courts = Courts(2);
+        var erste = phase.Matches.Where(m => m.Round == 1).ToList();
+
+        var doppelspieler = players[erste[0].Side1.EntryId!.Value][0];
+        var geteilt = players.ToDictionary(
+            paar => paar.Key,
+            paar => paar.Key == erste[1].Side1.EntryId
+                ? (IReadOnlyList<Guid>)[doppelspieler]
+                : paar.Value);
+
+        var problem = Problem(
+            phase,
+            geteilt,
+            courts,
+            [
+                Bestehend(erste[0].Id, courts[0].Id, At(16, 9)),
+                Bestehend(erste[1].Id, courts[1].Id, At(16, stunde, minute)),
+            ]);
+
+        var proposal = _solver.Solve(problem);
+        var zweites = proposal.Assignments.Single(a => a.MatchId == erste[1].Id);
+
+        Assert.Equal(bleibt, zweites.PlannedStart == At(16, stunde, minute));
+        Assert.Empty(Violations(proposal, problem));
+    }
+
+    [Fact]
+    public void Eine_Ansetzung_ausserhalb_der_Platzzeiten_wird_neu_gelegt()
+    {
+        // Die Platzzeit wurde nachträglich verkürzt: was jetzt davor oder danach
+        // liegt, lässt sich nicht behalten.
+        var (phase, players) = Knockout(4);
+        var kurz = new SchedulableCourt(
+            Guid.NewGuid(), "Platz 1", false, [new TimeSlot(At(16, 14), At(16, 22))]);
+
+        var erstes = phase.Matches.First(m => m.Round == 1);
+
+        var problem = Problem(phase, players, [kurz], [Bestehend(erstes.Id, kurz.Id, At(16, 9))]);
+        var proposal = _solver.Solve(problem);
+
+        var neu = proposal.Assignments.Single(a => a.MatchId == erstes.Id);
+
+        Assert.True(neu.PlannedStart >= At(16, 14));
+        Assert.Empty(Violations(proposal, problem));
+    }
+
+    [Fact]
+    public void Ein_Platzwechsel_gilt_als_Verschiebung()
+    {
+        // Derselbe Beginn, anderer Platz: für den Aushang ist auch das eine
+        // Änderung.
+        var (phase, players) = Knockout(4);
+        var courts = Courts(2);
+        var erste = phase.Matches.Where(m => m.Round == 1).ToList();
+
+        // Beide alten Ansetzungen liegen auf demselben Platz zur selben Zeit —
+        // eine davon muss auf den anderen Platz.
+        var problem = Problem(
+            phase,
+            players,
+            courts,
+            [
+                Bestehend(erste[0].Id, courts[0].Id, At(16, 9)),
+                Bestehend(erste[1].Id, courts[0].Id, At(16, 9), sequence: 2),
+            ]);
+
+        var proposal = _solver.Solve(problem);
+
+        Assert.Empty(Violations(proposal, problem));
+        Assert.Contains(
+            proposal.Assignments,
+            a => a.MatchId == erste[1].Id && a.Change != ProposalChange.Unchanged);
+    }
+
+    [Theory]
+    // Das spätere Match beginnt 11:30. Ein früheres, das 11:15 endet, lässt
+    // keine Pause; eines, das 10:15 endet, sehr wohl.
+    [InlineData(10, 0, false)]
+    [InlineData(9, 0, true)]
+    public void Auch_das_frueher_liegende_Match_haelt_die_Pause_ein(int stunde, int minute, bool bleibt)
+    {
+        // Der umgekehrte Fall: nicht das spätere weicht, sondern das frühere
+        // wird geprüft, nachdem das spätere schon steht. Ohne diese Richtung
+        // stünde derselbe Mensch mit einer Viertelstunde Abstand zweimal am Platz.
+        var (phase, players) = Knockout(4);
+        var courts = Courts(2);
+        var erste = phase.Matches.Where(m => m.Round == 1).ToList();
+
+        var doppelspieler = players[erste[0].Side1.EntryId!.Value][0];
+        var geteilt = players.ToDictionary(
+            paar => paar.Key,
+            paar => paar.Key == erste[1].Side1.EntryId
+                ? (IReadOnlyList<Guid>)[doppelspieler]
+                : paar.Value);
+
+        var problem = Problem(
+            phase,
+            geteilt,
+            courts,
+            [
+                Bestehend(erste[0].Id, courts[0].Id, At(16, 11, 30)),
+                Bestehend(erste[1].Id, courts[1].Id, At(16, stunde, minute)),
+            ]);
+
+        var proposal = _solver.Solve(problem);
+        var frueheres = proposal.Assignments.Single(a => a.MatchId == erste[1].Id);
+
+        Assert.Equal(bleibt, frueheres.PlannedStart == At(16, stunde, minute));
+        Assert.Empty(Violations(proposal, problem));
+    }
+
+    [Fact]
+    public void Eine_Ansetzung_ohne_Zeit_bekommt_eine_und_gilt_als_verschoben()
+    {
+        // Von Hand auf einen Platz gesetzt, ohne Zeit: der Solver trägt sie nach
+        // und weist sie als Änderung aus — im alten Aushang stand keine.
+        var (phase, players) = Knockout(4);
+        var courts = Courts(2);
+        var erstes = phase.Matches.First(m => m.Round == 1);
+
+        var problem = Problem(
+            phase,
+            players,
+            courts,
+            [Bestehend(erstes.Id, courts[0].Id, start: null, source: AssignmentSource.Auto)]);
+
+        var proposal = _solver.Solve(problem);
+        var nachgetragen = proposal.Assignments.Single(a => a.MatchId == erstes.Id);
+
+        Assert.NotEqual(default, nachgetragen.PlannedStart);
+        Assert.Equal(ProposalChange.Moved, nachgetragen.Change);
+    }
 }

@@ -240,6 +240,10 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
                 new("sub", subject[0]!, ClaimValueTypes.String, issuer),
                 new("iss", issuer, ClaimValueTypes.String, issuer),
                 new("name", subject[0]!, ClaimValueTypes.String, issuer),
+
+                // Keycloak legt beides hinein, Entra ID nur das eine. Die
+                // Auflösung nimmt „name" und fällt auf dieses zurück.
+                new("preferred_username", $"{subject[0]}@kennung", ClaimValueTypes.String, issuer),
             };
 
             // Optional, weil das echte Token sie auch nicht garantiert: nicht

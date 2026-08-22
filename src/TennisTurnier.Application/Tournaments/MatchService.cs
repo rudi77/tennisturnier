@@ -274,7 +274,7 @@ public sealed class MatchService : IMatchService
         var dependent = phases.FirstOrDefault(other =>
             other.Id != phase.Id
             && other.HasAnyResult
-            && PhaseOrchestrator.DefinitionOf(definition, other)?.Qualification?.FromPhase == phase.Ordinal);
+            && PhaseOrchestrator.DefinitionOf(definition, other)!.Qualification?.FromPhase == phase.Ordinal);
 
         if (dependent is not null)
         {
@@ -339,11 +339,19 @@ public sealed class MatchService : IMatchService
     {
         var finished = PhaseOrchestrator.IsFinished(tournament, phases, namesByEntry);
 
-        if (finished && tournament.State == TournamentState.InProgress)
+        if (finished)
         {
-            tournament.Complete();
+            // Schon abgeschlossen heißt: nichts zu tun. Das ist der Weg jeder
+            // weiteren Korrektur an einem fertigen Turnier.
+            if (tournament.State == TournamentState.InProgress)
+            {
+                tournament.Complete();
+            }
+
+            return;
         }
-        else if (!finished && tournament.State == TournamentState.Completed)
+
+        if (tournament.State == TournamentState.Completed)
         {
             tournament.Resume();
         }
