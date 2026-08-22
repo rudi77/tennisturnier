@@ -22,7 +22,7 @@ public static class PhaseFormats
 
     public static IPhaseFormat For(PhaseFormatKind kind)
     {
-        if (Implementations.TryGetValue(kind, out var format))
+        if (Implementations.GetValueOrDefault(kind) is { } format)
         {
             return format;
         }

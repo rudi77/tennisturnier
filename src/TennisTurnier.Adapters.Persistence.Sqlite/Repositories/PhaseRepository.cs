@@ -29,14 +29,11 @@ public sealed class PhaseRepository : IPhaseRepository
     /// </summary>
     public async Task<Phase?> FindByMatchAsync(Guid matchId, CancellationToken cancellationToken = default)
     {
-        var phaseId = await _db.Matches
-            .Where(m => m.Id == matchId)
-            .Select(m => (Guid?)m.PhaseId)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return phaseId is null
-            ? null
-            : await _db.Phases.FirstOrDefaultAsync(p => p.Id == phaseId, cancellationToken);
+        // In einem Zug statt in zweien: erst die Phasen-Id holen und dann die
+        // Phase hieße, für ein unbekanntes Match zweimal zu fragen.
+        return await _db.Phases.FirstOrDefaultAsync(
+            phase => _db.Matches.Any(m => m.Id == matchId && m.PhaseId == phase.Id),
+            cancellationToken);
     }
 
     public void Add(Phase phase) => _db.Phases.Add(phase);

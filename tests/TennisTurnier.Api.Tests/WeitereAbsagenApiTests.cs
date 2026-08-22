@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -175,5 +177,67 @@ public sealed class WeitereAbsagenApiTests : IClassFixture<TennisTurnierApiFacto
 
         var nachher = await turnier.Admin.GetAsync($"/api/public/{turnier.TournamentId}");
         Assert.Equal(etag, nachher.Headers.ETag?.Tag);
+    }
+
+    [Fact]
+    public async Task Eine_verlorene_Ansicht_wird_auf_Zuruf_neu_gebaut()
+    {
+        // Genau dafür gibt es den Endpunkt: die Projektion ist ein abgeleiteter
+        // Stand (ADR-0003), und wenn er einmal fehlt, muss er sich ohne
+        // Änderung am Turnier zurückholen lassen.
+        var turnier = await _factory.NeuesTurnierAsync(
+            $"leitung-{Guid.NewGuid():N}",
+            new TurnierWunsch { Teilnehmer = 4 });
+
+        using (var scope = _factory.CreateMigratedScope())
+        {
+            var db = scope.ServiceProvider
+                .GetRequiredService<Adapters.Persistence.Sqlite.TennisTurnierDbContext>();
+
+            var projektion = await db.TournamentProjections
+                .FirstAsync(p => p.Id == turnier.TournamentId);
+
+            db.TournamentProjections.Remove(projektion);
+            await db.SaveChangesAsync();
+        }
+
+        var weg = await _factory.CreateClient().GetAsync($"/public/tournaments/{turnier.TournamentId}");
+        Assert.Equal(HttpStatusCode.NotFound, weg.StatusCode);
+
+        var neu = await turnier.Admin.PostAsync(
+            $"/api/tournaments/{turnier.TournamentId}/public-view/rebuild",
+            content: null);
+
+        Assert.Equal(HttpStatusCode.NoContent, neu.StatusCode);
+
+        var wieder = await _factory.CreateClient().GetAsync($"/public/tournaments/{turnier.TournamentId}");
+        Assert.Equal(HttpStatusCode.OK, wieder.StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_geloeschtes_Turnier_nimmt_seine_Ansetzungen_mit()
+    {
+        // Ansetzungen hängen nicht am Turnier-Aggregat (ADR-0002) und würden
+        // sonst als verwaiste Zeilen zurückbleiben.
+        var turnier = await _factory.NeuesTurnierAsync(
+            $"leitung-{Guid.NewGuid():N}",
+            new TurnierWunsch { Teilnehmer = 4, Plaetze = 2, Platzzeiten = true, Spielplan = true });
+
+        var board = await turnier.Admin.GetFromJsonAsync<List<CourtBoard>>(
+            $"/api/tournaments/{turnier.TournamentId}/courts", Json);
+
+        Assert.NotEmpty(board!.SelectMany(c => c.Queue));
+
+        var geloescht = await turnier.Admin.DeleteAsync($"/api/tournaments/{turnier.TournamentId}");
+        Assert.Equal(HttpStatusCode.NoContent, geloescht.StatusCode);
+
+        using var scope = _factory.CreateMigratedScope();
+        var db = scope.ServiceProvider
+            .GetRequiredService<Adapters.Persistence.Sqlite.TennisTurnierDbContext>();
+
+        Assert.Empty(await db.CourtAssignments
+            .IgnoreQueryFilters()
+            .Where(a => a.TournamentId == turnier.TournamentId)
+            .ToListAsync());
     }
 }

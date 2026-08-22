@@ -1,4 +1,5 @@
 using TennisTurnier.Application.Common;
+using TennisTurnier.Domain.Common;
 using TennisTurnier.Application.Tests.Fakes;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
@@ -364,5 +365,56 @@ public sealed class TournamentServiceTests
 
         Assert.All(_publicView.Rebuilt, rebuilt => Assert.Equal(id, rebuilt));
         Assert.True(_publicView.Rebuilt.Count >= 3);
+    }
+
+    [Fact]
+    public async Task Der_Systemkontext_wird_nicht_zur_Turnierleitung()
+    {
+        // Ein Turnier, das im Zuge einer Wartung entsteht, gehört keinem
+        // Menschen. Eine Rollenzuweisung für Guid.Empty wäre keine — und stünde
+        // danach in jeder Rollenübersicht.
+        // Über eine mitgelieferte Vorlage: eine eigene gehört jemandem, und der
+        // Systemkontext sieht sie nicht.
+        var mitgeliefert = _templates.Seed(
+            new FormatTemplate(Guid.NewGuid(), ownerUserId: null, BuiltInFormats.Knockout));
+
+        _userContext.Current = UserPrincipal.System;
+
+        var id = await _service.CreateAsync(NewRequest(mitgeliefert.Id));
+
+        Assert.NotEqual(Guid.Empty, id);
+        Assert.Empty(_roles.Assignments);
+    }
+
+    [Fact]
+    public async Task Ein_Format_ohne_Implementierung_laesst_sich_nicht_auslosen()
+    {
+        // Eine Vorlage kann eine Formatart nennen, die diese Fassung nicht
+        // umsetzt — etwa nach einem Rückbau. Die Absage kommt vor dem Auslosen,
+        // nicht mittendrin: ein halb gebauter Draw wäre nicht zu reparieren.
+        var unbekannt = _templates.Seed(new FormatTemplate(
+            Guid.NewGuid(),
+            UserId,
+            BuiltInFormats.Knockout with
+            {
+                Id = "unbekanntes-format",
+                Name = "Unbekanntes Format",
+                Phases = [BuiltInFormats.Knockout.Phases[0] with { Format = (PhaseFormatKind)99 }],
+            }));
+
+        var id = await AnlegenAsync(unbekannt.Id);
+        await _service.OpenRegistrationAsync(id);
+
+        foreach (var name in new[] { "Müller, Anna", "Berger, Eva" })
+        {
+            var entryId = await _service.EnterAsync(id, new EnterTournamentRequest(SeedParticipant(name), null));
+            await _service.AcceptAsync(id, entryId);
+        }
+
+        await _service.CloseRegistrationAsync(id);
+
+        var fehler = await Assert.ThrowsAsync<DomainException>(() => _service.GenerateDrawAsync(id));
+
+        Assert.Contains("noch nicht umgesetzt", fehler.Message, StringComparison.Ordinal);
     }
 }

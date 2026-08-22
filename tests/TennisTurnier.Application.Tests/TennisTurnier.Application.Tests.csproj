@@ -10,6 +10,10 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
+    <!-- Für die Prüfung der Verdrahtung: AddApplication registriert in eine
+         Sammlung, und was dabei herauskommt, lässt sich nur an einem gebauten
+         Provider ablesen. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>

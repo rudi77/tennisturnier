@@ -86,5 +86,10 @@ public sealed class SchreibvorgangTests : IAsyncLifetime
         using var db = new DesignTimeDbContextFactory().CreateDbContext([]);
 
         Assert.NotNull(db.Model.FindEntityType(typeof(FormatTemplate)));
+
+        // Und der Query-Filter kommt aus dem Systemkontext: die Abfrage entsteht
+        // ohne Einschränkung auf ein Turnier. Ein Blick auf das erzeugte SQL
+        // genügt dafür — die Datei dahinter wird nie angelegt.
+        Assert.DoesNotContain("@__", db.Tournaments.ToQueryString(), StringComparison.Ordinal);
     }
 }
