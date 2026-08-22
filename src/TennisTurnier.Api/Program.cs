@@ -14,13 +14,21 @@ using TennisTurnier.Application.Security;
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Composition Root: die einzige Stelle, an der die Adapter verdrahtet werden.
-var oidc = builder.Configuration.GetSection(OidcOptions.SectionName).Get<OidcOptions>() ?? new OidcOptions();
-var security = builder.Configuration.GetSection(BootstrapAdminOptions.SectionName).Get<BootstrapAdminOptions>()
-               ?? new BootstrapAdminOptions();
+//
+// Gebunden statt gelesen: Bind füllt nur, was dasteht, und lässt jede Vorgabe
+// stehen, die keiner überschreibt. Ein Get<T> müsste den Fall abfangen, dass es
+// den Abschnitt gar nicht gibt — appsettings.json bringt beide mit, und eine
+// Ausweichfassung dafür wäre eine, die nie läuft.
+var oidc = new OidcOptions();
+builder.Configuration.GetSection(OidcOptions.SectionName).Bind(oidc);
+
+var security = new BootstrapAdminOptions();
+builder.Configuration.GetSection(BootstrapAdminOptions.SectionName).Bind(security);
 
 builder.Services.AddApplication(security);
-builder.Services.AddSqlitePersistence(
-    builder.Configuration.GetConnectionString("Default") ?? "Data Source=tennisturnier.db");
+
+// Dasselbe hier: die Verbindungszeichenfolge steht in appsettings.json.
+builder.Services.AddSqlitePersistence(builder.Configuration.GetConnectionString("Default")!);
 builder.Services.AddOidcIdentity(oidc);
 builder.Services.AddHeuristicScheduling();
 
@@ -46,11 +54,7 @@ builder.Services.AddRateLimiter(options =>
 
     options.AddPolicy(RegistrationEndpoints.PublicPolicy, http =>
         RateLimitPartition.GetFixedWindowLimiter(
-            // Die IP als Partitionsschlüssel. Hinter einem Proxy ist sie
-            // ungenau; genauer ginge nur mit einer Konfiguration, die davon
-            // abhängt, wie die Instanz betrieben wird. Ungenau und vorhanden ist
-            // hier mehr wert als genau und ungebaut.
-            http.Connection.RemoteIpAddress?.ToString() ?? "unbekannt",
+            Program.PartitionKeyOf(http),
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = builder.Configuration.GetValue(
@@ -144,4 +148,18 @@ public partial class Program
     internal const int RegistrationRequestsPerWindow = 20;
 
     internal const int RegistrationWindowMinutes = 10;
+
+    /// <summary>
+    /// Der Partitionsschlüssel der Ratenbegrenzung: die IP des Aufrufers.
+    ///
+    /// Hinter einem Proxy ist sie ungenau; genauer ginge nur mit einer
+    /// Konfiguration, die davon abhängt, wie die Instanz betrieben wird. Ungenau
+    /// und vorhanden ist hier mehr wert als genau und ungebaut.
+    ///
+    /// Ohne IP — ein In-Memory-Testserver hat keine — teilen sich alle Aufrufer
+    /// eine Partition. Das ist die strengere Auslegung und damit die richtige:
+    /// die lockere hieße, dass eine fehlende IP die Schranke aushebelt.
+    /// </summary>
+    internal static string PartitionKeyOf(HttpContext context) =>
+        context.Connection.RemoteIpAddress?.ToString() ?? "unbekannt";
 }

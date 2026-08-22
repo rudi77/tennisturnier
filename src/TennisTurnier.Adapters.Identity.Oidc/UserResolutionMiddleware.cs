@@ -14,20 +14,20 @@ namespace TennisTurnier.Adapters.Identity.Oidc;
 /// Muss nach <c>UseAuthentication</c> und vor allem, was Vereinsdaten abfragt,
 /// laufen — der Query-Filter aus ADR-0004 wertet das Ergebnis aus.
 /// </summary>
-public sealed class UserResolutionMiddleware : IMiddleware
+internal sealed class UserResolutionMiddleware : IMiddleware
 {
     /// <summary>Der Konfigurationsschlüssel, wie er in appsettings.json steht.</summary>
     private const string Setting =
         $"{BootstrapAdminOptions.SectionName}:{nameof(BootstrapAdminOptions.BootstrapSystemAdmins)}";
 
-    private readonly IUserContext _userContext;
+    private readonly ScopedUserContext _userContext;
     private readonly IUserDirectory _directory;
     private readonly SystemAdminBootstrap _bootstrap;
     private readonly OrganizerBootstrap _organizers;
     private readonly ILogger<UserResolutionMiddleware> _logger;
 
     public UserResolutionMiddleware(
-        IUserContext userContext,
+        ScopedUserContext userContext,
         IUserDirectory directory,
         SystemAdminBootstrap bootstrap,
         OrganizerBootstrap organizers,
@@ -42,12 +42,12 @@ public sealed class UserResolutionMiddleware : IMiddleware
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
-        if (_userContext is ScopedUserContext scoped && context.User.Identity?.IsAuthenticated == true)
+        if (context.User.Identity?.IsAuthenticated == true)
         {
             var principal = await ResolveAsync(context.User, context.RequestAborted);
             if (principal is not null)
             {
-                scoped.Set(principal);
+                _userContext.Set(principal);
             }
         }
 

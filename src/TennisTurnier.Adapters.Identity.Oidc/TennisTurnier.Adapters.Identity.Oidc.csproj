@@ -13,4 +13,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Die Benutzerauflösung wird als Ganzes geprüft, und dazu gehört ihr
+         Bereichskontext: beide gehen niemanden außerhalb des Adapters an. -->
+    <InternalsVisibleTo Include="TennisTurnier.Api.Tests" />
+  </ItemGroup>
+
 </Project>
