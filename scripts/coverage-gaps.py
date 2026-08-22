@@ -1,25 +1,24 @@
 """Zeigt, was die Testläufe nicht erreicht haben.
 
-Gelesen werden die rohen Cobertura-Dateien aller Testprojekte und selbst
-zusammengeführt: pro Quellzeile zählt der beste Treffer aus allen Läufen. Jedes
-Testprojekt schreibt einen eigenen Bericht, in dem alles Fremde als ungetestet
-dasteht — wer eine Datei einzeln liest, misst deshalb zu wenig.
-
-Zusammengeführt wird hier und nicht von ReportGenerator, weil dessen
-lcov-Ausgabe die Zweigtreffer eines Laufs verliert, sobald dieselbe Klasse in
-mehreren Berichten vorkommt: eine Bedingung, die nur die API-Tests erreichen,
-stünde sonst als offen da, obwohl sie gedeckt ist.
+Gelesen wird der von ReportGenerator zusammengeführte Cobertura-Bericht. Jedes
+Testprojekt schreibt einen eigenen, in dem alles Fremde als ungetestet dasteht —
+wer die Dateien einzeln liest, misst deshalb zu wenig, und wer sie selbst
+zusammenzählt, verliert die Zweige: eine Zeile mit zwei Ausgängen steht in zwei
+Berichten mit je 50 Prozent, und aus zweimal der Hälfte lässt sich nicht ablesen,
+ob es dieselbe Hälfte war. Der lcov-Bericht taugt aus demselben Grund nicht.
 
     dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
+    dotnet tool run reportgenerator "-reports:TestResults/**/coverage.cobertura.xml"
+        "-targetdir:TestResults/merged" -reporttypes:Cobertura
+        "-filefilters:-*/obj/*;-*/Migrations/*"
     python scripts/coverage-gaps.py [Namensfilter]
 """
 
-import glob
 import os
 import sys
 import xml.etree.ElementTree as ET
 
-WURZEL = os.path.join("TestResults", "**", "coverage.cobertura.xml")
+BERICHT = os.path.join("TestResults", "merged", "Cobertura.xml")
 
 # Was nicht von Hand geschrieben wurde, wird auch nicht von Hand getestet.
 AUSGENOMMEN = (os.sep + "obj" + os.sep, os.sep + "Migrations" + os.sep)
@@ -58,7 +57,7 @@ def anteil(text: str) -> tuple[int, int]:
 def lies() -> dict[str, Datei]:
     dateien: dict[str, Datei] = {}
 
-    for bericht in glob.glob(WURZEL, recursive=True):
+    for bericht in [BERICHT] if os.path.exists(BERICHT) else []:
         baum = ET.parse(bericht)
         wurzeln = [q.text or "" for q in baum.iter("source")]
 
@@ -89,7 +88,7 @@ def lies() -> dict[str, Datei]:
 def main() -> int:
     dateien = lies()
     if not dateien:
-        print(f"Keine Berichte unter {WURZEL} — erst `dotnet test --collect:\"XPlat Code Coverage\"`.")
+        print(f"{BERICHT} fehlt — erst messen und mit reportgenerator zusammenführen (siehe Kopf).")
         return 1
 
     filter_ = sys.argv[1] if len(sys.argv) > 1 else ""

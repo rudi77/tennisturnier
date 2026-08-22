@@ -122,14 +122,26 @@ public sealed class TournamentHubTests : IClassFixture<TennisTurnierApiFactory>
             await connection.InvokeAsync("Subscribe", Guid.NewGuid());
         }
 
-        // Dasselbe Turnier noch einmal geht immer — es entsteht keine Gruppe dazu.
-        var ersteId = Guid.NewGuid();
-        await connection.InvokeAsync("Unsubscribe", ersteId);
-
         var fehler = await Assert.ThrowsAsync<HubException>(() =>
             connection.InvokeAsync("Subscribe", Guid.NewGuid()));
 
         Assert.Contains("höchstens 16 Turniere", fehler.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Dasselbe_Turnier_zweimal_zu_verfolgen_kostet_keinen_Platz()
+    {
+        // Ein Client, der nach einem Verbindungsabriss erneut anmeldet, darf
+        // nicht an der Grenze scheitern — er verfolgt ja dasselbe Turnier.
+        await using var connection = Connect();
+        await connection.StartAsync();
+
+        var turnier = Guid.NewGuid();
+
+        for (var i = 0; i < 20; i++)
+        {
+            await connection.InvokeAsync("Subscribe", turnier);
+        }
     }
 
     [Fact]

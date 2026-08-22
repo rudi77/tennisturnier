@@ -54,6 +54,42 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
         return new TennisTurnierDbContext(builder.Options, new FixedUserContext(ActingAs));
     }
 
+    /// <summary>
+    /// Hält die Datei exklusiv, bis das Ergebnis entsorgt wird.
+    ///
+    /// SQLite lässt nur einen Schreiber zu; wer währenddessen schreiben will,
+    /// bekommt SQLITE_BUSY. Genau das ist am Turniertag der häufigste Konflikt,
+    /// und genau dafür gibt es die Übersetzung in der Arbeitseinheit.
+    /// </summary>
+    public Sperre Sperren()
+    {
+        var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_path}");
+        connection.Open();
+
+        using var befehl = connection.CreateCommand();
+        befehl.CommandText = "BEGIN EXCLUSIVE;";
+        befehl.ExecuteNonQuery();
+
+        return new Sperre(connection);
+    }
+
+    /// <summary>Eine offene exklusive Transaktion auf einer eigenen Verbindung.</summary>
+    public sealed class Sperre : IAsyncDisposable
+    {
+        private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
+
+        internal Sperre(Microsoft.Data.Sqlite.SqliteConnection connection) => _connection = connection;
+
+        public async ValueTask DisposeAsync()
+        {
+            await using var befehl = _connection.CreateCommand();
+            befehl.CommandText = "ROLLBACK;";
+            await befehl.ExecuteNonQueryAsync();
+
+            await _connection.DisposeAsync();
+        }
+    }
+
     public ValueTask DisposeAsync()
     {
         // Die Verbindungen des Pools halten die Datei offen; ohne das Leeren

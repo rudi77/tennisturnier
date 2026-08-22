@@ -1,4 +1,7 @@
 using System.Net;
+using System.Net.Http.Json;
+using TennisTurnier.Adapters.Persistence.Sqlite;
+using TennisTurnier.Application.Tournaments;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -76,5 +79,23 @@ public sealed class StartArtenTests
         mit.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.7");
 
         Assert.Equal("203.0.113.7", Program.PartitionKeyOf(mit));
+    }
+
+    [Fact]
+    public async Task Ein_zweiter_Start_legt_die_Vorlagen_nicht_erneut_an()
+    {
+        // Jeder Neustart sät. Legte er dabei ein zweites Mal an, stünde nach
+        // einem Monat jede Standardvorlage dreißigmal in der Auswahl.
+        using var fabrik = new EntwicklungsFabrik();
+        var client = fabrik.CreateClient();
+
+        var vorher = await client.GetFromJsonAsync<List<FormatTemplateSummary>>("/api/format-templates");
+
+        await fabrik.Services.SeedBuiltInFormatsAsync();
+
+        var nachher = await client.GetFromJsonAsync<List<FormatTemplateSummary>>("/api/format-templates");
+
+        Assert.NotEmpty(vorher!);
+        Assert.Equal(vorher!.Count, nachher!.Count);
     }
 }

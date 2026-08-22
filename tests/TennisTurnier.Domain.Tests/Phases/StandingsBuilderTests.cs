@@ -37,6 +37,20 @@ public sealed class StandingsBuilderTests
     }
 
     [Fact]
+    public void Eine_offene_Seite_gehoert_niemandem()
+    {
+        // Das Finale steht, bevor seine Teilnehmer feststehen. Wer dort nach
+        // seiner Seite fragt, bekommt keine — auch nicht die leere Kennung.
+        var phase = Phase();
+        var match = phase.AddPairings([
+            new Pairing(1, 1, ParticipantRef.Open, ParticipantRef.Open, "Finale"),
+        ])[0];
+
+        Assert.Null(StandingsBuilder.SideOf(match, Guid.NewGuid()));
+        Assert.Null(StandingsBuilder.SideOf(match, Guid.Empty));
+    }
+
+    [Fact]
     public void Ein_Freilos_ist_kein_direkter_Vergleich()
     {
         var einer = Guid.NewGuid();

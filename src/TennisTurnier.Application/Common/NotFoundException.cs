@@ -9,8 +9,6 @@ public sealed class NotFoundException : Exception
     public NotFoundException(string resource, Guid id)
         : base($"{resource} {id} wurde nicht gefunden.")
     {
-        Resource = resource;
-        Id = id;
     }
 
     /// <summary>
@@ -24,11 +22,5 @@ public sealed class NotFoundException : Exception
     public NotFoundException(string resource)
         : base($"{resource} wurde nicht gefunden.")
     {
-        Resource = resource;
     }
-
-    public string Resource { get; }
-
-    /// <summary>Leer, wenn die Ressource nicht über eine Kennung angefragt wurde.</summary>
-    public Guid Id { get; }
 }

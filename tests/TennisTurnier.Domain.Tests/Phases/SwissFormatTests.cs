@@ -638,4 +638,45 @@ public sealed class SwissFormatTests
         Assert.Contains("mindestens zwei Teilnehmer", fehler.Message, StringComparison.Ordinal);
         Assert.Contains($"hatte {teilnehmer}", fehler.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Ein_Freilos_auf_der_ersten_Seite_zaehlt_genauso()
+    {
+        // Das Format setzt das Freilos selbst immer auf die zweite Seite. Die
+        // Matches kommen aber aus der Ablage, und eine Phase, die aus einer
+        // anderen Fassung stammt, kann es andersherum stehen haben. Zählte es
+        // dann nicht, bekäme derselbe Spieler ein zweites Freilos — einen
+        // zweiten geschenkten Punkt.
+        var format = new SwissFormat();
+        var entries = Entries(3);
+        var phase = new Phase(Guid.NewGuid(), Guid.NewGuid(), 1, PhaseFormatKind.Swiss);
+
+        var matches = phase.AddPairings([
+            new Pairing(1, 1, ParticipantRef.ByeSlot, ParticipantRef.Of(entries[2].EntryId), "Runde 1"),
+            new Pairing(
+                1, 2,
+                ParticipantRef.Of(entries[0].EntryId),
+                ParticipantRef.Of(entries[1].EntryId),
+                "Runde 1"),
+        ]);
+
+        phase.RecordResult(
+            matches[1].Id,
+            Score.Played([new SetScore(6, 4), new SetScore(6, 2)], Standard));
+
+        var zweite = format.GeneratePairings(
+            new PhaseState(Definition(rounds: 2), entries, phase.Matches));
+
+        var freilos = zweite.SingleOrDefault(p => p.Side1 is ParticipantRef.Bye || p.Side2 is ParticipantRef.Bye);
+
+        Assert.NotNull(freilos);
+        Assert.NotEqual(entries[2].EntryId, freilos.Side1.EntryIdOrDefault());
+    }
+}
+
+internal static class ParticipantRefTestExtensions
+{
+    /// <summary>Die Meldung hinter einer Seite, sofern sie eine hat.</summary>
+    internal static Guid EntryIdOrDefault(this ParticipantRef origin) =>
+        origin is ParticipantRef.Entry entry ? entry.EntryId : Guid.Empty;
 }

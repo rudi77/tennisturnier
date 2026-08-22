@@ -410,4 +410,31 @@ public sealed class RoundRobinFormatTests
         Assert.Contains("Ohne Gegner blieben", fehler.Message, StringComparison.Ordinal);
         Assert.Contains("Gruppe A, Gruppe B, Gruppe C", fehler.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Eine_Gruppenphase_mit_offenen_Plaetzen_hat_noch_keine_Tabelle()
+    {
+        // Eine Zwischenrunde steht, bevor die Vorphase durch ist: ihre Matches
+        // haben Gruppenplätze statt Meldungen. Die Tabelle darf daran nicht
+        // scheitern — sie ist dann eben leer.
+        var phase = new Phase(Guid.NewGuid(), Guid.NewGuid(), 2, PhaseFormatKind.RoundRobin);
+        phase.AddPairings([
+            new Pairing(
+                1, 1,
+                ParticipantRef.FromGroupPosition(Guid.NewGuid(), "Gruppe A", 1),
+                ParticipantRef.FromGroupPosition(Guid.NewGuid(), "Gruppe B", 1),
+                null,
+                "Gruppe A"),
+        ]);
+
+        var slots = new[]
+        {
+            SeededEntry.ForSlot(
+                ParticipantRef.FromGroupPosition(Guid.NewGuid(), "Gruppe A", 1), 1, "Erster der Gruppe A"),
+        };
+
+        var tabelle = new RoundRobinFormat().ComputeStandings(StateOf(phase, slots));
+
+        Assert.Empty(tabelle.Places);
+    }
 }

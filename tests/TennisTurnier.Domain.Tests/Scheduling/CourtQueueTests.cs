@@ -173,4 +173,33 @@ public sealed class CourtQueueTests
 
         Assert.Empty(CourtQueue.Waiting([finished]));
     }
+
+    [Fact]
+    public void Ein_zweiter_Durchlauf_ohne_Aenderung_zaehlt_nichts()
+    {
+        // Die Warteschlange wird nach jedem Zug neu gerechnet. Bliebe sie dabei
+        // „geändert", schriebe die Anwendung bei jedem Aufruf dieselben Zeiten
+        // erneut — und jeder Zuschauer bekäme einen Push ohne Neuigkeit.
+        var queue = new[] { Planned(1, At(9)), Planned(2, At(10, 20)) };
+
+        CourtQueue.Reflow(queue, At(9), At(9));
+
+        Assert.Equal(0, CourtQueue.Reflow(queue, At(9), At(9)));
+    }
+
+    [Fact]
+    public void Ohne_geplante_Zeit_steht_eine_Zuweisung_hinten()
+    {
+        // Zwei Zuweisungen mit derselben Nummer — von Hand entstanden. Die ohne
+        // Zeit kommt zuletzt: eine Reihenfolge muss auch dann eine sein.
+        var ohneZeit = new CourtAssignment(
+            Guid.NewGuid(), _tournamentId, Guid.NewGuid(), _courtId, 1,
+            TimeSpan.FromMinutes(75), AssignmentSource.Manual);
+
+        var mitZeit = Planned(1, At(9));
+
+        var wartend = CourtQueue.Waiting([ohneZeit, mitZeit]);
+
+        Assert.Equal([mitZeit.Id, ohneZeit.Id], wartend.Select(a => a.Id));
+    }
 }
