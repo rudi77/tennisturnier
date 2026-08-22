@@ -39,9 +39,7 @@ public sealed class HeuristicScheduleSolverTests
             .ToList();
 
         var state = new PhaseState(
-            phase.Id,
             new PhaseDefinition { Ordinal = 1, Format = PhaseFormatKind.Knockout },
-            Standard,
             entries,
             phase.Matches);
 

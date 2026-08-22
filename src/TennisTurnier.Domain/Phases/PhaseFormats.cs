@@ -20,12 +20,17 @@ public static class PhaseFormats
             [PhaseFormatKind.Swiss] = new SwissFormat(),
         };
 
-    public static IPhaseFormat For(PhaseFormatKind kind) =>
-        Implementations.TryGetValue(kind, out var format)
-            ? format
-            : throw new DomainException(
-                $"Für das Format {kind} gibt es noch keine Implementierung. " +
-                "Ein genuin neues Paarungsverfahren braucht eine eigene IPhaseFormat-Klasse (ADR-0001).");
+    public static IPhaseFormat For(PhaseFormatKind kind)
+    {
+        if (Implementations.TryGetValue(kind, out var format))
+        {
+            return format;
+        }
+
+        throw new DomainException(
+            $"Für das Format {kind} gibt es noch keine Implementierung. " +
+            "Ein genuin neues Paarungsverfahren braucht eine eigene IPhaseFormat-Klasse (ADR-0001).");
+    }
 
     public static bool IsSupported(PhaseFormatKind kind) => Implementations.ContainsKey(kind);
 }

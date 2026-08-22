@@ -279,22 +279,16 @@ public sealed class Phase : Entity
     /// Läuft in einer Schleife, weil ein Freilos eine Kette auslösen kann: die
     /// erste Runde entscheidet sich kampflos, damit steht die zweite fest, und
     /// bei einem sehr kleinen Feld unter Umständen auch die dritte.
+    ///
+    /// Sie terminiert ohne Zähler: ein Durchgang meldet nur dann Arbeit, wenn
+    /// eine offene Seite eine Meldung bekommen hat oder ein Freilos entschieden
+    /// wurde. Beides ist endgültig, und beides gibt es nur endlich oft.
     /// </summary>
     private void ResolveDecided()
     {
-        bool changed;
-        var guard = 0;
-
-        do
+        while (ResolveOnce())
         {
-            changed = ResolveOnce();
-
-            if (++guard > _matches.Count + 1)
-            {
-                throw new DomainException("Die Auflösung der Turnierreferenzen terminiert nicht.");
-            }
         }
-        while (changed);
     }
 
     private bool ResolveOnce()
@@ -346,10 +340,13 @@ public sealed class Phase : Entity
     /// <summary>
     /// Ein Match mit einem Freilos wird nie gespielt. Sobald die andere Seite
     /// feststeht, ist es entschieden.
+    ///
+    /// Der Aufrufer reicht nur unentschiedene Matches herein — ein zweiter Blick
+    /// auf den Spielstand wäre hier eine Bedingung, die nie zutrifft.
     /// </summary>
     private static bool DecideByeIfPossible(Match match)
     {
-        if (match.Score is not null || !match.HasBye)
+        if (!match.HasBye)
         {
             return false;
         }

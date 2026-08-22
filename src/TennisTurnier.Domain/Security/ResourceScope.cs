@@ -39,16 +39,27 @@ public readonly record struct ResourceScope
 
     public static ResourceScope Create(ScopeType type, Guid? resourceId)
     {
+        // Keine Ressource und die leere Guid sind dasselbe: beides heißt „nicht
+        // angegeben". Zwei Schreibweisen für denselben Fall wären zwei Wege,
+        // ihn zu übersehen.
+        var resource = resourceId ?? Guid.Empty;
+
         if (type == ScopeType.Global)
         {
-            return resourceId is null || resourceId == Guid.Empty
-                ? Global
-                : throw new DomainException("Ein globaler Scope darf keine Ressource benennen.");
+            if (resource != Guid.Empty)
+            {
+                throw new DomainException("Ein globaler Scope darf keine Ressource benennen.");
+            }
+
+            return Global;
         }
 
-        return resourceId is null || resourceId == Guid.Empty
-            ? throw new DomainException($"Ein Scope vom Typ {type} braucht eine Ressource.")
-            : new ResourceScope(type, resourceId);
+        if (resource == Guid.Empty)
+        {
+            throw new DomainException($"Ein Scope vom Typ {type} braucht eine Ressource.");
+        }
+
+        return new ResourceScope(type, resource);
     }
 
     public override string ToString() =>

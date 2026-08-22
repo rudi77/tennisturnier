@@ -33,7 +33,7 @@ public sealed class RoundRobinFormatTests
         PhaseDefinition? definition = null)
     {
         var phase = new Phase(Guid.NewGuid(), Guid.NewGuid(), 1, PhaseFormatKind.RoundRobin, "Gruppenphase");
-        var state = new PhaseState(phase.Id, definition ?? Definition(), Standard, entries, phase.Matches);
+        var state = new PhaseState(definition ?? Definition(), entries, phase.Matches);
 
         phase.AddPairings(new RoundRobinFormat().GeneratePairings(state));
 
@@ -44,7 +44,7 @@ public sealed class RoundRobinFormatTests
         Phase phase,
         IReadOnlyList<SeededEntry> entries,
         PhaseDefinition? definition = null) =>
-        new(phase.Id, definition ?? Definition(), Standard, entries, phase.Matches);
+        new(definition ?? Definition(), entries, phase.Matches);
 
     private static Standings StandingsOf(
         Phase phase,
@@ -367,5 +367,47 @@ public sealed class RoundRobinFormatTests
         var phase = BuildPhase(entries);
 
         Assert.Empty(new RoundRobinFormat().GeneratePairings(StateOf(phase, entries)));
+    }
+
+    // --- Randfälle ---------------------------------------------------------
+
+    [Fact]
+    public void Eine_Gruppenphase_ohne_Matches_ist_nicht_fertig()
+    {
+        var phase = new Phase(Guid.NewGuid(), Guid.NewGuid(), 1, PhaseFormatKind.RoundRobin);
+
+        Assert.False(new RoundRobinFormat().IsComplete(StateOf(phase, Entries(4))));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Null_Gruppen_gibt_es_nicht(int groupCount)
+    {
+        var fehler = Assert.Throws<DomainException>(() =>
+            RoundRobinFormat.SplitIntoGroups(Entries(4), groupCount));
+
+        Assert.Contains($"hatte {groupCount}", fehler.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Eine_einzige_Gruppe_die_allein_bliebe_wird_benannt()
+    {
+        // Ein Feld aus einer Person: die Gruppe hat keinen Namen, und die Absage
+        // muss trotzdem sagen, wen es trifft.
+        var fehler = Assert.Throws<DomainException>(() => BuildPhase(Entries(1)));
+
+        Assert.Contains("Ohne Gegner bliebe die Gruppe", fehler.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mehrere_Gruppen_die_allein_blieben_werden_alle_benannt()
+    {
+        // Drei Teilnehmer auf drei Gruppen: jede bekommt einen, keine ein Match.
+        var fehler = Assert.Throws<DomainException>(() =>
+            BuildPhase(Entries(3), Definition(groupCount: 3)));
+
+        Assert.Contains("Ohne Gegner blieben", fehler.Message, StringComparison.Ordinal);
+        Assert.Contains("Gruppe A, Gruppe B, Gruppe C", fehler.Message, StringComparison.Ordinal);
     }
 }

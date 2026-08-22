@@ -38,14 +38,6 @@ public sealed class Player : Entity
     /// <summary>Die einzige Form des Namens, die in eine öffentliche Ausgabe gehört.</summary>
     public string DisplayName => $"{LastName}, {FirstName}";
 
-    public void Rename(string firstName, string lastName)
-    {
-        FirstName = Required(firstName, "Vorname");
-        LastName = Required(lastName, "Nachname");
-    }
-
-    public void UpdateContact(PlayerContact contact) => Contact = contact;
-
     private static string Required(string value, string what) =>
         string.IsNullOrWhiteSpace(value)
             ? throw new DomainException($"Ein Spieler braucht einen {what}.")

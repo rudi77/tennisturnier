@@ -189,9 +189,7 @@ public static class PhaseOrchestrator
         ArgumentNullException.ThrowIfNull(namesByEntry);
 
         return new PhaseState(
-            phase.Id,
             phaseDefinition,
-            definition.MatchFormatOf(phaseDefinition),
             StartersOf(tournament, phase, namesByEntry),
             phase.Matches);
     }

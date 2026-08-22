@@ -30,9 +30,7 @@ public sealed class ScheduleValidatorTests
         var entries = _entries.Select((id, i) => new SeededEntry(id, i + 1, $"Spielerin {i + 1}")).ToList();
 
         var state = new PhaseState(
-            phase.Id,
             new PhaseDefinition { Ordinal = 1, Format = PhaseFormatKind.Knockout },
-            Standard,
             entries,
             phase.Matches);
 
@@ -304,5 +302,32 @@ public sealed class ScheduleValidatorTests
             [_entries[2]] = [_players[2]],
             [_entries[3]] = [_players[3]],
         };
+    }
+
+    [Fact]
+    public void Eine_Zuweisung_ohne_Match_wird_uebergangen()
+    {
+        // Ein Match, das der Prüfer nicht kennt — etwa weil es beim Neuauslosen
+        // verschwunden ist. Der Plan darf daran nicht scheitern: die verwaiste
+        // Zuweisung trägt keine Spieler bei und begründet auch keine Abhängigkeit.
+        var phase = BuildPhase();
+        var erste = phase.Matches.Where(m => m.Round == 1).ToList();
+
+        var verwaist = new CourtAssignment(
+            Guid.NewGuid(),
+            _tournamentId,
+            Guid.NewGuid(),
+            _courtA,
+            2,
+            TimeSpan.FromMinutes(90),
+            AssignmentSource.Manual);
+
+        verwaist.PlanFor(At(14));
+
+        var verstoesse = _validator.Validate(
+            [Assign(erste[0], _courtA, At(9)), verwaist],
+            ContextFor(phase));
+
+        Assert.Empty(verstoesse);
     }
 }

@@ -30,14 +30,14 @@ public sealed class KnockoutFormatTests
     private Phase BuildPhase(IReadOnlyList<SeededEntry> entries, bool thirdPlaceMatch = false)
     {
         var phase = NewPhase();
-        var state = new PhaseState(phase.Id, Definition(thirdPlaceMatch), Standard, entries, phase.Matches);
+        var state = new PhaseState(Definition(thirdPlaceMatch), entries, phase.Matches);
 
         phase.AddPairings(_format.GeneratePairings(state));
         return phase;
     }
 
     private PhaseState StateOf(Phase phase, IReadOnlyList<SeededEntry> entries, bool thirdPlaceMatch = false) =>
-        new(phase.Id, Definition(thirdPlaceMatch), Standard, entries, phase.Matches);
+        new(Definition(thirdPlaceMatch), entries, phase.Matches);
 
     // --- Bracket-Aufbau ----------------------------------------------------
 
@@ -479,5 +479,50 @@ public sealed class KnockoutFormatTests
         }
 
         throw new InvalidOperationException("Die Phase ließ sich nicht zu Ende spielen.");
+    }
+
+    // --- Randfälle ---------------------------------------------------------
+
+    [Fact]
+    public void Eine_Phase_ohne_Matches_ist_nicht_fertig()
+    {
+        // Sonst wäre eine gerade angelegte Phase im selben Augenblick
+        // abgeschlossen — und die Endrunde begänne ohne Vorrunde.
+        var phase = NewPhase();
+
+        Assert.False(_format.IsComplete(StateOf(phase, Entries(4))));
+    }
+
+    [Fact]
+    public void Eine_Phase_ohne_Matches_hat_eine_Tabelle_ohne_Reihenfolge()
+    {
+        // Vor der Auslosung steht niemand vor oder hinter jemandem. Alle teilen
+        // sich Platz eins, statt nach Zufall sortiert zu werden.
+        var phase = NewPhase();
+        var entries = Entries(4);
+
+        var tabelle = _format.ComputeStandings(StateOf(phase, entries));
+
+        Assert.Equal(4, tabelle.Places.Count);
+        Assert.All(tabelle.Places, place => Assert.Equal(1, place.Rank));
+    }
+
+    [Fact]
+    public void Wer_nicht_in_der_Tabelle_steht_wird_nicht_verbucht()
+    {
+        // Die Startplätze einer Endrunde können wechseln, während die Matches
+        // stehen bleiben — ein Sieger, den die Tabelle nicht kennt, darf sie
+        // nicht zum Absturz bringen.
+        var entries = Entries(2);
+        var phase = BuildPhase(entries);
+        var match = Assert.Single(phase.Matches);
+
+        phase.RecordResult(match.Id, Score.Played([new SetScore(6, 4), new SetScore(6, 3)], Standard));
+
+        var fremde = Entries(2);
+        var tabelle = _format.ComputeStandings(StateOf(phase, fremde));
+
+        Assert.Equal(2, tabelle.Places.Count);
+        Assert.All(tabelle.Places, place => Assert.Equal(0, place.Played));
     }
 }

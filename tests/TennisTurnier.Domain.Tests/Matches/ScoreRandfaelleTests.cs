@@ -172,4 +172,18 @@ public sealed class ScoreRandfaelleTests
         Assert.Equal(0, ergebnis.SetsWonBy(2));
         Assert.Equal(1, ergebnis.WinnerSide);
     }
+
+    [Fact]
+    public void Nach_dem_entscheidenden_Satz_steht_kein_weiterer()
+    {
+        // 6:4, 6:3 war es — der dritte Satz kann nur ein Eingabefehler sein oder
+        // aus einem anderen Format stammen.
+        var fehler = Assert.Throws<DomainException>(() =>
+            Score.Played(
+                [new SetScore(6, 4), new SetScore(6, 3), new SetScore(6, 10)],
+                ZweiGewinnsaetze));
+
+        Assert.Contains("nach Satz 2 entschieden", fehler.Message, StringComparison.Ordinal);
+        Assert.Contains("3 Sätze eingetragen", fehler.Message, StringComparison.Ordinal);
+    }
 }

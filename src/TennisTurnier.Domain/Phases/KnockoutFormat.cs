@@ -16,8 +16,6 @@ public sealed class KnockoutFormat : IPhaseFormat
 {
     public const string ThirdPlaceLabel = "Spiel um Platz 3";
 
-    public PhaseFormatKind Kind => PhaseFormatKind.Knockout;
-
     public IReadOnlyList<Pairing> GeneratePairings(PhaseState state)
     {
         ArgumentNullException.ThrowIfNull(state);

@@ -122,4 +122,22 @@ public sealed class FormatTemplateTests
         tournament.CloseRegistration();
         return tournament;
     }
+
+    [Fact]
+    public void Eine_Kopie_braucht_Eigentuemer_und_Namen()
+    {
+        // Eine Kopie ohne Eigentümer wäre eine zweite mitgelieferte Vorlage —
+        // niemand dürfte sie ändern, und niemand könnte sie loswerden.
+        var vorlage = BuiltIn();
+
+        var ohneEigentuemer = Assert.Throws<DomainException>(() =>
+            vorlage.CopyFor(Guid.NewGuid(), Guid.Empty, "Meine Fassung"));
+
+        Assert.Contains("braucht einen Eigentümer", ohneEigentuemer.Message, StringComparison.Ordinal);
+
+        var ohneNamen = Assert.Throws<DomainException>(() =>
+            vorlage.CopyFor(Guid.NewGuid(), OwnerId, "   "));
+
+        Assert.Contains("braucht einen Namen", ohneNamen.Message, StringComparison.Ordinal);
+    }
 }

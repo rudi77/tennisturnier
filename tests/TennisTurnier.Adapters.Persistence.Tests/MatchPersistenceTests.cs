@@ -67,9 +67,7 @@ public sealed class MatchPersistenceTests : IAsyncLifetime
         var entries = _entryIds.Select((id, i) => new SeededEntry(id, i + 1, $"Spielerin {i + 1}")).ToList();
 
         var state = new PhaseState(
-            phase.Id,
             new PhaseDefinition { Ordinal = 1, Format = PhaseFormatKind.Knockout },
-            Standard,
             entries,
             phase.Matches);
 

@@ -23,9 +23,7 @@ public sealed record Pairing(
 /// Aggregat und ohne Datenbank testen.
 /// </summary>
 public sealed record PhaseState(
-    Guid PhaseId,
     PhaseDefinition Definition,
-    MatchFormat MatchFormat,
     IReadOnlyList<SeededEntry> Entries,
     IReadOnlyList<Match> Matches);
 
@@ -107,8 +105,6 @@ public sealed record Standings(IReadOnlyList<Standing> Places)
 /// </summary>
 public interface IPhaseFormat
 {
-    PhaseFormatKind Kind { get; }
-
     /// <summary>
     /// Die nächste Menge an Paarungen. Liefert eine leere Menge, wenn im
     /// Augenblick nichts anzusetzen ist — etwa weil eine Runde noch läuft.

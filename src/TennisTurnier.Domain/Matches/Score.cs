@@ -285,11 +285,20 @@ public sealed record Score
             : (winner >= format.TiebreakAt && winner - loser >= 2) || winner > format.TiebreakAt;
     }
 
+    /// <summary>
+    /// Der Satz, mit dem das Match entschieden war.
+    ///
+    /// Gefragt wird erst, nachdem <see cref="RequireDecided"/> festgestellt hat,
+    /// dass eine Seite die nötigen Sätze hat. Die Schleife findet den Satz
+    /// deshalb immer, und ein Rückfall hinter ihr wäre nur eine Zeile, die
+    /// niemand je ausführt.
+    /// </summary>
     private static int DecidingSetIndex(IReadOnlyList<SetScore> sets, int setsToWin)
     {
         int one = 0, two = 0;
+        var index = 0;
 
-        for (var index = 0; index < sets.Count; index++)
+        while (one < setsToWin && two < setsToWin)
         {
             if (sets[index].WinnerSide == 1)
             {
@@ -300,13 +309,10 @@ public sealed record Score
                 two++;
             }
 
-            if (one == setsToWin || two == setsToWin)
-            {
-                return index;
-            }
+            index++;
         }
 
-        return sets.Count - 1;
+        return index - 1;
     }
 
     private static void ValidateSet(SetScore set, int index, MatchFormat format)

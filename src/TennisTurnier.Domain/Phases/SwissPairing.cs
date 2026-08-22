@@ -106,12 +106,14 @@ internal static class SwissPairing
                 "Das Freilos wird vorher vergeben.");
         }
 
+        // Der letzte Anlauf lässt Wiederholungen zu und findet deshalb immer eine
+        // Paarung: dem Ersten steht dann jeder Übrige als Gegner offen, und das
+        // gilt in jedem Schritt der Rückverfolgung. Eine Absage gäbe es hier nur
+        // bei ungerader Anzahl — die ist oben schon abgewiesen.
         var pairs =
             ByScoreGroups(standingsOrder, pointsByEntry, previousOpponents)
             ?? Match([.. standingsOrder], previousOpponents, new Budget(SearchBudget), allowRematch: false)
-            ?? Match([.. standingsOrder], previousOpponents, new Budget(SearchBudget), allowRematch: true)
-            ?? throw new DomainException(
-                $"Für diese Runde lässt sich aus {standingsOrder.Count} Spielern keine Paarung bilden.");
+            ?? Match([.. standingsOrder], previousOpponents, new Budget(SearchBudget), allowRematch: true)!;
 
         return
         [
@@ -170,7 +172,10 @@ internal static class SwissPairing
             }
         }
 
-        return carried.Count == 0 ? pairs : null;
+        // Die letzte Punktgruppe hat nichts mehr unter sich: sie lässt niemanden
+        // durchrutschen, und was hier ankommt, ist gerade. Bliebe jemand übrig,
+        // wäre die Schleife oben schon ohne Paarung ausgestiegen.
+        return pairs;
     }
 
     /// <summary>
@@ -197,11 +202,6 @@ internal static class SwissPairing
         if (pool.Count == 0)
         {
             return [];
-        }
-
-        if (pool.Count % 2 != 0)
-        {
-            return null;
         }
 
         if (!budget.Spend())

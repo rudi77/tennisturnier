@@ -14,8 +14,6 @@ namespace TennisTurnier.Domain.Phases;
 /// </summary>
 public sealed class RoundRobinFormat : IPhaseFormat
 {
-    public PhaseFormatKind Kind => PhaseFormatKind.RoundRobin;
-
     public IReadOnlyList<Pairing> GeneratePairings(PhaseState state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -196,6 +194,10 @@ public sealed class RoundRobinFormat : IPhaseFormat
     /// Kreismethode: einer bleibt stehen, die übrigen rotieren. Bei ungerader
     /// Teilnehmerzahl setzt in jeder Runde genau einer aus — dafür steht ein
     /// gedachter Platzhalter im Kreis, dessen Paarungen entfallen.
+    ///
+    /// Dass jede Gruppe mindestens zwei Mitglieder hat, ist vorher geprüft:
+    /// <see cref="RequirePlayableGroups"/> weist eine Auslosung ab, in der eine
+    /// Gruppe allein bliebe.
     /// </summary>
     private static void AddGroupPairings(
         IReadOnlyList<SeededEntry> members,
@@ -203,11 +205,6 @@ public sealed class RoundRobinFormat : IPhaseFormat
         PhaseDefinition definition,
         List<Pairing> pairings)
     {
-        if (members.Count < 2)
-        {
-            return;
-        }
-
         var circle = members.Select(m => (SeededEntry?)m).ToList();
         if (circle.Count % 2 == 1)
         {

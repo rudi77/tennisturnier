@@ -47,7 +47,7 @@ public sealed class SwissFormatTests
 
         internal IReadOnlyList<SeededEntry> Entries { get; }
 
-        internal PhaseState State => new(Phase.Id, _definition, Standard, Entries, Phase.Matches);
+        internal PhaseState State => new(_definition, Entries, Phase.Matches);
 
         internal bool IsComplete => _format.IsComplete(State);
 
@@ -481,7 +481,7 @@ public sealed class SwissFormatTests
         var entries = Entries(4);
         var phase = new Phase(Guid.NewGuid(), Guid.NewGuid(), 1, PhaseFormatKind.Swiss, "Schweizer System");
         var format = new SwissFormat();
-        var state = new PhaseState(phase.Id, definition, Standard, entries, phase.Matches);
+        var state = new PhaseState(definition, entries, phase.Matches);
 
         phase.AddPairings(format.GeneratePairings(state));
 
@@ -623,5 +623,19 @@ public sealed class SwissFormatTests
 
         Assert.Equal(PhaseFormatKind.Swiss, BuiltInFormats.Swiss.Phases[0].Format);
         Assert.Contains(Tiebreaker.Buchholz, BuiltInFormats.Swiss.Phases[0].Tiebreakers);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Ein_Schweizer_System_braucht_einen_Gegner(int teilnehmer)
+    {
+        var phase = new Phase(Guid.NewGuid(), Guid.NewGuid(), 1, PhaseFormatKind.Swiss);
+        var state = new PhaseState(Definition(), Entries(teilnehmer), phase.Matches);
+
+        var fehler = Assert.Throws<DomainException>(() => new SwissFormat().GeneratePairings(state));
+
+        Assert.Contains("mindestens zwei Teilnehmer", fehler.Message, StringComparison.Ordinal);
+        Assert.Contains($"hatte {teilnehmer}", fehler.Message, StringComparison.Ordinal);
     }
 }

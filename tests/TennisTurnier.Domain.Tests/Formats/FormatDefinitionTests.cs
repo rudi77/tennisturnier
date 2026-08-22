@@ -322,4 +322,35 @@ public sealed class FormatDefinitionTests
 
         definition.Validate();
     }
+
+    [Fact]
+    public void Eine_Definition_braucht_Id_und_Namen()
+    {
+        // Beides steht am Ende in einem eingefrorenen Turnier und ist dort nicht
+        // mehr zu korrigieren.
+        var ohneId = new FormatDefinition { Id = "  ", Name = "Test", Phases = [Knockout()] };
+        Assert.Contains("braucht eine Id", Assert.Throws<DomainException>(ohneId.Validate).Message, StringComparison.Ordinal);
+
+        var ohneNamen = new FormatDefinition { Id = "test", Name = "  ", Phases = [Knockout()] };
+        Assert.Contains("braucht einen Namen", Assert.Throws<DomainException>(ohneNamen.Validate).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Eine_Definition_ohne_Phasen_ist_keine()
+    {
+        // "phases": null kommt aus einer von Hand geschriebenen Vorlage und
+        // landet trotz nicht-nullbarer Annotation hier — als Absage, nicht als
+        // Absturz.
+        var nichts = new FormatDefinition { Id = "test", Name = "Test", Phases = null! };
+        Assert.Contains(
+            "mindestens eine Phase",
+            Assert.Throws<DomainException>(nichts.Validate).Message,
+            StringComparison.Ordinal);
+
+        var leerePhase = new FormatDefinition { Id = "test", Name = "Test", Phases = [null!] };
+        Assert.Contains(
+            "eine leere Phase",
+            Assert.Throws<DomainException>(leerePhase.Validate).Message,
+            StringComparison.Ordinal);
+    }
 }

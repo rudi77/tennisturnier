@@ -247,4 +247,47 @@ public sealed class PhaseTests
         Assert.Equal(PhaseStatus.Completed, phase.Status);
         Assert.True(phase.HasAnyResult);
     }
+
+    [Fact]
+    public void Eine_Referenz_auf_ein_fremdes_Match_bleibt_offen()
+    {
+        // Kein Format erzeugt das — aber ein Format ist austauschbar (ADR-0001),
+        // und eine Referenz ins Leere darf die Phase nicht zum Absturz bringen.
+        var phase = Bauen(PhaseFormatKind.RoundRobin);
+
+        var matches = phase.AddPairings([
+            new Pairing(1, 1, ParticipantRef.FromWinnerOf(Guid.NewGuid()), Meldung(), null, "A"),
+        ]);
+
+        Assert.False(matches[0].Side1.Origin.IsResolved);
+    }
+
+    [Fact]
+    public void Ein_Spiel_um_Platz_drei_ohne_Vorrunde_bleibt_offen()
+    {
+        // Ein Finale in Runde eins gibt es nicht — es sei denn, ein anderes
+        // Format legt es so an. Dann fehlen die Halbfinals, und das Spiel um
+        // Platz drei bleibt unverdrahtet, statt in die Liste zu greifen.
+        var phase = Bauen();
+
+        var matches = phase.AddPairings([
+            new Pairing(1, 1, Meldung(), Meldung(), "F"),
+            new Pairing(1, 2, ParticipantRef.Open, ParticipantRef.Open, KnockoutFormat.ThirdPlaceLabel),
+        ]);
+
+        var platzDrei = matches.Single(m => m.Label == KnockoutFormat.ThirdPlaceLabel);
+        Assert.Null(platzDrei.Side1.Origin.DependsOnMatch);
+    }
+
+    [Fact]
+    public void Ein_Format_ohne_Implementierung_wird_benannt()
+    {
+        // Aus der Ablage kann eine Formatart kommen, die diese Fassung nicht
+        // kennt. Die Absage nennt den Weg, sie nachzuliefern.
+        Assert.False(PhaseFormats.IsSupported((PhaseFormatKind)99));
+
+        var fehler = Assert.Throws<DomainException>(() => PhaseFormats.For((PhaseFormatKind)99));
+
+        Assert.Contains("noch keine Implementierung", fehler.Message, StringComparison.Ordinal);
+    }
 }

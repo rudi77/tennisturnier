@@ -67,12 +67,7 @@ public sealed class DrawBuilder
             var entries = StartersOf(phaseDefinition, seeded, created, definition, entriesByOrdinal);
             entriesByOrdinal[phaseDefinition.Ordinal] = entries;
 
-            var state = new PhaseState(
-                phase.Id,
-                phaseDefinition,
-                definition.MatchFormatOf(phaseDefinition),
-                entries,
-                phase.Matches);
+            var state = new PhaseState(phaseDefinition, entries, phase.Matches);
 
             phase.AddPairings(PhaseFormats.For(phaseDefinition.Format).GeneratePairings(state));
 

@@ -15,8 +15,6 @@ namespace TennisTurnier.Domain.Phases;
 /// </summary>
 public sealed class SwissFormat : IPhaseFormat
 {
-    public PhaseFormatKind Kind => PhaseFormatKind.Swiss;
-
     public IReadOnlyList<Pairing> GeneratePairings(PhaseState state)
     {
         ArgumentNullException.ThrowIfNull(state);

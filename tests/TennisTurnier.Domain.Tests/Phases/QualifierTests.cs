@@ -1,3 +1,4 @@
+using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
@@ -170,4 +171,45 @@ public sealed class QualifierTests
         Assert.Equal(7, slots.Count);
         Assert.Single(slots, slot => Qualifier.IsBestOfRank(PositionOf(slot).Group));
     }
+
+    [Fact]
+    public void Aus_einer_leeren_Vorphase_kommt_niemand_weiter()
+    {
+        // „Alle kommen weiter" aus einem Feld ohne Teilnehmer: die Folgephase
+        // bekäme null Startplätze und ließe sich nie ausspielen.
+        var fehler = Assert.Throws<DomainException>(() =>
+            Slots(groupCount: 1, participants: 0, QualificationRule.All));
+
+        Assert.Contains("kommt niemand weiter", fehler.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Eine_Vorphase_ohne_Gruppennamen_besetzt_ihre_Plaetze_trotzdem()
+    {
+        // Bei einer einzigen Gruppe hat sie keinen Namen — der Startplatz heißt
+        // dann schlicht „Erster", und die Zuordnung muss trotzdem greifen.
+        var erste = Guid.NewGuid();
+        var zweite = Guid.NewGuid();
+
+        var phase = new Phase(Guid.NewGuid(), Guid.NewGuid(), 1, PhaseFormatKind.RoundRobin);
+        var state = new PhaseState(
+            Source(groupCount: 1) with { Tiebreakers = [Tiebreaker.SetRatio] },
+            [new SeededEntry(erste, 1, "Erste"), new SeededEntry(zweite, 2, "Zweite")],
+            phase.Matches);
+
+        var standings = new Standings(
+            [
+                Platz(1, erste, "Erste"),
+                Platz(2, zweite, "Zweite"),
+            ]);
+
+        var aufgeloest = Qualifier.Resolve(state, standings);
+
+        Assert.Equal(erste, aufgeloest[(string.Empty, 1)]);
+        Assert.Equal(zweite, aufgeloest[(string.Empty, 2)]);
+    }
+
+    private static Standing Platz(int rank, Guid entryId, string name) =>
+        new(rank, entryId, name, Group: null, Played: 1, Won: 1, Lost: 0, Points: 2,
+            SetsWon: 2, SetsLost: 0, GamesWon: 12, GamesLost: 4);
 }
