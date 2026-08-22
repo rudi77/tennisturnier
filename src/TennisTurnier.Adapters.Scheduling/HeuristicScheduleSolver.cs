@@ -234,7 +234,7 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
             var previousCourt = _problem.Existing.FirstOrDefault(a => a.MatchId == match.Id)?.CourtId;
 
             var best = _problem.Courts
-                .Select(court => (Court: court, Start: EarliestStart(court, match, readyAt, duration)))
+                .Select(court => (Court: court, Start: EarliestStart(court, readyAt, duration)))
                 .Where(candidate => candidate.Start is not null)
                 .OrderBy(candidate => candidate.Start!.Value)
                 // Bei gleicher Zeit zuerst der bisherige Platz. Ein Match, das
@@ -377,10 +377,15 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
         /// <summary>
         /// Der früheste Beginn auf diesem Platz, der in ein freies Fenster passt
         /// und keine schon liegende Ansetzung berührt.
+        ///
+        /// Die Spieler kommen hier nicht mehr vor: <see cref="ReadyAt"/> hat den
+        /// Beginn bereits hinter das letzte Match jedes Beteiligten samt Pause
+        /// geschoben. Ein zweiter Blick darauf wäre eine Bedingung, die nie
+        /// zutrifft — die Prüfung gegen die Spieler gehört dorthin, wo eine
+        /// bestehende Ansetzung übernommen wird, und dort steht sie auch.
         /// </summary>
         private DateTimeOffset? EarliestStart(
             SchedulableCourt court,
-            Match match,
             DateTimeOffset readyAt,
             TimeSpan duration)
         {
@@ -400,14 +405,12 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
                         .DefaultIfEmpty(DateTimeOffset.MinValue)
                         .Max();
 
-                    if (blocking == DateTimeOffset.MinValue && !ConflictsWithPlayers(match, slot))
+                    if (blocking == DateTimeOffset.MinValue)
                     {
                         return start;
                     }
 
-                    start = blocking == DateTimeOffset.MinValue
-                        ? NextPlayerFreeStart(match, slot)
-                        : blocking + CourtTurnaround;
+                    start = blocking + CourtTurnaround;
                 }
             }
 
@@ -426,25 +429,13 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
                     || (slot.Start - other.End >= TimeSpan.Zero && slot.Start - other.End < _problem.MinimumRest)
                     || (other.Start - slot.End >= TimeSpan.Zero && other.Start - slot.End < _problem.MinimumRest)));
 
-        private DateTimeOffset NextPlayerFreeStart(Match match, TimeSlot slot) =>
-            PlayersOf(match)
-                .Where(playerId => _playedByPlayer.ContainsKey(playerId))
-                .SelectMany(playerId => _playedByPlayer[playerId])
-                .Where(other => other.End + _problem.MinimumRest > slot.Start)
-                .Select(other => other.End + _problem.MinimumRest)
-                .DefaultIfEmpty(slot.Start + TimeSpan.FromMinutes(5))
-                .Min();
-
         private void Occupy(Guid matchId, Guid courtId, TimeSlot slot)
         {
             _slotByMatch[matchId] = slot;
 
-            if (!_occupiedByCourt.TryGetValue(courtId, out var occupied))
-            {
-                _occupiedByCourt[courtId] = occupied = [];
-            }
-
-            occupied.Add(slot);
+            // Jeder Platz des Problems hat seine Liste seit dem Konstruktor, und
+            // belegt wird nur ein Platz, den es dort gibt.
+            _occupiedByCourt[courtId].Add(slot);
 
             var match = _problem.Matches.FirstOrDefault(m => m.Id == matchId);
             if (match is null)

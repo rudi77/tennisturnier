@@ -464,4 +464,35 @@ public sealed class HeuristicScheduleSolverTests
             proposal.Assignments.Where(a => a.MatchId != fremde.MatchId),
             a => Assert.True(a.PlannedStart >= At(16, 9, 20)));
     }
+
+    [Fact]
+    public void Ein_Zyklus_in_den_Abhaengigkeiten_wird_benannt()
+    {
+        // Kein Format erzeugt das: ein Sieger kommt immer aus einer früheren
+        // Runde. Aus der Ablage kann es trotzdem kommen — und ohne die Schranke
+        // liefe die Tiefensuche, bis der Aufrufstapel voll ist.
+        var phaseId = Guid.NewGuid();
+        var ersteId = Guid.NewGuid();
+        var zweiteId = Guid.NewGuid();
+
+        var erste = new Match(
+            ersteId, _tournamentId, phaseId, 1, 1,
+            ParticipantRef.FromWinnerOf(zweiteId), ParticipantRef.Open);
+
+        var zweite = new Match(
+            zweiteId, _tournamentId, phaseId, 1, 2,
+            ParticipantRef.FromWinnerOf(ersteId), ParticipantRef.Open);
+
+        var problem = new SchedulingProblem(
+            [erste, zweite],
+            new Dictionary<Guid, IReadOnlyList<Guid>>(),
+            Courts(1),
+            new Dictionary<Guid, TimeSpan>(),
+            Rest,
+            []);
+
+        var fehler = Assert.Throws<DomainException>(() => _solver.Solve(problem));
+
+        Assert.Contains("Zyklus", fehler.Message, StringComparison.Ordinal);
+    }
 }

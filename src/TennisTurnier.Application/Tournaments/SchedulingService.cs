@@ -185,16 +185,10 @@ public sealed class SchedulingService : ISchedulingService
 
         RequireWithinTournament(plan.Tournament, confirmed);
 
-        // Ein Match, das schon aufgerufen wurde oder läuft, wird nicht mehr
-        // geplant. Eine zweite, parallele Ansetzung daneben zu legen hieße, es
-        // gleichzeitig auf zwei Plätzen anzusetzen.
-        var running = active.FirstOrDefault(assignment => assignment.Status != AssignmentStatus.Planned);
-        if (running is not null)
-        {
-            throw new DomainException(
-                $"„{plan.Labels.GetValueOrDefault(match.Id) ?? "Das Match"}“ ist bereits {running.Status} " +
-                "und lässt sich nicht mehr einplanen.");
-        }
+        // Ein Match, das schon aufgerufen wurde, läuft oder unterbrochen ist,
+        // kommt hier gar nicht mehr an: der Plan lässt es aus, und der Zugriff
+        // darauf ist oben schon als unbekanntes Match abgewiesen worden. Eine
+        // zweite Absage dafür wäre eine, die nie fällt.
 
         if (active.FirstOrDefault() is { } existing)
         {

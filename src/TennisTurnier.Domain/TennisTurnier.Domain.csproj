@@ -7,6 +7,10 @@
     <!-- Für Bausteine wie die Setzlistenverteilung, die zur Fachlogik gehören,
          aber keine Aufrufstelle außerhalb der Domäne haben. -->
     <InternalsVisibleTo Include="TennisTurnier.Domain.Tests" />
+    <!-- Der Solver muss auch mit einer Matchmenge zurechtkommen, die kein Format
+         so erzeugt — etwa mit einem Zyklus in den Abhängigkeiten. Solche Matches
+         lassen sich nur über den internen Konstruktor bauen. -->
+    <InternalsVisibleTo Include="TennisTurnier.Adapters.Scheduling.Tests" />
   </ItemGroup>
 
 </Project>
