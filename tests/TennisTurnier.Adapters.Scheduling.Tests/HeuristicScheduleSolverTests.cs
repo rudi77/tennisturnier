@@ -399,4 +399,69 @@ public sealed class HeuristicScheduleSolverTests
 
         Assert.Empty(Violations(_solver.Solve(problem), problem));
     }
+
+    [Fact]
+    public void Wer_in_zwei_Meldungen_steckt_spielt_nacheinander()
+    {
+        // Einzel und Doppel am selben Tag: zwei Meldungen, ein Mensch. Plätze
+        // sind genug da — die Pause zwischen seinen Matches ist der einzige
+        // Grund, das zweite später anzusetzen.
+        var (phase, players) = Knockout(4);
+        var erste = phase.Matches.Where(m => m.Round == 1).ToList();
+
+        var doppelspieler = players[erste[0].Side1.EntryId!.Value][0];
+        var geteilt = players.ToDictionary(
+            paar => paar.Key,
+            paar => paar.Key == erste[1].Side1.EntryId
+                ? (IReadOnlyList<Guid>)[doppelspieler]
+                : paar.Value);
+
+        var problem = Problem(phase, geteilt, Courts(4));
+        var proposal = _solver.Solve(problem);
+
+        Assert.Empty(proposal.Unscheduled);
+        Assert.Empty(Violations(proposal, problem));
+
+        var eins = proposal.Assignments.Single(a => a.MatchId == erste[0].Id);
+        var zwei = proposal.Assignments.Single(a => a.MatchId == erste[1].Id);
+
+        // Zwischen den beiden liegt mindestens die Mindestpause.
+        var frueher = eins.PlannedStart <= zwei.PlannedStart ? eins : zwei;
+        var spaeter = frueher == eins ? zwei : eins;
+
+        Assert.True(spaeter.PlannedStart >= frueher.PlannedStart + frueher.EstimatedDuration + Rest);
+    }
+
+    [Fact]
+    public void Eine_bestehende_Ansetzung_ohne_Match_belegt_nur_den_Platz()
+    {
+        // Sie bleibt aus einem verworfenen Draw zurück. Der Platz gilt trotzdem
+        // als belegt — dort steht jemand, auch wenn der Solver das Match nicht
+        // mehr kennt.
+        var (phase, players) = Knockout(4);
+        var courts = Courts(1);
+
+        var fremde = new CourtAssignment(
+            Guid.NewGuid(),
+            _tournamentId,
+            Guid.NewGuid(),
+            courts[0].Id,
+            1,
+            TimeSpan.FromMinutes(75),
+            AssignmentSource.Manual);
+
+        fremde.PlanFor(At(16, 8));
+
+        var problem = Problem(phase, players, courts, [fremde]);
+        var proposal = _solver.Solve(problem);
+
+        Assert.Empty(proposal.Unscheduled);
+
+        // Die fremde Ansetzung bleibt unangetastet stehen; alles Geplante rückt
+        // dahinter.
+        Assert.Contains(proposal.Assignments, a => a.MatchId == fremde.MatchId);
+        Assert.All(
+            proposal.Assignments.Where(a => a.MatchId != fremde.MatchId),
+            a => Assert.True(a.PlannedStart >= At(16, 9, 20)));
+    }
 }

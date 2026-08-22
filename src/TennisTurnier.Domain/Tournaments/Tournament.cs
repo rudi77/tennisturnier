@@ -732,14 +732,17 @@ public sealed class Tournament : Entity
     /// </summary>
     public TimeSlot? Period()
     {
-        if (StartsOn is not { } starts || EndsOn is not { } ends)
+        // Beginn und Ende gibt es nur zusammen: SetDates weist ein Ende ohne
+        // Beginn ab und setzt das Ende sonst auf den Beginn. Ein zweiter Test
+        // auf das Ende wäre einer, der nie zutrifft.
+        if (StartsOn is not { } starts)
         {
             return null;
         }
 
         var local = new LocalTime(Venue.TimeZone);
 
-        return new TimeSlot(local.Midnight(starts.AddDays(-1)), local.Midnight(ends.AddDays(2)));
+        return new TimeSlot(local.Midnight(starts.AddDays(-1)), local.Midnight(EndsOn!.Value.AddDays(2)));
     }
 
     /// <summary>
@@ -778,13 +781,13 @@ public sealed class Tournament : Entity
         // RequireDatesRecorded, bevor er überhaupt so weit kommt. Dieser
         // Kommentar behauptete das einmal für die Domäne — und die Prüfung, auf
         // die er verwies, stand damals an einer einzigen, ganz anderen Stelle.
-        if (StartsOn is not { } starts || EndsOn is not { } ends)
+        if (StartsOn is not { } starts)
         {
             return;
         }
 
         var from = new DateTimeOffset(starts.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(-1);
-        var until = new DateTimeOffset(ends.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(2);
+        var until = new DateTimeOffset(EndsOn!.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(2);
 
         if (when < from || when >= until)
         {
