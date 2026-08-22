@@ -158,4 +158,39 @@ public sealed class TurnierRandfaelleTests
         // Und mittendrin geht es.
         turnier.RequireScheduledWithin(new DateTimeOffset(2026, 5, 16, 10, 0, 0, TimeSpan.Zero));
     }
+
+    [Fact]
+    public void Ein_Platz_ohne_Namen_wird_abgewiesen()
+    {
+        // Aus einer Anfrage kann "name": null kommen. Die Absage muss fachlich
+        // sein und darf nicht als Absturz beim Vergleich mit den bestehenden
+        // Namen enden.
+        var turnier = Turnier();
+
+        Assert.Throws<DomainException>(() =>
+            turnier.AddCourt(Guid.NewGuid(), null!, CourtSurface.Clay, CourtLocation.Outdoor));
+    }
+
+    [Fact]
+    public void Eine_freie_Setzposition_bleibt_frei()
+    {
+        // Die Gegenprobe zur belegten: ohne sie wäre die Regel auch dann
+        // erfüllt, wenn jede Setzposition als vergeben gälte.
+        var turnier = Turnier();
+        turnier.OpenRegistration();
+
+        var erste = turnier.Enter(Guid.NewGuid(), Guid.NewGuid(), seed: 1);
+        turnier.Accept(erste.Id);
+
+        var zweite = turnier.Enter(Guid.NewGuid(), Guid.NewGuid());
+        turnier.Accept(zweite.Id);
+
+        turnier.SetSeed(zweite.Id, 2);
+
+        Assert.Equal(2, zweite.Seed);
+
+        // Und ohne Angabe wird gar nicht erst gesucht.
+        turnier.SetSeed(zweite.Id, null);
+        Assert.Null(zweite.Seed);
+    }
 }

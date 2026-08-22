@@ -141,13 +141,16 @@ internal static class StandingsBuilder
 
         foreach (var match in matches)
         {
-            if (match.Score is not { } score
-                || score.Outcome == MatchOutcome.Bye
-                || match.WinnerEntryId is not { } winner
-                || match.LoserEntryId is not { } loser)
+            if (match.Score is not { } score || score.Outcome == MatchOutcome.Bye)
             {
                 continue;
             }
+
+            // Ein entschiedenes Match, das kein Freilos war, hat beide Seiten
+            // besetzt: ein Ergebnis lässt sich nur eintragen, wenn feststeht,
+            // wer spielt.
+            var winner = match.WinnerEntryId!.Value;
+            var loser = match.LoserEntryId!.Value;
 
             headToHead[(winner, loser)] = headToHead.GetValueOrDefault((winner, loser)) + 1;
 

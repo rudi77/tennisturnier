@@ -202,4 +202,19 @@ public sealed class CourtQueueTests
 
         Assert.Equal([mitZeit.Id, ohneZeit.Id], wartend.Select(a => a.Id));
     }
+
+    [Fact]
+    public void Eine_Zuweisung_ohne_Zeit_bekommt_eine()
+    {
+        // Von Hand auf den Platz gesetzt, ohne Zeitangabe: die Warteschlange
+        // trägt sie nach, sonst stünde sie ohne Beginn im Aushang.
+        var ohneZeit = new CourtAssignment(
+            Guid.NewGuid(), _tournamentId, Guid.NewGuid(), _courtId, 1,
+            TimeSpan.FromMinutes(75), AssignmentSource.Manual);
+
+        var geaendert = CourtQueue.Reflow([ohneZeit], At(9), At(9));
+
+        Assert.Equal(1, geaendert);
+        Assert.Equal(At(9), ohneZeit.PlannedStart);
+    }
 }

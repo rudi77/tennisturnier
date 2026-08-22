@@ -227,10 +227,10 @@ public sealed class ParticipantResolver
             var key = (player.FirstName.ToLowerInvariant(), player.LastName.ToLowerInvariant(),
                 mail.ToLowerInvariant());
 
-            if (_resolved.TryGetValue(key, out var seen) && ReferenceEquals(seen, player))
-            {
-                _resolved.Remove(key);
-            }
+            // Der Merkzettel führt genau auf diesen Spieler: hätte es unter dem
+            // Schlüssel schon einen gegeben, wäre der zurückgegeben worden und
+            // kein neuer entstanden.
+            _resolved.Remove(key);
         }
 
         _pendingPlayers.Clear();

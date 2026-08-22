@@ -273,12 +273,15 @@ public sealed class KnockoutFormat : IPhaseFormat
     {
         var score = match.Score!;
 
-        if (match.WinnerEntryId is { } winnerId && records.TryGetValue(winnerId, out var winner))
+        // Beide Seiten stehen fest: ein Ergebnis gibt es nur zu einem Match, das
+        // gespielt wurde. In der Tabelle stehen sie deshalb nicht zwangsläufig —
+        // die Startplätze einer Phase können sich geändert haben.
+        if (records.TryGetValue(match.WinnerEntryId!.Value, out var winner))
         {
             winner.AddWin(score, score.WinnerSide);
         }
 
-        if (match.LoserEntryId is { } loserId && records.TryGetValue(loserId, out var loser))
+        if (records.TryGetValue(match.LoserEntryId!.Value, out var loser))
         {
             loser.AddLoss(score, score.LoserSide, match.Round);
         }

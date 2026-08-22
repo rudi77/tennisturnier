@@ -36,8 +36,9 @@ public sealed class DrawBuilder
         Tournament tournament,
         CancellationToken cancellationToken = default)
     {
-        var snapshot = tournament.Format
-            ?? throw new DomainException("Ohne eingefrorenes Format lässt sich kein Draw bauen.");
+        // Eingefroren wird beim Auslosen, und ausgelost wird über genau diesen
+        // Weg: das Format ist da, bevor der Draw gebaut wird.
+        var snapshot = tournament.Format!;
 
         var definition = snapshot.Definition;
 
