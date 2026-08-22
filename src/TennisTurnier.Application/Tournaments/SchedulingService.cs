@@ -167,8 +167,11 @@ public sealed class SchedulingService : ISchedulingService
             applied.Add(ApplyOne(plan, confirmed, byMatch.GetValueOrDefault(confirmed.MatchId, [])));
         }
 
-        RemoveOrphans(plan, byMatch);
-
+        // Hier stand einmal ein Aufräumen verwaister Ansetzungen — solcher, deren
+        // Match der Plan nicht mehr kennt. Es lief nie: ein gespieltes Match
+        // verliert seine Ansetzung schon bei der Ergebniseingabe, ein verworfener
+        // Draw nimmt sie über den Fremdschlüssel mit, und was am Platz steht,
+        // kommt in den Turniertagbetrieb, in dem gar nicht bestätigt wird.
         return applied;
     }
 
@@ -219,32 +222,6 @@ public sealed class SchedulingService : ISchedulingService
         _assignments.Add(created);
 
         return created;
-    }
-
-    /// <summary>
-    /// Räumt Ansetzungen ab, deren Match inzwischen gespielt ist.
-    ///
-    /// Ohne das bliebe die Zeit des gespielten Matches für den Rest des Turniers
-    /// belegt — in der öffentlichen Warteschlange sichtbar und, schlimmer, als
-    /// stiller Kollisionspartner für alles, was danach dorthin geplant wird.
-    /// Ansetzungen, die schlicht nicht in der Bestätigung stehen, bleiben
-    /// unangetastet: eine Teilbestätigung ist keine Aufforderung, den Rest zu
-    /// löschen.
-    /// </summary>
-    private void RemoveOrphans(Plan plan, IReadOnlyDictionary<Guid, List<CourtAssignment>> byMatch)
-    {
-        foreach (var (matchId, assignments) in byMatch)
-        {
-            if (plan.Problem.Matches.Any(match => match.Id == matchId))
-            {
-                continue;
-            }
-
-            foreach (var orphan in assignments.Where(a => a.Status == AssignmentStatus.Planned))
-            {
-                _assignments.Remove(orphan);
-            }
-        }
     }
 
     /// <summary>Die noch gespeicherten Ansetzungen, die diese Bestätigung nicht berührt.</summary>

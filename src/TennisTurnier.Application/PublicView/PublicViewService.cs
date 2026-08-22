@@ -193,11 +193,9 @@ public sealed class PublicViewService : IPublicViewService
 
         foreach (var phase in phases)
         {
-            if (PhaseOrchestrator.DefinitionOf(definition, phase) is not { } phaseDefinition)
-            {
-                continue;
-            }
-
+            // Die Phasen sind aus dieser Definition entstanden und sie ist
+            // eingefroren: zu jeder gibt es ihre Definition.
+            var phaseDefinition = PhaseOrchestrator.DefinitionOf(definition, phase)!;
             var state = PhaseOrchestrator.StateOf(tournament, definition, phaseDefinition, phase, names);
 
             standings[phase.Id] = PhaseFormats.For(phase.Format).ComputeStandings(state);

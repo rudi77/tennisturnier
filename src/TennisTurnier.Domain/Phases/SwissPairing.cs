@@ -238,31 +238,21 @@ internal static class SwissPairing
     /// zuerst alle ungespielten nach Dutch-Vorzug, dann — nur wenn Wiederholungen
     /// erlaubt sind — die bereits gespielten in derselben Reihenfolge.
     /// </summary>
-    private static IEnumerable<int> Candidates(
+    private static List<int> Candidates(
         List<Guid> pool,
         IReadOnlySet<Guid>? met,
         bool allowRematch)
     {
-        foreach (var index in Preferences(pool.Count))
+        var candidates = Preferences(pool.Count)
+            .Where(index => met?.Contains(pool[index]) != true)
+            .ToList();
+
+        if (allowRematch && met is not null)
         {
-            if (met?.Contains(pool[index]) != true)
-            {
-                yield return index;
-            }
+            candidates.AddRange(Preferences(pool.Count).Where(index => met.Contains(pool[index])));
         }
 
-        if (!allowRematch || met is null)
-        {
-            yield break;
-        }
-
-        foreach (var index in Preferences(pool.Count))
-        {
-            if (met.Contains(pool[index]))
-            {
-                yield return index;
-            }
-        }
+        return candidates;
     }
 
     /// <summary>

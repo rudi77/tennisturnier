@@ -267,10 +267,9 @@ public sealed class MatchService : IMatchService
         IReadOnlyList<Phase> phases,
         Phase phase)
     {
-        if (tournament.Format?.Definition is not { } definition)
-        {
-            return;
-        }
+        // Ein Turnier, dessen Ergebnis zurückgenommen wird, hat Phasen — und
+        // damit ein eingefrorenes Format.
+        var definition = tournament.Format!.Definition;
 
         var dependent = phases.FirstOrDefault(other =>
             other.Id != phase.Id
