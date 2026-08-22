@@ -7,9 +7,16 @@
  */
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest'
 import { resetDb, server } from './server'
+
+// Fünf Sekunden statt einer für findBy* und waitFor. Nicht, weil etwas so
+// lange dauert — sondern weil auf einer ausgelasteten Maschine das Aufsetzen
+// der jsdom-Umgebung schon mal eine Sekunde frisst. Eine Sekunde Vorgabe macht
+// aus so einem Lauf einen roten, und ein Test, der ohne Grund rot wird, ist
+// schlimmer als ein langsamer.
+configure({ asyncUtilTimeout: 5_000 })
 
 // `matchMedia` gibt es in jsdom nicht. Die Anwendung liest genau eine Abfrage
 // (lib/breakpoints.ts); breit ist die Vorgabe, schmal stellt ein Test um.

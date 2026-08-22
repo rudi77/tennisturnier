@@ -58,6 +58,36 @@ Turnierleiter — berufen die Turnierleitungen selbst über
 `Security:SelfServiceOrganizers` abschalten, wenn eine Instanz geschlossen
 laufen soll.
 
+## Tests
+
+Drei Ebenen, die sich nicht ersetzen: die Domäne rechnet ohne Datenbank, die
+API läuft gegen eine echte SQLite-Datei, und der Durchlauf im Browser geht
+gegen den echten Stapel samt Keycloak.
+
+```bash
+./scripts/coverage.ps1        # Backend: alle Testprojekte, Abdeckung, Lücken
+cd app && npm run coverage    # Frontend: Vitest mit MSW
+cd app && npm run e2e         # Ende zu Ende: Playwright gegen API und Keycloak
+```
+
+`scripts/coverage.ps1` lässt die Testprojekte nacheinander laufen und rechnet
+ihre Treffer in einem Bericht zusammen. Das ist kein Umweg: nachträglich
+zusammenführen lässt sich nicht, weil eine Zeile mit zwei Ausgängen in zwei
+Berichten mit je 50 Prozent steht und daraus nicht hervorgeht, ob es dieselbe
+Hälfte war. Am Ende steht, was ungetestet blieb — und der Aufruf endet rot,
+sobald das etwas ist. Für einen Ausschnitt: `-Filter MatchService`.
+
+Der Stand ist **100 Prozent** in beiden Ebenen, Zeilen wie Zweige. Das ist
+weniger ein Ziel als eine Arbeitsweise: was sich nicht erreichen ließ, war
+jedes Mal Code, den es nicht braucht — eine Ausweichfassung für einen Fall, den
+ein Fremdschlüssel ausschließt, eine zweite Prüfung derselben Sache, ein
+Rückfall hinter einer Schleife, die immer trifft. Die Abdeckung war dabei das
+Werkzeug, das sie gefunden hat.
+
+Der Playwright-Durchlauf braucht Keycloak (`docker compose up -d keycloak`) und
+startet API und Vite selbst; er benutzt Port 5001 und eine eigene
+Datenbankdatei unter `app/.playwright`.
+
 ## Architektur
 
 Ports & Adapters. Der fachliche Kern — Paarungserzeugung, Tabellen, Tiebreaker,

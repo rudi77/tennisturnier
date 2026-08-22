@@ -75,7 +75,22 @@ try {
     New-Item -ItemType Directory -Force 'TestResults/merged' | Out-Null
     Copy-Item $bericht.FullName 'TestResults/merged/Cobertura.xml' -Force
 
-    python scripts/coverage-gaps.py $Filter
+    # Auf den CI-Läufern heißt es python3, unter Windows python. Geprüft wird
+    # nicht, ob der Name existiert, sondern ob er läuft: Windows legt für
+    # python3 einen Platzhalter an, der nur den Store öffnet.
+    $python = @('python', 'python3') | Where-Object {
+        try { & $_ --version *> $null; $LASTEXITCODE -eq 0 } catch { $false }
+    } | Select-Object -First 1
+
+    if (-not $python) {
+        throw 'Python wird gebraucht, um den Bericht auszuwerten.'
+    }
+
+    & $python scripts/coverage-gaps.py $Filter
+
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Es gibt ungetestete Zeilen oder Zweige.'
+    }
 }
 finally {
     Pop-Location

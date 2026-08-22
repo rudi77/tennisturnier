@@ -6,7 +6,8 @@ on:
   pull_request:
 
 jobs:
-  build-and-test:
+  backend:
+    name: Backend
     runs-on: ubuntu-latest
 
     steps:
@@ -17,18 +18,100 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore
-        run: dotnet restore
+        run: |
+          dotnet restore
+          dotnet tool restore
 
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test
-        run: dotnet test --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+      # Misst und prüft in einem: das Skript lässt die Testprojekte
+      # nacheinander laufen, rechnet die Treffer zusammen und bricht ab, sobald
+      # eine Zeile oder ein Zweig ungetestet bleibt.
+      - name: Test und Abdeckung
+        shell: pwsh
+        run: ./scripts/coverage.ps1
 
-      - name: Testergebnisse veröffentlichen
+      - name: Abdeckungsbericht veröffentlichen
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: "**/TestResults/*.trx"
+          name: backend-coverage
+          path: TestResults/merged/Cobertura.xml
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Abhängigkeiten
+        run: npm ci
+
+      - name: Typen
+        run: npm run typecheck
+
+      # Die Schwellen stehen in vitest.config.ts: hundert Prozent, sonst rot.
+      - name: Test und Abdeckung
+        run: npm run coverage
+
+  e2e:
+    name: Ende zu Ende
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # Der Identity Provider läuft als Container mit demselben Realm wie
+      # lokal — ohne ihn prüfte der Durchlauf eine Anwendung ohne Anmeldung.
+      - name: Keycloak starten
+        run: |
+          docker compose up -d keycloak
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/realms/tennisturnier >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Keycloak ist nicht hochgekommen." >&2
+          docker compose logs keycloak
+          exit 1
+
+      - name: Abhängigkeiten
+        working-directory: app
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Durchläufe
+        working-directory: app
+        run: npm run e2e
+
+      - name: Bericht veröffentlichen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: app/playwright-report
           if-no-files-found: ignore
