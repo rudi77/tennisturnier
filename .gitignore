@@ -454,6 +454,9 @@ design-time.db
 # --- Testberichte ---------------------------------------------------------
 # Coverage-Berichte und Playwright-Artefakte entstehen bei jedem Lauf neu.
 /TestResults/
+
+# Das Bauprotokoll, aus dem der CI-Lauf seine Warnungen liest.
+build.log
 app/coverage/
 app/playwright-report/
 app/test-results/

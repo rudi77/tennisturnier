@@ -48,6 +48,7 @@ try {
         dotnet test $projekt.FullName `
             --settings $einstellungen `
             --results-directory TestResults `
+            --logger "trx;LogFileName=$($projekt.BaseName).trx" `
             --nologo `
             --verbosity quiet
         if ($LASTEXITCODE -ne 0) {

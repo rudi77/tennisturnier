@@ -1,5 +1,7 @@
 # tennisturnier
 
+[![CI](https://github.com/rudi77/tennisturnier/actions/workflows/ci.yml/badge.svg)](https://github.com/rudi77/tennisturnier/actions/workflows/ci.yml)
+
 Turnierplattform für Tennisvereine: Platzverwaltung, Turniere in verschiedenen Modi
 (K.O., Gruppenphase + K.O., jeder gegen jeden, Liga, Schweizer System) für Einzel,
 Doppel und Mixed, einstellbares Satzformat bis hinunter zu Kurzsätzen mit
@@ -87,6 +89,15 @@ Werkzeug, das sie gefunden hat.
 Der Playwright-Durchlauf braucht Keycloak (`docker compose up -d keycloak`) und
 startet API und Vite selbst; er benutzt Port 5001 und eine eigene
 Datenbankdatei unter `app/.playwright`.
+
+Dieselben drei Ebenen laufen im
+[CI](https://github.com/rudi77/tennisturnier/actions/workflows/ci.yml), dort
+zusätzlich mit dem Bau des Frontend-Bündels. Jeder Durchgang schreibt seine
+Zahlen in die Zusammenfassung des Laufs — Tests je Projekt, Abdeckung nach
+Assembly, Compilermeldungen — und legt die vollständigen Berichte als Artefakte
+ab: die begehbare HTML-Abdeckung beider Ebenen und den Playwright-Bericht samt
+Spuren gescheiterter Durchläufe. Warnungen und gescheiterte Tests stehen
+zusätzlich als Annotation an ihrer Zeile.
 
 ## Architektur
 

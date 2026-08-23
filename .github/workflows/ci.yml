@@ -5,6 +5,12 @@ on:
     branches: ["**"]
   pull_request:
 
+# Ein zweiter Push auf denselben Branch macht den laufenden Durchgang
+# gegenstandslos — er darf abgebrochen werden, statt die Warteschlange zu füllen.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend
@@ -17,28 +23,62 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Restore
+      - name: Abhängigkeiten
         run: |
           dotnet restore
           dotnet tool restore
 
-      - name: Build
-        run: dotnet build --no-restore --configuration Release
+      # Das Protokoll wird mitgeschrieben, damit Warnungen danach als
+      # Annotation an ihrer Zeile stehen. `TreatWarningsAsErrors` ist an: eine
+      # Warnung bricht hier schon ab — sichtbar soll sie trotzdem sein.
+      - name: Bauen
+        run: |
+          set -o pipefail
+          dotnet build --no-restore --configuration Release \
+            -p:GenerateFullPaths=true \
+            -consoleLoggerParameters:NoSummary \
+            | tee build.log
+
+      - name: Warnungen zeigen
+        if: always()
+        run: python3 scripts/ci-bericht.py warnungen build.log >> "$GITHUB_STEP_SUMMARY"
 
       # Misst und prüft in einem: das Skript lässt die Testprojekte
       # nacheinander laufen, rechnet die Treffer zusammen und bricht ab, sobald
       # eine Zeile oder ein Zweig ungetestet bleibt.
-      - name: Test und Abdeckung
+      - name: Tests und Abdeckung
         shell: pwsh
         run: ./scripts/coverage.ps1
 
-      - name: Abdeckungsbericht veröffentlichen
+      - name: Testergebnisse zeigen
+        if: always()
+        run: python3 scripts/ci-bericht.py tests TestResults >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Abdeckung zeigen
+        if: always()
+        run: |
+          dotnet tool run reportgenerator \
+            -reports:TestResults/merged/Cobertura.xml \
+            -targetdir:TestResults/report \
+            "-reporttypes:Html;MarkdownSummaryGithub" \
+            -title:"Backend"
+          {
+            echo '## Abdeckung Backend'
+            echo
+            tail -n +2 TestResults/report/SummaryGithub.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Berichte ablegen
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: backend-coverage
-          path: TestResults/merged/Cobertura.xml
-          if-no-files-found: ignore
+          name: backend-berichte
+          path: |
+            TestResults/report
+            TestResults/**/*.trx
+            TestResults/merged/Cobertura.xml
+            build.log
+          if-no-files-found: warn
 
   frontend:
     name: Frontend
@@ -62,9 +102,29 @@ jobs:
       - name: Typen
         run: npm run typecheck
 
-      # Die Schwellen stehen in vitest.config.ts: hundert Prozent, sonst rot.
-      - name: Test und Abdeckung
+      # Der eigentliche Bau — nicht nur die Typprüfung. Ein Bündel, das nicht
+      # entsteht, ist ein Fehler, den keine Typprüfung findet.
+      - name: Bauen
+        run: npm run build
+
+      # Die Schranken stehen in vitest.config.ts: hundert Prozent, sonst rot.
+      - name: Tests und Abdeckung
         run: npm run coverage
+
+      - name: Abdeckung zeigen
+        if: always()
+        working-directory: .
+        run: python3 scripts/ci-bericht.py abdeckung-frontend app/coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Berichte ablegen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-berichte
+          path: |
+            app/coverage
+            app/dist
+          if-no-files-found: warn
 
   e2e:
     name: Ende zu Ende
@@ -89,7 +149,8 @@ jobs:
         run: |
           docker compose up -d keycloak
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/realms/tennisturnier >/dev/null; then
+            if curl -sf http://localhost:8080/realms/tennisturnier > /dev/null; then
+              echo "Keycloak steht."
               exit 0
             fi
             sleep 5
@@ -108,10 +169,16 @@ jobs:
         working-directory: app
         run: npm run e2e
 
-      - name: Bericht veröffentlichen
+      - name: Ergebnisse zeigen
+        if: always()
+        run: python3 scripts/ci-bericht.py e2e app/playwright-report/ergebnisse.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Bericht ablegen
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-report
-          path: app/playwright-report
-          if-no-files-found: ignore
+          name: e2e-bericht
+          path: |
+            app/playwright-report
+            app/test-results
+          if-no-files-found: warn

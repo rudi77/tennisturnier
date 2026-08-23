@@ -37,7 +37,16 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
 
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
+  // Im CI zusätzlich der GitHub-Reporter: ein gescheiterter Durchlauf steht
+  // damit als Annotation an der Zeile, an der er gescheitert ist, statt nur im
+  // Protokoll. Der JSON-Bericht speist die Zusammenfassung des Laufs.
+  reporter: process.env.CI
+    ? [
+        ['github'],
+        ['html', { open: 'never' }],
+        ['json', { outputFile: 'playwright-report/ergebnisse.json' }],
+      ]
+    : [['list']],
 
   use: {
     baseURL: 'http://localhost:5001',
