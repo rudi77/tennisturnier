@@ -70,7 +70,7 @@ jobs:
 
       - name: Berichte ablegen
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: backend-berichte
           path: |
@@ -118,7 +118,7 @@ jobs:
 
       - name: Berichte ablegen
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-berichte
           path: |
@@ -175,7 +175,7 @@ jobs:
 
       - name: Bericht ablegen
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-bericht
           path: |
