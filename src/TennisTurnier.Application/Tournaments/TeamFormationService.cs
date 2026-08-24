@@ -56,19 +56,22 @@ public sealed class TeamFormationService : ITeamFormationService
     private readonly IPublicViewService _publicView;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
+    private readonly TournamentOptions _options;
 
     public TeamFormationService(
         ITournamentRepository tournaments,
         IPlayerRepository players,
         IPublicViewService publicView,
         IUnitOfWork unitOfWork,
-        IUserContext userContext)
+        IUserContext userContext,
+        TournamentOptions options)
     {
         _tournaments = tournaments;
         _players = players;
         _publicView = publicView;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
+        _options = options;
     }
 
     public async Task<Guid> FormAsync(
@@ -91,10 +94,12 @@ public sealed class TeamFormationService : ITeamFormationService
 
     /// <summary>
     /// Das Los. Es liegt hier und nicht in der Domäne: sie rechnet, und was sie
-    /// rechnet, muss zweimal dasselbe ergeben. Gelost wird über
-    /// <see cref="Random.Shared"/> — für eine Auslosung im Vereinsheim ist das
-    /// die richtige Größenordnung, und ein eigener Port dafür wäre eine
-    /// Schnittstelle mit genau einer Implementierung und einem Aufrufer.
+    /// rechnet, muss zweimal dasselbe ergeben.
+    ///
+    /// Gelost wird über eine feste Ausgangsreihenfolge — nach Meldezeitpunkt,
+    /// bei Gleichstand nach Kennung. Ohne sie hinge das Ergebnis daran, in
+    /// welcher Reihenfolge die Datenbank die Meldungen zurückgibt, und ein
+    /// gesetzter Saatwert wäre wertlos.
     /// </summary>
     public async Task<DrawTeamsResult> DrawAsync(
         Guid tournamentId,
@@ -104,9 +109,13 @@ public sealed class TeamFormationService : ITeamFormationService
         tournament.RequireFormsTeamsItself();
 
         var byId = await ParticipantsOfAsync(tournament, cancellationToken);
-        var offen = tournament.UnpairedEntries.ToArray();
 
-        Random.Shared.Shuffle(offen);
+        var offen = tournament.UnpairedEntries
+            .OrderBy(entry => entry.RegisteredAt)
+            .ThenBy(entry => entry.Id)
+            .ToArray();
+
+        Los().Shuffle(offen);
 
         var gebildet = 0;
 
@@ -132,6 +141,16 @@ public sealed class TeamFormationService : ITeamFormationService
 
         await SaveAsync(tournamentId, cancellationToken);
     }
+
+    /// <summary>
+    /// Das Los für diese Auslosung.
+    ///
+    /// Ohne Saatwert der geteilte Zufall. Mit einem — <c>Tournament:TeamDrawSeed</c>
+    /// — ein eigener je Auslosung und nicht ein fortlaufender: sonst hinge das
+    /// Ergebnis daran, wie oft seit dem Start gelost wurde, und dieselbe
+    /// Meldungsliste ergäbe zweimal etwas anderes.
+    /// </summary>
+    private Random Los() => _options.TeamDrawSeed is { } saat ? new Random(saat) : Random.Shared;
 
     /// <summary>
     /// Stellt ein Team zusammen: erst der Teilnehmer, dann die Meldung.

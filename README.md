@@ -153,6 +153,12 @@ die Anmeldungen zweier Menschen, samt Bestätigungscode und Meldezeitpunkt, und
 wer sie zusammenlegt, nimmt ihnen nicht den Weg zu ihrer eigenen Anmeldung. Ein
 Team lässt sich jederzeit wieder auflösen, solange nicht ausgelost ist.
 
+Das Los nimmt echten Zufall. Für eine Vorführung oder eine Testumgebung lässt
+sich in der Konfiguration ein Saatwert setzen — `Tournament:TeamDrawSeed` —,
+und dann ergibt dieselbe Meldungsliste immer dieselben Teams. Für ein Turnier,
+bei dem tatsächlich um etwas gelost wird, gehört er leer: wer den Saatwert
+kennt, kennt die Paarung, bevor sie fällt.
+
 Die Kapazität zählt dabei Menschen und nicht Teams — ein Feld für zwölf ist bei
 zwölf Meldungen voll, nicht bei zwölf Paaren. Und ausgelost wird erst, wenn
 niemand mehr ohne Team im Feld steht: eine einzelne Spielerin im Draw eines

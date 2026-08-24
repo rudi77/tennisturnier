@@ -10,6 +10,7 @@ using TennisTurnier.Api.Realtime;
 using TennisTurnier.Application;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.Security;
+using TennisTurnier.Application.Tournaments;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,7 +26,10 @@ builder.Configuration.GetSection(OidcOptions.SectionName).Bind(oidc);
 var security = new BootstrapAdminOptions();
 builder.Configuration.GetSection(BootstrapAdminOptions.SectionName).Bind(security);
 
-builder.Services.AddApplication(security);
+var tournaments = new TournamentOptions();
+builder.Configuration.GetSection(TournamentOptions.SectionName).Bind(tournaments);
+
+builder.Services.AddApplication(security, tournaments);
 
 // Dasselbe hier: die Verbindungszeichenfolge steht in appsettings.json.
 builder.Services.AddSqlitePersistence(builder.Configuration.GetConnectionString("Default")!);

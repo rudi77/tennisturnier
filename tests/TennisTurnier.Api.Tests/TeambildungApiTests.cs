@@ -372,4 +372,65 @@ public sealed class TeambildungApiTests : IClassFixture<TennisTurnierApiFactory>
             (await fremder.DeleteAsync(
                 $"/api/tournaments/{turnier.TournamentId}/teams/{Guid.NewGuid()}")).StatusCode);
     }
+
+    [Fact]
+    public async Task Mit_Saatwert_ergibt_dieselbe_Liste_dieselben_Teams()
+    {
+        // Nachvollziehbar ausgelost statt bloß ausgelost: eine Vorführung, eine
+        // Testumgebung und die Frage „wie kam diese Paarung zustande" brauchen
+        // einen Ablauf, der sich wiederholen lässt.
+        using var fabrik = new TennisTurnierApiFactory([], teamDrawSeed: 20260824);
+
+        var turnier = await fabrik.NeuesTurnierAsync(
+            $"leitung-{Guid.NewGuid():N}",
+            new TurnierWunsch
+            {
+                Disziplin = Discipline.Doubles,
+                Teambildung = TeamFormation.ByOrganiser,
+                // Zehn Meldungen ergeben 945 mögliche Aufteilungen in fünf
+                // Teams — zweimal dieselbe fällt nicht aus Versehen.
+                Teilnehmer = 10,
+                Setzen = false,
+                Auslosen = false,
+            });
+
+        var erste = await AuslosenAsync(turnier);
+
+        foreach (var team in erste.Keys)
+        {
+            Assert.Equal(
+                HttpStatusCode.NoContent,
+                (await turnier.Admin.DeleteAsync(
+                    $"/api/tournaments/{turnier.TournamentId}/teams/{team}")).StatusCode);
+        }
+
+        var zweite = await AuslosenAsync(turnier);
+
+        // Die Kennungen der Teams sind neu — die Paarungen dahinter dieselben.
+        Assert.Equal(
+            erste.Values.OrderBy(m => m, StringComparer.Ordinal),
+            zweite.Values.OrderBy(m => m, StringComparer.Ordinal));
+    }
+
+    /// <summary>Lost aus und liefert je Team die Namen seiner beiden Meldungen.</summary>
+    private static async Task<Dictionary<Guid, string>> AuslosenAsync(AufgebautesTurnier turnier)
+    {
+        var response = await turnier.Admin.PostAsync(
+            $"/api/tournaments/{turnier.TournamentId}/teams/draw", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var meldungen = (await DetailAsync(turnier)).Entries;
+
+        return meldungen
+            .Where(e => e.Status == EntryStatus.Accepted)
+            .ToDictionary(
+                team => team.Id,
+                team => string.Join(
+                    " + ",
+                    meldungen
+                        .Where(m => m.TeamEntryId == team.Id)
+                        .Select(m => m.ParticipantName)
+                        .Order(StringComparer.Ordinal)));
+    }
 }

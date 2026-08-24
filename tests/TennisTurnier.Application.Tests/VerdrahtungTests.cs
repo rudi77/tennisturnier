@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using TennisTurnier.Application.Security;
+using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Application.Tests.Fakes;
 using TennisTurnier.Domain.Security;
 
@@ -32,6 +33,10 @@ public sealed class VerdrahtungTests
 
         Assert.Empty(options.BootstrapSystemAdmins);
         Assert.True(options.SelfServiceOrganizers);
+
+        // Und das Los der Teams ist echter Zufall, solange niemand einen
+        // Saatwert setzt.
+        Assert.Null(provider.GetRequiredService<TournamentOptions>().TeamDrawSeed);
     }
 
     [Fact]

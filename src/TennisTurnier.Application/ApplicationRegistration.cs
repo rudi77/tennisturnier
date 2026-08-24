@@ -20,11 +20,17 @@ public static class ApplicationRegistration
     /// muss. Ohne Angabe gibt es keine — dann bleibt es bei den Rollen aus der
     /// Datenbank.
     /// </param>
+    /// <param name="tournamentOptions">
+    /// Was für alle Turniere dieser Instanz gilt. Ohne Angabe die Vorgaben —
+    /// unter anderem echter Zufall beim Los der Teams.
+    /// </param>
     public static IServiceCollection AddApplication(
         this IServiceCollection services,
-        BootstrapAdminOptions? bootstrapAdmins = null)
+        BootstrapAdminOptions? bootstrapAdmins = null,
+        TournamentOptions? tournamentOptions = null)
     {
         services.AddSingleton(bootstrapAdmins ?? new BootstrapAdminOptions());
+        services.AddSingleton(tournamentOptions ?? new TournamentOptions());
         services.AddScoped<SystemAdminBootstrap>();
         services.AddScoped<OrganizerBootstrap>();
 
