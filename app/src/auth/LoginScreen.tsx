@@ -83,7 +83,8 @@ export function LoginScreen({ onPublicView }: { onPublicView: () => void }) {
                 lineHeight: 'var(--lh-relaxed)',
               }}
             >
-              Keine Authority konfiguriert (<code className="md-num">VITE_OIDC_AUTHORITY</code>).
+              Keine Authority konfiguriert (<code className="md-num">Oidc__Authority</code> am
+              Server, <code className="md-num">VITE_OIDC_AUTHORITY</code> im Entwicklungsbetrieb).
               Ohne sie ist nur die öffentliche Ansicht erreichbar.
             </p>
           )}

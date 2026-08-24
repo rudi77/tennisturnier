@@ -6,7 +6,7 @@
  *
  * Authorization Code Flow mit PKCE, weil eine Single-Page-Anwendung kein
  * Client-Secret geheim halten kann. Der Test-Realm des Backends
- * (deploy/keycloak/tennisturnier-realm.json) führt `tennisturnier-api` genau
+ * (deploy/keycloak/import/tennisturnier-realm.json) führt `tennisturnier-api` genau
  * dafür als öffentlichen Client mit `http://localhost:5000/*` als Redirect-URI.
  *
  * Die Rollen kommen bewusst NICHT aus dem Token: der IdP liefert nur Identität,

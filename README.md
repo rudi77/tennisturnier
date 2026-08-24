@@ -102,6 +102,7 @@ als gültige Weiterleitung (`https://…/`) und als erlaubter Ursprung.
 | `Oidc__Audience` | Wofür ein Token gelten muss. Vorgabe `tennisturnier-api`. |
 | `Oidc__Scope` | Vorgabe `openid profile email`. |
 | `Security__BootstrapSystemAdmins__0` | Die E-Mail-Adresse, die beim ersten Anmelden Systemadministrator wird. Danach wieder leeren. |
+| `Security__SelfServiceOrganizers` | Vorgabe `true`: wer sich anmeldet, darf Turniere ausschreiben. Für eine Instanz mit offenem Anmeldeweg (siehe Google) auf `false`. |
 | `Tournament__TeamDrawSeed` | Saatwert für das Los der Teams. Nur für Vorführungen — wer ihn kennt, kennt die Paarung, bevor sie fällt. |
 | `ConnectionStrings__Default` | Vorgabe `Data Source=/data/matchday.db`, passend zum Datenträger. |
 
@@ -109,6 +110,76 @@ Die Oberfläche holt sich `Oidc__Authority`, `Oidc__ClientId` und `Oidc__Scope`
 zur Laufzeit über `/config.js`. Sie sind deshalb nicht ins Bündel gebaut, und
 dasselbe Bild läuft gegen jeden Aussteller — ein Wechsel des Realms ist eine
 Variable, kein neuer Bau.
+
+### Keycloak als zweiter Dienst
+
+MATCHDAY prüft Tokens, stellt aber keine aus. Ohne erreichbaren Aussteller
+bleibt es bei der öffentlichen Ansicht — das lokale Keycloak aus
+`docker-compose.yml` ist von Railway aus nicht erreichbar, und `localhost`
+zeigt dort auf den Container selbst.
+
+`deploy/keycloak/` enthält deshalb ein zweites Bild: derselbe Realm wie lokal,
+aber im Produktionsmodus gegen PostgreSQL statt `start-dev` gegen den
+Arbeitsspeicher. Der Unterschied ist keiner der Bequemlichkeit — `start-dev`
+vergisst beim Neustart jeden Benutzer, jede Sitzung und jede Verknüpfung zu
+einem Google-Konto.
+
+1. Im selben Railway-Projekt einen Dienst aus demselben Repository anlegen und
+   sein **Root Directory** auf `deploy/keycloak` setzen. Den Rest sagt das
+   `railway.json` daneben.
+2. Eine PostgreSQL-Datenbank hinzufügen und den Dienst darauf zeigen lassen:
+
+   | Variable | Wert |
+   | --- | --- |
+   | `KC_DB_URL` | `jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}` |
+   | `KC_DB_USERNAME` | `${{Postgres.PGUSER}}` |
+   | `KC_DB_PASSWORD` | `${{Postgres.PGPASSWORD}}` |
+   | `KC_BOOTSTRAP_ADMIN_USERNAME` | Der erste Administrator — nur beim ersten Start nötig. |
+   | `KC_BOOTSTRAP_ADMIN_PASSWORD` | Dessen Passwort. Danach beides wieder entfernen. |
+   | `MATCHDAY_ORIGIN` | `https://<matchday-domain>` — **ohne** Schrägstrich am Ende. |
+
+3. In MATCHDAY `Oidc__Authority` auf
+   `https://<keycloak-domain>/realms/tennisturnier` setzen und `Oidc__ClientId`
+   auf `tennisturnier-api`.
+
+`MATCHDAY_ORIGIN` trägt die Adresse der Instanz als gültige Weiterleitung und
+erlaubten Ursprung in den Client ein. Sie muss stehen, **bevor** Keycloak das
+erste Mal startet: eingespielt wird der Realm nur, solange es ihn noch nicht
+gibt — sonst überschriebe jeder Neustart die Benutzer, die inzwischen
+dazugekommen sind. Was danach kommt, gehört in die Administrationsoberfläche.
+
+Aus derselben Datei kommen `systemadmin`, `clubadmin` und `referee` mit
+Passwörtern, die ihren Namen gleichen. Sie sind für den Entwicklungsbetrieb
+gedacht; in einer erreichbaren Instanz gehören sie gelöscht oder umgestellt,
+sobald ein echtes Konto Systemadministrator ist.
+
+### Google als Anmeldeweg
+
+Keycloak steht dann vor Google, nicht daneben: MATCHDAY kennt weiterhin genau
+einen Aussteller, und wer sich mit Google anmeldet, bekommt in Keycloak ein
+Konto, dem die Anwendung anschließend Rollen geben kann (ADR-0007).
+
+1. In der Google Cloud Console einen OAuth-Client vom Typ *Webanwendung*
+   anlegen. Als autorisierte Weiterleitungs-URI trägt er genau eine Adresse:
+   `https://<keycloak-domain>/realms/tennisturnier/broker/google/endpoint`
+2. Am Keycloak-Dienst setzen:
+
+   | Variable | Wert |
+   | --- | --- |
+   | `KC_GOOGLE_ENABLED` | `true` |
+   | `KC_GOOGLE_CLIENT_ID` | Die Client-ID aus der Google Cloud Console. |
+   | `KC_GOOGLE_CLIENT_SECRET` | Das dazugehörige Secret. |
+
+Auch diese drei wirken über den Realm-Import und damit nur beim ersten Start;
+danach ist die Administrationsoberfläche der Ort dafür. Ohne sie bleibt der
+Anmeldeweg angelegt, aber abgeschaltet — lokal sieht man deshalb nichts davon.
+
+Ein offener Anmeldeweg heißt: jedes Google-Konto kommt bis zum Anmeldeschirm.
+Rollen bringt das keine mit — außer der einen, die MATCHDAY von sich aus
+vergibt: wer sich anmeldet, wird `Organizer` und darf ausschreiben. Für eine
+Instanz, die nicht dem ganzen Internet offenstehen soll, gehört
+`Security__SelfServiceOrganizers` deshalb auf `false`, und die Turnierleitungen
+werden von Hand berufen.
 
 Ein Hinweis für Instanzen mit vielen Meldungen: die Schranke der anonymen
 Meldeendpunkte teilt nach IP, und hinter dem Proxy von Railway ist das die des

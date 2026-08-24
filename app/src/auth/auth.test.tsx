@@ -404,6 +404,10 @@ describe('LoginScreen', () => {
     state.configured = false
     maske()
 
+    // Die Server-Variable zuerst: eine ausgelieferte Instanz bekommt ihre
+    // Anmeldedaten über /config.js, und wer dort VITE_OIDC_AUTHORITY sucht,
+    // sucht an einem Ort, den es im Bild gar nicht mehr gibt.
+    expect(screen.getByText('Oidc__Authority')).toBeInTheDocument()
     expect(screen.getByText('VITE_OIDC_AUTHORITY')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Anmelden' })).toBeDisabled()
   })

@@ -32,7 +32,7 @@ Zeit des Vereins und sagen nichts mehr über Rollen: die vergibt die Anwendung.
 Wer sich anmeldet, darf Turniere ausschreiben und führt, was er anlegt.
 
 > **Der Port 5000 ist nicht verhandelbar.** Der Test-Realm
-> (`deploy/keycloak/tennisturnier-realm.json`) trägt für den öffentlichen Client
+> (`deploy/keycloak/import/tennisturnier-realm.json`) trägt für den öffentlichen Client
 > `tennisturnier-api` genau `http://localhost:5000/*` als Redirect-URI und
 > `http://localhost:5000` als Web-Origin. Auf Vites Standardport 5173 bricht der
 > Login-Redirect ab, bevor irgendetwas geladen ist. Deshalb steht in

@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test'
  * anders konfiguriert (LAN-Adresse für den Zugriff vom Handy), und die
  * Anmeldung liefe dann gegen einen Aussteller, den diese API nicht kennt.
  * Der Test-Realm führt beide Herkünfte einzeln auf
- * (`deploy/keycloak/tennisturnier-realm.json`) — ohne den Eintrag bricht der
+ * (`deploy/keycloak/import/tennisturnier-realm.json`) — ohne den Eintrag bricht der
  * Login ab, bevor irgendetwas geladen ist.
  *
  * Was diese Tests leisten und die Vitest-Läufe nicht: sie gehen durch die

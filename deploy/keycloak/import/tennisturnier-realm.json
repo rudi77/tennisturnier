@@ -1,7 +1,7 @@
 {
   "realm": "tennisturnier",
   "enabled": true,
-  "sslRequired": "none",
+  "sslRequired": "external",
   "registrationAllowed": false,
   "accessTokenLifespan": 3600,
   "clients": [
@@ -15,12 +15,14 @@
       "redirectUris": [
         "http://localhost:5000/*",
         "http://192.168.2.213:5000/*",
-        "http://localhost:5001/*"
+        "http://localhost:5001/*",
+        "${MATCHDAY_ORIGIN:http://localhost:5000}/*"
       ],
       "webOrigins": [
         "http://localhost:5000",
         "http://192.168.2.213:5000",
-        "http://localhost:5001"
+        "http://localhost:5001",
+        "${MATCHDAY_ORIGIN:http://localhost:5000}"
       ],
       "protocolMappers": [
         {
@@ -80,6 +82,25 @@
           "temporary": false
         }
       ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "providerId": "google",
+      "enabled": "${KC_GOOGLE_ENABLED:false}",
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${KC_GOOGLE_CLIENT_ID:}",
+        "clientSecret": "${KC_GOOGLE_CLIENT_SECRET:}",
+        "defaultScope": "openid profile email",
+        "syncMode": "IMPORT",
+        "updateProfileFirstLoginMode": "off",
+        "useJwksUrl": "true"
+      }
     }
   ]
 }
