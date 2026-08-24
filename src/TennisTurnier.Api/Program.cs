@@ -31,6 +31,19 @@ builder.Configuration.GetSection(BootstrapAdminOptions.SectionName).Bind(securit
 var tournaments = new TournamentOptions();
 builder.Configuration.GetSection(TournamentOptions.SectionName).Bind(tournaments);
 
+// Anmeldung und offener Betrieb schließen einander aus. Der Fehlschlag ist
+// beabsichtigt: der stille Ausgang hieße, dass ein versehentlich gesetzter
+// Schalter eine angemeldete Instanz aufmacht, ohne dass jemand es merkt — und
+// die Sorte Fehler zeigt sich sonst erst, wenn sie ausgenutzt wurde.
+if (security.OpenAccess && oidc.IsConfigured)
+{
+    throw new InvalidOperationException(
+        $"{BootstrapAdminOptions.SectionName}:{nameof(BootstrapAdminOptions.OpenAccess)} und "
+        + $"{OidcOptions.SectionName}:{nameof(OidcOptions.Authority)} sind beide gesetzt. "
+        + "Der offene Betrieb ist der Schritt vor der Anmeldung, nicht daneben — "
+        + "einer von beiden gehört entfernt.");
+}
+
 builder.Services.AddApplication(security, tournaments);
 
 // Dasselbe hier: die Verbindungszeichenfolge steht in appsettings.json.
@@ -126,6 +139,11 @@ var oberflaechenKonfiguration = JsonSerializer.Serialize(new
     oidcAuthority = oidc.Authority,
     oidcClientId = oidc.ClientId,
     oidcScope = oidc.Scope,
+
+    // Ohne diese Angabe stünde die Oberfläche vor einer Anmeldemaske, hinter
+    // der es nichts anzumelden gibt: sie kann von sich aus nicht wissen, dass
+    // der Server jeden Aufruf durchlässt.
+    openAccess = security.OpenAccess,
 });
 
 app.MapGet("/config.js", () => Results.Text(

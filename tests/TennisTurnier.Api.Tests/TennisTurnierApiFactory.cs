@@ -51,6 +51,7 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     private readonly IReadOnlyList<string> _bootstrapSystemAdmins;
     private readonly int _publicRegistrationLimit;
     private readonly int? _teamDrawSeed;
+    private readonly bool _openAccess;
 
     private readonly Lock _migrationGate = new();
     private bool _migrated;
@@ -71,11 +72,13 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     internal TennisTurnierApiFactory(
         IReadOnlyList<string> bootstrapSystemAdmins,
         int publicRegistrationLimit = Unbegrenzt,
-        int? teamDrawSeed = null)
+        int? teamDrawSeed = null,
+        bool openAccess = false)
     {
         _bootstrapSystemAdmins = bootstrapSystemAdmins;
         _publicRegistrationLimit = publicRegistrationLimit;
         _teamDrawSeed = teamDrawSeed;
+        _openAccess = openAccess;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -105,6 +108,11 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
             builder.UseSetting(
                 "Tournament:TeamDrawSeed",
                 saat.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (_openAccess)
+        {
+            builder.UseSetting("Security:OpenAccess", "true");
         }
 
         for (var i = 0; i < _bootstrapSystemAdmins.Count; i++)

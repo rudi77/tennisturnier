@@ -29,6 +29,21 @@ body {
   flex-direction: column;
 }
 
+/*
+ * Der Hinweis auf den offenen Betrieb. Er steht über allem und läuft nicht mit
+ * dem Inhalt weg: eine Warnung, die man wegscrollt, ist nach dem ersten
+ * Handgriff nicht mehr da.
+ */
+.md-open-access {
+  background: var(--call-tint);
+  color: var(--court-950);
+  border-bottom: 2px solid var(--call-400);
+  padding: var(--sp-4) var(--gutter-page);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-wide);
+}
+
 .md-section {
   padding: var(--sp-10) var(--gutter-page) var(--sp-20);
 }

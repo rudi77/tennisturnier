@@ -20,10 +20,22 @@ internal sealed class UserResolutionMiddleware : IMiddleware
     private const string Setting =
         $"{BootstrapAdminOptions.SectionName}:{nameof(BootstrapAdminOptions.BootstrapSystemAdmins)}";
 
+    /// <summary>
+    /// Die Herkunft des Kontos im offenen Betrieb.
+    ///
+    /// Kein Aussteller, sondern eine Kennzeichnung: sie kann mit keiner echten
+    /// Herkunft kollidieren, und sie steht in der Datenbank, wo man sie später
+    /// wiederfindet — samt allem, was unter ihr angelegt wurde.
+    /// </summary>
+    internal const string OpenAccessIssuer = "matchday:ohne-anmeldung";
+
+    internal const string OpenAccessSubject = "offener-betrieb";
+
     private readonly ScopedUserContext _userContext;
     private readonly IUserDirectory _directory;
     private readonly SystemAdminBootstrap _bootstrap;
     private readonly OrganizerBootstrap _organizers;
+    private readonly BootstrapAdminOptions _options;
     private readonly ILogger<UserResolutionMiddleware> _logger;
 
     public UserResolutionMiddleware(
@@ -31,12 +43,14 @@ internal sealed class UserResolutionMiddleware : IMiddleware
         IUserDirectory directory,
         SystemAdminBootstrap bootstrap,
         OrganizerBootstrap organizers,
+        BootstrapAdminOptions options,
         ILogger<UserResolutionMiddleware> logger)
     {
         _userContext = userContext;
         _directory = directory;
         _bootstrap = bootstrap;
         _organizers = organizers;
+        _options = options;
         _logger = logger;
     }
 
@@ -52,8 +66,53 @@ internal sealed class UserResolutionMiddleware : IMiddleware
                 _userContext.Set(principal);
             }
         }
+        else if (_options.OpenAccess)
+        {
+            _userContext.Set(await ResolveOpenAccessAsync(context.RequestAborted));
+        }
 
         await next(context);
+    }
+
+    /// <summary>
+    /// Der eine Benutzer, als der im offenen Betrieb jeder gilt.
+    ///
+    /// Ein echtes Konto und keine Sonderfassung des Aufrufers: die Turniere
+    /// brauchen einen Eigentümer, der Query-Filter aus ADR-0004 einen Benutzer,
+    /// und beides soll denselben Weg gehen wie mit Anmeldung. Wird die
+    /// Anmeldung später eingeschaltet, bleibt das Konto stehen — anmelden kann
+    /// sich niemand mehr als es, und ein Systemadministrator kann ihm die Rolle
+    /// nehmen.
+    /// </summary>
+    private async Task<UserPrincipal> ResolveOpenAccessAsync(CancellationToken cancellationToken)
+    {
+        var account = await _directory.EnsureAccountAsync(
+            OpenAccessIssuer,
+            OpenAccessSubject,
+            email: null,
+            displayName: "Ohne Anmeldung",
+            cancellationToken);
+
+        var assignments = await _directory.GetAssignmentsAsync(account.Id, cancellationToken);
+
+        if (!assignments.Any(a => a.Role == Role.SystemAdmin))
+        {
+            await _directory.AssignAsync(
+                new RoleAssignment(Guid.NewGuid(), account.Id, Role.SystemAdmin, ResourceScope.Global),
+                cancellationToken);
+
+            // Als Warnung: eine Instanz, die jedem alles erlaubt, soll in einem
+            // auf Information gefilterten Protokoll auffallen — und zwar dort,
+            // wo es zum ersten Mal tatsächlich passiert.
+            _logger.LogWarning(
+                "Offener Betrieb: Konto {UserId} gilt für jeden Aufruf und ist Systemadministrator. "
+                + "Wer die Adresse kennt, darf alles.",
+                account.Id);
+
+            assignments = await _directory.GetAssignmentsAsync(account.Id, cancellationToken);
+        }
+
+        return new UserPrincipal(account.Id, assignments);
     }
 
     private async Task<UserPrincipal?> ResolveAsync(ClaimsPrincipal claims, CancellationToken cancellationToken)

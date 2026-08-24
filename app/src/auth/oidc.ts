@@ -29,6 +29,7 @@ export interface Laufzeitkonfiguration {
   oidcAuthority?: string
   oidcClientId?: string
   oidcScope?: string
+  openAccess?: boolean
 }
 
 declare global {
@@ -47,6 +48,15 @@ const scope =
 
 /** Ohne Authority läuft die Anwendung rein öffentlich — nur die Live-Ansicht. */
 export const isAuthConfigured = authority.trim().length > 0
+
+/**
+ * Läuft diese Instanz ohne Anmeldung?
+ *
+ * Das kann nur der Server beantworten, und nur er sagt es auch: eine
+ * Bauzeitvariable hier hieße, dass ein Bündel den offenen Betrieb behauptet,
+ * während der Server jeden Aufruf abweist — oder, schlimmer, umgekehrt.
+ */
+export const isOpenAccess = zurLaufzeit.openAccess === true
 
 export const userManager: UserManager | null = isAuthConfigured
   ? new UserManager({

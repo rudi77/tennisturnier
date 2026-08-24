@@ -14,6 +14,7 @@ import { user as userEvent } from '../test/render'
 
 const state = {
   configured: true,
+  openAccess: false,
   redirectCallback: false,
   existing: null as User | null,
   signedIn: null as User | null,
@@ -58,6 +59,9 @@ const manager = {
 vi.mock('./oidc', () => ({
   get isAuthConfigured() {
     return state.configured
+  },
+  get isOpenAccess() {
+    return state.openAccess
   },
   get userManager() {
     return state.configured ? manager : null
@@ -115,6 +119,7 @@ function aufbau() {
 
 beforeEach(() => {
   state.configured = true
+  state.openAccess = false
   state.redirectCallback = false
   state.existing = null
   state.signedIn = null

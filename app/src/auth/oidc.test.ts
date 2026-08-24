@@ -13,7 +13,7 @@ const AUTHORITY = 'http://localhost:8080/realms/tennisturnier'
 /** `undefined` heißt: die Variable gibt es gar nicht — nicht „sie ist leer". */
 async function ladeMit(
   env: Record<string, string | undefined>,
-  zurLaufzeit?: Record<string, string>,
+  zurLaufzeit?: Record<string, string | boolean>,
 ) {
   vi.resetModules()
   for (const [key, value] of Object.entries(env)) {
@@ -229,5 +229,23 @@ describe('Laufzeitkonfiguration', () => {
     expect(oidc.userManager!.settings.authority).toBe(AUTHORITY)
     expect(oidc.userManager!.settings.client_id).toBe('tennisturnier-api')
     expect(oidc.userManager!.settings.scope).toBe('openid profile email')
+  })
+})
+
+describe('offener Betrieb', () => {
+  it('gilt nur, wenn der Server es sagt', async () => {
+    const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: undefined }, { openAccess: true })
+    expect(oidc.isOpenAccess).toBe(true)
+    expect(oidc.isAuthConfigured).toBe(false)
+  })
+
+  it('ist ohne Angabe aus', async () => {
+    // Der gefährliche Ausgang wäre der umgekehrte: eine Oberfläche, die den
+    // offenen Betrieb annimmt, während der Server jeden Aufruf abweist.
+    const ohne = await ladeMit({ VITE_OIDC_AUTHORITY: undefined })
+    expect(ohne.isOpenAccess).toBe(false)
+
+    const falsch = await ladeMit({ VITE_OIDC_AUTHORITY: undefined }, { openAccess: false })
+    expect(falsch.isOpenAccess).toBe(false)
   })
 })

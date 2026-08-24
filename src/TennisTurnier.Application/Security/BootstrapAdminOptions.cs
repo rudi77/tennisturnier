@@ -27,4 +27,21 @@ public sealed class BootstrapAdminOptions
     /// vergibt dann ein Systemadministrator.
     /// </summary>
     public bool SelfServiceOrganizers { get; set; } = true;
+
+    /// <summary>
+    /// Betrieb ganz ohne Anmeldung.
+    ///
+    /// Gedacht für den ersten Schritt: eine Instanz steht, bevor ein Identity
+    /// Provider steht. Jeder Aufruf gilt dann als derselbe Benutzer, und der
+    /// ist Systemadministrator — wer die Adresse kennt, darf alles, auch
+    /// löschen. Das ist keine Lücke, sondern die Ansage; deshalb steht sie in
+    /// der Oberfläche und im Protokoll, statt still zu wirken.
+    ///
+    /// Ausdrücklich einzuschalten und nicht aus einer fehlenden Authority
+    /// abzuleiten: „kein Aussteller konfiguriert" heißt sonst plötzlich „offen
+    /// für alle", und genau dieser Wechsel darf niemandem versehentlich
+    /// passieren. Beides zusammen — Anmeldung und offener Betrieb — lehnt die
+    /// Anwendung beim Start ab.
+    /// </summary>
+    public bool OpenAccess { get; set; }
 }

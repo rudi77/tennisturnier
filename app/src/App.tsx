@@ -33,7 +33,7 @@ export function App() {
 }
 
 function Root() {
-  const { status, configured, login } = useAuth()
+  const { status, configured, login, openAccess } = useAuth()
   const { registrationToken, tournamentId } = useRoute()
   const [publicOnly, setPublicOnly] = useState(false)
 
@@ -69,7 +69,7 @@ function Root() {
   // keine Navigation. Sie stand hier einmal mit — und jeder ihrer Punkte warf
   // zurück auf die Anmeldemaske, weil hinter keinem von ihnen etwas Abrufbares
   // liegt. Eine Navigation, die nur wegführt, ist keine.
-  if (status === 'anonymous' || !configured) {
+  if (status === 'anonymous' || (!configured && !openAccess)) {
     // „Anmelden" führt zum Identity Provider und nicht zurück auf die Maske:
     // die Maske hat genau diesen einen Knopf, und ein Zwischenschritt, der
     // nichts fragt, ist keiner.
@@ -85,7 +85,7 @@ function Root() {
 }
 
 function AppShell() {
-  const { user, logout } = useAuth()
+  const { user, logout, openAccess } = useAuth()
   const route = useRoute()
 
   // Der Einstieg ist der Ablauf: er beantwortet die Frage, mit der man
@@ -184,8 +184,19 @@ function AppShell() {
           tournament={tournament.data}
           user={user}
           onLogout={logout}
+          openAccess={openAccess}
         />
         <main className="md-main">
+          {/*
+            Sichtbar und nicht nur im Protokoll: wer hier arbeitet, soll wissen,
+            dass jeder mit der Adresse dasselbe darf — vor der ersten
+            Ergebniseingabe und nicht danach.
+          */}
+          {openAccess && (
+            <div className="md-open-access" role="status">
+              Ohne Anmeldung: Jeder, der die Adresse kennt, kann hier alles ändern.
+            </div>
+          )}
           {tournamentList.error ? (
             <ErrorBlock error={tournamentList.error} onRetry={() => void tournamentList.reload()} />
           ) : (

@@ -102,6 +102,7 @@ Keycloak-Dienst von unten mitnimmt, bekommt beides ohne Zutun.
 | `Oidc__ClientId` | Der Client, unter dem sich die Oberfläche anmeldet. |
 | `Oidc__Audience` | Wofür ein Token gelten muss. Vorgabe `tennisturnier-api`. |
 | `Oidc__Scope` | Vorgabe `openid profile email`. |
+| `Security__OpenAccess` | `true` lässt die Instanz ohne Anmeldung laufen (siehe unten). Zusammen mit `Oidc__Authority` verweigert die Anwendung den Start. |
 | `Security__BootstrapSystemAdmins__0` | Die E-Mail-Adresse, die beim ersten Anmelden Systemadministrator wird. Danach wieder leeren. |
 | `Security__SelfServiceOrganizers` | Vorgabe `true`: wer sich anmeldet, darf Turniere ausschreiben. Für eine Instanz mit offenem Anmeldeweg (siehe Google) auf `false`. |
 | `Tournament__TeamDrawSeed` | Saatwert für das Los der Teams. Nur für Vorführungen — wer ihn kennt, kennt die Paarung, bevor sie fällt. |
@@ -111,6 +112,36 @@ Die Oberfläche holt sich `Oidc__Authority`, `Oidc__ClientId` und `Oidc__Scope`
 zur Laufzeit über `/config.js`. Sie sind deshalb nicht ins Bündel gebaut, und
 dasselbe Bild läuft gegen jeden Aussteller — ein Wechsel des Realms ist eine
 Variable, kein neuer Bau.
+
+### Der erste Schritt: ohne Anmeldung
+
+Eine Instanz steht meist, bevor ein Identity Provider steht. `Security__OpenAccess=true`
+lässt MATCHDAY dann trotzdem arbeiten: es gibt keine Anmeldemaske, jeder Aufruf
+gilt als derselbe Benutzer, und der ist Systemadministrator.
+
+Das ist keine halbe Anmeldung, sondern gar keine — wer die Adresse kennt, kann
+Turniere anlegen, Ergebnisse eintragen und löschen. Deshalb steht es in der
+Oberfläche über jedem Schirm und beim ersten Aufruf als Warnung im Protokoll,
+statt still zu wirken. Für einen Probelauf im Verein ist das in Ordnung; für
+eine Adresse, die herumgereicht wird, nicht.
+
+Zwei Entscheidungen dahinter sind Absicht:
+
+- Der Schalter muss ausdrücklich gesetzt werden. Aus einer fehlenden Authority
+  abgeleitet hieße „kein Aussteller konfiguriert" plötzlich „offen für alle" —
+  und dieser Wechsel darf niemandem versehentlich passieren. Ohne Schalter und
+  ohne Authority bleibt es wie bisher bei der öffentlichen Live-Ansicht.
+- Zusammen mit `Oidc__Authority` **startet die Anwendung nicht**. Der stille
+  Ausgang wäre der gefährliche: ein versehentlich gesetzter Schalter machte eine
+  angemeldete Instanz auf, ohne dass es jemandem auffiele.
+
+Der offene Betrieb legt ein echtes Konto an (`Ohne Anmeldung`), dem alles
+gehört, was in dieser Zeit entsteht. Wird die Anmeldung später eingeschaltet,
+bleiben die Turniere also stehen — anmelden kann sich niemand mehr als dieses
+Konto, und ein Systemadministrator kann ihm seine Rolle nehmen. Der Weg vom
+ersten Schritt zum zweiten ist damit: Keycloak aufsetzen (unten),
+`Security__OpenAccess` entfernen, `Oidc__Authority` setzen, sich anmelden und
+über `Security__BootstrapSystemAdmins__0` zum Administrator machen.
 
 ### Keycloak als zweiter Dienst
 

@@ -13,6 +13,7 @@ import {
   clearCallbackParams,
   completeSignin,
   isAuthConfigured,
+  isOpenAccess,
   isRedirectCallback,
   userManager,
 } from './oidc'
@@ -23,6 +24,12 @@ interface AuthState {
   status: 'loading' | 'anonymous' | 'authenticated'
   /** Ohne konfigurierte Authority gibt es nur die öffentliche Ansicht. */
   configured: boolean
+  /**
+   * Diese Instanz läuft ohne Anmeldung: der Server lässt jeden Aufruf zu und
+   * behandelt ihn als denselben Benutzer. Dann gibt es nichts anzumelden — und
+   * die Arbeitsoberfläche steht trotzdem offen.
+   */
+  openAccess: boolean
   error: string | null
   login: () => void
   logout: () => void
@@ -32,8 +39,10 @@ const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  // Ohne Anmeldung gibt es nichts zu prüfen und nichts zu warten: der Server
+  // hat bereits entschieden, dass jeder Aufruf durchgeht.
   const [status, setStatus] = useState<AuthState['status']>(
-    isAuthConfigured ? 'loading' : 'anonymous',
+    isAuthConfigured ? 'loading' : isOpenAccess ? 'authenticated' : 'anonymous',
   )
   const [error, setError] = useState<string | null>(null)
 
@@ -123,7 +132,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<AuthState>(
-    () => ({ user, status, configured: isAuthConfigured, error, login, logout }),
+    () => ({
+      user,
+      status,
+      configured: isAuthConfigured,
+      openAccess: isOpenAccess,
+      error,
+      login,
+      logout,
+    }),
     [user, status, error, login, logout],
   )
 

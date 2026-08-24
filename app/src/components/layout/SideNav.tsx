@@ -28,12 +28,15 @@ export function SideNav({
   tournament,
   user,
   onLogout,
+  openAccess = false,
 }: {
   screen: ScreenId
   onNavigate: (id: ScreenId) => void
   tournament: TournamentDetail | null
   user: User | null
   onLogout: () => void
+  /** Läuft die Instanz ohne Anmeldung, gibt es auch nichts abzumelden. */
+  openAccess?: boolean
 }) {
   return (
     <nav className="md-nav" aria-label="Hauptnavigation">
@@ -116,23 +119,31 @@ export function SideNav({
               style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               title={displayName(user)}
             >
-              {displayName(user) || 'Nicht angemeldet'}
+              {displayName(user) || (openAccess ? 'Ohne Anmeldung' : 'Nicht angemeldet')}
             </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              style={{
-                background: 'none',
-                border: 0,
-                padding: 0,
-                cursor: 'pointer',
-                color: 'var(--fg-on-dark-3)',
-                fontSize: 'var(--fs-xs)',
-                fontFamily: 'inherit',
-              }}
-            >
-              Abmelden
-            </button>
+            {openAccess ? (
+              // Ein Knopf, der nichts beendet, wäre ein Versprechen: es gibt
+              // keine Sitzung, aus der man hier herauskäme.
+              <div style={{ color: 'var(--fg-on-dark-3)', fontSize: 'var(--fs-xs)' }}>
+                offener Betrieb
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={onLogout}
+                style={{
+                  background: 'none',
+                  border: 0,
+                  padding: 0,
+                  cursor: 'pointer',
+                  color: 'var(--fg-on-dark-3)',
+                  fontSize: 'var(--fs-xs)',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Abmelden
+              </button>
+            )}
           </div>
         </div>
       </div>

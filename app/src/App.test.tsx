@@ -19,6 +19,7 @@ import { user as userEvent } from './test/render'
 
 const state = {
   configured: true,
+  openAccess: false,
   existing: null as User | null,
 }
 
@@ -42,6 +43,9 @@ const manager = {
 vi.mock('./auth/oidc', () => ({
   get isAuthConfigured() {
     return state.configured
+  },
+  get isOpenAccess() {
+    return state.openAccess
   },
   get userManager() {
     return state.configured ? manager : null
@@ -72,6 +76,7 @@ function angemeldet(): User {
 
 beforeEach(() => {
   state.configured = true
+  state.openAccess = false
   state.existing = null
   signinRedirect.mockClear()
   removeUser.mockClear()
@@ -147,6 +152,35 @@ describe('App — Eingang', () => {
 
     expect(await screen.findByText('Clubmeisterschaft 2026')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Anmelden' })).not.toBeInTheDocument()
+  })
+
+  it('geht im offenen Betrieb ohne Maske in den Arbeitsbereich', async () => {
+    // Der erste Schritt einer Instanz: der Server lässt jeden Aufruf zu. Eine
+    // Anmeldemaske davor wäre eine Tür ohne Schloss und ohne Schlüssel.
+    state.configured = false
+    state.openAccess = true
+    bei('/')
+    render(<App />)
+
+    expect(await screen.findByRole('navigation', { name: 'Hauptnavigation' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Anmelden' })).not.toBeInTheDocument()
+  })
+
+  it('sagt im offenen Betrieb, woran man ist', async () => {
+    // Sichtbar und nicht nur im Protokoll des Servers: wer hier arbeitet, soll
+    // es wissen, bevor er das erste Ergebnis einträgt.
+    state.configured = false
+    state.openAccess = true
+    bei('/')
+    render(<App />)
+
+    expect(
+      await screen.findByText(/Jeder, der die Adresse kennt, kann hier alles ändern/),
+    ).toBeInTheDocument()
+
+    // Und kein Knopf, der eine Sitzung beendet, die es nicht gibt.
+    expect(screen.queryByRole('button', { name: 'Abmelden' })).not.toBeInTheDocument()
+    expect(screen.getByText('Ohne Anmeldung')).toBeInTheDocument()
   })
 })
 
