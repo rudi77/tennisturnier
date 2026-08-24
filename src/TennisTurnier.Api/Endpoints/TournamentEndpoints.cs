@@ -71,6 +71,7 @@ internal static class TournamentEndpoints
 
         MapTransitions(tournaments);
         MapEntries(tournaments);
+        MapTeams(tournaments);
         MapCourts(tournaments);
     }
 
@@ -233,6 +234,42 @@ internal static class TournamentEndpoints
             CancellationToken ct) =>
         {
             await service.SetSeedAsync(tournamentId, entryId, request, ct);
+            return Results.NoContent();
+        });
+    }
+
+    /// <summary>
+    /// Die Teams eines Doppels, dessen Paare die Turnierleitung bildet.
+    ///
+    /// Eigene Gruppe neben den Meldungen: ein Team ist zwar eine Meldung, aber
+    /// es entsteht nicht durch Melden. Wer es unter <c>/entries</c> anlegte,
+    /// müsste dort zwei Sorten POST unterscheiden — eine für Menschen, eine
+    /// für Paare.
+    /// </summary>
+    private static void MapTeams(RouteGroupBuilder tournaments)
+    {
+        var teams = tournaments.MapGroup("/teams").WithTags("Teams");
+
+        teams.MapPost("/", async (
+            Guid tournamentId,
+            FormTeamRequest request,
+            ITeamFormationService service,
+            CancellationToken ct) =>
+        {
+            var id = await service.FormAsync(tournamentId, request, ct);
+            return Results.Created($"/api/tournaments/{tournamentId}/teams/{id}", new { id });
+        });
+
+        // Das Los. Eigener Endpunkt und kein Schalter am Anlegen: es betrifft
+        // alle offenen Meldungen auf einmal und antwortet mit einem Bericht.
+        teams.MapPost("/draw", async (
+            Guid tournamentId, ITeamFormationService service, CancellationToken ct) =>
+            Results.Ok(await service.DrawAsync(tournamentId, ct)));
+
+        teams.MapDelete("/{teamEntryId:guid}", async (
+            Guid tournamentId, Guid teamEntryId, ITeamFormationService service, CancellationToken ct) =>
+        {
+            await service.DisbandAsync(tournamentId, teamEntryId, ct);
             return Results.NoContent();
         });
     }

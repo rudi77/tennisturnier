@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { tournaments as tournamentApi } from '../../api/endpoints'
-import { Discipline, type ImportEntriesResult } from '../../api/types'
+import type { ImportEntriesResult } from '../../api/types'
 import { useToast } from '../../hooks/useToast'
 
 /**
@@ -37,11 +37,16 @@ const TEAM = {
  */
 export function CsvImportPanel({
   tournamentId,
-  discipline,
+  needsPartner,
   onImported,
 }: {
   tournamentId: string
-  discipline: Discipline
+  /**
+   * Ob eine Zeile einen Partner nennt. Nicht die Disziplin: ein Doppel, dessen
+   * Teams die Turnierleitung bildet, bekommt eine Liste mit einer Person je
+   * Zeile — wie im Einzel.
+   */
+  needsPartner: boolean
   onImported: () => Promise<void>
 }) {
   const { show, showError } = useToast()
@@ -50,7 +55,7 @@ export function CsvImportPanel({
   const [result, setResult] = useState<ImportEntriesResult | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
-  const layout = discipline === Discipline.Singles ? SINGLES : TEAM
+  const layout = needsPartner ? TEAM : SINGLES
   const empty = csv.trim().length === 0
 
   const readFile = async (file: File) => {

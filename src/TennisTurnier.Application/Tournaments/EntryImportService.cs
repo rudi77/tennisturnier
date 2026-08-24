@@ -147,7 +147,10 @@ public sealed class EntryImportService : IEntryImportService
         // Änderungsverfolger stehen.
         var lineups = await _participants.LoadLineupsAsync(tournament, cancellationToken);
 
-        var needsPartner = tournament.Discipline.NeedsPartner();
+        // Die Einstellung des Turniers, nicht die Disziplin: ein Doppel, dessen
+        // Teams die Turnierleitung bildet, bekommt eine Liste mit einer Person
+        // je Zeile — wie im Einzel.
+        var needsPartner = tournament.NeedsPartnerOnEntry;
         var problems = new List<ImportProblem>();
         var imported = 0;
         var skipped = 0;

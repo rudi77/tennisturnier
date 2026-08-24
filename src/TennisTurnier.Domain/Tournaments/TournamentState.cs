@@ -67,4 +67,15 @@ public enum EntryStatus
 
     /// <summary>Zurückgezogen.</summary>
     Withdrawn,
+
+    /// <summary>
+    /// Gemeldet und einem Team zugeschlagen. Im Draw steht das Team, nicht
+    /// diese Meldung — sie bleibt trotzdem bestehen: sie ist die Meldung eines
+    /// Menschen, samt seinem Bestätigungscode und seinem Meldezeitpunkt. Wer
+    /// sie zurückzöge, nähme ihm den Weg zu seiner eigenen Anmeldung.
+    ///
+    /// Steht hinten, weil der Wert über die Schnittstelle als Zahl geht: eine
+    /// Einfügung in der Mitte verschöbe die bestehenden.
+    /// </summary>
+    Paired,
 }

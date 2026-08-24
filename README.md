@@ -135,6 +135,31 @@ Die tragenden Entscheidungen samt verworfener Alternativen stehen in
 - [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler gehören keinem Turnier
   — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
 
+## Doppel: wer mit wem
+
+Zwei Turniere, die sich für den Melder grundlegend unterscheiden — und die
+Ausschreibung entscheidet welches:
+
+- **Paare melden sich gemeinsam.** Das Vereinsdoppel: jeder bringt seinen
+  Partner mit, und eine Meldung ist ein Paar. Das Meldeformular fragt nach
+  ihm, die hochgeladene Liste hat Partnerspalten.
+- **Die Turnierleitung stellt die Teams.** Der Schleiferl- oder Mixed-Abend: es
+  meldet sich jeder für sich, und wer mit wem spielt, fällt danach — per Los
+  über alle offenen Meldungen oder von Hand, zwei ausgewählt und zusammengelegt.
+
+Im zweiten Fall ist ein Team eine eigene Meldung; die beiden Meldungen dahinter
+bleiben bestehen und stehen auf „im Team". Das ist keine Buchhaltung: sie sind
+die Anmeldungen zweier Menschen, samt Bestätigungscode und Meldezeitpunkt, und
+wer sie zusammenlegt, nimmt ihnen nicht den Weg zu ihrer eigenen Anmeldung. Ein
+Team lässt sich jederzeit wieder auflösen, solange nicht ausgelost ist.
+
+Die Kapazität zählt dabei Menschen und nicht Teams — ein Feld für zwölf ist bei
+zwölf Meldungen voll, nicht bei zwölf Paaren. Und ausgelost wird erst, wenn
+niemand mehr ohne Team im Feld steht: eine einzelne Spielerin im Draw eines
+Doppels fiele sonst erst am Platz auf, wenn zwei gegen eine antreten. Wer bei
+ungerader Zahl übrig bleibt, bleibt sichtbar stehen — was mit ihm geschieht,
+entscheidet die Turnierleitung und nicht das Los.
+
 ## Spielplan
 
 Im Planungsmodus rechnet `POST /api/tournaments/{id}/schedule/proposal` einen

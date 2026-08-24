@@ -70,8 +70,20 @@ export const EntryStatus = {
   Accepted: 1,
   WaitingList: 2,
   Withdrawn: 3,
+  /**
+   * Gemeldet und einem Team zugeschlagen. Im Draw steht das Team; diese Meldung
+   * bleibt daneben bestehen, weil sie die Anmeldung eines Menschen ist.
+   */
+  Paired: 4,
 } as const
 export type EntryStatus = (typeof EntryStatus)[keyof typeof EntryStatus]
+
+/**
+ * Woher die Paare eines Doppels kommen: von den Meldenden oder von der
+ * Turnierleitung. Im Einzel ohne Bedeutung.
+ */
+export const TeamFormation = { Registered: 0, ByOrganiser: 1 } as const
+export type TeamFormation = (typeof TeamFormation)[keyof typeof TeamFormation]
 
 /** Pending = Teilnehmer stehen noch nicht fest, Ready = spielbar. */
 export const MatchStatus = { Pending: 0, Ready: 1, Finished: 2 } as const
@@ -230,6 +242,7 @@ export interface TournamentDetail {
   name: string
   venue: VenueDetail
   discipline: Discipline
+  teamFormation: TeamFormation
   startsOn: string | null
   endsOn: string | null
   state: TournamentState
@@ -289,6 +302,8 @@ export interface EntryDetail {
   participantName: string
   seed: number | null
   status: EntryStatus
+  /** Die Meldung des Teams, in dem diese spielt — sonst leer. */
+  teamEntryId: string | null
 }
 
 /** Woher eine Meldung stammt. */
@@ -312,6 +327,8 @@ export interface EntryOverview {
   registeredAt: string
   confirmationCode: string | null
   contacts: EntryContact[]
+  /** Die Meldung des Teams, in dem diese spielt — sonst leer. */
+  teamEntryId: string | null
 }
 
 export interface EntryContact {
@@ -751,4 +768,16 @@ export interface ImportEntriesResult {
   imported: number
   skipped: number
   problems: ImportProblem[]
+}
+
+/**
+ * Was das Los der Teams ergeben hat.
+ *
+ * `leftOver` ist bei ungerader Zahl genau eins. Die Meldung steht danach immer
+ * noch im Feld — und das Auslosen des Draws weist sie ab, bis die
+ * Turnierleitung entschieden hat, was mit ihr geschieht.
+ */
+export interface DrawTeamsResult {
+  formed: number
+  leftOver: number
 }

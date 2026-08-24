@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { EntryStatus, TournamentState } from '../api/types'
+import { Discipline, EntryStatus, TeamFormation, TournamentState } from '../api/types'
 import * as fx from '../test/fixtures'
 import { renderWithProviders, user, workspace } from '../test/render'
 import { callsTo } from '../test/server'
@@ -160,6 +160,29 @@ describe('FlowScreen — Teilnehmer sammeln', () => {
   it('bietet den Import der Teilnehmerliste an', async () => {
     aufbau({ state: TournamentState.RegistrationOpen })
     expect(await screen.findByText('Teilnehmerliste hochladen')).toBeInTheDocument()
+  })
+
+  it('verlangt beim Vereinsdoppel Partnerspalten und sonst nicht', async () => {
+    // Dieselbe Liste liest sich je nach Ausschreibung anders: mit Partner im
+    // Vereinsdoppel, eine Person je Zeile beim Schleiferl.
+    aufbau({
+      state: TournamentState.RegistrationOpen,
+      discipline: Discipline.Doubles,
+      teamFormation: TeamFormation.Registered,
+    })
+
+    expect(await screen.findByText(/Partner-Vorname/)).toBeInTheDocument()
+  })
+
+  it('erwartet beim eigenen Stellen der Teams eine Person je Zeile', async () => {
+    aufbau({
+      state: TournamentState.RegistrationOpen,
+      discipline: Discipline.Doubles,
+      teamFormation: TeamFormation.ByOrganiser,
+    })
+
+    await screen.findByText('Teilnehmerliste hochladen')
+    expect(screen.queryByText(/Partner-Vorname/)).not.toBeInTheDocument()
   })
 
   it('holt den Anmeldelink nicht, wo die Meldung gar nicht offen ist', () => {

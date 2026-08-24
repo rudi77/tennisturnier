@@ -15,6 +15,13 @@ namespace TennisTurnier.Application.Tournaments;
 /// abzubilden; sie steht deshalb im Anlegen und nicht in einer späteren
 /// Einstellung.
 /// </param>
+/// <param name="TeamFormation">
+/// Nur im Doppel von Bedeutung: melden sich die Paare gemeinsam, oder meldet
+/// sich jeder für sich und die Turnierleitung stellt die Teams zusammen? Steht
+/// wie die Disziplin im Anlegen, weil beides zusammen die Ausschreibung
+/// ausmacht — und weil der Anmeldelink von der ersten Minute an das richtige
+/// Formular zeigen muss.
+/// </param>
 public sealed record CreateTournamentRequest(
     string Name,
     string VenueName,
@@ -25,7 +32,8 @@ public sealed record CreateTournamentRequest(
     DateOnly? StartsOn,
     DateOnly? EndsOn,
     Guid FormatTemplateId,
-    MatchFormat? MatchFormat = null);
+    MatchFormat? MatchFormat = null,
+    TeamFormation TeamFormation = TeamFormation.Registered);
 
 /// <summary>
 /// Das Satzformat des Turniers. <c>null</c> nimmt es zurück — dann gilt wieder
@@ -104,6 +112,7 @@ public sealed record TournamentDetail(
     string Name,
     VenueDetail Venue,
     Discipline Discipline,
+    TeamFormation TeamFormation,
     DateOnly? StartsOn,
     DateOnly? EndsOn,
     TournamentState State,
@@ -133,12 +142,17 @@ public sealed record RegistrationDetail(
 
 public sealed record ConfigureRegistrationRequest(int? Capacity, DateTimeOffset? Deadline);
 
+/// <param name="TeamEntryId">
+/// Die Meldung des Teams, in dem diese Meldung spielt — nur besetzt, wenn die
+/// Turnierleitung die Teams bildet und diese schon zugeordnet ist.
+/// </param>
 public sealed record EntryDetail(
     Guid Id,
     Guid ParticipantId,
     string ParticipantName,
     int? Seed,
-    EntryStatus Status);
+    EntryStatus Status,
+    Guid? TeamEntryId);
 
 /// <summary>
 /// Eine Meldung in der Meldungsverwaltung — mit allem, was die Turnierleitung
@@ -164,7 +178,8 @@ public sealed record EntryOverview(
     EntryOrigin Origin,
     DateTimeOffset RegisteredAt,
     string? ConfirmationCode,
-    IReadOnlyList<EntryContact> Contacts);
+    IReadOnlyList<EntryContact> Contacts,
+    Guid? TeamEntryId);
 
 public sealed record EntryContact(Guid PlayerId, string DisplayName, string? Email, string? Phone);
 

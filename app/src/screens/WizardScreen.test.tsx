@@ -5,6 +5,7 @@ import {
   CourtLocation,
   CourtSurface,
   Discipline,
+  TeamFormation,
   FinalSetMode,
   PhaseFormatKind,
 } from '../api/types'
@@ -119,6 +120,23 @@ describe('WizardScreen — Eckdaten', () => {
     const vorschau = screen.getByText('Vorschau').closest('aside') as HTMLElement
     expect(within(vorschau).getByText('UTC')).toBeInTheDocument()
     expect(within(vorschau).getByText('Doppel')).toBeInTheDocument()
+  })
+
+  it('fragt erst beim Doppel, woher die Paare kommen', async () => {
+    // Im Einzel gibt es nichts zu bilden — die Frage wäre dort eine, auf die
+    // jede Antwort dasselbe bedeutet.
+    aufbau()
+    await screen.findByLabelText('Name')
+
+    expect(screen.queryByRole('button', { name: 'Paare melden sich gemeinsam' })).not.toBeInTheDocument()
+
+    await user().click(screen.getByRole('button', { name: 'Doppel' }))
+
+    expect(screen.getByRole('button', { name: 'Paare melden sich gemeinsam' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Turnierleitung stellt die Teams' })).toBeInTheDocument()
   })
 
   it('fängt ohne Termin an — ein vorbelegtes Datum wäre eine Behauptung', async () => {
@@ -456,6 +474,27 @@ describe('WizardScreen — Anlegen', () => {
     expect(await screen.findByText(/Name und Anlage fehlen noch/)).toBeInTheDocument()
   })
 
+  it('legt ein Doppel an, dessen Teams die Turnierleitung stellt', async () => {
+    // Der Schleiferl-Abend: die Ausschreibung sagt es von der ersten Minute an,
+    // damit der Anmeldelink das richtige Formular zeigt.
+    aufbau()
+    await screen.findByLabelText('Name')
+    await eckdaten()
+
+    await user().click(screen.getByRole('button', { name: 'Doppel' }))
+    await user().click(screen.getByRole('button', { name: 'Turnierleitung stellt die Teams' }))
+    await schritt('Zusammenfassung')
+
+    await user().click(screen.getByRole('button', { name: 'Turnier anlegen' }))
+
+    await waitFor(() =>
+      expect(lastBody('POST', '/api/tournaments')).toMatchObject({
+        discipline: Discipline.Doubles,
+        teamFormation: TeamFormation.ByOrganiser,
+      }),
+    )
+  })
+
   it('zeigt die Zusammenfassung als lesbaren Schnappschuss', async () => {
     aufbau()
     await bisZurZusammenfassung()
@@ -504,6 +543,7 @@ describe('WizardScreen — Anlegen', () => {
         endsOn: null,
         formatTemplateId: KO,
         matchFormat: null,
+        teamFormation: TeamFormation.Registered,
       }),
     )
 

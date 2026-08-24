@@ -56,7 +56,7 @@ public sealed class RegistrationService : IRegistrationService
             tournament.StartsOn,
             tournament.EndsOn,
             tournament.Discipline,
-            tournament.Discipline.NeedsPartner(),
+            tournament.NeedsPartnerOnEntry,
             IsOpen(tournament),
             FreeSlots(tournament),
             tournament.Registration.Deadline);

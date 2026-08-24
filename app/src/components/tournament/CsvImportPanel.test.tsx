@@ -1,7 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
-import { Discipline } from '../../api/types'
 import { IDS } from '../../test/fixtures'
 import { renderWithProviders, user } from '../../test/render'
 import { db, lastBody, server } from '../../test/server'
@@ -10,11 +9,11 @@ import { CsvImportPanel } from './CsvImportPanel'
 
 const T = IDS.tournament
 
-function aufbau(discipline: Discipline = Discipline.Singles) {
+function aufbau(needsPartner = false) {
   const onImported = vi.fn(() => Promise.resolve())
   renderWithProviders(
     <>
-      <CsvImportPanel tournamentId={T} discipline={discipline} onImported={onImported} />
+      <CsvImportPanel tournamentId={T} needsPartner={needsPartner} onImported={onImported} />
       <Toast />
     </>,
     { workspace: null },
@@ -24,14 +23,14 @@ function aufbau(discipline: Discipline = Discipline.Singles) {
 
 describe('CsvImportPanel', () => {
   it('nennt die Spalten der Einzel-Ausschreibung', () => {
-    aufbau(Discipline.Singles)
+    aufbau()
 
     expect(screen.getByText('Vorname; Nachname; E-Mail; Telefon')).toBeInTheDocument()
     expect(screen.getByText(/ab der dritten Spalte/)).toBeInTheDocument()
   })
 
   it('nennt beim Doppel die Partnerspalten mit', () => {
-    aufbau(Discipline.Doubles)
+    aufbau(true)
 
     expect(
       screen.getByText(
@@ -41,9 +40,13 @@ describe('CsvImportPanel', () => {
     expect(screen.getByText(/ab der fünften Spalte/)).toBeInTheDocument()
   })
 
-  it('nennt auch beim Mixed die Partnerspalten', () => {
-    aufbau(Discipline.Mixed)
-    expect(screen.getByText(/Partner-Vorname/)).toBeInTheDocument()
+  it('nennt eine Person je Zeile, wo die Turnierleitung die Teams bildet', () => {
+    // Ein Doppel ohne Partnerspalten: die Paare fallen später, und eine Zeile
+    // ist ein Mensch — dieselbe Liste wie im Einzel.
+    aufbau(false)
+
+    expect(screen.getByText('Vorname; Nachname; E-Mail; Telefon')).toBeInTheDocument()
+    expect(screen.queryByText(/Partner-Vorname/)).not.toBeInTheDocument()
   })
 
   it('lässt nichts übernehmen, solange nichts dasteht', () => {

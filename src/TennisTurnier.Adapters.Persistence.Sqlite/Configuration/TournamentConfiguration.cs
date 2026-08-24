@@ -18,6 +18,7 @@ public sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournamen
         builder.Property(t => t.State).HasConversion<string>().HasMaxLength(30);
         builder.Property(t => t.SchedulingMode).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.Discipline).HasConversion<string>().HasMaxLength(20);
+        builder.Property(t => t.TeamFormation).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.FormatTemplateId).IsRequired();
 
         // Der Ort als Spalten am Turnier, nicht als eigene Tabelle: ein Ort ohne
@@ -90,6 +91,8 @@ public sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournamen
         // an — ein Fremdschlüssel, der einem abgeleiteten Status folgt und beim
         // Rückzug wieder genullt wird.
         builder.Ignore(t => t.AcceptedEntries);
+        builder.Ignore(t => t.UnpairedEntries);
+        builder.Ignore(t => t.FormedTeams);
 
         builder.HasIndex(t => t.StartsOn);
     }
@@ -156,6 +159,13 @@ public sealed class TournamentEntryConfiguration : IEntityTypeConfiguration<Tour
         builder.Property(e => e.Origin).HasConversion<string>().HasMaxLength(20);
         builder.Property(e => e.RegisteredAt).IsRequired();
         builder.Property(e => e.ConfirmationCode).IsRequired().HasMaxLength(32);
+
+        // Kein Fremdschlüssel auf die Meldung des Teams: er zeigte innerhalb
+        // derselben Tabelle auf eine Zeile desselben Aggregats, und EF Core
+        // müsste beim Auflösen eines Teams eine Reihenfolge einhalten, die es
+        // nicht kennt. Die Zuordnung setzt und löst ohnehin nur das Aggregat.
+        builder.Property(e => e.TeamEntryId);
+        builder.HasIndex(e => e.TeamEntryId);
 
         builder.HasOne<Participant>()
             .WithMany()

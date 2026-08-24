@@ -14,6 +14,7 @@ import type {
   CourtLocation,
   CourtSurface,
   Discipline,
+  DrawTeamsResult,
   EntryOverview,
   FormatDefinition,
   FormatTemplateDetail,
@@ -34,6 +35,7 @@ import type {
   SelfRegistrationResult,
   SetScore,
   StandingsDetail,
+  TeamFormation,
   TournamentDetail,
   TournamentRoleSummary,
   TournamentSummary,
@@ -70,8 +72,13 @@ export const tournaments = {
 
   // Wer anlegt, wird Turnierleiter seines Turniers — in derselben
   // Arbeitseinheit. Es braucht dafür keine Freischaltung.
-  create: (body: TournamentBody & { formatTemplateId: string; matchFormat?: MatchFormat | null }) =>
-    http.post<{ id: string }>('/api/tournaments', body),
+  create: (
+    body: TournamentBody & {
+      formatTemplateId: string
+      matchFormat?: MatchFormat | null
+      teamFormation?: TeamFormation
+    },
+  ) => http.post<{ id: string }>('/api/tournaments', body),
 
   update: (tournamentId: string, body: TournamentBody) =>
     http.put<void>(`/api/tournaments/${tournamentId}`, body),
@@ -168,6 +175,22 @@ export const tournaments = {
 
   /** Die Meldungen zur Verwaltung — mit Kontaktdaten, wenn der Aufrufer sie sehen darf. */
   entries: (id: string) => http.get<EntryOverview[]>(`/api/tournaments/${id}/entries`),
+
+  // --- Teams ---
+  // Nur für ein Doppel, dessen Paare die Turnierleitung bildet. Ein Team ist
+  // eine eigene Meldung; die beiden dahinter bleiben bestehen.
+
+  formTeam: (
+    id: string,
+    body: { firstEntryId: string; secondEntryId: string; teamName?: string | null },
+  ) => http.post<{ id: string }>(`/api/tournaments/${id}/teams`, body),
+
+  /** Das Los über alle Meldungen ohne Team. */
+  drawTeams: (id: string) =>
+    http.post<DrawTeamsResult>(`/api/tournaments/${id}/teams/draw`),
+
+  disbandTeam: (id: string, teamEntryId: string) =>
+    http.del<void>(`/api/tournaments/${id}/teams/${teamEntryId}`),
 
   // --- Anmeldelink ---
 

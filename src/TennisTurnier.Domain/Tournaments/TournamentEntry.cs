@@ -86,6 +86,13 @@ public sealed class TournamentEntry : Entity
     /// </summary>
     public string ConfirmationCode { get; private set; }
 
+    /// <summary>
+    /// Die Meldung des Teams, in dem diese Meldung spielt — leer, solange sie
+    /// für sich steht. Nur im Doppel besetzt, dessen Teams die Turnierleitung
+    /// bildet (<see cref="TeamFormation.ByOrganiser"/>).
+    /// </summary>
+    public Guid? TeamEntryId { get; private set; }
+
     public bool IsInDraw => Status == EntryStatus.Accepted;
 
     public void SetSeed(int? seed)
@@ -110,6 +117,30 @@ public sealed class TournamentEntry : Entity
     {
         Status = EntryStatus.Withdrawn;
         Seed = null;
+    }
+
+    /// <summary>
+    /// Ordnet diese Meldung einem Team zu.
+    ///
+    /// Die Setzposition entfällt wie beim Rückzug: gesetzt wird, wer im Draw
+    /// steht, und das ist ab jetzt das Team. Eine stehengebliebene Einzelsetzung
+    /// belegte eine Position, die niemand einnimmt.
+    /// </summary>
+    internal void PairInto(Guid teamEntryId)
+    {
+        Status = EntryStatus.Paired;
+        TeamEntryId = teamEntryId;
+        Seed = null;
+    }
+
+    /// <summary>
+    /// Löst die Zuordnung. Die Meldung steht danach wieder für sich im Feld —
+    /// nicht auf der Warteliste: sie war angenommen, bevor sie ein Team bekam.
+    /// </summary>
+    internal void Unpair()
+    {
+        Status = EntryStatus.Accepted;
+        TeamEntryId = null;
     }
 
     private static string NewConfirmationCode() =>

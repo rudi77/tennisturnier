@@ -15,6 +15,7 @@ import {
   CourtSurface,
   Discipline,
   EntryStatus,
+  TeamFormation,
   MatchOutcome,
   MatchStatus,
   ProposalChange,
@@ -109,6 +110,16 @@ export const entryStatusLabel: Record<EntryStatus, string> = {
   [EntryStatus.Accepted]: 'angenommen',
   [EntryStatus.WaitingList]: 'Warteliste',
   [EntryStatus.Withdrawn]: 'zurückgezogen',
+  [EntryStatus.Paired]: 'im Team',
+}
+
+/**
+ * Woher die Paare kommen. Steht in der Ausschreibung und entscheidet, ob das
+ * Meldeformular nach einem Partner fragt.
+ */
+export const teamFormationLabel: Record<TeamFormation, string> = {
+  [TeamFormation.Registered]: 'Paare melden sich gemeinsam',
+  [TeamFormation.ByOrganiser]: 'Turnierleitung stellt die Teams',
 }
 
 export const surfaceLabel: Record<CourtSurface, string> = {

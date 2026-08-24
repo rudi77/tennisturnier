@@ -1,7 +1,14 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
-import { EntryOrigin, EntryStatus, Role } from '../api/types'
+import {
+  Discipline,
+  EntryOrigin,
+  EntryStatus,
+  Role,
+  TeamFormation,
+  TournamentState,
+} from '../api/types'
 import * as fx from '../test/fixtures'
 import { renderWithProviders, user, workspace } from '../test/render'
 import { callsTo, db, lastBody, server } from '../test/server'
@@ -10,7 +17,10 @@ import { EntriesScreen } from './EntriesScreen'
 
 const T = fx.IDS.tournament
 
-function aufbau(mitTurnier = true) {
+function aufbau(
+  mitTurnier = true,
+  over: Parameters<typeof fx.tournamentDetail>[0] = {},
+) {
   const reloadTournament = vi.fn(() => Promise.resolve())
   renderWithProviders(
     <>
@@ -19,7 +29,7 @@ function aufbau(mitTurnier = true) {
     </>,
     {
       workspace: workspace({
-        tournament: mitTurnier ? fx.tournamentDetail() : null,
+        tournament: mitTurnier ? fx.tournamentDetail(over) : null,
         reloadTournament,
       }),
     },
@@ -493,5 +503,54 @@ describe('EntriesScreen — Meldungen', () => {
 
     expect(await screen.findByText('Konnte nicht geladen werden')).toBeInTheDocument()
     await user().click(screen.getByRole('button', { name: 'Erneut versuchen' }))
+  })
+
+  it('zeigt die Teambildung nur, wo die Turnierleitung sie stellt', async () => {
+    aufbau(true, {
+      discipline: Discipline.Doubles,
+      teamFormation: TeamFormation.ByOrganiser,
+    })
+
+    expect(await screen.findByText('Teams')).toBeInTheDocument()
+
+    // Und dort erwartet auch die Liste eine Person je Zeile.
+    expect(screen.queryByText(/Partner-Vorname/)).not.toBeInTheDocument()
+  })
+
+  it('lädt die Meldungen nach, wenn die Teams gefallen sind', async () => {
+    // Die Zuordnung steht an den Meldungen: ohne Nachladen zeigte die Liste
+    // weiter Einzelne, die längst ein Team haben.
+    const { reloadTournament } = aufbau(true, {
+      discipline: Discipline.Doubles,
+      teamFormation: TeamFormation.ByOrganiser,
+    })
+
+    await screen.findByText('Teams')
+    await user().click(screen.getByRole('button', { name: 'Teams auslosen' }))
+
+    await waitFor(() => expect(callsTo('POST', `/api/tournaments/${T}/teams/draw`)).toBe(1))
+    await waitFor(() => expect(reloadTournament).toHaveBeenCalled())
+    expect(callsTo('GET', `/api/tournaments/${T}/entries`)).toBeGreaterThan(1)
+  })
+
+  it('zeigt beim Vereinsdoppel keine Teambildung', async () => {
+    aufbau(true, {
+      discipline: Discipline.Doubles,
+      teamFormation: TeamFormation.Registered,
+    })
+
+    expect(await screen.findByText(/Partner-Vorname/)).toBeInTheDocument()
+    expect(screen.queryByText('Teams')).not.toBeInTheDocument()
+  })
+
+  it('rührt die Teams nach der Auslosung nicht mehr an', async () => {
+    aufbau(true, {
+      discipline: Discipline.Mixed,
+      teamFormation: TeamFormation.ByOrganiser,
+      state: TournamentState.DrawGenerated,
+    })
+
+    await screen.findByText('Teams')
+    expect(screen.getByRole('button', { name: 'Teams auslosen' })).toBeDisabled()
   })
 })

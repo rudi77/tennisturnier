@@ -65,7 +65,15 @@ export interface TurnierAufbau {
 export async function turnierMitFeld(
   api: ApiKlient,
   anzahl = 4,
-  over: Partial<{ name: string; startsOn: string | null; endsOn: string | null }> = {},
+  over: Partial<{
+    name: string
+    startsOn: string | null
+    endsOn: string | null
+    /** 0 Einzel, 1 Doppel, 2 Mixed. */
+    discipline: number
+    /** 0 Paare melden sich gemeinsam, 1 die Turnierleitung stellt sie. */
+    teamFormation: number
+  }> = {},
 ): Promise<TurnierAufbau> {
   const vorlagen = await api.get<{ id: string; name: string }[]>('/api/format-templates')
   const ko = vorlagen.find((v) => v.name.includes('K.-o.')) ?? vorlagen[0]!
@@ -78,10 +86,11 @@ export async function turnierMitFeld(
     venueAddress: null,
     venueCity: 'Musterstadt',
     timeZoneId: 'Europe/Vienna',
-    discipline: 0,
+    discipline: over.discipline ?? 0,
     startsOn: over.startsOn === undefined ? '2026-05-16' : over.startsOn,
     endsOn: over.endsOn === undefined ? '2026-05-16' : over.endsOn,
     formatTemplateId: ko.id,
+    teamFormation: over.teamFormation ?? 0,
   })
 
   const courtIds: string[] = []

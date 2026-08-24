@@ -42,6 +42,7 @@ public static class ApplicationRegistration
         services.AddScoped<ICourtQueueService, CourtQueueService>();
         services.AddScoped<IRegistrationService, RegistrationService>();
         services.AddScoped<IEntryImportService, EntryImportService>();
+        services.AddScoped<ITeamFormationService, TeamFormationService>();
 
         return services;
     }

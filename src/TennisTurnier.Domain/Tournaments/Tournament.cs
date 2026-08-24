@@ -23,7 +23,8 @@ public sealed class Tournament : Entity
         Discipline discipline,
         DateOnly? startsOn,
         DateOnly? endsOn,
-        Guid formatTemplateId)
+        Guid formatTemplateId,
+        TeamFormation teamFormation = TeamFormation.Registered)
         : base(id)
     {
         ArgumentNullException.ThrowIfNull(venue);
@@ -33,9 +34,16 @@ public sealed class Tournament : Entity
             throw new DomainException("Ein Turnier braucht eine Formatvorlage.");
         }
 
+        if (teamFormation == TeamFormation.ByOrganiser && !discipline.NeedsPartner())
+        {
+            throw new DomainException(
+                "Ein Turnier im Einzel hat keine Teams zu bilden — dort meldet ohnehin jeder für sich.");
+        }
+
         Name = ValidateName(name);
         Venue = venue;
         Discipline = discipline;
+        TeamFormation = teamFormation;
         FormatTemplateId = formatTemplateId;
         SetDates(startsOn, endsOn);
 
@@ -62,6 +70,27 @@ public sealed class Tournament : Entity
     public Venue Venue { get; private set; }
 
     public Discipline Discipline { get; private set; }
+
+    /// <summary>
+    /// Woher die Paare kommen: von den Meldenden oder von der Turnierleitung.
+    /// Im Einzel ohne Bedeutung.
+    /// </summary>
+    public TeamFormation TeamFormation { get; private set; }
+
+    /// <summary>
+    /// Gehört zu einer Meldung ein Partner?
+    ///
+    /// Die Disziplin allein beantwortet das nicht mehr: ein Doppel, dessen Teams
+    /// die Turnierleitung bildet, nimmt Einzelmeldungen entgegen — und weist
+    /// eine mitgebrachte Partnerangabe ab, weil sie beim Auslosen der Teams
+    /// wortlos verlorenginge.
+    /// </summary>
+    public bool NeedsPartnerOnEntry =>
+        Discipline.NeedsPartner() && TeamFormation == TeamFormation.Registered;
+
+    /// <summary>Bildet die Turnierleitung die Teams selbst?</summary>
+    public bool FormsTeamsItself =>
+        Discipline.NeedsPartner() && TeamFormation == TeamFormation.ByOrganiser;
 
     /// <summary>
     /// Die Plätze, die diesem Turnier zur Verfügung stehen.
@@ -302,16 +331,20 @@ public sealed class Tournament : Entity
     /// </summary>
     public void RequireMatchesDiscipline(bool hasPartner)
     {
-        if (Discipline.NeedsPartner() && !hasPartner)
+        if (NeedsPartnerOnEntry && !hasPartner)
         {
             throw new DomainException(
                 $"Dieses Turnier wird im {Discipline} gespielt. Eine Meldung braucht einen Partner.");
         }
 
-        if (!Discipline.NeedsPartner() && hasPartner)
+        if (!NeedsPartnerOnEntry && hasPartner)
         {
             throw new DomainException(
-                "Dieses Turnier wird im Einzel gespielt. Eine Meldung nennt genau eine Spielerin oder einen Spieler.");
+                FormsTeamsItself
+                    ? "Bei diesem Turnier bildet die Turnierleitung die Teams. Eine Meldung nennt genau " +
+                      "eine Spielerin oder einen Spieler."
+                    : "Dieses Turnier wird im Einzel gespielt. Eine Meldung nennt genau eine Spielerin " +
+                      "oder einen Spieler.");
         }
     }
 
@@ -351,6 +384,8 @@ public sealed class Tournament : Entity
         // Erneut prüfen, obwohl die Vorlage beim Speichern schon geprüft wurde:
         // zwischen beiden Zeitpunkten liegt eine Bearbeitung der Vorlage.
         definition.Validate();
+
+        RequireTeamsFormed();
 
         if (AcceptedEntries.Count < 2)
         {
@@ -523,7 +558,9 @@ public sealed class Tournament : Entity
     /// zählt nicht mit — sie ist ja gerade das, was entsteht, wenn voll ist.
     /// </summary>
     public int CountAgainstCapacity() =>
-        _entries.Count(e => e.Status is EntryStatus.Applied or EntryStatus.Accepted);
+        _entries.Count(e =>
+            e.Status is EntryStatus.Applied or EntryStatus.Accepted or EntryStatus.Paired
+            && !IsFormedTeam(e));
 
     public void Accept(Guid entryId)
     {
@@ -557,6 +594,146 @@ public sealed class Tournament : Entity
         EntryOf(entryId).SetSeed(seed);
         RequireDistinctSeeds();
         Touch();
+    }
+
+    // --- Teams ------------------------------------------------------------
+
+    /// <summary>
+    /// Die Meldungen, die noch kein Team haben — die Grundmenge jeder
+    /// Teambildung, ausgelost wie von Hand.
+    /// </summary>
+    public IReadOnlyList<TournamentEntry> UnpairedEntries =>
+        [.. _entries.Where(entry => entry.Status == EntryStatus.Accepted && !IsFormedTeam(entry))];
+
+    /// <summary>Die gebildeten Teams — die Meldungen, die im Draw stehen.</summary>
+    public IReadOnlyList<TournamentEntry> FormedTeams => [.. _entries.Where(IsFormedTeam)];
+
+    /// <summary>Die beiden Meldungen hinter einem gebildeten Team.</summary>
+    public IReadOnlyList<TournamentEntry> MembersOf(Guid teamEntryId) =>
+        [.. _entries.Where(entry => entry.TeamEntryId == teamEntryId)];
+
+    /// <summary>
+    /// Macht aus zwei Einzelmeldungen ein Team.
+    ///
+    /// Das Team bekommt eine eigene Meldung — es ist die Einheit, die spielt,
+    /// und alles ab dem Draw hängt an einer Meldung: Setzung, Paarung,
+    /// Ergebnis. Die beiden Einzelmeldungen bleiben daneben bestehen und
+    /// wechseln nach <see cref="EntryStatus.Paired"/>: sie sind die Anmeldungen
+    /// zweier Menschen, und die verschwinden nicht, weil jemand sie zusammenlegt.
+    ///
+    /// Der Teilnehmer des Teams entsteht außerhalb — er gehört keinem Turnier
+    /// (ADR-0008) und wird deshalb vom Anwendungsfall angelegt und hier nur
+    /// genannt.
+    /// </summary>
+    public TournamentEntry FormTeam(
+        Guid teamEntryId,
+        Guid teamParticipantId,
+        Guid firstEntryId,
+        Guid secondEntryId)
+    {
+        RequireNotFrozen();
+        RequireFormsTeamsItself();
+
+        if (firstEntryId == secondEntryId)
+        {
+            throw new DomainException("Ein Team braucht zwei verschiedene Meldungen.");
+        }
+
+        var first = RequirePairable(firstEntryId);
+        var second = RequirePairable(secondEntryId);
+
+        var team = new TournamentEntry(teamEntryId, Id, teamParticipantId, seed: null);
+        team.Accept();
+
+        _entries.Add(team);
+        first.PairInto(team.Id);
+        second.PairInto(team.Id);
+        Touch();
+
+        return team;
+    }
+
+    /// <summary>
+    /// Löst ein Team wieder auf. Die beiden Meldungen dahinter stehen danach
+    /// wieder einzeln im Feld und lassen sich neu zusammenstellen.
+    /// </summary>
+    public void DisbandTeam(Guid teamEntryId)
+    {
+        RequireNotFrozen();
+
+        var team = EntryOf(teamEntryId);
+
+        if (!IsFormedTeam(team))
+        {
+            throw new DomainException("Diese Meldung ist kein gebildetes Team.");
+        }
+
+        foreach (var member in MembersOf(teamEntryId))
+        {
+            member.Unpair();
+        }
+
+        _entries.Remove(team);
+        Touch();
+    }
+
+    private bool IsFormedTeam(TournamentEntry entry) =>
+        _entries.Any(other => other.TeamEntryId == entry.Id);
+
+    private TournamentEntry RequirePairable(Guid entryId)
+    {
+        var entry = EntryOf(entryId);
+
+        if (entry.Status != EntryStatus.Accepted)
+        {
+            throw new DomainException(
+                $"Nur angenommene Meldungen lassen sich zu einem Team zusammenstellen; " +
+                $"diese steht auf {entry.Status}.");
+        }
+
+        if (IsFormedTeam(entry))
+        {
+            throw new DomainException("Ein gebildetes Team lässt sich nicht noch einmal verpaaren.");
+        }
+
+        return entry;
+    }
+
+    /// <summary>
+    /// Weist eine Auslosung ab, solange noch jemand ohne Team im Feld steht.
+    ///
+    /// Sonst stünde eine einzelne Spielerin im Draw eines Doppels — und zwar
+    /// als vollwertige Meldung, gegen ein Paar. Das fiele erst am Platz auf,
+    /// wenn zwei gegen eine antreten.
+    /// </summary>
+    private void RequireTeamsFormed()
+    {
+        if (!FormsTeamsItself)
+        {
+            return;
+        }
+
+        var ohneTeam = UnpairedEntries.Count;
+
+        if (ohneTeam > 0)
+        {
+            throw new DomainException(
+                $"{ohneTeam} Meldung(en) stehen noch ohne Team im Feld. Erst die Teams bilden — " +
+                "wer übrig bleibt, gehört auf die Warteliste.");
+        }
+    }
+
+    /// <summary>
+    /// Weist ein Turnier ab, bei dem es nichts zu bilden gibt: eines im Einzel,
+    /// und eines, dessen Paare sich gemeinsam melden.
+    /// </summary>
+    public void RequireFormsTeamsItself()
+    {
+        if (!FormsTeamsItself)
+        {
+            throw new DomainException(
+                "Bei diesem Turnier melden sich die Paare selbst — es gibt keine Teams zu bilden.");
+        }
     }
 
     // --- Innere Helfer ----------------------------------------------------

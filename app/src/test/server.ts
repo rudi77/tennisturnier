@@ -20,6 +20,7 @@ import type {
   EntryOverview,
   FormatTemplateDetail,
   FormatTemplateSummary,
+  DrawTeamsResult,
   ImportEntriesResult,
   MeResponse,
   PhaseDetail,
@@ -53,6 +54,7 @@ export interface FakeDb {
   templateDetails: FormatTemplateDetail[]
   players: PlayerSummary[]
   importResult: ImportEntriesResult
+  drawTeamsResult: DrawTeamsResult
   /** Der ETag, den die öffentliche Ansicht ausliefert. */
   publicEtag: string
   /** Jede beantwortete Anfrage, in der Reihenfolge des Eingangs. */
@@ -108,6 +110,7 @@ function initial(): FakeDb {
       { id: IDS.player2, displayName: 'L. Berger' },
     ],
     importResult: { imported: 2, skipped: 1, problems: [] },
+    drawTeamsResult: { formed: 2, leftOver: 0 },
     publicEtag: '"etag-1"',
     calls: [],
   }
@@ -239,6 +242,11 @@ export const handlers: HttpHandler[] = [
   on('post', '/api/tournaments/:id/entries/:entryId/waiting-list', noContent),
   on('post', '/api/tournaments/:id/entries/:entryId/withdraw', noContent),
   on('put', '/api/tournaments/:id/entries/:entryId/seed', noContent),
+
+  // --- Teams ---
+  on('post', '/api/tournaments/:id/teams', () => HttpResponse.json({ id: IDS.entry3 }, { status: 201 })),
+  on('post', '/api/tournaments/:id/teams/draw', () => HttpResponse.json(db.drawTeamsResult)),
+  on('delete', '/api/tournaments/:id/teams/:teamEntryId', noContent),
 
   // --- Anmeldelink ---
   on('get', '/api/tournaments/:id/registration', () => HttpResponse.json(db.registration)),

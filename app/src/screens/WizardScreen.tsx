@@ -9,6 +9,7 @@ import {
   CourtLocation,
   CourtSurface,
   Discipline,
+  TeamFormation,
   PhaseFormatKind,
   QualificationRule,
   type FormatDefinition,
@@ -17,7 +18,7 @@ import {
 } from '../api/types'
 import { MatchFormatPicker } from '../components/tournament/MatchFormatPicker'
 import { DEFAULT_MATCH_FORMAT, matchFormatSummary } from '../lib/matchFormat'
-import { disciplineLabel, surfaceLabel } from '../lib/labels'
+import { disciplineLabel, surfaceLabel, teamFormationLabel } from '../lib/labels'
 import { formatDateRange, tournamentDays } from '../lib/time'
 
 const STEPS = ['Eckdaten', 'Format', 'Parameter', 'Plätze', 'Zusammenfassung'] as const
@@ -69,6 +70,7 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
   const [venueCity, setVenueCity] = useState('')
   const [timeZoneId, setTimeZoneId] = useState('Europe/Vienna')
   const [discipline, setDiscipline] = useState<Discipline>(Discipline.Singles)
+  const [teamFormation, setTeamFormation] = useState<TeamFormation>(TeamFormation.Registered)
   // Leer und nicht "heute": ein Turnier entsteht meist, bevor der Termin
   // steht. Ein vorbelegtes Datum wäre eine Behauptung, die niemand geprüft hat
   // — und der Spielplan rechnete anschließend damit.
@@ -206,6 +208,10 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
         // die drei zulässigen Formen des Termins definiert sind.
         endsOn: endsOn || null,
         formatTemplateId: effectiveTemplateId,
+        // Im Einzel ohne Bedeutung — und dort weist die Domäne alles andere
+        // als „Paare melden sich gemeinsam" ab.
+        teamFormation:
+          discipline === Discipline.Singles ? TeamFormation.Registered : teamFormation,
         // Nur, wenn jemand daran gedreht hat. Sonst bleibt das Turnier bei dem
         // der Vorlage — und eine spätere Änderung dort gilt auch für dieses
         // Turnier, solange es nicht ausgelost ist.
@@ -370,6 +376,25 @@ export function WizardScreen({ onCreated }: { onCreated?: () => void }) {
                         </button>
                       ))}
                     </Row>
+
+                    {discipline !== Discipline.Singles && (
+                      <Row
+                        label="Teams"
+                        hint="beim Schleiferl meldet sich jeder für sich — die Paare fallen später"
+                      >
+                        {[TeamFormation.Registered, TeamFormation.ByOrganiser].map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className="md-pill"
+                            aria-pressed={teamFormation === value}
+                            onClick={() => setTeamFormation(value)}
+                          >
+                            {teamFormationLabel[value]}
+                          </button>
+                        ))}
+                      </Row>
+                    )}
 
                     <div style={{ display: 'flex', gap: 'var(--sp-6)', flexWrap: 'wrap' }}>
                       <Field label="Beginn">

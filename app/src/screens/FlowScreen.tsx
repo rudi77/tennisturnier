@@ -10,7 +10,13 @@ import { useResource } from '../hooks/useResource'
 import { useAction } from '../hooks/useAction'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { tournaments as tournamentApi } from '../api/endpoints'
-import { EntryStatus, TournamentState, type TournamentDetail } from '../api/types'
+import {
+  Discipline,
+  EntryStatus,
+  TeamFormation,
+  TournamentState,
+  type TournamentDetail,
+} from '../api/types'
 import { formatDateRange } from '../lib/time'
 import { publicUrl, registrationUrl } from '../hooks/useRoute'
 import type { ScreenId } from '../components/layout/SideNav'
@@ -280,7 +286,10 @@ function Actions({
 
             <CsvImportPanel
               tournamentId={tournament.id}
-              discipline={tournament.discipline}
+              needsPartner={
+                tournament.discipline !== Discipline.Singles &&
+                tournament.teamFormation === TeamFormation.Registered
+              }
               onImported={onChanged}
             />
           </>

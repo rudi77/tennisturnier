@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
+import { TeamPanel } from '../components/tournament/TeamPanel'
 import { ShareLink } from '../components/tournament/ShareLink'
 import { registrationUrl } from '../hooks/useRoute'
 import { TournamentPicker } from '../components/layout/TournamentPicker'
@@ -9,8 +10,34 @@ import { useResource } from '../hooks/useResource'
 import { useToast } from '../hooks/useToast'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { tournaments as tournamentApi } from '../api/endpoints'
-import { EntryOrigin, EntryStatus, Role, type EntryOverview } from '../api/types'
+import {
+  Discipline,
+  EntryOrigin,
+  EntryStatus,
+  Role,
+  TeamFormation,
+  TournamentState,
+  type EntryOverview,
+  type TournamentDetail,
+} from '../api/types'
 import { entryStatusLabel, roleLabel } from '../lib/labels'
+
+/** Ab hier steht das Feld: an den Teams ist dann nichts mehr zu ändern. */
+const FROZEN = new Set<TournamentState>([
+  TournamentState.DrawGenerated,
+  TournamentState.InProgress,
+  TournamentState.Completed,
+])
+
+/** Gehört zu einer Meldung ein Partner? Dieselbe Regel wie im Backend. */
+const needsPartner = (tournament: TournamentDetail) =>
+  tournament.discipline !== Discipline.Singles &&
+  tournament.teamFormation === TeamFormation.Registered
+
+/** Bildet die Turnierleitung die Teams selbst? */
+const formsTeamsItself = (tournament: TournamentDetail) =>
+  tournament.discipline !== Discipline.Singles &&
+  tournament.teamFormation === TeamFormation.ByOrganiser
 
 /**
  * Die Meldungen.
@@ -105,12 +132,24 @@ export function EntriesScreen() {
 
         <CsvImportPanel
           tournamentId={tournament.id}
-          discipline={tournament.discipline}
+          needsPartner={needsPartner(tournament)}
           onImported={async () => {
             await entries.reload()
             await reloadTournament()
           }}
         />
+
+        {formsTeamsItself(tournament) && (
+          <TeamPanel
+            tournamentId={tournament.id}
+            entries={rows}
+            disabled={FROZEN.has(tournament.state)}
+            onChanged={async () => {
+              await entries.reload()
+              await reloadTournament()
+            }}
+          />
+        )}
 
         <RolePanel tournamentId={tournament.id} />
 

@@ -64,6 +64,16 @@ internal sealed record TurnierWunsch
     /// </summary>
     public IReadOnlyList<string>? Teams { get; init; }
 
+    /// <summary>
+    /// Woher die Paare kommen. Bei <see cref="TeamFormation.ByOrganiser"/>
+    /// melden sich <see cref="Teilnehmer"/> Einzelne — das Feld besteht dann
+    /// aus Menschen und wird erst über die Teambildung zu Paaren.
+    /// </summary>
+    public TeamFormation Teambildung { get; init; } = TeamFormation.Registered;
+
+    /// <summary>Lost die Teams aus, sobald das Feld steht.</summary>
+    public bool TeamsAuslosen { get; init; }
+
     /// <summary>Setzt jede Meldung auf ihre laufende Nummer — die Tabelle wird damit vorhersagbar.</summary>
     public bool Setzen { get; init; } = true;
 
@@ -150,6 +160,12 @@ internal static class TurnierAufbau
                 "Für ein Turnier im Entwurf gehört Auslosen = false dazu.");
         }
 
+        if (w.TeamsAuslosen && w.Teambildung != TeamFormation.ByOrganiser)
+        {
+            throw new InvalidOperationException(
+                "Ausgelost werden Teams nur dort, wo die Turnierleitung sie bildet.");
+        }
+
         if (w.Turniertag && !w.Spielplan)
         {
             throw new InvalidOperationException(
@@ -182,7 +198,8 @@ internal static class TurnierAufbau
                 w.Beginn,
                 w.Ende,
                 templateId,
-                w.Satzformat),
+                w.Satzformat,
+                w.Teambildung),
             Json));
 
         var courtIds = await PlaetzeAsync(admin, tournamentId, w);
@@ -190,6 +207,13 @@ internal static class TurnierAufbau
         var entryIds = feldgroesse == 0
             ? []
             : await MeldungenAsync(admin, tournamentId, w);
+
+        if (w.TeamsAuslosen)
+        {
+            await GelungenAsync(
+                await admin.PostAsync($"/api/tournaments/{tournamentId}/teams/draw", null),
+                "Teams auslosen");
+        }
 
         if (w.Auslosen)
         {

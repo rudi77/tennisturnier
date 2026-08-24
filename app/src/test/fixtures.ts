@@ -13,6 +13,7 @@ import {
   CourtLocation,
   CourtSurface,
   Discipline,
+  TeamFormation,
   EntryOrigin,
   EntryStatus,
   FinalSetMode,
@@ -134,6 +135,7 @@ export function entry(over: Partial<EntryDetail> = {}): EntryDetail {
     participantName: 'S. Moser',
     seed: 1,
     status: EntryStatus.Accepted,
+    teamEntryId: null,
     ...over,
   }
 }
@@ -148,6 +150,7 @@ export function entryOverview(over: Partial<EntryOverview> = {}): EntryOverview 
     origin: EntryOrigin.Organiser,
     registeredAt: '2026-05-01T09:00:00+00:00',
     confirmationCode: 'ABC123',
+    teamEntryId: null,
     contacts: [
       {
         playerId: IDS.player1,
@@ -193,6 +196,7 @@ export function tournamentDetail(over: Partial<TournamentDetail> = {}): Tourname
   return {
     id: IDS.tournament,
     name: 'Clubmeisterschaft 2026',
+    teamFormation: TeamFormation.Registered,
     venue: {
       name: 'TC Musterstadt',
       address: 'Sportplatzweg 1',

@@ -78,7 +78,8 @@ public sealed class TournamentService : ITournamentService
             request.Discipline,
             request.StartsOn,
             request.EndsOn,
-            template.Id);
+            template.Id,
+            request.TeamFormation);
 
         // Das Satzformat kommt aus demselben Aufruf und nicht aus einem zweiten
         // danach: „Sätze bis vier" ist Teil der Ausschreibung, und ein Turnier,
@@ -157,6 +158,7 @@ public sealed class TournamentService : ITournamentService
                 tournament.Venue.City,
                 tournament.Venue.TimeZoneId),
             tournament.Discipline,
+            tournament.TeamFormation,
             tournament.StartsOn,
             tournament.EndsOn,
             tournament.State,
@@ -174,7 +176,8 @@ public sealed class TournamentService : ITournamentService
                     e.ParticipantId,
                     names.GetValueOrDefault(e.ParticipantId, "(unbekannt)"),
                     e.Seed,
-                    e.Status))
+                    e.Status,
+                    e.TeamEntryId))
                 .ToList(),
             tournament.Version);
     }
@@ -593,7 +596,8 @@ public sealed class TournamentService : ITournamentService
                     entry.Origin,
                     entry.RegisteredAt,
                     entry.ConfirmationCode,
-                    contactsByParticipant.GetValueOrDefault(entry.ParticipantId, [])))
+                    contactsByParticipant.GetValueOrDefault(entry.ParticipantId, []),
+                    entry.TeamEntryId))
         ];
     }
 
