@@ -17,9 +17,33 @@
 
 import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts'
 
-const authority = import.meta.env.VITE_OIDC_AUTHORITY ?? ''
-const clientId = import.meta.env.VITE_OIDC_CLIENT_ID ?? 'tennisturnier-api'
-const scope = import.meta.env.VITE_OIDC_SCOPE ?? 'openid profile email'
+/**
+ * Was der Server über `/config.js` hereingibt.
+ *
+ * Er hat Vorrang vor den Bauzeitvariablen: ein Bündel mit einkompilierter
+ * Authority ließe sich nur für genau einen Aussteller ausliefern. Die
+ * Bauzeitvariablen bleiben als Rückfall — im Entwicklungsbetrieb ohne
+ * laufende API steht sonst gar nichts da.
+ */
+export interface Laufzeitkonfiguration {
+  oidcAuthority?: string
+  oidcClientId?: string
+  oidcScope?: string
+}
+
+declare global {
+  interface Window {
+    __tennisturnier?: Laufzeitkonfiguration
+  }
+}
+
+const zurLaufzeit: Laufzeitkonfiguration = window.__tennisturnier ?? {}
+
+const authority = zurLaufzeit.oidcAuthority || import.meta.env.VITE_OIDC_AUTHORITY || ''
+const clientId =
+  zurLaufzeit.oidcClientId || import.meta.env.VITE_OIDC_CLIENT_ID || 'tennisturnier-api'
+const scope =
+  zurLaufzeit.oidcScope || import.meta.env.VITE_OIDC_SCOPE || 'openid profile email'
 
 /** Ohne Authority läuft die Anwendung rein öffentlich — nur die Live-Ansicht. */
 export const isAuthConfigured = authority.trim().length > 0

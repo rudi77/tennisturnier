@@ -1,0 +1,32 @@
+# Was nicht ins Bild gehört — und den Bau nur verlangsamt oder verfälscht.
+#
+# Ohne diese Liste wandern die Bauergebnisse des Entwicklungsrechners in den
+# Kontext: node_modules mit den falschen Binärdateien für Linux, bin/obj mit
+# einer Wiederherstellung, die nicht zu diesem Bild gehört, und die lokale
+# SQLite-Datei samt Turnierdaten.
+
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/coverage/
+**/TestResults/
+**/playwright-report/
+**/test-results/
+**/.playwright/
+
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+
+# Die lokale Datenbank samt ihren Begleitdateien.
+*.db
+*.db-shm
+*.db-wal
+
+# Was nur für den Entwicklungsrechner gilt.
+docker-compose.yml
+**/appsettings.Development.json
+**/*.user

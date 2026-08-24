@@ -26,6 +26,20 @@ public sealed class OidcOptions
     public bool RequireHttpsMetadata { get; set; } = true;
 
     /// <summary>
+    /// Der öffentliche Client, mit dem sich die Oberfläche anmeldet.
+    ///
+    /// Er steht hier und nicht im Bündel der Oberfläche: eine Single-Page-
+    /// Anwendung, die ihre Authority einkompiliert hat, lässt sich nur noch für
+    /// genau einen Aussteller ausliefern — und dasselbe Bild wäre in einer
+    /// zweiten Instanz unbrauchbar. Der Server reicht die Angaben deshalb zur
+    /// Laufzeit heraus (<c>/config.js</c>).
+    /// </summary>
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>Die Scopes, die die Oberfläche anfragt.</summary>
+    public string Scope { get; set; } = "openid profile email";
+
+    /// <summary>
     /// Ist die Anmeldung überhaupt konfiguriert? Ohne Authority läuft die
     /// Anwendung rein öffentlich — brauchbar für einen ersten Blick auf die
     /// Live-Ansicht, aber ohne jede schreibende Funktion.

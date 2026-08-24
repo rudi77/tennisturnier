@@ -11,15 +11,27 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const AUTHORITY = 'http://localhost:8080/realms/tennisturnier'
 
 /** `undefined` heißt: die Variable gibt es gar nicht — nicht „sie ist leer". */
-async function ladeMit(env: Record<string, string | undefined>) {
+async function ladeMit(
+  env: Record<string, string | undefined>,
+  zurLaufzeit?: Record<string, string>,
+) {
   vi.resetModules()
   for (const [key, value] of Object.entries(env)) {
     vi.stubEnv(key, value)
   }
+
+  // Was der Server über /config.js hereingäbe.
+  if (zurLaufzeit) {
+    window.__tennisturnier = zurLaufzeit
+  }
+
   return await import('./oidc')
 }
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  delete window.__tennisturnier
+})
 
 function alsBenutzer(profile: Record<string, unknown>): User {
   return { profile } as unknown as User
@@ -166,5 +178,56 @@ describe('initials', () => {
   it('fällt auch bei einem Namen aus lauter Trennzeichen darauf zurück', async () => {
     const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: AUTHORITY })
     expect(oidc.initials(alsBenutzer({ name: ' . . ' }))).toBe('··')
+  })
+})
+
+describe('Laufzeitkonfiguration', () => {
+  it('nimmt, was der Server hereingibt, und nicht das Einkompilierte', async () => {
+    // Der Grund für den ganzen Weg: dasselbe Bündel soll sich gegen einen
+    // anderen Aussteller ausliefern lassen, ohne neu gebaut zu werden.
+    const oidc = await ladeMit(
+      { VITE_OIDC_AUTHORITY: AUTHORITY, VITE_OIDC_CLIENT_ID: 'aus-dem-buendel' },
+      {
+        oidcAuthority: 'https://idp.example.invalid/realms/matchday',
+        oidcClientId: 'matchday-web',
+        oidcScope: 'openid profile',
+      },
+    )
+
+    expect(oidc.isAuthConfigured).toBe(true)
+    expect(oidc.userManager!.settings.authority).toBe(
+      'https://idp.example.invalid/realms/matchday',
+    )
+    expect(oidc.userManager!.settings.client_id).toBe('matchday-web')
+    expect(oidc.userManager!.settings.scope).toBe('openid profile')
+  })
+
+  it('fällt auf die Bauzeitvariablen zurück, wo der Server nichts sagt', async () => {
+    // Der Entwicklungsbetrieb ohne laufende API: /config.js ist dann nicht da,
+    // und ohne Rückfall stünde die Anmeldung still.
+    const oidc = await ladeMit({
+      VITE_OIDC_AUTHORITY: AUTHORITY,
+      VITE_OIDC_CLIENT_ID: 'aus-dem-buendel',
+      VITE_OIDC_SCOPE: 'openid',
+    })
+
+    expect(oidc.userManager!.settings.authority).toBe(AUTHORITY)
+    expect(oidc.userManager!.settings.client_id).toBe('aus-dem-buendel')
+    expect(oidc.userManager!.settings.scope).toBe('openid')
+  })
+
+  it('nimmt einen leeren Serverwert nicht für eine Angabe', async () => {
+    // Eine Instanz ohne Anmeldung liefert leere Felder aus. Sie dürfen die
+    // Bauzeitvariablen nicht überschreiben — sonst liefe der
+    // Entwicklungsbetrieb plötzlich ohne Anmeldung.
+    const oidc = await ladeMit(
+      { VITE_OIDC_AUTHORITY: AUTHORITY },
+      { oidcAuthority: '', oidcClientId: '', oidcScope: '' },
+    )
+
+    expect(oidc.isAuthConfigured).toBe(true)
+    expect(oidc.userManager!.settings.authority).toBe(AUTHORITY)
+    expect(oidc.userManager!.settings.client_id).toBe('tennisturnier-api')
+    expect(oidc.userManager!.settings.scope).toBe('openid profile email')
   })
 })

@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -74,6 +76,16 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
+// Die gebaute Oberfläche, sofern sie im Bild neben der Anwendung liegt. Im
+// Entwicklungsbetrieb tut sie das nicht — dort liefert Vite sie aus und reicht
+// die API hierher weiter. Ohne wwwroot passiert hier schlicht nichts.
+//
+// Die Oberfläche führt ihre Navigation über die Adresszeile („?screen=board"),
+// nicht über Pfade. Es braucht deshalb keinen Rückfall auf index.html: die eine
+// Adresse, die sie öffnet, ist die Wurzel — und die beantwortet UseDefaultFiles.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // Der Anmeldetoken steht in der Adresszeile — ohne diese Kopfzeile stünde er
 // beim nächsten ausgehenden Link im Referer und damit im Protokoll eines
 // fremden Servers.
@@ -101,6 +113,26 @@ app.UseAuthorization();
 app.UseUserResolution();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("Health");
+
+// Die Anmeldedaten der Oberfläche, zur Laufzeit statt einkompiliert.
+//
+// Eine Single-Page-Anwendung, die ihre Authority im Bündel trägt, lässt sich
+// nur für genau einen Aussteller ausliefern — dasselbe Bild wäre in einer
+// zweiten Instanz unbrauchbar, und ein Wechsel des Realms verlangte einen
+// neuen Bau. Als Skript und nicht als JSON, damit die Oberfläche beim Laden
+// schon Bescheid weiß und nicht erst nach einer Anfrage.
+var oberflaechenKonfiguration = JsonSerializer.Serialize(new
+{
+    oidcAuthority = oidc.Authority,
+    oidcClientId = oidc.ClientId,
+    oidcScope = oidc.Scope,
+});
+
+app.MapGet("/config.js", () => Results.Text(
+    $"window.__tennisturnier = {oberflaechenKonfiguration};",
+    "application/javascript",
+    Encoding.UTF8))
+    .WithTags("Oberfläche");
 
 // „Wer bin ich, und was darf ich" — die Oberfläche muss entscheiden, welche
 // Schaltfläche sie überhaupt zeigt. Ohne Anmeldung ist „niemand" die Antwort

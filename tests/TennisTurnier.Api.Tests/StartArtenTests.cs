@@ -98,4 +98,36 @@ public sealed class StartArtenTests
         Assert.NotEmpty(vorher!);
         Assert.Equal(vorher!.Count, nachher!.Count);
     }
+
+    [Fact]
+    public async Task Die_Oberflaeche_bekommt_ihre_Anmeldedaten_zur_Laufzeit()
+    {
+        // Eine Single-Page-Anwendung mit einkompilierter Authority ließe sich
+        // nur für genau einen Aussteller ausliefern — dasselbe Bild wäre in
+        // einer zweiten Instanz unbrauchbar.
+        using var fabrik = new EntwicklungsFabrik();
+
+        using var client = fabrik
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("Oidc:Authority", "https://idp.example.invalid/realms/matchday");
+                builder.UseSetting("Oidc:ClientId", "matchday-web");
+            })
+            .CreateClient();
+
+        var response = await client.GetAsync("/config.js");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/javascript", response.Content.Headers.ContentType!.MediaType);
+
+        var skript = await response.Content.ReadAsStringAsync();
+
+        Assert.StartsWith("window.__tennisturnier = {", skript, StringComparison.Ordinal);
+        Assert.Contains(
+            "\"oidcAuthority\":\"https://idp.example.invalid/realms/matchday\"",
+            skript,
+            StringComparison.Ordinal);
+        Assert.Contains("\"oidcClientId\":\"matchday-web\"", skript, StringComparison.Ordinal);
+        Assert.Contains("\"oidcScope\":\"openid profile email\"", skript, StringComparison.Ordinal);
+    }
 }

@@ -60,6 +60,61 @@ Turnierleiter — berufen die Turnierleitungen selbst über
 `Security:SelfServiceOrganizers` abschalten, wenn eine Instanz geschlossen
 laufen soll.
 
+## Betrieb
+
+Ein Bild, ein Dienst. Das `Dockerfile` baut die Oberfläche und die Anwendung und
+legt die gebauten Dateien der Oberfläche neben die Anwendung, die sie mit
+ausliefert. Zwei Dienste wären der naheliegende Schnitt und hier der falsche:
+gleich-origin heißt kein CORS, kein zweiter Hostname im Identity Provider und
+keine Weiterleitung zwischen zwei Diensten.
+
+```bash
+docker build -t matchday .
+docker run --rm -p 8080:8080 -v matchday-daten:/data \
+  -e Oidc__Authority=https://idp.example.org/realms/matchday \
+  -e Oidc__ClientId=matchday-web \
+  matchday
+```
+
+### Railway
+
+Railway baut direkt aus GitHub. `railway.json` legt fest, dass das `Dockerfile`
+gebaut wird und nicht geraten — ohne diese Angabe sucht Railpack nach einem
+Projekt, das es kennt, und findet in einer Projektmappe aus mehreren
+Verzeichnissen keines.
+
+1. In Railway ein Projekt aus dem GitHub-Repository anlegen. Mehr als das
+   Repository braucht es nicht: Bauweise, Gesundheitsprüfung und
+   Neustartverhalten stehen in `railway.json`.
+2. Einen Datenträger anlegen und auf `/data` hängen. **Ohne ihn ist die
+   Datenbank nach jedem Neustart leer** — sie ist eine Datei, und ein Container
+   ohne Datenträger vergisst seine Dateien.
+3. Die Variablen setzen (siehe unten).
+
+Den Port gibt Railway über `PORT` vor; die Anwendung nimmt ihn beim Start
+entgegen. Die Adresse der Instanz gehört anschließend in den Identity Provider —
+als gültige Weiterleitung (`https://…/`) und als erlaubter Ursprung.
+
+| Variable | Bedeutung |
+| --- | --- |
+| `Oidc__Authority` | Der Aussteller, z. B. `https://idp.example.org/realms/matchday`. Leer heißt: keine Anmeldung, nur die öffentlichen Endpunkte. |
+| `Oidc__ClientId` | Der Client, unter dem sich die Oberfläche anmeldet. |
+| `Oidc__Audience` | Wofür ein Token gelten muss. Vorgabe `tennisturnier-api`. |
+| `Oidc__Scope` | Vorgabe `openid profile email`. |
+| `Security__BootstrapSystemAdmins__0` | Die E-Mail-Adresse, die beim ersten Anmelden Systemadministrator wird. Danach wieder leeren. |
+| `Tournament__TeamDrawSeed` | Saatwert für das Los der Teams. Nur für Vorführungen — wer ihn kennt, kennt die Paarung, bevor sie fällt. |
+| `ConnectionStrings__Default` | Vorgabe `Data Source=/data/matchday.db`, passend zum Datenträger. |
+
+Die Oberfläche holt sich `Oidc__Authority`, `Oidc__ClientId` und `Oidc__Scope`
+zur Laufzeit über `/config.js`. Sie sind deshalb nicht ins Bündel gebaut, und
+dasselbe Bild läuft gegen jeden Aussteller — ein Wechsel des Realms ist eine
+Variable, kein neuer Bau.
+
+Ein Hinweis für Instanzen mit vielen Meldungen: die Schranke der anonymen
+Meldeendpunkte teilt nach IP, und hinter dem Proxy von Railway ist das die des
+Proxys. Wo das zu eng wird, hebt `Security__PublicRegistrationRequestsPerWindow`
+sie an.
+
 ## Tests
 
 Drei Ebenen, die sich nicht ersetzen: die Domäne rechnet ohne Datenbank, die

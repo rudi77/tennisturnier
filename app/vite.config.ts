@@ -33,6 +33,9 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         '/api': { target, changeOrigin: true },
+        // Die Anmeldedaten der Oberfläche. Im Entwicklungsbetrieb liefert Vite
+        // die Seite und die API die Konfiguration darin.
+        '/config.js': { target, changeOrigin: true },
         '/public': { target, changeOrigin: true },
         '/health': { target, changeOrigin: true },
         // SignalR verhandelt über HTTP und wechselt dann auf WebSockets.
