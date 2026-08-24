@@ -93,7 +93,8 @@ Verzeichnissen keines.
 
 Den Port gibt Railway über `PORT` vor; die Anwendung nimmt ihn beim Start
 entgegen. Die Adresse der Instanz gehört anschließend in den Identity Provider —
-als gültige Weiterleitung (`https://…/`) und als erlaubter Ursprung.
+als gültige Weiterleitung (`https://…/`) und als erlaubter Ursprung. Wer den
+Keycloak-Dienst von unten mitnimmt, bekommt beides ohne Zutun.
 
 | Variable | Bedeutung |
 | --- | --- |
@@ -136,11 +137,29 @@ einem Google-Konto.
    | `KC_DB_PASSWORD` | `${{Postgres.PGPASSWORD}}` |
    | `KC_BOOTSTRAP_ADMIN_USERNAME` | Der erste Administrator — nur beim ersten Start nötig. |
    | `KC_BOOTSTRAP_ADMIN_PASSWORD` | Dessen Passwort. Danach beides wieder entfernen. |
-   | `MATCHDAY_ORIGIN` | `https://<matchday-domain>` — **ohne** Schrägstrich am Ende. |
+   | `MATCHDAY_ORIGIN` | `https://${{matchday.RAILWAY_PUBLIC_DOMAIN}}` — **ohne** Schrägstrich am Ende. |
 
 3. In MATCHDAY `Oidc__Authority` auf
-   `https://<keycloak-domain>/realms/tennisturnier` setzen und `Oidc__ClientId`
-   auf `tennisturnier-api`.
+   `https://${{keycloak.RAILWAY_PUBLIC_DOMAIN}}/realms/tennisturnier` setzen und
+   `Oidc__ClientId` auf `tennisturnier-api`.
+
+Beide Dienste bekommen von Railway je eine eigene Domain, und die Verweise
+oben (`${{dienst.RAILWAY_PUBLIC_DOMAIN}}`, mit den tatsächlichen Dienstnamen)
+ersparen das Abtippen: ändert sich eine Domain, zieht die andere Seite mit.
+
+Zwei Domains sind dabei kein Umweg. Über die Grenze gehen genau zwei Dinge —
+die Weiterleitung des Browsers zur Anmeldeseite, für die es keine
+Same-Origin-Regel gibt, und der Aufruf, mit dem die Oberfläche den Code gegen
+ein Token tauscht; für den steht die Adresse als erlaubter Ursprung im Client.
+Alles Übrige prüft MATCHDAY vom Server aus, ohne Browser dazwischen. Dass
+Oberfläche und API in **einem** Bild liegen, ist der Fall, in dem
+Gleich-Origin tatsächlich zählt: die beiden reden ständig miteinander.
+
+Das private Netz von Railway (`<dienst>.railway.internal`) taugt hier nicht:
+Keycloak leitet seinen Aussteller aus der Anfrage ab, antwortet über die
+interne Adresse also mit einem anderen `iss`, als in den Tokens im Browser
+steht — und die Prüfung scheitert. `Oidc__Authority` gehört auf die öffentliche
+Domain.
 
 `MATCHDAY_ORIGIN` trägt die Adresse der Instanz als gültige Weiterleitung und
 erlaubten Ursprung in den Client ein. Sie muss stehen, **bevor** Keycloak das
