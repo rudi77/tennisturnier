@@ -3,8 +3,12 @@
  *
  * Der Weg, den jede Turnierleitung genau einmal je Turnier geht — und der
  * einzige, an dessen Ende ein Datensatz steht, den es vorher nicht gab. Geprüft
- * wird bis in die API hinein: was der Assistent zusammenstellt, muss danach
- * auch dort stehen.
+ * wird bis in die API hinein: was das Formular zusammenstellt, muss danach auch
+ * dort stehen.
+ *
+ * Und mit ihm die Behauptung des Umbaus: zwei Felder und ein Knopf reichen.
+ * Alles Weitere hat eine Vorgabe und steht hinter einer Lade — es ist nicht
+ * verschwunden, es steht nur nicht mehr im Weg.
  */
 
 import { alsTurnierleitung, eindeutig, expect, test, type ApiKlient } from './support/fixtures'
@@ -31,26 +35,27 @@ test('legt ein Turnier samt Plätzen und Platzzeiten an', async ({ page, api }) 
 
   await alsTurnierleitung(page, '/?screen=create')
 
-  await page.getByLabel('Name').fill(name)
-  await page.getByLabel('Anlage').fill('TC Musterstadt')
-  await page.getByLabel('Ort (optional)').fill('Musterstadt')
+  await page.getByLabel('Name', { exact: true }).fill(name)
+  await page.getByLabel('Anlage', { exact: true }).fill('TC Musterstadt')
   await page.getByRole('button', { name: 'Doppel' }).click()
-  await page.getByLabel('Beginn').fill('2026-05-16')
-  await page.getByLabel('Ende').fill('2026-05-17')
+  await page.getByLabel('Tag', { exact: true }).fill('2026-05-16')
+  await page.getByLabel('geht über mehrere Tage').check()
+  await page.getByLabel('Letzter Tag').fill('2026-05-17')
 
-  // Die Vorschau rechnet mit, bevor irgendetwas gespeichert ist.
-  await expect(page.locator('aside').getByText('Doppel')).toBeVisible()
+  // Die Lade sagt zu, was gälte, ohne dass man sie öffnet.
+  await expect(page.getByText(/2 Plätze · 08:00–22:00/)).toBeVisible()
 
-  await page.getByRole('button', { name: /04\s*Plätze/ }).click()
+  await page.getByText(/2 Plätze · 08:00–22:00/).click()
   await expect(page.getByText(/4 Platzzeiten —/)).toBeVisible()
-  await page.getByLabel('von', { exact: true }).fill('09:00')
+  await page.getByLabel('Ort', { exact: true }).fill('Musterstadt')
+  await page.getByLabel('Plätze frei ab').fill('09:00')
   await page.getByLabel('bis', { exact: true }).fill('18:00')
 
-  await page.getByRole('button', { name: /05\s*Zusammenfassung/ }).click()
   await page.getByRole('button', { name: 'Turnier anlegen', exact: true }).click()
 
   // Danach steht der Ablauf — und das neue Turnier ist gewählt.
-  await expect(page.getByRole('heading', { name })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Ablauf' })).toBeVisible()
+  await expect(page.locator('.md-appbar__name')).toHaveText(name)
   await expect(page.getByText('Teilnehmer sammeln')).toBeVisible()
 
   const turnier = await turnierNamens(api, name)
@@ -69,17 +74,14 @@ test('legt ein Turnier ohne Termin an — und ohne Platzzeiten', async ({ page, 
 
   await alsTurnierleitung(page, '/?screen=create')
 
-  await page.getByLabel('Name').fill(name)
-  await page.getByLabel('Anlage').fill('TC Musterstadt')
+  // Zwei Felder und ein Knopf — mehr braucht ein Turnier nicht.
+  await page.getByLabel('Name', { exact: true }).fill(name)
+  await page.getByLabel('Anlage', { exact: true }).fill('TC Musterstadt')
 
-  await page.getByRole('button', { name: /04\s*Plätze/ }).click()
-  await expect(page.getByText(/Solange kein Termin feststeht/)).toBeVisible()
-
-  await page.getByRole('button', { name: /05\s*Zusammenfassung/ }).click()
   await page.getByRole('button', { name: 'Turnier anlegen', exact: true }).click()
 
-  await expect(page.getByRole('heading', { name })).toBeVisible()
-  await expect(page.getByText('Termin offen')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Ablauf' })).toBeVisible()
+  await expect(page.locator('.md-appbar__name')).toHaveText(name)
 
   const turnier = await turnierNamens(api, name)
   expect(turnier.startsOn).toBeNull()
@@ -91,21 +93,19 @@ test('kopiert eine eingebaute Vorlage, sobald jemand an ihr dreht', async ({ pag
 
   await alsTurnierleitung(page, '/?screen=create')
 
-  await page.getByLabel('Name').fill(name)
-  await page.getByLabel('Anlage').fill('TC Musterstadt')
+  await page.getByLabel('Name', { exact: true }).fill(name)
+  await page.getByLabel('Anlage', { exact: true }).fill('TC Musterstadt')
 
-  await page.getByRole('button', { name: /03\s*Parameter/ }).click()
-  await page.getByRole('button', { name: 'ein Satz' }).click()
-  await page.getByRole('button', { name: 'bis 4' }).click()
+  // Eine Ebene tiefer steht alles, was der Assistent auf drei Schritte
+  // verteilt hatte.
+  await page.getByText(/2 Plätze · 08:00–22:00/).click()
+  await page.getByRole('button', { name: /Kurz/ }).click()
   // Die eingebaute Vorlage führt das Spiel um Platz 3; hier wird es
   // abgewählt — das ist die Änderung, die eine eigene Kopie erzwingt.
   await page.getByRole('button', { name: 'nein' }).click()
 
-  await page.getByRole('button', { name: /05\s*Zusammenfassung/ }).click()
-  await expect(page.locator('.md-snapshot')).toContainText('"eigeneKopie": true')
-
   await page.getByRole('button', { name: 'Turnier anlegen', exact: true }).click()
-  await expect(page.getByRole('heading', { name })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Ablauf' })).toBeVisible()
 
   // Das Satzformat gehört dem Turnier, die geänderten Parameter der Kopie.
   const turnier = await turnierNamens(api, name)

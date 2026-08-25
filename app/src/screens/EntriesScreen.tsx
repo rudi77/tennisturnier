@@ -463,75 +463,71 @@ function Row({
   const [seed, setSeed] = useState(entry.seed?.toString() ?? '')
 
   return (
-    <div
-      className="md-checkrow"
-      style={{ cursor: 'default', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sp-4)' }}
-    >
-      <div style={{ flex: '1 1 200px' }}>
-        <div style={{ fontSize: 'var(--fs-md)', fontWeight: 'var(--fw-semibold)' }}>
-          {entry.participantName}
-        </div>
-        <div className="md-num" style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', marginTop: 2 }}>
-          {entry.origin === EntryOrigin.SelfService ? 'Selbstmeldung' : 'von der Turnierleitung'}
-          {' · '}
-          {new Date(entry.registeredAt).toLocaleString('de-AT')}
-          {entry.confirmationCode ? ` · ${entry.confirmationCode}` : ''}
-        </div>
-
-        {entry.contacts.length > 0 && (
-          <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-2)', marginTop: 4 }}>
-            {entry.contacts
-              .map((contact) =>
-                [contact.displayName, contact.email, contact.phone].filter(Boolean).join(' · '),
-              )
-              .join(' | ')}
-          </div>
-        )}
+    <div className="md-entry">
+      <div className="md-entry__head">
+        <div className="md-entry__name">{entry.participantName}</div>
+        <span className="md-chip">{entryStatusLabel[entry.status]}</span>
       </div>
 
-      <span className="md-pill" aria-pressed={false} style={{ pointerEvents: 'none' }}>
-        {entryStatusLabel[entry.status]}
-      </span>
+      <div className="md-num md-entry__meta">
+        {entry.origin === EntryOrigin.SelfService ? 'Selbstmeldung' : 'von der Turnierleitung'}
+        {' · '}
+        {new Date(entry.registeredAt).toLocaleString('de-AT')}
+        {entry.confirmationCode ? ` · ${entry.confirmationCode}` : ''}
+      </div>
 
-      <input
-        className="md-input"
-        type="number"
-        min={1}
-        value={seed}
-        aria-label={`Setzposition von ${entry.participantName}`}
-        placeholder="Seed"
-        style={{ width: 84 }}
-        onChange={(event) => setSeed(event.target.value)}
-        onBlur={() => {
-          const next = seed.trim() ? Number(seed) : null
-          if (next !== entry.seed) onSeed(next)
-        }}
-      />
+      {entry.contacts.length > 0 && (
+        <div className="md-entry__contacts">
+          {entry.contacts
+            .map((contact) =>
+              [contact.displayName, contact.email, contact.phone].filter(Boolean).join(' · '),
+            )
+            .join(' | ')}
+        </div>
+      )}
 
-      <button
-        type="button"
-        className="md-btn"
-        disabled={busy || entry.status === EntryStatus.Accepted}
-        onClick={onAccept}
-      >
-        Annehmen
-      </button>
-      <button
-        type="button"
-        className="md-btn"
-        disabled={busy || entry.status === EntryStatus.WaitingList}
-        onClick={onWaitingList}
-      >
-        Warteliste
-      </button>
-      <button
-        type="button"
-        className="md-btn"
-        disabled={busy || entry.status === EntryStatus.Withdrawn}
-        onClick={onWithdraw}
-      >
-        Zurückziehen
-      </button>
+      {/* Die Handlungen unten und über die Breite: am Telefon ist das die
+          Stelle, die der Daumen erreicht, ohne die Karte zu verdecken. */}
+      <div className="md-entry__actions">
+        <input
+          className="md-input md-entry__seed"
+          type="number"
+          min={1}
+          value={seed}
+          aria-label={`Setzposition von ${entry.participantName}`}
+          placeholder="Seed"
+          onChange={(event) => setSeed(event.target.value)}
+          onBlur={() => {
+            const next = seed.trim() ? Number(seed) : null
+            if (next !== entry.seed) onSeed(next)
+          }}
+        />
+
+        <button
+          type="button"
+          className="md-btn"
+          disabled={busy || entry.status === EntryStatus.Accepted}
+          onClick={onAccept}
+        >
+          Annehmen
+        </button>
+        <button
+          type="button"
+          className="md-btn"
+          disabled={busy || entry.status === EntryStatus.WaitingList}
+          onClick={onWaitingList}
+        >
+          Warteliste
+        </button>
+        <button
+          type="button"
+          className="md-btn"
+          disabled={busy || entry.status === EntryStatus.Withdrawn}
+          onClick={onWithdraw}
+        >
+          Zurückziehen
+        </button>
+      </div>
     </div>
   )
 }

@@ -710,15 +710,17 @@ body {
   max-width: min(680px, calc(100vw - var(--sp-16)));
 }
 
+/* Ein Dialog nimmt am Telefon die Breite, die da ist — die Ergebniseingabe
+   ist der eine Bildschirm, an dem es auf jeden Millimeter ankommt. */
 .md-scrim {
   position: fixed;
   inset: 0;
   z-index: 60;
   background: var(--scrim);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: var(--sp-12);
+  padding: var(--sp-10) var(--sp-5) var(--sp-5);
 }
 
 .md-empty {
@@ -829,20 +831,39 @@ body {
    ihre Summe ist genau die Breite, die es braucht. Eine Zahl daneben wäre
    dieselbe Aussage ein zweites Mal — und stünde falsch da, sobald jemand
    --court-col-width anfasst. */
+/* Die Plätze stapeln sich, statt seitwärts zu scrollen. Am Turniertag steht
+   man mit einer Hand am Platz — ein Wisch nach unten geht, einer zur Seite
+   trifft die Karte darunter. Nebeneinander erst, wo mehrere Spalten
+   nebeneinander passen. */
 .md-queue {
-  overflow-x: auto;
   padding-bottom: var(--sp-4);
 }
 
 .md-queue__row {
   display: flex;
+  flex-direction: column;
   gap: var(--sp-6);
-  align-items: flex-start;
+  align-items: stretch;
+}
+
+@media (min-width: 900px) {
+  .md-queue {
+    overflow-x: auto;
+  }
+
+  .md-queue__row {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .md-queue__col {
+    flex: 1 0 var(--court-col-width);
+    min-width: var(--court-col-width);
+  }
 }
 
 .md-queue__col {
-  flex: 1 0 var(--court-col-width);
-  min-width: var(--court-col-width);
+  min-width: 0;
   background: var(--surface);
   border: var(--border);
   border-top: 3px solid var(--line);
@@ -1338,6 +1359,162 @@ body {
   font-weight: var(--fw-semibold);
 }
 
+/* --- Eine Meldung in der Liste -----------------------------------------
+   Eine Karte und keine Zeile: Name, Herkunft, Kontakt und vier Bedienelemente
+   nebeneinander ergaben auf 360 Pixeln sechs Umbrüche in beliebiger
+   Reihenfolge. Untereinander steht dieselbe Auskunft in der Reihenfolge, in
+   der sie gelesen wird. */
+
+.md-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--sp-6) var(--sp-6) var(--sp-5);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.md-entry__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.md-entry__name {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.md-entry__head .md-chip {
+  flex: none;
+  background: var(--blue-100);
+  color: var(--court-700);
+}
+
+.md-entry__meta {
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+}
+
+.md-entry__contacts {
+  font-size: var(--fs-xs);
+  color: var(--fg-2);
+  margin-top: 3px;
+}
+
+.md-entry__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
+}
+
+/* Zwei nebeneinander auf einem schmalen Gerät, alle vier, sobald Platz ist —
+   und keine schmaler als ein Daumen. */
+.md-entry__actions .md-btn {
+  flex: 1 1 104px;
+}
+
+.md-entry__seed {
+  flex: 0 0 88px;
+  width: 88px;
+}
+
+/* --- Selbstmeldung ------------------------------------------------------
+   Der einzige Bildschirm, auf dem jemand ohne Konto etwas schreibt — und der
+   einzige, von dem man sicher weiß, dass er am Telefon geöffnet wird: er
+   kommt über einen Link aus einer Vereinsgruppe. */
+
+.md-register {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: var(--sp-8) var(--gutter-page) var(--sp-16);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.md-register__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  margin-bottom: var(--sp-8);
+  line-height: 1.1;
+}
+
+.md-register__wordmark {
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wide);
+}
+
+.md-register__kind {
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+}
+
+.md-register__panel {
+  padding: var(--sp-8);
+}
+
+.md-register__panel + .md-register__panel,
+.md-register__panel + * {
+  margin-top: var(--sp-6);
+}
+
+.md-register__title {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+}
+
+.md-register__heading {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  margin-bottom: var(--sp-7);
+}
+
+.md-register__meta {
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+  margin-top: 4px;
+}
+
+.md-register__lead {
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+  margin-top: 6px;
+  line-height: var(--lh-relaxed);
+}
+
+/* Der Bestätigungscode ist das, was von diesem Bildschirm mitgenommen wird —
+   abgeschrieben oder abfotografiert. Er ist deshalb so groß, dass beides
+   ohne Zoom geht. */
+.md-register__code {
+  margin-top: var(--sp-8);
+  padding: var(--sp-7);
+  background: var(--surface-muted);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wide);
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .md-register {
+    padding: var(--sp-12) var(--sp-10) var(--sp-20);
+  }
+
+  .md-register__panel {
+    padding: var(--sp-10);
+  }
+}
+
 /* --- Zuschauer-Ansicht --------------------------------------------------- */
 
 /* Die Seite für alle anderen. Sie ist die einzige, die jemand am Handy im
@@ -1418,7 +1595,23 @@ body {
 }
 
 .md-public__body {
-  padding: var(--sp-8) var(--gutter-page) var(--sp-20);
+  padding: var(--sp-7) var(--sp-6) var(--sp-16);
+}
+
+/* Der Umschalter auf den Clubhaus-Monitor, der Link zum Teilen, die zweite
+   Darstellung des Draws: sie sind nicht wichtiger als die Auskunft selbst. */
+.md-only-wide {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .md-public__body {
+    padding: var(--sp-8) var(--gutter-page) var(--sp-20);
+  }
+
+  .md-only-wide {
+    display: revert;
+  }
 }
 
 /* Im angemeldeten Bereich steht der Inhalt schon in einer .md-section — sonst
@@ -1453,6 +1646,75 @@ body {
 /* Die Reiter. Am Schreibtisch stehen sie unter dem Kopf, am Handy unten am
    Rand, wo der Daumen ist — dieselbe Entscheidung wie bei der Navigation des
    Arbeitsbereichs, und aus demselben Grund. */
+/* Die Reiter stehen am unteren Rand, wo der Daumen ist — dieselbe
+   Entscheidung wie bei der Navigation, und aus demselben Grund. Sie gilt nur
+   für die Seite ohne Anmeldung: im Arbeitsbereich steht dort schon die
+   Navigation, und zwei Leisten übereinander sind keine. */
+.md-public--standalone {
+  padding-bottom: var(--nav-bar-height);
+}
+
+.md-public--standalone .md-tabs {
+  position: fixed;
+  top: auto;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  padding: 0 var(--sp-3) env(safe-area-inset-bottom, 0px);
+  border-bottom: 0;
+  border-top: var(--border);
+  justify-content: space-between;
+}
+
+.md-public--standalone .md-tabs__item {
+  flex: 1 0 auto;
+  padding: var(--sp-4) var(--sp-3);
+  font-size: var(--fs-tiny);
+  text-align: center;
+  border-bottom: 0;
+  border-top: 2px solid transparent;
+}
+
+.md-public--standalone .md-tabs__item[aria-current="page"] {
+  border-top-color: var(--acc);
+  border-bottom-color: transparent;
+}
+
+/* Der Monitor braucht keine Fußleiste — er hat keine Bedienung. */
+.md-public--kiosk {
+  padding-bottom: 0;
+}
+
+@media (min-width: 900px) {
+  .md-public--standalone {
+    padding-bottom: 0;
+  }
+
+  .md-public--standalone .md-tabs {
+    position: sticky;
+    top: 0;
+    bottom: auto;
+    padding: 0 var(--gutter-page);
+    border-top: 0;
+    border-bottom: var(--border);
+    justify-content: flex-start;
+  }
+
+  .md-public--standalone .md-tabs__item {
+    flex: 0 0 auto;
+    padding: var(--sp-5) var(--sp-7);
+    font-size: var(--fs-base);
+    border-top: 0;
+    border-bottom: 2px solid transparent;
+  }
+
+  .md-public--standalone .md-tabs__item[aria-current="page"] {
+    border-bottom-color: var(--acc);
+    border-top-color: transparent;
+  }
+}
+
 .md-tabs {
   display: flex;
   gap: var(--sp-2);
@@ -1490,8 +1752,14 @@ body {
    passen am Bildschirm. */
 .md-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--sp-6);
+}
+
+@media (min-width: 620px) {
+  .md-cards {
+    grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  }
 }
 
 .md-live-card {
@@ -1636,9 +1904,28 @@ body {
    von Ranglisten untereinander stehen. */
 .md-tables {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--sp-8);
   align-items: start;
+}
+
+@media (min-width: 620px) {
+  .md-tables {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+}
+
+/* Sätze und Spiele entscheiden die Reihenfolge, aber wer am Platz nachsieht,
+   sucht seinen Rang und seine Punkte. Die vollständige Tabelle steht auf
+   jedem breiteren Schirm. */
+.md-table__col--wide {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .md-table__col--wide {
+    display: revert;
+  }
 }
 
 .md-table-wrap { padding: var(--sp-7); overflow-x: auto; }
@@ -1751,8 +2038,8 @@ body {
   gap: var(--sp-6);
 }
 
-@media (max-width: 1100px) {
-  .md-kiosk__grid { grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 1101px) {
+  .md-kiosk__grid { grid-template-columns: repeat(4, 1fr); }
 }
 
 /* --- Ablauf ------------------------------------------------------------- */
@@ -1766,7 +2053,7 @@ body {
 
 .md-flow__step {
   display: flex;
-  gap: var(--sp-6);
+  gap: var(--sp-5);
   padding-bottom: var(--sp-8);
   position: relative;
 }
@@ -1828,138 +2115,26 @@ body {
   margin-top: var(--sp-5);
 }
 
-.md-flow__row { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
+/* Die Schaltflächen einer Reihe füllen die Breite — nebeneinander wären sie
+   auf einem Telefon schmaler als ein Daumen. */
+.md-flow__row {
+  display: flex;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.md-flow__row .md-btn {
+  flex: 1 0 auto;
+}
 
 .md-flow__count { font-size: var(--fs-lg); }
 
-/* --- Mobil -------------------------------------------------------------- */
-
-/* Handy zuerst: die Navigation wandert an den unteren Rand, wo der Daumen ist,
-   und bleibt dort stehen. Oben säße sie außerhalb der Reichweite und würde beim
-   Scrollen entweder mitgeschoben oder klebte über dem Inhalt. */
-@media (max-width: 860px) {
-  .md-app { flex-direction: column; padding-bottom: var(--nav-bar-height); }
-
-  .md-nav {
-    width: 100%;
-    height: auto;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    top: auto;
-    z-index: 60;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    align-items: stretch;
-    padding: var(--sp-2) var(--sp-3) calc(var(--sp-2) + env(safe-area-inset-bottom, 0px));
-    gap: var(--sp-1);
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-  }
-
-  .md-nav__brand,
-  .md-nav__footer,
-  .md-nav__tag { display: none; }
-
-  .md-nav__item {
-    width: auto;
-    flex: 1 0 auto;
-    justify-content: center;
-    text-align: center;
-    min-height: var(--hit-target);
-    padding: var(--sp-3) var(--sp-4);
-    font-size: var(--fs-xs);
-  }
-
-  .md-nav__label { display: none; }
-  .md-nav__label--short { display: inline; }
-
-  .md-section { padding: var(--sp-8) var(--sp-6) var(--sp-16); }
-  .md-header { padding: var(--sp-6); gap: var(--sp-5); }
-
-  /* Die Kopfzeile trägt am Handy den Titel, nicht eine Werkzeugleiste: was
-     rechts stand, rutscht darunter und darf die volle Breite nehmen. */
-  .md-header__actions { margin-left: 0; width: 100%; }
-  .md-header__title { font-size: var(--fs-lg); }
-
-  .md-kpi { flex: 1; }
-
-  /* Die Plätze stapeln sich, statt seitwärts zu scrollen. Am Turniertag steht
-     man mit einer Hand am Platz — ein Wisch nach unten geht, einer zur Seite
-     trifft die Karte darunter. Die Spalte gibt ihre Breite selbst auf; sie von
-     außen mit einem Nachfahrenselektor zu überschreiben hieße, sie zweimal zu
-     besitzen. */
-  .md-queue { overflow-x: visible; }
-  .md-queue__row { flex-direction: column; }
-  .md-queue__col { flex-basis: auto; min-width: 0; }
-
-  /* Ein Dialog nimmt am Handy die Breite, die da ist — die Ergebniseingabe ist
-     der eine Bildschirm, an dem es auf jeden Millimeter ankommt. */
-  .md-scrim { padding: var(--sp-10) var(--sp-5) var(--sp-5); align-items: flex-start; }
-
-  /* --- Zuschauer am Handy --- */
-
-  /* Was am Schreibtisch nebenher steht, hat hier keinen Platz: der Umschalter
-     auf den Clubhaus-Monitor, der Link zum Teilen, die zweite Darstellung des
-     Draws. Sie sind nicht wichtiger als die Auskunft selbst. */
-  .md-only-wide { display: none; }
-
-  .md-public__body { padding: var(--sp-7) var(--sp-6) var(--sp-16); }
-  .md-public__bar { padding: var(--sp-5) var(--sp-6); gap: var(--sp-5); }
-
-  /* Die Reiter wandern an den unteren Rand, wo der Daumen ist — dieselbe
-     Entscheidung wie bei der Navigation, und aus demselben Grund. Sie gilt nur
-     für die Seite ohne Anmeldung: im Arbeitsbereich steht dort schon die
-     Navigation, und zwei Leisten übereinander sind keine. */
-  .md-public--standalone { padding-bottom: var(--nav-bar-height); }
-
-  .md-public--standalone .md-tabs {
-    position: fixed;
-    top: auto;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 60;
-    padding: 0 var(--sp-3) env(safe-area-inset-bottom, 0px);
-    border-bottom: 0;
-    border-top: var(--border);
-    justify-content: space-between;
-  }
-
-  .md-public--standalone .md-tabs__item {
-    flex: 1 0 auto;
-    padding: var(--sp-4) var(--sp-3);
-    font-size: var(--fs-tiny);
-    text-align: center;
-    border-bottom: 0;
-    border-top: 2px solid transparent;
-  }
-
-  .md-public--standalone .md-tabs__item[aria-current="page"] {
-    border-top-color: var(--acc);
-    border-bottom-color: transparent;
-  }
-
-  /* Der Monitor braucht keine Fußleiste — er hat keine Bedienung. */
-  .md-public--kiosk { padding-bottom: 0; }
-
-  /* Sätze und Spiele entscheiden die Reihenfolge, aber wer am Platz nachsieht,
-     sucht seinen Rang und seine Punkte. Die vollständige Tabelle steht auf
-     jedem breiteren Schirm. */
-  .md-table__col--wide { display: none; }
-
-  .md-cards { grid-template-columns: 1fr; }
-  .md-tables { grid-template-columns: 1fr; }
-}
-
 /* Der Ablauf ist die eine Ansicht, die auf jeder Breite dieselbe bleibt — er
-   ist von vornherein eine Spalte. Nur die Marken rücken enger zusammen. */
-@media (max-width: 480px) {
-  .md-flow__step { gap: var(--sp-5); }
-  /* Auf schmalen Geräten füllen die Schaltflaechen einer Reihe die Breite —
-     nebeneinander wären sie schmaler als ein Daumen. */
-  .md-flow__row .md-btn { flex: 1 0 auto; }
+   ist von vornherein eine Spalte. Nur die Marken rücken auseinander, sobald
+   Platz dafür ist. */
+@media (min-width: 620px) {
+  .md-flow__step { gap: var(--sp-6); }
+  .md-flow__row .md-btn { flex: 0 0 auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

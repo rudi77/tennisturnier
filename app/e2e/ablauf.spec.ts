@@ -92,8 +92,8 @@ test('meldet sich über den Anmeldelink ohne Konto', async ({ page, api, browser
 
   // Die Turnierleitung sieht sie ohne Neuladen der Anwendung — sie holt beim
   // Wechsel auf die Meldungen.
-  await page.getByRole('button', { name: /03\s*Meldungen/ }).click()
-  const zeile = page.locator('.md-checkrow').filter({ hasText: 'Müller, Anna' })
+  await page.getByRole('button', { name: 'Meldungen', exact: true }).click()
+  const zeile = page.locator('.md-entry').filter({ hasText: 'Müller, Anna' })
   await expect(zeile).toHaveCount(1)
   await expect(zeile).toContainText('Selbstmeldung')
   // Die Kontaktdaten stehen hier, weil das Backend sie mitschickt — die
@@ -129,7 +129,7 @@ test('nimmt eine Meldung an und setzt eine auf die Warteliste', async ({ page, a
 
   await alsTurnierleitung(page, `/?screen=entries&t=${turnier.id}`)
 
-  const zeile = (name: string) => page.locator('.md-checkrow').filter({ hasText: name })
+  const zeile = (name: string) => page.locator('.md-entry').filter({ hasText: name })
 
   await expect(zeile('Berger, Bea')).toBeVisible()
   await zeile('Berger, Bea').getByRole('button', { name: 'Annehmen' }).click()
@@ -164,7 +164,7 @@ test('führt ein Turnier vom Draw bis zum Endstand', async ({ page, api }) => {
   // Zwei Halbfinals und ein Finale. Ein gespieltes Match bleibt anklickbar —
   // eine Korrektur ist ein eigener Anwendungsfall —, deshalb wird hier
   // ausdrücklich das nächste *ohne* Sieger gesucht.
-  await page.getByRole('button', { name: /04\s*Draw & Bracket/ }).click()
+  await page.getByRole('button', { name: 'Draw & Bracket', exact: true }).click()
 
   const offen = page.locator(
     'button[title="Ergebnis erfassen"]:not(:has(.md-bracket__side--winner))',
@@ -186,7 +186,7 @@ test('führt ein Turnier vom Draw bis zum Endstand', async ({ page, api }) => {
   await expect(offen).toHaveCount(0)
 
   // Das letzte Ergebnis schließt das Turnier von selbst ab.
-  await page.getByRole('button', { name: /01\s*Ablauf/ }).click()
+  await page.getByRole('button', { name: 'Ablauf', exact: true }).click()
   await expect(page.getByText('Alle Partien sind entschieden')).toBeVisible()
 
   const detail = await api.get<{ state: number }>(`/api/tournaments/${turnier.id}`)

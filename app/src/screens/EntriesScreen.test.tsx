@@ -39,7 +39,7 @@ function aufbau(
 
 /** Die Zeile, in der dieser Teilnehmer steht. */
 function zeile(name: string): HTMLElement {
-  const row = screen.getByText(name).closest('.md-checkrow')
+  const row = screen.getByText(name).closest('.md-entry')
   if (!row) throw new Error(`Keine Zeile für „${name}".`)
   return row as HTMLElement
 }
