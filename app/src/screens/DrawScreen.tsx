@@ -1,6 +1,5 @@
 import { useMemo, useState, type CSSProperties } from 'react'
-import { PageHeader } from '../components/layout/PageHeader'
-import { TournamentPicker } from '../components/layout/TournamentPicker'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { BracketMatch } from '../components/tournament/BracketMatch'
 import { DrawPreparation } from '../components/tournament/DrawPreparation'
@@ -134,20 +133,16 @@ export function DrawScreen() {
 
   return (
     <>
-      <PageHeader
-        title="Draw & Bracket"
-        tag={phase ? phase.name : 'kein Draw'}
-        subtitle={
-          tournament
-            ? `${tournament.name} · ${tournament.entries.length} Meldungen`
-            : 'Kein Turnier ausgewählt'
-        }
-        kpis={kpis}
-      >
-        <TournamentPicker />
-      </PageHeader>
-
       <section className="md-section">
+        <ScreenHeader
+          title="Draw & Bracket"
+          lead={
+            tournament
+              ? `${phase ? phase.name : 'noch kein Draw'} · ${tournament.entries.length} Meldungen`
+              : 'Kein Turnier ausgewählt'
+          }
+          stats={kpis}
+        />
         {!tournament ? (
           <Empty title="Kein Turnier ausgewählt" />
         ) : beforeDraw ? (

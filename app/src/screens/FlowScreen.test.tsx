@@ -47,11 +47,12 @@ function schrittZustaende(): string[] {
 }
 
 describe('FlowScreen — ohne Turnier', () => {
-  it('sagt, dass keines gewählt ist, und lässt eines wählen', () => {
+  it('sagt, dass keines gewählt ist', () => {
+    // Gewählt wird in der Kopfleiste der Hülle und nicht mehr hier: dieselbe
+    // Auswahl stand vorher auf jedem Bildschirm ein zweites Mal.
     aufbau(null, { tournaments: [fx.tournamentSummary()], loading: false })
 
     expect(screen.getByText('Kein Turnier ausgewählt')).toBeInTheDocument()
-    expect(screen.getByLabelText('Turnier')).toBeInTheDocument()
     expect(screen.getByText('Noch kein Turnier')).toBeInTheDocument()
   })
 
@@ -90,11 +91,12 @@ describe('FlowScreen — Schrittfolge', () => {
     expect(screen.getByText(/Dieses Turnier wurde abgebrochen/)).toBeInTheDocument()
   })
 
-  it('nennt Turnier, Ort und Termin in der Kopfzeile', () => {
+  it('sagt, worum es auf diesem Bildschirm geht', () => {
+    // Welches Turnier gemeint ist, steht in der Kopfleiste der Hülle. Hier
+    // steht, was der Bildschirm beantwortet.
     aufbau()
-    expect(screen.getByRole('heading', { name: 'Clubmeisterschaft 2026' })).toBeInTheDocument()
-    expect(screen.getByText(/TC Musterstadt · 16\..*17\. Mai 2026/)).toBeInTheDocument()
-    expect(screen.getByText(T.slice(0, 8))).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Ablauf' })).toBeInTheDocument()
+    expect(screen.getByText(/Was als Nächstes zu tun ist/)).toBeInTheDocument()
   })
 })
 

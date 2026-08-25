@@ -39,7 +39,7 @@ function aufbau(
 
 /** Die Zeile, in der dieser Teilnehmer steht. */
 function zeile(name: string): HTMLElement {
-  const row = screen.getByText(name).closest('.md-checkrow')
+  const row = screen.getByText(name).closest('.md-entry')
   if (!row) throw new Error(`Keine Zeile für „${name}".`)
   return row as HTMLElement
 }
@@ -49,7 +49,7 @@ describe('EntriesScreen — ohne Turnier', () => {
     aufbau(false)
 
     expect(screen.getByText('Kein Turnier')).toBeInTheDocument()
-    expect(screen.getByText(/Oben links unter/)).toBeInTheDocument()
+    expect(screen.getByText(/Oben in der Kopfleiste/)).toBeInTheDocument()
     expect(callsTo('GET', `/api/tournaments/${T}/entries`)).toBe(0)
   })
 })

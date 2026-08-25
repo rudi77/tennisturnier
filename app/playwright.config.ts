@@ -27,6 +27,12 @@ export default defineConfig({
   testDir: './e2e',
   outputDir: './test-results',
 
+  // Der Bildlauf ist kein Test, sondern ein Werkzeug: er legt Aufnahmen der
+  // Bildschirme in Telefon- und Schreibtischgröße ab, damit jemand sie ansieht.
+  // Im regulären Durchgang hätte er nichts zu sagen und kostete zwei Minuten —
+  // aufgerufen wird er von Hand: `npx playwright test ansicht --grep .`
+  testIgnore: process.env.MATCHDAY_ANSICHT ? [] : ['**/ansicht.spec.ts'],
+
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,

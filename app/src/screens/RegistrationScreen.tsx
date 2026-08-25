@@ -25,12 +25,12 @@ export function RegistrationScreen({ token }: { token: string }) {
   const [result, setResult] = useState<SelfRegistrationResult | null>(null)
 
   return (
-    <div className="md-public" style={{ maxWidth: 620, margin: '0 auto', padding: 'var(--sp-10)' }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', marginBottom: 'var(--sp-10)' }}>
+    <div className="md-register">
+      <header className="md-register__brand">
         <MatchdayMark size={30} />
-        <div style={{ lineHeight: 1.1 }}>
-          <div style={{ fontWeight: 'var(--fw-bold)', letterSpacing: 'var(--ls-wide)' }}>MATCHDAY</div>
-          <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)' }}>Anmeldung</div>
+        <div>
+          <div className="md-register__wordmark">MATCHDAY</div>
+          <div className="md-register__kind">Anmeldung</div>
         </div>
       </header>
 
@@ -44,15 +44,13 @@ export function RegistrationScreen({ token }: { token: string }) {
         <Confirmation result={result} />
       ) : (
         <>
-          <div className="md-panel" style={{ padding: 'var(--sp-10)', marginBottom: 'var(--sp-8)' }}>
-            <div style={{ fontSize: 'var(--fs-xl)', fontWeight: 'var(--fw-bold)', lineHeight: 'var(--lh-snug)' }}>
-              {view.data.tournamentName}
-            </div>
-            <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--fg-2)', marginTop: 5 }}>
+          <div className="md-panel md-register__panel">
+            <div className="md-register__title">{view.data.tournamentName}</div>
+            <div className="md-register__meta">
               {view.data.venueName}
               {view.data.city ? ` · ${view.data.city}` : ''}
             </div>
-            <div className="md-num" style={{ fontSize: 'var(--fs-sm)', color: 'var(--fg-3)', marginTop: 3 }}>
+            <div className="md-num md-num--wrap md-register__meta">
               {formatDateRange(view.data.startsOn, view.data.endsOn)} · {disciplineLabel[view.data.discipline]}
             </div>
 
@@ -166,13 +164,11 @@ function Form({
   }
 
   return (
-    <div className="md-panel" style={{ padding: 'var(--sp-10)' }}>
-      <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 'var(--fw-bold)', marginBottom: 'var(--sp-8)' }}>
-        {needsPartner ? 'Als Doppel melden' : 'Melden'}
-      </div>
+    <div className="md-panel md-register__panel">
+      <div className="md-register__heading">{needsPartner ? 'Als Doppel melden' : 'Melden'}</div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
-        <div style={{ display: 'flex', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+      <div className="md-form">
+        <div className="md-field-row">
           <Field label="Vorname">
             <input className="md-input" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
           </Field>
@@ -181,7 +177,7 @@ function Form({
           </Field>
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+        <div className="md-field-row">
           <Field label="E-Mail">
             <input
               className="md-input"
@@ -207,7 +203,7 @@ function Form({
               selbst zweimal ein. Der sichtbare Text steckt im vorgelesenen
               (WCAG 2.5.3), damit Spracheingabe weiter funktioniert.
             */}
-            <div style={{ display: 'flex', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+            <div className="md-field-row">
               <Field label="Vorname">
                 <input
                   className="md-input"
@@ -225,7 +221,7 @@ function Form({
                 />
               </Field>
             </div>
-            <div style={{ display: 'flex', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+            <div className="md-field-row">
               <Field label="E-Mail des Partners (optional)">
                 <input
                   className="md-input"
@@ -259,8 +255,8 @@ function Form({
 
       <button
         type="button"
-        className="md-btn md-btn--accent"
-        style={{ marginTop: 'var(--sp-8)', minHeight: 'var(--hit-target)' }}
+        className="md-btn md-btn--accent md-btn--wide"
+        style={{ marginTop: 'var(--sp-8)' }}
         disabled={busy || !complete}
         onClick={() => void submit()}
       >
@@ -300,32 +296,18 @@ function Confirmation({ result }: { result: SelfRegistrationResult }) {
   }, [])
 
   return (
-    <div className="md-panel" style={{ padding: 'var(--sp-10)' }}>
-      <div style={{ fontSize: 'var(--fs-xl)', fontWeight: 'var(--fw-bold)' }}>
+    <div className="md-panel md-register__panel">
+      <div className="md-register__title">
         {result.status === EntryStatus.WaitingList ? 'Auf der Warteliste' : 'Meldung angekommen'}
       </div>
 
-      <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--fg-2)', marginTop: 6 }}>
+      <div className="md-register__lead">
         {result.status === EntryStatus.WaitingList
           ? 'Das Feld war voll. Die Turnierleitung entscheidet, wer nachrückt — die Reihenfolge der Meldungen ist dabei festgehalten.'
           : 'Die Turnierleitung nimmt sie an, sobald das Feld steht.'}
       </div>
 
-      <div
-        className="md-num"
-        style={{
-          marginTop: 'var(--sp-8)',
-          padding: 'var(--sp-6)',
-          background: 'var(--surface-muted)',
-          borderRadius: 'var(--radius-md)',
-          fontSize: 'var(--fs-xl)',
-          fontWeight: 'var(--fw-bold)',
-          letterSpacing: 'var(--ls-wide)',
-          textAlign: 'center',
-        }}
-      >
-        {result.confirmationCode}
-      </div>
+      <div className="md-num md-register__code">{result.confirmationCode}</div>
 
       <div className="md-hint" style={{ marginTop: 'var(--sp-6)' }}>
         Der Bestätigungscode. Er ist der Weg zurück zu dieser Meldung — aufschreiben oder
@@ -338,7 +320,7 @@ function Confirmation({ result }: { result: SelfRegistrationResult }) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 180 }}>
+    <label className="md-field">
       <span className="md-eyebrow">{label}</span>
       {children}
     </label>

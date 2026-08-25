@@ -8,17 +8,20 @@
  * sollen.
  */
 
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
 import { TournamentState } from '../api/types'
 import { ScoreStepper } from './core/ScoreStepper'
 import { MatchdayMark } from './core/MatchdayMark'
 import { StatusChip } from './core/StatusChip'
-import { PageHeader } from './layout/PageHeader'
+import { ScreenHeader } from './layout/ScreenHeader'
 import { Empty, ErrorBlock, Loading } from './layout/StateBlock'
 import { Toast } from './layout/Toast'
-import { TournamentPicker } from './layout/TournamentPicker'
+import { AppBar } from './layout/AppBar'
+import { AppNav } from './layout/AppNav'
+import { Sheet } from './layout/Sheet'
+import { Icon } from './core/Icon'
 import { renderWithProviders, user, workspace } from '../test/render'
 import * as fx from '../test/fixtures'
 import { ToastProvider, useToast } from '../hooks/useToast'
@@ -92,34 +95,84 @@ describe('ScoreStepper', () => {
   })
 })
 
-describe('PageHeader', () => {
-  it('nennt Titel, Bezeichner und Untertitel', () => {
-    render(<PageHeader title="Spielplan" tag="/api/schedule" subtitle="16. Mai 2026" />)
+describe('ScreenHeader', () => {
+  it('nennt den Bildschirm — und sonst nichts, wo es nichts zu sagen gibt', () => {
+    render(<ScreenHeader title="Spielplan" />)
 
     expect(screen.getByRole('heading', { name: 'Spielplan' })).toBeInTheDocument()
-    expect(screen.getByText('/api/schedule')).toBeInTheDocument()
-    expect(screen.getByText('16. Mai 2026')).toBeInTheDocument()
+    expect(document.querySelector('.md-stats')).toBeNull()
   })
 
-  it('zeigt Kennzahlen und Handlungen daneben', () => {
+  it('zeigt Vorspann, Kennzahlen und Handlungen', () => {
     render(
-      <PageHeader
+      <ScreenHeader
         title="Ablauf"
-        tag="flow"
-        subtitle="—"
-        kpis={[
+        lead="Was als Nächstes zu tun ist."
+        stats={[
           { value: 12, label: 'Matches' },
           { value: '4', label: 'offen', color: 'var(--acc)' },
         ]}
       >
         <button type="button">Auslosen</button>
-      </PageHeader>,
+      </ScreenHeader>,
     )
 
+    expect(screen.getByText('Was als Nächstes zu tun ist.')).toBeInTheDocument()
     expect(screen.getByText('12')).toBeInTheDocument()
     expect(screen.getByText('offen')).toBeInTheDocument()
     expect(screen.getByText('4')).toHaveStyle({ color: 'var(--acc)' })
     expect(screen.getByRole('button', { name: 'Auslosen' })).toBeInTheDocument()
+  })
+})
+
+describe('Icon', () => {
+  it('ist Beiwerk und bleibt für Hilfsmittel unsichtbar', () => {
+    const { container } = render(<Icon name="flow" size={18} />)
+    const svg = container.querySelector('svg')!
+
+    expect(svg).toHaveAttribute('aria-hidden', 'true')
+    expect(svg).toHaveAttribute('width', '18')
+  })
+})
+
+describe('Sheet', () => {
+  it('bleibt zu, solange sie zu ist', () => {
+    render(
+      <Sheet open={false} title="Mehr" onClose={() => {}}>
+        <span>Inhalt</span>
+      </Sheet>,
+    )
+    expect(screen.queryByText('Inhalt')).not.toBeInTheDocument()
+  })
+
+  it('schließt über den Grund daneben und über Escape', async () => {
+    const onClose = vi.fn()
+    const { rerender } = render(
+      <Sheet open title="Mehr" onClose={onClose}>
+        <span>Inhalt</span>
+      </Sheet>,
+    )
+
+    expect(screen.getByText('Inhalt')).toBeInTheDocument()
+
+    await user().click(screen.getByRole('button', { name: 'Schließen' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(2)
+
+    // Eine andere Taste geht sie nichts an.
+    fireEvent.keyDown(document, { key: 'a' })
+    expect(onClose).toHaveBeenCalledTimes(2)
+
+    // Und zugeklappt hört sie nicht mehr mit.
+    rerender(
+      <Sheet open={false} title="Mehr" onClose={onClose}>
+        <span>Inhalt</span>
+      </Sheet>,
+    )
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -237,10 +290,30 @@ describe('Toast', () => {
   })
 })
 
-describe('TournamentPicker', () => {
-  it('zeigt Namen und Zustand jedes Turniers', () => {
-    renderWithProviders(<TournamentPicker />, {
+describe('AppBar', () => {
+  it('nennt das gewählte Turnier samt Ort, Termin und Zustand', () => {
+    renderWithProviders(<AppBar />)
+
+    expect(screen.getByText('Clubmeisterschaft 2026')).toBeInTheDocument()
+    expect(screen.getByText(/TC Musterstadt · .* · Entwurf/)).toBeInTheDocument()
+  })
+
+  it('sagt ohne Turnier, dass keines gewählt ist', async () => {
+    renderWithProviders(<AppBar />, {
+      workspace: workspace({ tournament: null, tournaments: [] }),
+    })
+
+    expect(screen.getByText('Kein Turnier')).toBeInTheDocument()
+
+    await user().click(screen.getByRole('button', { name: 'Turnier wählen' }))
+    expect(screen.getByText(/Noch kein Turnier/)).toBeInTheDocument()
+  })
+
+  it('wählt in der Lade ein anderes Turnier', async () => {
+    const selectTournament = vi.fn()
+    renderWithProviders(<AppBar />, {
       workspace: workspace({
+        selectTournament,
         tournaments: [
           fx.tournamentSummary(),
           fx.tournamentSummary({
@@ -252,32 +325,107 @@ describe('TournamentPicker', () => {
       }),
     })
 
-    expect(screen.getByRole('option', { name: 'Clubmeisterschaft 2026 · Entwurf' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Herbstturnier · läuft' })).toBeInTheDocument()
-  })
+    const u = user()
+    await u.click(screen.getByRole('button', { name: 'Turnier wählen' }))
 
-  it('meldet die Auswahl weiter', async () => {
-    const selectTournament = vi.fn()
-    renderWithProviders(<TournamentPicker />, {
-      workspace: workspace({
-        selectTournament,
-        tournaments: [
-          fx.tournamentSummary(),
-          fx.tournamentSummary({ id: fx.IDS.otherTournament, name: 'Herbstturnier' }),
-        ],
-      }),
-    })
+    // Das laufende steht mit seinem Zustand da, das gewählte ist als solches
+    // erkennbar.
+    expect(screen.getByText(/TC Musterstadt · läuft/)).toBeInTheDocument()
 
-    await user().selectOptions(screen.getByLabelText('Turnier'), fx.IDS.otherTournament)
+    await u.click(screen.getByText('Herbstturnier'))
     expect(selectTournament).toHaveBeenCalledWith(fx.IDS.otherTournament)
   })
 
-  it('ist ohne Turniere abgeschaltet', () => {
-    renderWithProviders(<TournamentPicker />, {
-      workspace: workspace({ tournaments: [], tournament: null }),
-    })
+  it('lässt die Lade auch wieder zu, ohne dass etwas gewählt wird', async () => {
+    const selectTournament = vi.fn()
+    renderWithProviders(<AppBar />, { workspace: workspace({ selectTournament }) })
 
-    expect(screen.getByLabelText('Turnier')).toBeDisabled()
-    expect(screen.getByRole('option', { name: 'kein Turnier' })).toBeInTheDocument()
+    const u = user()
+    await u.click(screen.getByRole('button', { name: 'Turnier wählen' }))
+    await u.click(screen.getByRole('button', { name: 'Schließen' }))
+
+    expect(screen.queryByRole('button', { name: 'Schließen' })).not.toBeInTheDocument()
+    expect(selectTournament).not.toHaveBeenCalled()
+  })
+})
+
+describe('AppNav', () => {
+  function nav(over: Partial<Parameters<typeof AppNav>[0]> = {}) {
+    const onNavigate = vi.fn()
+    const onLogout = vi.fn()
+    render(
+      <AppNav screen="flow" onNavigate={onNavigate} user={null} onLogout={onLogout} {...over} />,
+    )
+    return { onNavigate, onLogout }
+  }
+
+  it('führt die vier des Turniertags und merkt sich, wo man ist', () => {
+    nav()
+
+    expect(screen.getByRole('button', { name: 'Ablauf' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Meldungen' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('button', { name: 'Spielplan' })).toBeInTheDocument()
+  })
+
+  it('navigiert', async () => {
+    const { onNavigate } = nav()
+
+    await user().click(screen.getByRole('button', { name: 'Draw & Bracket' }))
+    expect(onNavigate).toHaveBeenCalledWith('draw')
+  })
+
+  it('legt den selteneren Rest in eine Lade', async () => {
+    const { onNavigate } = nav()
+    const u = user()
+
+    await u.click(screen.getByRole('button', { name: 'Mehr' }))
+
+    // Zweimal da: einmal in der Spalte für den Schreibtisch, einmal in der
+    // Lade für die Fußleiste. Sichtbar ist immer nur eines von beiden.
+    const eintraege = screen.getAllByRole('button', { name: 'Live-Ansicht' })
+    expect(eintraege).toHaveLength(2)
+
+    await u.click(eintraege[1]!)
+    expect(onNavigate).toHaveBeenCalledWith('public')
+    // Und die Lade ist wieder zu.
+    expect(screen.getAllByRole('button', { name: 'Live-Ansicht' })).toHaveLength(1)
+  })
+
+  it('meldet ab — aus der Spalte wie aus der Lade', async () => {
+    const { onLogout } = nav()
+    const u = user()
+
+    await u.click(screen.getByRole('button', { name: 'Abmelden' }))
+    expect(onLogout).toHaveBeenCalledTimes(1)
+
+    await u.click(screen.getByRole('button', { name: 'Mehr' }))
+    await u.click(screen.getAllByRole('button', { name: 'Abmelden' })[1]!)
+    expect(onLogout).toHaveBeenCalledTimes(2)
+  })
+
+  it('lässt die Lade auch wieder zu, ohne dass irgendwohin navigiert wird', async () => {
+    const { onNavigate } = nav()
+    const u = user()
+
+    await u.click(screen.getByRole('button', { name: 'Mehr' }))
+    await u.click(screen.getByRole('button', { name: 'Schließen' }))
+
+    expect(screen.queryByRole('button', { name: 'Schließen' })).not.toBeInTheDocument()
+    expect(onNavigate).not.toHaveBeenCalled()
+  })
+
+  it('sagt, wer angemeldet ist', () => {
+    nav({ user: { profile: { name: 'Sabine Moser' } } as never })
+    expect(screen.getByText('Sabine Moser')).toBeInTheDocument()
+  })
+
+  it('bietet im offenen Betrieb nichts an, was sich abmelden ließe', async () => {
+    nav({ openAccess: true })
+
+    expect(screen.getByText('Ohne Anmeldung')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Abmelden' })).not.toBeInTheDocument()
+
+    await user().click(screen.getByRole('button', { name: 'Mehr' }))
+    expect(screen.queryByRole('button', { name: 'Abmelden' })).not.toBeInTheDocument()
   })
 })

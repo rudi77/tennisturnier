@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { PageHeader } from '../components/layout/PageHeader'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
 import { TeamPanel } from '../components/tournament/TeamPanel'
 import { ShareLink } from '../components/tournament/ShareLink'
 import { registrationUrl } from '../hooks/useRoute'
-import { TournamentPicker } from '../components/layout/TournamentPicker'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { useResource } from '../hooks/useResource'
 import { useToast } from '../hooks/useToast'
@@ -85,27 +84,23 @@ export function EntriesScreen() {
 
   if (!tournament) {
     return (
-      <>
-        <PageHeader title="Meldungen" tag="entries" subtitle="Kein Turnier ausgewählt" />
-        <section className="md-section">
-          <Empty
-            title="Kein Turnier"
-            hint={'Oben links unter „Meine Turniere“ eines auswählen.'}
-          />
-        </section>
-      </>
+      <section className="md-section">
+        <ScreenHeader title="Meldungen" />
+        <Empty
+          title="Kein Turnier"
+          hint={'Oben in der Kopfleiste eines auswählen — oder unter „Mehr“ ein neues anlegen.'}
+        />
+      </section>
     )
   }
 
   const rows = entries.data ?? []
 
   return (
-    <>
-      <PageHeader
+    <section className="md-section">
+      <ScreenHeader
         title="Meldungen"
-        tag={tournament.id.slice(0, 8)}
-        subtitle={tournament.name}
-        kpis={[
+        stats={[
           { value: rows.filter((e) => e.status === EntryStatus.Applied).length, label: 'gemeldet' },
           {
             value: rows.filter((e) => e.status === EntryStatus.Accepted).length,
@@ -118,83 +113,78 @@ export function EntriesScreen() {
             color: 'var(--fg-3)',
           },
         ]}
-      >
-        <TournamentPicker />
-      </PageHeader>
+      />
+      <LinkPanel
+        tournamentId={tournament.id}
+        tournamentName={tournament.name}
+        detail={registration.data}
+        onChanged={() => void registration.reload()}
+      />
 
-      <section className="md-section">
-        <LinkPanel
-          tournamentId={tournament.id}
-          tournamentName={tournament.name}
-          detail={registration.data}
-          onChanged={() => void registration.reload()}
-        />
+      <CsvImportPanel
+        tournamentId={tournament.id}
+        needsPartner={needsPartner(tournament)}
+        onImported={async () => {
+          await entries.reload()
+          await reloadTournament()
+        }}
+      />
 
-        <CsvImportPanel
+      {formsTeamsItself(tournament) && (
+        <TeamPanel
           tournamentId={tournament.id}
-          needsPartner={needsPartner(tournament)}
-          onImported={async () => {
+          entries={rows}
+          disabled={FROZEN.has(tournament.state)}
+          onChanged={async () => {
             await entries.reload()
             await reloadTournament()
           }}
         />
+      )}
 
-        {formsTeamsItself(tournament) && (
-          <TeamPanel
-            tournamentId={tournament.id}
-            entries={rows}
-            disabled={FROZEN.has(tournament.state)}
-            onChanged={async () => {
-              await entries.reload()
-              await reloadTournament()
-            }}
-          />
-        )}
+      <RolePanel tournamentId={tournament.id} />
 
-        <RolePanel tournamentId={tournament.id} />
-
-        {entries.error ? (
-          <ErrorBlock error={entries.error} onRetry={() => void entries.reload()} />
-        ) : entries.loading && rows.length === 0 ? (
-          <Loading label="Meldungen werden geladen …" />
-        ) : rows.length === 0 ? (
-          <Empty
-            title="Noch keine Meldung"
-            hint="Über den Anmeldelink oben kann sich jeder ohne Konto melden — sobald die Meldung offen ist."
-          />
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-            {rows.map((entry) => (
-              <Row
-                key={entry.id}
-                entry={entry}
-                busy={busy === entry.id}
-                onAccept={() =>
-                  void act(entry.id, 'Meldung angenommen', () =>
-                    tournamentApi.accept(tournament.id, entry.id),
-                  )
-                }
-                onWaitingList={() =>
-                  void act(entry.id, 'Auf die Warteliste gesetzt', () =>
-                    tournamentApi.moveToWaitingList(tournament.id, entry.id),
-                  )
-                }
-                onWithdraw={() =>
-                  void act(entry.id, 'Meldung zurückgezogen', () =>
-                    tournamentApi.withdraw(tournament.id, entry.id),
-                  )
-                }
-                onSeed={(seed) =>
-                  void act(entry.id, 'Setzposition gespeichert', () =>
-                    tournamentApi.setSeed(tournament.id, entry.id, seed),
-                  )
-                }
-              />
-            ))}
-          </div>
-        )}
-      </section>
-    </>
+      {entries.error ? (
+        <ErrorBlock error={entries.error} onRetry={() => void entries.reload()} />
+      ) : entries.loading && rows.length === 0 ? (
+        <Loading label="Meldungen werden geladen …" />
+      ) : rows.length === 0 ? (
+        <Empty
+          title="Noch keine Meldung"
+          hint="Über den Anmeldelink oben kann sich jeder ohne Konto melden — sobald die Meldung offen ist."
+        />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+          {rows.map((entry) => (
+            <Row
+              key={entry.id}
+              entry={entry}
+              busy={busy === entry.id}
+              onAccept={() =>
+                void act(entry.id, 'Meldung angenommen', () =>
+                  tournamentApi.accept(tournament.id, entry.id),
+                )
+              }
+              onWaitingList={() =>
+                void act(entry.id, 'Auf die Warteliste gesetzt', () =>
+                  tournamentApi.moveToWaitingList(tournament.id, entry.id),
+                )
+              }
+              onWithdraw={() =>
+                void act(entry.id, 'Meldung zurückgezogen', () =>
+                  tournamentApi.withdraw(tournament.id, entry.id),
+                )
+              }
+              onSeed={(seed) =>
+                void act(entry.id, 'Setzposition gespeichert', () =>
+                  tournamentApi.setSeed(tournament.id, entry.id, seed),
+                )
+              }
+            />
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -288,7 +278,7 @@ function LinkPanel({
       </div>
 
       <div
-        className="md-num"
+        className="md-num md-num--wrap"
         style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', marginTop: 'var(--sp-5)' }}
       >
         {detail.applied} gemeldet · {detail.accepted} im Feld · {detail.waitingList} Warteliste
@@ -473,75 +463,71 @@ function Row({
   const [seed, setSeed] = useState(entry.seed?.toString() ?? '')
 
   return (
-    <div
-      className="md-checkrow"
-      style={{ cursor: 'default', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sp-4)' }}
-    >
-      <div style={{ flex: '1 1 200px' }}>
-        <div style={{ fontSize: 'var(--fs-md)', fontWeight: 'var(--fw-semibold)' }}>
-          {entry.participantName}
-        </div>
-        <div className="md-num" style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', marginTop: 2 }}>
-          {entry.origin === EntryOrigin.SelfService ? 'Selbstmeldung' : 'von der Turnierleitung'}
-          {' · '}
-          {new Date(entry.registeredAt).toLocaleString('de-AT')}
-          {entry.confirmationCode ? ` · ${entry.confirmationCode}` : ''}
-        </div>
-
-        {entry.contacts.length > 0 && (
-          <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-2)', marginTop: 4 }}>
-            {entry.contacts
-              .map((contact) =>
-                [contact.displayName, contact.email, contact.phone].filter(Boolean).join(' · '),
-              )
-              .join(' | ')}
-          </div>
-        )}
+    <div className="md-entry">
+      <div className="md-entry__head">
+        <div className="md-entry__name">{entry.participantName}</div>
+        <span className="md-chip">{entryStatusLabel[entry.status]}</span>
       </div>
 
-      <span className="md-pill" aria-pressed={false} style={{ pointerEvents: 'none' }}>
-        {entryStatusLabel[entry.status]}
-      </span>
+      <div className="md-num md-entry__meta">
+        {entry.origin === EntryOrigin.SelfService ? 'Selbstmeldung' : 'von der Turnierleitung'}
+        {' · '}
+        {new Date(entry.registeredAt).toLocaleString('de-AT')}
+        {entry.confirmationCode ? ` · ${entry.confirmationCode}` : ''}
+      </div>
 
-      <input
-        className="md-input"
-        type="number"
-        min={1}
-        value={seed}
-        aria-label={`Setzposition von ${entry.participantName}`}
-        placeholder="Seed"
-        style={{ width: 84 }}
-        onChange={(event) => setSeed(event.target.value)}
-        onBlur={() => {
-          const next = seed.trim() ? Number(seed) : null
-          if (next !== entry.seed) onSeed(next)
-        }}
-      />
+      {entry.contacts.length > 0 && (
+        <div className="md-entry__contacts">
+          {entry.contacts
+            .map((contact) =>
+              [contact.displayName, contact.email, contact.phone].filter(Boolean).join(' · '),
+            )
+            .join(' | ')}
+        </div>
+      )}
 
-      <button
-        type="button"
-        className="md-btn"
-        disabled={busy || entry.status === EntryStatus.Accepted}
-        onClick={onAccept}
-      >
-        Annehmen
-      </button>
-      <button
-        type="button"
-        className="md-btn"
-        disabled={busy || entry.status === EntryStatus.WaitingList}
-        onClick={onWaitingList}
-      >
-        Warteliste
-      </button>
-      <button
-        type="button"
-        className="md-btn"
-        disabled={busy || entry.status === EntryStatus.Withdrawn}
-        onClick={onWithdraw}
-      >
-        Zurückziehen
-      </button>
+      {/* Die Handlungen unten und über die Breite: am Telefon ist das die
+          Stelle, die der Daumen erreicht, ohne die Karte zu verdecken. */}
+      <div className="md-entry__actions">
+        <input
+          className="md-input md-entry__seed"
+          type="number"
+          min={1}
+          value={seed}
+          aria-label={`Setzposition von ${entry.participantName}`}
+          placeholder="Seed"
+          onChange={(event) => setSeed(event.target.value)}
+          onBlur={() => {
+            const next = seed.trim() ? Number(seed) : null
+            if (next !== entry.seed) onSeed(next)
+          }}
+        />
+
+        <button
+          type="button"
+          className="md-btn"
+          disabled={busy || entry.status === EntryStatus.Accepted}
+          onClick={onAccept}
+        >
+          Annehmen
+        </button>
+        <button
+          type="button"
+          className="md-btn"
+          disabled={busy || entry.status === EntryStatus.WaitingList}
+          onClick={onWaitingList}
+        >
+          Warteliste
+        </button>
+        <button
+          type="button"
+          className="md-btn"
+          disabled={busy || entry.status === EntryStatus.Withdrawn}
+          onClick={onWithdraw}
+        >
+          Zurückziehen
+        </button>
+      </div>
     </div>
   )
 }

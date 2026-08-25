@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { PageHeader } from '../components/layout/PageHeader'
-import { TournamentPicker } from '../components/layout/TournamentPicker'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { GanttBoard, type ScheduledMatch } from '../components/tournament/GanttBoard'
 import { QueueBoard, type QueueAction } from '../components/tournament/QueueBoard'
@@ -312,40 +311,37 @@ export function BoardScreen() {
 
   return (
     <>
-      <PageHeader
-        title="Spielplan"
-        tag={tournament ? tournament.id.slice(0, 8) : 'kein Turnier'}
-        subtitle={
-          tournament
-            ? `${tournament.name} · ${tournament.courts.length} Plätze · ${timeZone}`
-            : 'Kein Turnier ausgewählt'
-        }
-        kpis={kpis}
-      >
-        <TournamentPicker />
-        <div className="md-pillbar">
-          <button
-            type="button"
-            className="md-seg"
-            aria-pressed={!matchDay}
-            disabled={switching}
-            onClick={() => void switchMode(SchedulingMode.Planning)}
-          >
-            Planungsmodus
-          </button>
-          <button
-            type="button"
-            className="md-seg"
-            aria-pressed={matchDay}
-            disabled={switching}
-            onClick={() => void switchMode(SchedulingMode.MatchDay)}
-          >
-            Turniertag
-          </button>
-        </div>
-      </PageHeader>
-
       <section className="md-section">
+        <ScreenHeader
+          title="Spielplan"
+          lead={
+            tournament
+              ? `${tournament.courts.length} Plätze · ${timeZone}`
+              : 'Kein Turnier ausgewählt'
+          }
+          stats={kpis}
+        >
+          <div className="md-pillbar">
+            <button
+              type="button"
+              className="md-seg"
+              aria-pressed={!matchDay}
+              disabled={switching}
+              onClick={() => void switchMode(SchedulingMode.Planning)}
+            >
+              Planungsmodus
+            </button>
+            <button
+              type="button"
+              className="md-seg"
+              aria-pressed={matchDay}
+              disabled={switching}
+              onClick={() => void switchMode(SchedulingMode.MatchDay)}
+            >
+              Turniertag
+            </button>
+          </div>
+        </ScreenHeader>
         {!tournament ? (
           <Empty
             title="Kein Turnier ausgewählt"

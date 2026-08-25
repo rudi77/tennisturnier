@@ -34,16 +34,14 @@ describe('DrawScreen — Rahmen', () => {
   it('sagt ohne Turnier, dass keines gewählt ist', () => {
     aufbau(null)
 
-    // Einmal als Untertitel, einmal als leerer Zustand.
+    // Einmal im Kopf des Bildschirms, einmal als leerer Zustand.
     expect(screen.getAllByText('Kein Turnier ausgewählt')).toHaveLength(2)
-    expect(screen.getByText('kein Draw')).toBeInTheDocument()
   })
 
   it('nennt Turnier, Phase und die Zahlen', async () => {
     aufbau()
 
-    expect(await screen.findByText('Hauptfeld')).toBeInTheDocument()
-    expect(screen.getByText('Clubmeisterschaft 2026 · 4 Meldungen')).toBeInTheDocument()
+    expect(await screen.findByText('Hauptfeld · 4 Meldungen')).toBeInTheDocument()
     expect(screen.getByText('Matches')).toBeInTheDocument()
     expect(screen.getByText('fertig')).toBeInTheDocument()
     expect(screen.getByText('offen')).toBeInTheDocument()
@@ -60,7 +58,7 @@ describe('DrawScreen — Rahmen', () => {
     ]
     aufbau()
 
-    await screen.findByText('Hauptfeld')
+    await screen.findByText(/Hauptfeld ·/)
     const kpis = [...document.querySelectorAll('.md-kpi')].map((el) => el.textContent)
     expect(kpis).toEqual(['2Matches', '1fertig', '1offen'])
   })
@@ -110,7 +108,7 @@ describe('DrawScreen — Rahmen', () => {
 describe('DrawScreen — Darstellungen', () => {
   it('startet auf dem breiten Schirm mit dem Baum', async () => {
     aufbau()
-    await screen.findByText('Hauptfeld')
+    await screen.findByText(/Hauptfeld ·/)
 
     expect(screen.getByRole('button', { name: 'Baum mit Verbindungen' })).toHaveAttribute(
       'aria-pressed',
@@ -122,7 +120,7 @@ describe('DrawScreen — Darstellungen', () => {
   it('startet auf dem schmalen Schirm mit der Rundenliste', async () => {
     useNarrowScreen()
     aufbau()
-    await screen.findByText('Hauptfeld')
+    await screen.findByText(/Hauptfeld ·/)
 
     expect(screen.getByRole('button', { name: 'Rundenliste (mobil)' })).toHaveAttribute(
       'aria-pressed',
@@ -132,7 +130,7 @@ describe('DrawScreen — Darstellungen', () => {
 
   it('wechselt in die Rundenspalten', async () => {
     aufbau()
-    await screen.findByText('Hauptfeld')
+    await screen.findByText(/Hauptfeld ·/)
 
     await user().click(screen.getByRole('button', { name: 'Kompakte Rundenspalten' }))
 
@@ -146,7 +144,7 @@ describe('DrawScreen — Darstellungen', () => {
 
   it('zeigt in der Rundenliste den Fortschritt je Runde', async () => {
     aufbau()
-    await screen.findByText('Hauptfeld')
+    await screen.findByText(/Hauptfeld ·/)
 
     await user().click(screen.getByRole('button', { name: 'Rundenliste (mobil)' }))
 
@@ -159,7 +157,7 @@ describe('DrawScreen — Darstellungen', () => {
 describe('DrawScreen — Runden', () => {
   it('benennt eine Runde nach den Etiketten ihrer Matches', async () => {
     aufbau()
-    await screen.findByText('Hauptfeld')
+    await screen.findByText(/Hauptfeld ·/)
 
     expect(screen.getAllByText('M1 · M2').length).toBeGreaterThan(0)
     expect(screen.getAllByText('F').length).toBeGreaterThan(0)
@@ -200,7 +198,7 @@ describe('DrawScreen — Runden', () => {
 describe('DrawScreen — Phasenwahl', () => {
   it('zeigt die Auswahl nur bei mehreren Phasen', async () => {
     aufbau()
-    await screen.findByText('Hauptfeld')
+    await screen.findByText(/Hauptfeld ·/)
     expect(screen.queryByLabelText('Phase')).not.toBeInTheDocument()
   })
 
@@ -217,13 +215,13 @@ describe('DrawScreen — Phasenwahl', () => {
     ]
     aufbau()
 
-    await screen.findByText('Gruppen')
+    await screen.findByText(/Gruppen ·/)
     await user().selectOptions(
       screen.getByLabelText('Phase'),
       'f0000000-0000-0000-0000-000000000002',
     )
 
-    expect(await screen.findByText('Endrunde')).toBeInTheDocument()
+    expect(await screen.findByText(/Endrunde ·/)).toBeInTheDocument()
   })
 })
 

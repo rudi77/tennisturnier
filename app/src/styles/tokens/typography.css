@@ -7,18 +7,26 @@
   --fw-semibold: 600;
   --fw-bold: 700;
 
-  /* Dense ops scale. This is an operations tool: 11–13px carries the UI,
-     and only kiosk/hero type goes large. */
-  --fs-micro: 9.5px;   /* uppercase meta above a card, seed numbers */
-  --fs-tiny: 10.5px;   /* eyebrow labels, tab bar */
-  --fs-xs: 11px;       /* times, secondary meta */
-  --fs-sm: 12px;       /* body in dense views */
-  --fs-base: 12.5px;   /* buttons, primary rows */
-  --fs-md: 13px;       /* panel titles */
-  --fs-lg: 15px;       /* section headings */
-  --fs-xl: 19px;       /* page title */
-  --fs-2xl: 24px;      /* kiosk headline */
-  --fs-clock: 34px;    /* kiosk clock */
+  /* Die Skala am Telefon. Sie steht zuerst, weil dort gelesen wird, was
+     zählt: eine Ergebniseingabe am Platz, bei Sonne, mit einer Hand. Die
+     dichte Fassung darunter gilt erst, wo ein Bildschirm sie trägt.
+
+     Die alte Skala begann bei 9,5px. Das ist am Schreibtisch dicht und am
+     Telefon schlicht nicht lesbar — und es war dieselbe Zahl für beide. */
+  --fs-micro: 11px;    /* uppercase meta above a card, seed numbers */
+  --fs-tiny: 12px;     /* eyebrow labels */
+  --fs-xs: 12.5px;     /* times, secondary meta */
+  --fs-sm: 13.5px;     /* body in dense views */
+  --fs-base: 15px;     /* buttons, primary rows */
+  --fs-md: 16px;       /* panel titles */
+  --fs-lg: 18px;       /* section headings */
+  --fs-xl: 22px;       /* page title */
+  --fs-2xl: 26px;      /* kiosk headline */
+  --fs-clock: 38px;    /* kiosk clock */
+
+  /* Unter 16px zoomt iOS beim Antippen eines Feldes die ganze Seite heran
+     und kommt nicht von selbst zurück. Das ist keine Geschmacksfrage. */
+  --fs-input: 16px;
 
   --lh-tight: 1.1;
   --lh-snug: 1.25;
@@ -30,4 +38,23 @@
   --ls-wide: 0.06em;    /* status chips */
   --ls-wider: 0.1em;    /* uppercase eyebrows */
   --ls-brand: 0.06em;   /* MATCHDAY wordmark */
+}
+
+/* Ab Tablet die dichte Fassung: dort ist es ein Werkzeug für den
+   Schreibtisch, und mehr Zeilen auf einen Blick sind dort mehr wert als
+   grössere Schrift. */
+@media (min-width: 900px) {
+  :root {
+    --fs-micro: 9.5px;
+    --fs-tiny: 10.5px;
+    --fs-xs: 11px;
+    --fs-sm: 12px;
+    --fs-base: 12.5px;
+    --fs-md: 13px;
+    --fs-lg: 15px;
+    --fs-xl: 19px;
+    --fs-2xl: 24px;
+    --fs-clock: 34px;
+    --fs-input: var(--fs-base);
+  }
 }

@@ -3,7 +3,8 @@ import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { LoginScreen } from './auth/LoginScreen'
 import { ToastProvider } from './hooks/useToast'
 import { Toast } from './components/layout/Toast'
-import { SideNav, type ScreenId } from './components/layout/SideNav'
+import { AppNav, type ScreenId } from './components/layout/AppNav'
+import { AppBar } from './components/layout/AppBar'
 import { ErrorBlock, Loading } from './components/layout/StateBlock'
 import { WorkspaceContext, type Workspace } from './state/WorkspaceContext'
 import { me as meApi, tournaments as tournamentApi } from './api/endpoints'
@@ -16,7 +17,7 @@ import { EntriesScreen } from './screens/EntriesScreen'
 import { RegistrationScreen } from './screens/RegistrationScreen'
 import { TournamentsScreen } from './screens/TournamentsScreen'
 import { FlowScreen } from './screens/FlowScreen'
-import { WizardScreen } from './screens/WizardScreen'
+import { CreateScreen } from './screens/CreateScreen'
 import { PublicScreen } from './screens/PublicScreen'
 
 const SCREENS: ScreenId[] = ['flow', 'tournaments', 'draw', 'entries', 'board', 'create', 'public']
@@ -178,15 +179,18 @@ function AppShell() {
   return (
     <WorkspaceContext.Provider value={workspace}>
       <div className="md-app">
-        <SideNav
+        <AppNav
           screen={screen}
           onNavigate={goTo}
-          tournament={tournament.data}
           user={user}
           onLogout={logout}
           openAccess={openAccess}
         />
-        <main className="md-main">
+        <main className="md-view">
+          {/* Die Kopfleiste steht hier und nicht in den Bildschirmen: welches
+              Turnier gemeint ist, ist überall dieselbe Frage. */}
+          <AppBar />
+
           {/*
             Sichtbar und nicht nur im Protokoll: wer hier arbeitet, soll wissen,
             dass jeder mit der Adresse dasselbe darf — vor der ersten
@@ -227,7 +231,7 @@ function Screen({
     case 'draw':
       return <DrawScreen />
     case 'create':
-      return <WizardScreen onCreated={() => onNavigate('flow')} />
+      return <CreateScreen onCreated={() => onNavigate('flow')} />
     case 'public':
       return <PublicScreen />
   }
