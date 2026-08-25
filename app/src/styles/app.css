@@ -14,167 +14,476 @@ body {
   font-family: var(--font-ui);
 }
 
-/* --- Layout ------------------------------------------------------------- */
+/* --- Hülle: Kopfleiste, Inhalt, Navigation ------------------------------
+   Mobil zuerst. Was hier ohne Medienabfrage steht, gilt am Telefon; der
+   Schreibtisch ist der Sonderfall weiter unten und nicht umgekehrt. Vorher
+   war es andersherum, und das Telefon bekam am Ende, was übrig blieb. */
 
 .md-app {
-  display: flex;
   min-height: 100vh;
-  align-items: stretch;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
-.md-main {
+/* Der Inhalt. Unten so viel Luft, dass die Fußleiste nichts verdeckt — samt
+   dem, was ein Telefon sich selbst für seine Gestenleiste nimmt. */
+.md-view {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-}
-
-/*
- * Der Hinweis auf den offenen Betrieb. Er steht über allem und läuft nicht mit
- * dem Inhalt weg: eine Warnung, die man wegscrollt, ist nach dem ersten
- * Handgriff nicht mehr da.
- */
-.md-open-access {
-  background: var(--call-tint);
-  color: var(--court-950);
-  border-bottom: 2px solid var(--call-400);
-  padding: var(--sp-4) var(--gutter-page);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-  letter-spacing: var(--ls-wide);
+  padding-bottom: calc(var(--nav-bar-height) + env(safe-area-inset-bottom) + var(--sp-8));
 }
 
 .md-section {
-  padding: var(--sp-10) var(--gutter-page) var(--sp-20);
-}
-
-/* --- Seitennavigation --------------------------------------------------- */
-
-.md-nav {
-  width: var(--nav-width);
-  flex: none;
-  background: var(--court-950);
+  padding: var(--sp-8) var(--gutter-page) var(--sp-12);
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
-  padding: var(--sp-10) var(--sp-6);
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  gap: var(--sp-8);
 }
 
-.md-nav__brand {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-5);
-  padding: 0 var(--sp-4) 22px;
-}
-
-.md-nav__wordmark {
-  font-weight: var(--fw-bold);
+/* Die Überschrift eines Bildschirms. Klein: welches Turnier gemeint ist,
+   steht in der Kopfleiste, und der Bildschirmname ist nur die Antwort auf
+   die Frage, wo man gerade ist. */
+.md-view__title {
   font-size: var(--fs-lg);
-  letter-spacing: var(--ls-brand);
-  color: var(--fg-on-dark);
-  font-size: 15px;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight);
+  margin: 0;
 }
 
-.md-nav__version {
-  font-family: var(--font-num);
-  font-size: var(--fs-micro);
-  letter-spacing: 0.12em;
-  color: var(--fg-on-dark-3);
-  margin-top: 3px;
+.md-view__lead {
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+  line-height: var(--lh-relaxed);
+  margin: calc(var(--sp-6) * -1) 0 0;
 }
 
-.md-nav__item {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  width: 100%;
-  text-align: left;
-  padding: var(--sp-5);
-  border-radius: var(--radius);
-  border: 0;
-  border-left: 2px solid transparent;
-  cursor: pointer;
-  font-size: var(--fs-base);
-  font-weight: var(--fw-semibold);
-  background: transparent;
-  color: var(--fg-on-dark-2);
-  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-}
+/* --- Kopfleiste --------------------------------------------------------- */
 
-.md-nav__item:hover {
-  color: var(--fg-on-dark);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.md-nav__item[aria-current="page"] {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--fg-on-dark);
-  border-left-color: var(--acc);
-}
-
-/* Zwei Beschriftungen, eine sichtbar: „Draw & Bracket" trägt am Schreibtisch,
-   in einer Fußleiste mit sieben Einträgen trägt nur „Draw". Beide stehen im
-   Markup — die verborgene kostet nichts und die Umschaltung bleibt beim
-   Stylesheet, wo auch die Breite bekannt ist. */
-.md-nav__label--short { display: none; }
-
-.md-nav__tag {
-  font-family: var(--font-num);
-  font-size: 10px;
-  opacity: 0.55;
-}
-
-.md-nav__footer {
-  margin-top: auto;
-  padding: var(--sp-7) var(--sp-5) 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
-}
-
-/* --- Kopfzeile ---------------------------------------------------------- */
-
-.md-header {
+.md-appbar {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: rgba(238, 241, 246, 0.86);
-  backdrop-filter: var(--header-blur);
-  border-bottom: 1px solid var(--line);
-  padding: var(--sp-7) var(--gutter-page);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-10);
-  flex-wrap: wrap;
+  background: var(--court-950);
+  padding-top: env(safe-area-inset-top);
 }
 
-.md-header__title {
-  margin: 0;
-  font-size: var(--fs-xl);
-  font-weight: var(--fw-bold);
-  letter-spacing: var(--ls-tight);
-}
-
-/* Der rechte Teil der Kopfzeile. Benannt und nicht „letztes div“: eine Regel
-   nach Position trifft beim nächsten Kind stillschweigend das falsche. */
-.md-header__actions {
-  margin-left: auto;
+.md-appbar__pick {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: var(--sp-5);
-  flex-wrap: wrap;
+  min-height: var(--hit-target);
+  padding: var(--sp-6) var(--gutter-page);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--fg-on-dark);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
 }
 
-.md-header__tag {
-  font-family: var(--font-num);
-  font-size: 10px;
+.md-appbar__text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.md-appbar__name {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-appbar__meta {
+  font-size: var(--fs-xs);
+  color: var(--fg-on-dark-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Navigation --------------------------------------------------------- */
+
+.md-nav {
+  position: fixed;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--court-950);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Die Wortmarke und der Benutzer gehören zur Spalte am Schreibtisch. In einer
+   Fußleiste von fünf Zielen ist für beides kein Platz — die Marke steht dort
+   ohnehin schon im Reiter des Browsers. */
+.md-nav__brand,
+.md-nav__foot,
+.md-nav__rest {
+  display: none;
+}
+
+.md-nav__item {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--nav-bar-height);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: var(--sp-3) var(--sp-1);
+  border: 0;
+  background: transparent;
+  color: var(--fg-on-dark-3);
+  font-family: inherit;
+  font-size: var(--fs-micro);
   font-weight: var(--fw-semibold);
-  letter-spacing: var(--ls-wide);
-  padding: 3px 7px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.md-nav__item[aria-current="page"] {
+  color: var(--acc);
+}
+
+.md-nav__item .md-icon {
+  width: 22px;
+  height: 22px;
+}
+
+/* Zwei Beschriftungen, eine sichtbar. */
+.md-nav__label { display: none; }
+
+.md-nav__label--short {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-nav__item--more .md-nav__label {
+  display: block;
+}
+
+/* --- Lade von unten ----------------------------------------------------- */
+
+.md-sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.md-sheet__scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(9, 15, 26, 0.55);
+  cursor: pointer;
+}
+
+.md-sheet {
+  position: relative;
+  background: var(--surface);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  padding: var(--sp-5) var(--gutter-page) calc(var(--sp-10) + env(safe-area-inset-bottom));
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: md-sheet-in var(--dur-fast) var(--ease-out);
+}
+
+@keyframes md-sheet-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0.6;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.md-sheet__grip {
+  width: 36px;
+  height: 4px;
   border-radius: var(--radius-pill);
-  background: var(--blue-100);
+  background: var(--line);
+  margin: 0 auto var(--sp-6);
+}
+
+.md-sheet__title {
+  font-size: var(--fs-xs);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  font-weight: var(--fw-semibold);
+  margin-bottom: var(--sp-4);
+}
+
+.md-sheet__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.md-sheet__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  width: 100%;
+  min-height: var(--hit-target);
+  padding: var(--sp-5) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.md-sheet__item:last-child {
+  border-bottom: 0;
+}
+
+.md-sheet__item[aria-current] {
   color: var(--court-700);
+}
+
+.md-sheet__spacer {
+  width: 22px;
+  flex: none;
+}
+
+.md-sheet__stack {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.md-sheet__sub {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+  color: var(--fg-3);
+}
+
+/* --- Ab Tablet: die Navigation wird zur Spalte -------------------------- */
+
+@media (min-width: 900px) {
+  .md-app {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .md-view {
+    padding-bottom: 0;
+  }
+
+  .md-section {
+    padding: var(--sp-10) var(--gutter-page) var(--sp-20);
+  }
+
+  .md-appbar {
+    background: rgba(238, 241, 246, 0.86);
+    backdrop-filter: var(--header-blur);
+  }
+
+  .md-appbar__pick {
+    border-bottom: 1px solid var(--line);
+    color: var(--fg);
+    max-width: 520px;
+  }
+
+  .md-appbar__meta {
+    color: var(--fg-2);
+  }
+
+  .md-nav {
+    position: sticky;
+    top: 0;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    height: 100vh;
+    width: var(--nav-width);
+    flex: none;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-10) var(--sp-6);
+    border-top: 0;
+  }
+
+  .md-nav__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-5);
+    padding: 0 var(--sp-4) 22px;
+  }
+
+  .md-nav__wordmark {
+    font-weight: var(--fw-bold);
+    font-size: 15px;
+    letter-spacing: var(--ls-brand);
+    color: var(--fg-on-dark);
+  }
+
+  .md-nav__rest {
+    display: contents;
+  }
+
+  .md-nav__item {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--sp-4);
+    min-height: var(--hit-target);
+    padding: var(--sp-4) var(--sp-5);
+    border-radius: var(--radius);
+    border-left: 2px solid transparent;
+    font-size: var(--fs-base);
+    color: var(--fg-on-dark-2);
+  }
+
+  .md-nav__item:hover {
+    color: var(--fg-on-dark);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .md-nav__item[aria-current="page"] {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--fg-on-dark);
+    border-left-color: var(--acc);
+  }
+
+  /* „Mehr" ist die Antwort auf eine fehlende Fußleiste. Wo alles sichtbar
+     ist, wäre es eine Lade, in der nichts steht. */
+  .md-nav__item--more {
+    display: none;
+  }
+
+  .md-nav__label {
+    display: block;
+  }
+
+  .md-nav__label--short {
+    display: none;
+  }
+
+  .md-nav__foot {
+    display: block;
+    margin-top: auto;
+    padding: var(--sp-7) var(--sp-5) 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    font-size: var(--fs-xs);
+    color: var(--fg-on-dark-2);
+  }
+
+  .md-nav__who {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .md-nav__logout {
+    background: none;
+    border: 0;
+    padding: var(--sp-2) 0 0;
+    cursor: pointer;
+    color: var(--fg-on-dark-3);
+    font-size: var(--fs-xs);
+    font-family: inherit;
+  }
+
+  /* Am Schreibtisch steht die Auswahl neben der Schaltfläche und nicht am
+     unteren Rand — dort wäre sie einen halben Bildschirm entfernt. */
+  .md-sheet-layer {
+    justify-content: flex-start;
+    align-items: flex-start;
+    padding: 68px 0 0 calc(var(--nav-width) + var(--gutter-page));
+  }
+
+  .md-sheet {
+    width: min(420px, 100%);
+    border-radius: var(--radius-lg);
+    border: var(--border);
+    box-shadow: 0 18px 48px rgba(9, 15, 26, 0.18);
+    padding: var(--sp-7) var(--sp-9) var(--sp-9);
+    max-height: 70vh;
+  }
+
+  .md-sheet__grip {
+    display: none;
+  }
+}
+/* --- Kopf eines Bildschirms --------------------------------------------- */
+
+.md-screenhead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.md-screenhead__lead {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+  line-height: var(--lh-relaxed);
+}
+
+.md-screenhead__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  align-items: center;
+}
+
+/* Waagrecht durchziehen statt umbrechen: drei Kacheln nebeneinander sind auf
+   360 Pixeln nicht lesbar, untereinander schöben sie den Inhalt aus dem Bild.
+   Der Rand rechts zeigt, dass es weitergeht. */
+.md-stats {
+  display: flex;
+  gap: var(--sp-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 calc(var(--gutter-page) * -1);
+  padding: 0 var(--gutter-page);
+}
+
+.md-stats::-webkit-scrollbar {
+  display: none;
+}
+
+.md-stats .md-kpi {
+  flex: none;
+}
+
+@media (min-width: 900px) {
+  .md-stats {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 /* --- Bausteine ---------------------------------------------------------- */
@@ -243,6 +552,69 @@ body {
   line-height: var(--lh-normal);
 }
 
+/* --- Karten in einer Liste ----------------------------------------------
+   Am Telefon untereinander über die volle Breite, sobald Platz ist
+   nebeneinander. Die Karte ist die Schaltfläche und nicht ein Kasten mit
+   einer darin: das ganze Feld ist das Ziel. */
+
+.md-cardlist {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-4);
+}
+
+@media (min-width: 620px) {
+  .md-cardlist {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--sp-5);
+  }
+}
+
+.md-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+  text-align: left;
+  padding: var(--sp-7);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--fg);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.md-card[aria-current] {
+  border-color: var(--blue-400);
+  background: var(--surface-chosen, var(--blue-100));
+  box-shadow: var(--shadow-sm);
+}
+
+.md-card__title {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+}
+
+.md-card__meta {
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+}
+
+.md-card__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  margin-top: var(--sp-3);
+}
+
+.md-card__foot .md-chip {
+  background: var(--blue-100);
+  color: var(--court-700);
+}
+
 .md-chip {
   font-size: var(--fs-micro);
   font-weight: var(--fw-bold);
@@ -268,11 +640,15 @@ body {
 
 /* --- Schaltflächen ------------------------------------------------------ */
 
+/* Am Telefon ist eine Schaltfläche so hoch wie ein Daumen breit ist, und die
+   wichtigste steht über die volle Breite. Am Schreibtisch wäre beides
+   verschwendeter Platz — dort steht sie neben ihren Geschwistern. */
 .md-btn {
   font-family: inherit;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-base);
   font-weight: var(--fw-semibold);
-  padding: 9px var(--sp-7);
+  padding: var(--sp-4) var(--sp-8);
+  min-height: var(--hit-target);
   border-radius: var(--radius);
   cursor: pointer;
   border: var(--border);
@@ -280,6 +656,14 @@ body {
   color: var(--court-700);
   white-space: nowrap;
   transition: filter var(--dur-fast) var(--ease-out);
+}
+
+@media (min-width: 900px) {
+  .md-btn {
+    font-size: var(--fs-sm);
+    padding: 9px var(--sp-7);
+    min-height: 0;
+  }
 }
 
 .md-btn:hover:not(:disabled) { filter: brightness(0.97); }
@@ -647,13 +1031,20 @@ body {
   border: var(--border);
   background: var(--surface);
   color: var(--court-700);
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   padding: var(--sp-4) var(--sp-6);
   border-radius: var(--radius);
   cursor: pointer;
-  min-height: 36px;
+  min-height: var(--hit-target);
   font-family: inherit;
+}
+
+@media (min-width: 900px) {
+  .md-pill {
+    font-size: 11.5px;
+    min-height: 36px;
+  }
 }
 
 .md-pill[aria-pressed="true"] {
@@ -685,11 +1076,20 @@ body {
   border: var(--border);
   border-radius: var(--radius);
   padding: var(--sp-4) var(--sp-5);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-input);
   font-family: inherit;
   color: var(--fg);
   background: var(--surface);
-  min-height: 36px;
+  min-height: var(--hit-target);
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (min-width: 900px) {
+  .md-input {
+    min-height: 36px;
+    width: auto;
+  }
 }
 
 .md-input:focus-visible,
@@ -701,6 +1101,241 @@ body {
 .md-bracket__match:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+
+/* --- Formularsprache ----------------------------------------------------
+   Ein Feld ist eine Beschriftung über seinem Bedienelement, über die volle
+   Breite. Nebeneinander stehen zwei Felder erst, wo Platz dafür ist — am
+   Telefon ist ein halbbreites Textfeld eine Einladung zum Vertippen. */
+
+.md-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-7);
+}
+
+.md-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.md-field__label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--fg);
+}
+
+/* Der Hinweis steht neben der Beschriftung und nicht in ihr: sonst liest ein
+   Screenreader den ganzen Absatz als Namen des Feldes vor, und „Tag" heißt
+   dann „Tag offen lassen, solange der Termin nicht steht". */
+.md-field__hint {
+  display: block;
+  margin-top: -2px;
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+  line-height: var(--lh-snug);
+}
+
+.md-field__control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: center;
+  min-width: 0;
+}
+
+/* Eine Reihe von Feldern, die nebeneinander dürfen, sobald Platz ist. */
+.md-field-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-7);
+}
+
+@media (min-width: 620px) {
+  .md-field-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.md-inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+}
+
+/* Am Telefon trägt die entscheidende Schaltfläche über die ganze Breite —
+   sie ist die einzige, die man dort sucht. */
+.md-btn--wide {
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .md-btn--wide {
+    width: auto;
+  }
+}
+
+/* --- Auswahl in Karten --------------------------------------------------
+   Für Entscheidungen mit zwei bis vier Möglichkeiten, die eine Erklärung
+   brauchen: Spieldauer, Modus, Disziplin. Eine Reihe von Pillen sagt nur
+   ihren Namen; hier steht darunter, was er bedeutet. */
+
+.md-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-4);
+}
+
+.md-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  text-align: left;
+  min-height: var(--hit-target);
+  padding: var(--sp-5) var(--sp-6);
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.md-choice[aria-pressed="true"] {
+  border-color: var(--blue-400);
+  background: var(--surface-chosen, var(--blue-100));
+  box-shadow: inset 0 0 0 1px var(--blue-400);
+}
+
+.md-choice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.md-choice__label {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+}
+
+.md-choice__sub {
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+  line-height: var(--lh-snug);
+}
+
+.md-choice[aria-pressed="true"] .md-choice__sub {
+  color: var(--court-700);
+}
+
+/* --- Aufklappbares ------------------------------------------------------
+   Alles, was Vorgaben hat, steht dahinter. Der Zweck ist nicht, es zu
+   verstecken, sondern die Frage zu beantworten „muss ich das jetzt
+   entscheiden" — und die Antwort ist meistens nein. */
+
+.md-details {
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.md-details__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: var(--hit-target);
+  padding: var(--sp-4) var(--sp-6);
+  cursor: pointer;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  color: var(--court-700);
+  list-style: none;
+}
+
+.md-details__summary::-webkit-details-marker {
+  display: none;
+}
+
+.md-details__summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.md-details[open] > .md-details__summary::before {
+  transform: rotate(45deg);
+}
+
+.md-details__note {
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+}
+
+.md-details__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-7);
+  padding: var(--sp-3) var(--sp-6) var(--sp-8);
+  border-top: 1px solid var(--line);
+}
+
+.md-format {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+/* --- Zähler -------------------------------------------------------------
+   Für kleine Mengen, die man um eins ändert: Plätze. Ein Zahlenfeld dafür
+   heisst am Telefon: Tastatur auf, Ziffer treffen, Tastatur zu. */
+
+.md-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 3px;
+}
+
+.md-stepper__btn {
+  width: 40px;
+  height: 38px;
+  border: 0;
+  border-radius: var(--radius-xs, 4px);
+  background: transparent;
+  color: var(--court-700);
+  font-size: 19px;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.md-stepper__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.md-stepper__value {
+  min-width: 34px;
+  text-align: center;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
 }
 
 /* --- Zuschauer-Ansicht --------------------------------------------------- */

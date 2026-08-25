@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { PageHeader } from '../components/layout/PageHeader'
-import { TournamentPicker } from '../components/layout/TournamentPicker'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { MatchdayMark } from '../components/core/MatchdayMark'
 import { StatusChip } from '../components/core/StatusChip'
@@ -134,23 +133,19 @@ export function PublicScreen({
 
   return (
     <div className="md-public">
-      <PageHeader
-        title="Live-Ansicht"
-        tag="/public"
-        subtitle="Was Zuschauer ohne Anmeldung sehen — Read-Modell, ETag, SignalR"
-        kpis={[
-          {
-            value: state.live ? 'live' : 'poll',
-            label: 'Kanal',
-            color: state.live ? 'var(--court-900)' : 'var(--fg-3)',
-          },
-          { value: state.notModifiedCount, label: '304', color: 'var(--fg-3)' },
-        ]}
-      >
-        <TournamentPicker />
-      </PageHeader>
-
       <section className="md-section">
+        <ScreenHeader
+          title="Live-Ansicht"
+          lead="Was Zuschauer ohne Anmeldung sehen."
+          stats={[
+            {
+              value: state.live ? 'live' : 'poll',
+              label: 'Kanal',
+              color: state.live ? 'var(--court-900)' : 'var(--fg-3)',
+            },
+            { value: state.notModifiedCount, label: '304', color: 'var(--fg-3)' },
+          ]}
+        />
         <div className="md-public__tools">
           <button
             type="button"

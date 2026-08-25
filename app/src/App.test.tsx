@@ -87,13 +87,15 @@ function bei(pfad: string): void {
 }
 
 /**
- * Ein Punkt der Hauptnavigation, über seine Nummer.
+ * Ein Punkt der Hauptnavigation.
  *
- * Über den Text ginge es nicht: jeder Punkt trägt seine Beschriftung zweimal
- * — einmal lang für die Seitenleiste, einmal kurz für die Fußleiste.
+ * Über die lange Beschriftung: die kurze, die in der Fußleiste steht, ist für
+ * Hilfsmittel verborgen — sichtbar ist immer nur eine von beiden.
  */
-function navPunkt(nummer: string): HTMLElement {
-  return screen.getByRole('button', { name: new RegExp(`^${nummer}`) })
+function navPunkt(name: string): HTMLElement {
+  return screen.getAllByRole('button', { name }).find((knopf) =>
+    knopf.classList.contains('md-nav__item'),
+  )!
 }
 
 describe('App — Eingang', () => {
@@ -192,7 +194,7 @@ describe('App — Arbeitsbereich', () => {
   it('steigt im Ablauf ein', async () => {
     render(<App />)
 
-    expect(await screen.findByRole('heading', { name: 'Clubmeisterschaft 2026' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Ablauf' })).toBeInTheDocument()
     expect(screen.getAllByRole('button').some((b) => b.getAttribute('aria-current') === 'page')).toBe(
       true,
     )
@@ -206,18 +208,18 @@ describe('App — Arbeitsbereich', () => {
 
   it('navigiert zwischen den Bildschirmen', async () => {
     render(<App />)
-    await screen.findByRole('heading', { name: 'Clubmeisterschaft 2026' })
+    await screen.findByRole('heading', { name: 'Ablauf' })
     const u = userEvent()
 
-    for (const [nummer, ueberschrift] of [
-      ['02', 'Meine Turniere'],
-      ['03', 'Meldungen'],
-      ['04', 'Draw & Bracket'],
-      ['05', 'Spielplan'],
-      ['06', 'Turnier anlegen'],
-      ['07', 'Live-Ansicht'],
+    for (const [punkt, ueberschrift] of [
+      ['Meine Turniere', 'Meine Turniere'],
+      ['Meldungen', 'Meldungen'],
+      ['Draw & Bracket', 'Draw & Bracket'],
+      ['Spielplan', 'Spielplan'],
+      ['Neues Turnier', 'Turnier anlegen'],
+      ['Live-Ansicht', 'Live-Ansicht'],
     ] as const) {
-      await u.click(navPunkt(nummer))
+      await u.click(navPunkt(punkt))
       expect(await screen.findByRole('heading', { name: ueberschrift })).toBeInTheDocument()
     }
   })
@@ -226,16 +228,18 @@ describe('App — Arbeitsbereich', () => {
     bei(`/?screen=unfug&t=${T}`)
     render(<App />)
 
-    expect(await screen.findByRole('heading', { name: 'Clubmeisterschaft 2026' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Ablauf' })).toBeInTheDocument()
   })
 
   it('geht aus der Turnierliste in den Ablauf', async () => {
     bei(`/?screen=tournaments&t=${T}`)
     render(<App />)
 
-    await userEvent().click(await screen.findByText('Clubmeisterschaft 2026'))
+    // Die Karte selbst ist die Schaltfläche — ihr Name trägt Ort und Termin
+    // mit, und in der Kopfleiste steht derselbe Turniername noch einmal.
+    await userEvent().click(await screen.findByRole('button', { name: /Clubmeisterschaft 2026/ }))
 
-    expect(await screen.findByRole('heading', { name: 'Clubmeisterschaft 2026' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Ablauf' })).toBeInTheDocument()
   })
 
   it('führt aus der Turnierliste zum Anlegen', async () => {
@@ -248,13 +252,13 @@ describe('App — Arbeitsbereich', () => {
   })
 
   it('wechselt nach dem Anlegen in den Ablauf', async () => {
+    // Zwei Felder und ein Knopf — kein Weg durch fünf Schritte mehr.
     bei(`/?screen=create&t=${T}`)
     render(<App />)
 
     const u = userEvent()
     await u.type(await screen.findByLabelText('Name'), 'Neu')
     await u.type(screen.getByLabelText('Anlage'), 'TC Neu')
-    await u.click(screen.getByRole('button', { name: /05\s*Zusammenfassung/ }))
     await u.click(screen.getByRole('button', { name: 'Turnier anlegen' }))
 
     await waitFor(() => expect(window.location.search).toContain('screen=flow'))
@@ -266,7 +270,8 @@ describe('App — Arbeitsbereich', () => {
     render(<App />)
 
     expect(await screen.findByText('Noch kein Turnier')).toBeInTheDocument()
-    expect(screen.getByText('kein Turnier geladen')).toBeInTheDocument()
+    // Und die Kopfleiste sagt es auch: es ist keines gewählt.
+    expect(screen.getByText('Kein Turnier')).toBeInTheDocument()
   })
 
   it('meldet einen Fehler an der Turnierliste', async () => {
@@ -279,7 +284,7 @@ describe('App — Arbeitsbereich', () => {
 
   it('meldet ab', async () => {
     render(<App />)
-    await screen.findByRole('heading', { name: 'Clubmeisterschaft 2026' })
+    await screen.findByRole('heading', { name: 'Ablauf' })
 
     await userEvent().click(screen.getByRole('button', { name: 'Abmelden' }))
     expect(removeUser).toHaveBeenCalled()
@@ -307,7 +312,8 @@ describe('App — fremdes Turnier', () => {
     bei(`/?t=${fx.IDS.otherTournament}`)
     render(<App />)
 
-    await userEvent().click(await screen.findByRole('button', { name: 'Meine Turniere' }))
+    await screen.findByText('Fremdes Turnier')
+    await userEvent().click(screen.getByRole('button', { name: 'Meine Turniere' }))
 
     await waitFor(() =>
       expect(screen.getByRole('navigation', { name: 'Hauptnavigation' })).toBeInTheDocument(),

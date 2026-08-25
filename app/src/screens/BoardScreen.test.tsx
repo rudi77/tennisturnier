@@ -53,8 +53,7 @@ describe('BoardScreen — Rahmen', () => {
   it('sagt ohne Turnier, dass es keinen Spielplan gibt', () => {
     aufbau(null)
 
-    expect(screen.getByText('kein Turnier')).toBeInTheDocument()
-    // Einmal als Untertitel, einmal als leerer Zustand.
+    // Einmal im Kopf des Bildschirms, einmal als leerer Zustand.
     expect(screen.getAllByText('Kein Turnier ausgewählt')).toHaveLength(2)
     expect(screen.getByText(/Ohne Turnier gibt es keinen Spielplan/)).toBeInTheDocument()
   })
@@ -69,7 +68,7 @@ describe('BoardScreen — Rahmen', () => {
   it('nennt Turnier, Plätze und Zeitzone', async () => {
     aufbau()
 
-    expect(await screen.findByText('Clubmeisterschaft 2026 · 2 Plätze · Europe/Vienna')).toBeInTheDocument()
+    expect(await screen.findByText('2 Plätze · Europe/Vienna')).toBeInTheDocument()
   })
 
   it('teilt alle Matches auf läuft, offen und fertig auf', async () => {

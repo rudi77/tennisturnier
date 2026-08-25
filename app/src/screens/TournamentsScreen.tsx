@@ -1,4 +1,4 @@
-import { PageHeader } from '../components/layout/PageHeader'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { Empty, Loading } from '../components/layout/StateBlock'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { disciplineLabel, tournamentStateLabel } from '../lib/labels'
@@ -32,21 +32,20 @@ export function TournamentsScreen({
 
   return (
     <>
-      <PageHeader
-        title="Meine Turniere"
-        tag={me ? (me.isSystemAdmin ? 'systemadmin' : 'veranstalter') : '—'}
-        subtitle={
-          tournaments.length === 0
-            ? 'Noch kein Turnier ausgeschrieben'
-            : `${tournaments.length} ${tournaments.length === 1 ? 'Turnier' : 'Turniere'}`
-        }
-      >
-        <button type="button" className="md-btn md-btn--accent" onClick={onCreate}>
-          Turnier anlegen
-        </button>
-      </PageHeader>
-
       <section className="md-section">
+        <ScreenHeader
+          title="Meine Turniere"
+          lead={
+            tournaments.length === 0
+              ? 'Noch kein Turnier ausgeschrieben.'
+              : `${tournaments.length} ${tournaments.length === 1 ? 'Turnier' : 'Turniere'}` +
+                (me?.isSystemAdmin ? ' · Systemadministrator' : '')
+          }
+        >
+          <button type="button" className="md-btn md-btn--accent md-btn--wide" onClick={onCreate}>
+            Turnier anlegen
+          </button>
+        </ScreenHeader>
         {loading && tournaments.length === 0 ? (
           <Loading label="Turniere werden geladen …" />
         ) : tournaments.length === 0 ? (
@@ -58,13 +57,7 @@ export function TournamentsScreen({
             }
           />
         ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: 'var(--sp-5)',
-            }}
-          >
+          <div className="md-cardlist">
             {tournaments.map((entry) => (
               <Card
                 key={entry.id}
@@ -90,53 +83,25 @@ function Card({
   onOpen: () => void
 }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      style={{
-        textAlign: 'left',
-        cursor: 'pointer',
-        padding: 'var(--sp-8)',
-        borderRadius: 'var(--radius-md)',
-        background: active ? 'var(--surface-chosen)' : 'var(--surface)',
-        border: active ? '1px solid var(--blue-400)' : 'var(--border)',
-        boxShadow: active ? 'var(--shadow-sm)' : 'none',
-        fontFamily: 'inherit',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 7,
-      }}
-    >
-      <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 'var(--fw-bold)', lineHeight: 'var(--lh-snug)' }}>
-        {entry.name}
-      </div>
+    <button type="button" className="md-card" aria-current={active ? 'true' : undefined} onClick={onOpen}>
+      <span className="md-card__title">{entry.name}</span>
 
-      <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--fg-2)' }}>
+      <span className="md-card__meta">
         {entry.venueName} · {disciplineLabel[entry.discipline]}
-      </div>
+      </span>
 
-      <div className="md-num" style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)' }}>
+      <span className="md-card__meta md-num">
         {formatDateRange(entry.startsOn, entry.endsOn)}
-      </div>
+      </span>
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--sp-4)',
-          marginTop: 'var(--sp-4)',
-          flexWrap: 'wrap',
-        }}
-      >
-        <span className="md-pill" aria-pressed={false} style={{ pointerEvents: 'none' }}>
-          {tournamentStateLabel[entry.state]}
-        </span>
-        <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)' }}>
+      <span className="md-card__foot">
+        <span className="md-chip">{tournamentStateLabel[entry.state]}</span>
+        <span className="md-card__meta">
           {entry.state === TournamentState.Draft
             ? 'noch keine Meldungen'
             : `${entry.acceptedEntries} im Feld`}
         </span>
-      </div>
+      </span>
     </button>
   )
 }

@@ -1,6 +1,5 @@
 import { type ReactNode } from 'react'
-import { PageHeader } from '../components/layout/PageHeader'
-import { TournamentPicker } from '../components/layout/TournamentPicker'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { Empty, Loading } from '../components/layout/StateBlock'
 import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
 import { MatchFormatPanel } from '../components/tournament/MatchFormatPanel'
@@ -17,9 +16,8 @@ import {
   TournamentState,
   type TournamentDetail,
 } from '../api/types'
-import { formatDateRange } from '../lib/time'
 import { publicUrl, registrationUrl } from '../hooks/useRoute'
-import type { ScreenId } from '../components/layout/SideNav'
+import type { ScreenId } from '../components/layout/AppNav'
 
 /**
  * Der Ablauf eines Turniers auf einem Bildschirm.
@@ -69,21 +67,17 @@ export function FlowScreen({ onNavigate }: { onNavigate: (id: ScreenId) => void 
 
   if (!tournament) {
     return (
-      <>
-        <PageHeader title="Ablauf" tag="—" subtitle="Kein Turnier ausgewählt">
-          <TournamentPicker />
-        </PageHeader>
-        <section className="md-section">
-          {loading && tournaments.length === 0 ? (
-            <Loading label="Turniere werden geladen …" />
-          ) : (
-            <Empty
-              title="Noch kein Turnier"
-              hint="Ein Turnier braucht einen Namen, einen Ort und eine Disziplin — mehr nicht. Termin, Plätze und Meldungen kommen danach."
-            />
-          )}
-        </section>
-      </>
+      <section className="md-section">
+        <ScreenHeader title="Ablauf" lead="Kein Turnier ausgewählt" />
+        {loading && tournaments.length === 0 ? (
+          <Loading label="Turniere werden geladen …" />
+        ) : (
+          <Empty
+            title="Noch kein Turnier"
+            hint="Ein Turnier braucht einen Namen, einen Ort und eine Disziplin — mehr nicht. Termin, Plätze und Meldungen kommen danach."
+          />
+        )}
+      </section>
     )
   }
 
@@ -92,15 +86,11 @@ export function FlowScreen({ onNavigate }: { onNavigate: (id: ScreenId) => void 
 
   return (
     <>
-      <PageHeader
-        title={tournament.name}
-        tag={tournament.id.slice(0, 8)}
-        subtitle={`${tournament.venue.name} · ${formatDateRange(tournament.startsOn, tournament.endsOn)}`}
-      >
-        <TournamentPicker />
-      </PageHeader>
-
       <section className="md-section">
+        <ScreenHeader
+          title="Ablauf"
+          lead="Was als Nächstes zu tun ist — von oben nach unten."
+        />
         <ol className="md-flow">
           {STEPS.map((step, index) => (
             <Step

@@ -49,7 +49,7 @@ describe('EntriesScreen — ohne Turnier', () => {
     aufbau(false)
 
     expect(screen.getByText('Kein Turnier')).toBeInTheDocument()
-    expect(screen.getByText(/Oben links unter/)).toBeInTheDocument()
+    expect(screen.getByText(/Oben in der Kopfleiste/)).toBeInTheDocument()
     expect(callsTo('GET', `/api/tournaments/${T}/entries`)).toBe(0)
   })
 })

@@ -34,20 +34,21 @@ describe('TournamentsScreen', () => {
     expect(screen.getByText('2 Turniere')).toBeInTheDocument()
   })
 
-  it('nennt die Rolle des Aufrufers', () => {
-    const { ws } = aufbau()
-    void ws
-    expect(screen.getByText('veranstalter')).toBeInTheDocument()
-  })
-
   it('nennt den Systemadministrator als solchen', () => {
+    // Nur ihn: dass jemand Veranstalter ist, ist der Normalfall und keine
+    // Auskunft — es stand als Etikett „veranstalter" auf jedem Bildschirm.
     aufbau({ me: fx.meResponse({ isSystemAdmin: true }) })
-    expect(screen.getByText('systemadmin')).toBeInTheDocument()
+    expect(screen.getByText(/Systemadministrator/)).toBeInTheDocument()
   })
 
-  it('zeigt einen Gedankenstrich, solange die Auskunft lädt', () => {
+  it('sagt bei allen anderen nichts über Rollen', () => {
+    aufbau()
+    expect(screen.queryByText(/Systemadministrator/)).not.toBeInTheDocument()
+  })
+
+  it('kommt zurecht, solange die Auskunft über den Aufrufer noch lädt', () => {
     aufbau({ me: null })
-    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.getByText('1 Turnier')).toBeInTheDocument()
   })
 
   it('zeigt die Ladeanzeige, solange noch nichts da ist', () => {
@@ -58,7 +59,7 @@ describe('TournamentsScreen', () => {
   it('sagt beim leeren Bestand, was ein Turnier überhaupt braucht', () => {
     aufbau({ tournaments: [], loading: false })
 
-    expect(screen.getByText('Noch kein Turnier ausgeschrieben')).toBeInTheDocument()
+    expect(screen.getByText('Noch kein Turnier ausgeschrieben.')).toBeInTheDocument()
     expect(screen.getByText('Noch kein Turnier')).toBeInTheDocument()
     expect(screen.getByText(/einen Namen, einen Ort und eine Disziplin/)).toBeInTheDocument()
   })
@@ -89,9 +90,11 @@ describe('TournamentsScreen', () => {
       ],
     })
 
-    const karten = screen.getAllByRole('button').filter((b) => b.textContent?.includes('TC Musterstadt'))
-    expect(karten[0]).toHaveStyle({ background: 'var(--surface-chosen)' })
-    expect(karten[1]).toHaveStyle({ background: 'var(--surface)' })
+    const karten = screen
+      .getAllByRole('button')
+      .filter((knopf) => knopf.textContent?.includes('TC Musterstadt'))
+    expect(karten[0]).toHaveAttribute('aria-current', 'true')
+    expect(karten[1]).not.toHaveAttribute('aria-current')
   })
 
   it('wählt beim Öffnen aus und wechselt in den Ablauf', async () => {
