@@ -91,13 +91,47 @@ src/
   api/          types.ts (Verträge) · client.ts (fetch + ProblemDetails)
                 endpoints.ts (Endpunkte 1:1) · realtime.ts (SignalR)
   auth/         oidc.ts · AuthProvider.tsx · LoginScreen.tsx
-  components/   core/ · layout/ · tournament/
-  screens/      TournamentsScreen · EntriesScreen · DrawScreen · BoardScreen
-                WizardScreen · RegistrationScreen · PublicScreen
+  components/   core/ · layout/ (AppNav, AppBar, Sheet, ScreenHeader) · tournament/
+  screens/      FlowScreen · TournamentsScreen · EntriesScreen · DrawScreen
+                BoardScreen · CreateScreen · RegistrationScreen · PublicScreen
   hooks/        useResource · useToast · usePublicView · useRoute
   lib/          time.ts (Zeitzone, TimeSpan) · labels.ts (deutsche Beschriftungen)
   styles/       tokens/ (unverändert aus dem Design System) · app.css
 ```
+
+### Die Hülle
+
+`AppNav` und `AppBar` stehen einmal in `App.tsx` und nicht in den Bildschirmen.
+Die Navigation ist am Telefon eine Fußleiste mit vier Zielen — Ablauf,
+Meldungen, Draw, Spielplan — und am Schreibtisch dieselbe Liste als Spalte; das
+Markup ist beide Male dasselbe, den Unterschied macht `app.css` an der Schwelle
+von 900 Pixeln. Der seltenere Rest steht am Telefon hinter „Mehr" in einer
+`Sheet`, der Lade, die von unten hereinkommt.
+
+Die Beschriftung eines Navigationspunkts steht als `aria-label` am Knopf und
+nicht nur im Text: sichtbar ist je nach Breite die lange oder die kurze, und
+eine vom Stylesheet ausgeblendete zählt für den zugänglichen Namen nicht.
+
+Welches Turnier gemeint ist, sagt die `AppBar`. Ein Bildschirm sagt über
+`ScreenHeader` nur noch, welcher er ist.
+
+### Mobil zuerst — und zwar wörtlich
+
+Was in `app.css` ohne Medienabfrage steht, gilt am Telefon. Jede Medienabfrage
+lautet `min-width` und nimmt zurück, was dort zu eng gedacht wäre. Dieselbe
+Reihenfolge gilt für die Schriftskala in `tokens/typography.css`: sie beginnt
+bei 15 Pixeln und wird zum Schreibtisch hin dichter, nicht umgekehrt.
+
+Eingabefelder sind 16 Pixel groß (`--fs-input`). Das ist keine
+Geschmacksfrage — darunter zoomt iOS beim Antippen die ganze Seite heran und
+kommt nicht von selbst zurück. Trefferflächen sind nie kleiner als
+`--hit-target` (44px).
+
+`e2e/mobil.spec.ts` prüft auf 390 Pixeln, dass kein Bildschirm über den rechten
+Rand ragt. Der Fehler entsteht im Zusammenspiel; wer ihn im Bauteil sucht,
+findet ihn dort nicht. `e2e/ansicht.spec.ts` legt Aufnahmen ab — kein Test, ein
+Werkzeug (`MATCHDAY_ANSICHT=1 npx playwright test ansicht`), und im regulären
+Durchgang ausgenommen.
 
 ### Zwei Dinge, die man wissen muss, bevor man etwas ändert
 
@@ -140,14 +174,20 @@ anders geschnitten werden; jede ist im Screen selbst benannt, nicht nur hier.
 2. **Der Moduswechsel Planung ↔ Turniertag ruft die API** (`scheduling/match-day`
    bzw. `…/planning`) statt ein lokales Flag zu setzen. Er ändert die Bedeutung jeder
    angezeigten Uhrzeit — das ist ein Zustandsübergang, kein Schalter.
-3. **Wizard, Schritt „Parameter".** Satzformat, Gruppen und Qualifikanten gehören zur
-   *Formatvorlage*, nicht zum Turnier. Eingebaute Vorlagen sind nicht editierbar; wer
-   etwas ändert, bekommt beim Anlegen eine eigene Kopie. Genau das tut der
-   Schritt, und die Vorschau sagt es an.
-4. **Wizard, Schritt „Plätze".** Hier stand einmal, eine Auswahl der Plätze *pro
-   Turnier* kenne die API nicht — Plätze gehörten dem Verein. Genau diese Lücke
-   ist mit ADR-0009 zugegangen: der Schritt legt die Plätze an und bucht ihre
-   Zeiten, beide Plätze, alle Turniertage, eine Uhrzeitspanne, in einem Aufruf.
+3. **Anlegen fragt nur, was niemand raten kann.** Name, Anlage, Tag, Disziplin,
+   Modus stehen vorn; Plätze, Zeiten, Satzformat, Zeitzone und die Parameter der
+   Vorlage stehen hinter einer Lade und haben Vorgaben. Das war einmal ein
+   Assistent aus fünf Schritten — wer ihn zum ersten Mal vor sich hatte, musste
+   Belag und Lage von Platz 2 entscheiden, bevor überhaupt eine Meldung offen
+   war. Verschwunden ist nichts, es steht nur nicht mehr im Weg.
+4. **Satzformat, Gruppen und Qualifikanten gehören zur *Formatvorlage*,** nicht
+   zum Turnier. Eingebaute Vorlagen sind nicht editierbar; wer etwas ändert,
+   bekommt beim Anlegen eine eigene Kopie. Das Satzformat selbst ist die
+   Ausnahme: es gehört dem Turnier und legt keine Kopie an.
+5. **Plätze legt das Anlegen an und bucht ihre Zeiten** — alle Plätze, alle
+   Turniertage, eine Uhrzeitspanne, in einem Aufruf. Hier stand einmal, eine
+   Auswahl der Plätze *pro Turnier* kenne die API nicht; die Lücke ist mit
+   ADR-0009 zugegangen.
 
 Dazu eine Ergänzung, die der Entwurf nicht hatte, die die API aber braucht: bei
 `Retirement`, `Walkover` und `Disqualification` fragt die Ergebniseingabe nach der
@@ -168,7 +208,7 @@ trotzdem *optional*:
 - `TournamentsScreen` — der Einstieg: die eigenen Turniere, und die Schaltfläche,
   mit der das erste entsteht. Hier stand einmal ein `ClubScreen`, auf dem jemand
   einen Verein anlegen musste, bevor irgendetwas ging. Er ist mit ADR-0009
-  entfallen; Plätze und ihre Zeiten legt jetzt der Wizard an.
+  entfallen; Plätze und ihre Zeiten entstehen jetzt beim Anlegen.
 - `RegistrationScreen` — die öffentliche Anmeldung, erreichbar über `?r=<token>`
   und **vor** der Anmeldemaske. Wer über einen Aushang kommt, soll kein Konto
   brauchen; eine Anmeldemaske davor nähme dem Link seinen Zweck (ADR-0010).
@@ -194,7 +234,7 @@ Das .NET-SDK ließ sich in der Entwicklungsumgebung nicht installieren
 (`dot.net` antwortete mit 403), deshalb wurde die Oberfläche gegen einen
 Stub-Server geprüft, der genau diesen Vertrag bedient — inklusive der Asymmetrie
 bei den Aufzählungen. Geprüft und in Ordnung: alle vier Screens, beide
-Spielplanmodi, alle drei Bracket-Varianten, alle vier Wizard-Schritte, beide
+Spielplanmodi, alle drei Bracket-Varianten, das Anlegen samt seiner Lade, beide
 Live-Geräte, Ergebnis-Modal, Solver-Vorschlag mit Diff und Begründungen,
 ETag/304-Zyklus und der Rückfall auf Polling, wenn der SignalR-Hub fehlt.
 

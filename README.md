@@ -248,6 +248,15 @@ cd app && npm run coverage    # Frontend: Vitest mit MSW
 cd app && npm run e2e         # Ende zu Ende: Playwright gegen API und Keycloak
 ```
 
+Ein Teil des Browser-Durchlaufs öffnet die Bildschirme in Telefongröße und
+prüft die eine Frage, die beim Bauen am Schreibtisch niemandem auffällt: ragt
+etwas über den rechten Rand. Wer sie ansehen statt nur prüfen will, ruft den
+Bildlauf auf — er ist kein Test und im regulären Durchgang ausgenommen:
+
+```bash
+cd app && MATCHDAY_ANSICHT=1 npx playwright test ansicht
+```
+
 `scripts/coverage.ps1` lässt die Testprojekte nacheinander laufen und rechnet
 ihre Treffer in einem Bericht zusammen. Das ist kein Umweg: nachträglich
 zusammenführen lässt sich nicht, weil eine Zeile mit zwei Ausgängen in zwei

@@ -39,6 +39,17 @@ test('Aufnahmen am Telefon', async ({ page, api }) => {
   await expect(page.getByRole('button', { name: /Standard/ })).toBeVisible()
   await page.screenshot({ path: 'test-results/ansicht/handy-anlegen-offen.png', fullPage: true })
 
+  for (const [screen, marke] of [
+    ['draw', 'Draw & Bracket'],
+    ['board', 'Spielplan'],
+    ['tournaments', 'Meine Turniere'],
+    ['public', 'Live-Ansicht'],
+  ] as const) {
+    await alsTurnierleitung(page, `/?screen=${screen}&t=${turnier.id}`)
+    await expect(page.getByRole('heading', { name: marke })).toBeVisible()
+    await page.screenshot({ path: `test-results/ansicht/handy-${screen}.png`, fullPage: true })
+  }
+
   const link = await api.get<{ token: string }>(`/api/tournaments/${turnier.id}/registration`)
   await page.goto(`/?r=${encodeURIComponent(link.token)}`)
   await expect(page.getByRole('textbox', { name: 'Vorname' })).toBeVisible()
