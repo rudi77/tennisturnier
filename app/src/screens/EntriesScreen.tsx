@@ -278,7 +278,7 @@ function LinkPanel({
       </div>
 
       <div
-        className="md-num"
+        className="md-num md-num--wrap"
         style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', marginTop: 'var(--sp-5)' }}
       >
         {detail.applied} gemeldet · {detail.accepted} im Feld · {detail.waitingList} Warteliste

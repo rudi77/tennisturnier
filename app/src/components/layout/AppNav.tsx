@@ -160,6 +160,16 @@ function NavButton({
       type="button"
       className="md-nav__item"
       aria-current={current ? 'page' : undefined}
+      // Der Name steht hier und nicht im Text: sichtbar ist je nach Breite
+      // die lange oder die kurze Beschriftung, und welche das ist, entscheidet
+      // das Stylesheet. Ohne diese Zeile hätte der Knopf in der Fußleiste
+      // überhaupt keinen Namen — die lange ist dort ausgeblendet, und eine
+      // ausgeblendete zählt nicht.
+      //
+      // „Plan" steckt in „Spielplan", „Draw" in „Draw & Bracket": der
+      // sichtbare Text bleibt Teil des vorgelesenen, damit Spracheingabe
+      // weiter funktioniert (WCAG 2.5.3).
+      aria-label={item.label}
       onClick={() => onClick(item.id)}
     >
       <Icon name={item.icon} />
@@ -168,11 +178,7 @@ function NavButton({
           kostet nichts, und die Umschaltung bleibt beim Stylesheet — dort ist
           die Breite bekannt. */}
       <span className="md-nav__label">{item.label}</span>
-      {/* Verborgen für Hilfsmittel: sichtbar ist immer nur eine der beiden,
-          vorgelesen werden sonst beide hintereinander. */}
-      <span className="md-nav__label--short" aria-hidden="true">
-        {item.short}
-      </span>
+      <span className="md-nav__label--short">{item.short}</span>
     </button>
   )
 }

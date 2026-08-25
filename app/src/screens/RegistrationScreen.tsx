@@ -50,7 +50,7 @@ export function RegistrationScreen({ token }: { token: string }) {
               {view.data.venueName}
               {view.data.city ? ` · ${view.data.city}` : ''}
             </div>
-            <div className="md-num md-register__meta">
+            <div className="md-num md-num--wrap md-register__meta">
               {formatDateRange(view.data.startsOn, view.data.endsOn)} · {disciplineLabel[view.data.discipline]}
             </div>
 

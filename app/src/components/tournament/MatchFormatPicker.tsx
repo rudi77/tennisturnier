@@ -125,7 +125,7 @@ export function MatchFormatPicker({
 
   return (
     <div className="md-format">
-      <div className="md-choices" role="group" aria-label="Spieldauer">
+      <div className="md-choices md-choices--kurz" role="group" aria-label="Spieldauer">
         {PRESETS.map((preset) => (
           <button
             key={preset.id}

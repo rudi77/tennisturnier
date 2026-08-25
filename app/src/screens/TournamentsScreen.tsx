@@ -90,7 +90,7 @@ function Card({
         {entry.venueName} · {disciplineLabel[entry.discipline]}
       </span>
 
-      <span className="md-card__meta md-num">
+      <span className="md-card__meta md-num md-num--wrap">
         {formatDateRange(entry.startsOn, entry.endsOn)}
       </span>
 
