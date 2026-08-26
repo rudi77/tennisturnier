@@ -84,6 +84,11 @@ public sealed class PlayerRepository : IPlayerRepository
     public Task<Player?> FindAsync(Guid playerId, CancellationToken cancellationToken = default) =>
         _db.Players.FirstOrDefaultAsync(p => p.Id == playerId, cancellationToken);
 
+    public Task<Player?> FindByUserAccountAsync(
+        Guid userAccountId,
+        CancellationToken cancellationToken = default) =>
+        _db.Players.FirstOrDefaultAsync(p => p.UserAccountId == userAccountId, cancellationToken);
+
     /// <summary>
     /// Sucht in Vor- und Nachname.
     ///

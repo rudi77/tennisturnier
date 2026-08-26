@@ -133,6 +133,11 @@ public sealed class InMemoryPlayerRepository : IPlayerRepository
             && p.Contact.Email is { } stored
             && string.Equals(stored, email, StringComparison.OrdinalIgnoreCase)));
 
+    public Task<Player?> FindByUserAccountAsync(
+        Guid userAccountId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_players.Values.FirstOrDefault(p => p.UserAccountId == userAccountId));
+
     public Task<Participant?> FindParticipantAsync(
         Guid participantId,
         CancellationToken cancellationToken = default) =>

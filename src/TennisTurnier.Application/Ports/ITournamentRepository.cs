@@ -84,6 +84,15 @@ public interface IPlayerRepository
         string email,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Der Spieler, der zu diesem Konto gehört — oder <c>null</c>.
+    ///
+    /// Der erste Griff beim Beitritt: wer schon einmal mitgespielt hat, ist
+    /// derselbe Spieler und nicht ein zweiter mit gleichem Namen. Erst wenn
+    /// das nichts ergibt, wird über Name und E-Mail gesucht.
+    /// </summary>
+    Task<Player?> FindByUserAccountAsync(Guid userAccountId, CancellationToken cancellationToken = default);
+
     Task<Participant?> FindParticipantAsync(Guid participantId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Participant>> FindParticipantsAsync(

@@ -219,6 +219,17 @@ public sealed class PlayerConfiguration : IEntityTypeConfiguration<Player>
         });
 
         builder.HasIndex(p => new { p.LastName, p.FirstName });
+
+        // Genau ein Spieler je Konto — und beliebig viele ohne. Der eindeutige
+        // Index lässt in SQLite wie in PostgreSQL mehrere NULL nebeneinander
+        // zu; das ist hier keine Nachlässigkeit, sondern die Regel: wer aus
+        // einer hochgeladenen Liste kommt, hat kein Konto.
+        //
+        // Kein Fremdschlüssel auf UserAccounts: die Spieler liegen außerhalb
+        // des Query-Filters (ADR-0008), die Konten dahinter — eine Beziehung
+        // zwischen beiden zöge die Konten in jede Spielerabfrage.
+        builder.Property(p => p.UserAccountId);
+        builder.HasIndex(p => p.UserAccountId).IsUnique();
     }
 }
 
