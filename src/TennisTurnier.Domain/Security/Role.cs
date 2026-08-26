@@ -31,6 +31,21 @@ public enum Role
 
     /// <summary>Ausschließlich Ergebniseingabe. Scope: Tournament.</summary>
     Referee,
+
+    /// <summary>
+    /// Gehört zum Turnier und sieht es — mehr nicht. Scope: Tournament.
+    ///
+    /// Die Rolle, die ein Turnier zur Gruppe macht: wer beitritt oder
+    /// eingeladen wird, bekommt sie und findet das Turnier fortan unter
+    /// seinen eigenen. Sie gewährt keine einzige <see cref="Permission"/> —
+    /// die Sichtbarkeit kommt aus dem Query-Filter (ADR-0004), der jede
+    /// Tournament-Rolle gleich behandelt.
+    ///
+    /// Am Ende angefügt und nicht einsortiert: die Rolle steht als Name in
+    /// der Datenbank, aber die Reihenfolge ist Teil des Enums, und wer sie
+    /// ändert, ändert sie überall.
+    /// </summary>
+    Member,
 }
 
 /// <summary>

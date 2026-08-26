@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Security;
+using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Security;
 
 namespace TennisTurnier.Api.Tests;
@@ -104,6 +105,41 @@ public sealed class RollenApiTests : IClassFixture<TennisTurnierApiFactory>
             $"/api/tournaments/{tournamentId}/roles", Json);
 
         Assert.Single(rollen!, r => r.Role == Role.Referee);
+    }
+
+    [Fact]
+    public async Task Ein_Mitglied_sieht_sein_Turnier_und_aendert_nichts_daran()
+    {
+        // Die Rolle, die ein Turnier zur Gruppe macht. Sie ist der ganze
+        // Unterschied zwischen „kennt die Adresse" und „gehoert dazu" — und
+        // sie gewaehrt trotzdem kein einziges Recht.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var (mitglied, email) = await AngemeldeterBenutzerAsync("mitglied");
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await mitglied.GetAsync($"/api/tournaments/{tournamentId}")).StatusCode);
+
+        var response = await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Member),
+            Json);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        // Es sieht das Turnier — und findet es unter seinen eigenen.
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await mitglied.GetAsync($"/api/tournaments/{tournamentId}")).StatusCode);
+
+        var meine = await mitglied.GetFromJsonAsync<List<TournamentSummary>>(
+            "/api/tournaments", Json);
+        Assert.Contains(meine!, t => t.Id == tournamentId);
+
+        // Aendern darf es nichts: die Meldung zu oeffnen ist Sache der Leitung.
+        var versuch = await mitglied.PostAsync(
+            $"/api/tournaments/{tournamentId}/registration/open", null);
+        Assert.Equal(HttpStatusCode.NotFound, versuch.StatusCode);
     }
 
     [Theory]

@@ -140,6 +140,7 @@ export const roleLabel: Record<Role, string> = {
   [Role.Organizer]: 'Veranstalter',
   [Role.TournamentDirector]: 'Turnierleitung',
   [Role.Referee]: 'Schiedsrichter',
+  [Role.Member]: 'Mitglied',
 }
 
 export const disciplineLabel: Record<Discipline, string> = {

@@ -36,6 +36,12 @@ public static class Permissions
             {
                 Permission.EnterResults,
             },
+
+            // Bewusst leer und trotzdem eingetragen: das Mitglied darf nichts
+            // tun, aber es sieht sein Turnier — die Sichtbarkeit kommt aus dem
+            // Query-Filter, der an der Rollenzuweisung hängt, nicht aus dieser
+            // Matrix. Fehlte der Eintrag, sähe es hier aus wie ein Versehen.
+            [Role.Member] = None,
         };
 
     public static IReadOnlySet<Permission> Of(Role role) =>

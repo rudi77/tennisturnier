@@ -80,6 +80,42 @@ public sealed class ScopeUndRolleTests
     }
 
     [Fact]
+    public void Ein_Mitglied_darf_nichts_und_gehoert_zum_Turnier()
+    {
+        // Die Rolle, die ein Turnier zur Gruppe macht. Sie gewaehrt kein
+        // einziges Recht — sichtbar wird das Turnier ueber den Query-Filter,
+        // der an der Zuweisung haengt und nicht an der Rechtematrix.
+        Assert.Empty(Permissions.Of(Role.Member));
+
+        var turnier = Guid.NewGuid();
+        var zuweisung = new RoleAssignment(
+            Guid.NewGuid(), Guid.NewGuid(), Role.Member, ResourceScope.Tournament(turnier));
+
+        Assert.Equal($"Member@Tournament:{turnier}", zuweisung.ToString());
+
+        // Global gibt es sie nicht: ein Mitglied ist Mitglied eines Turniers.
+        Assert.Throws<DomainException>(() =>
+            new RoleAssignment(Guid.NewGuid(), Guid.NewGuid(), Role.Member, ResourceScope.Global));
+    }
+
+    [Fact]
+    public void Ein_Mitglied_sieht_sein_Turnier_und_kein_anderes()
+    {
+        var meins = Guid.NewGuid();
+        var fremdes = Guid.NewGuid();
+        var benutzer = Guid.NewGuid();
+
+        var mitglied = new UserPrincipal(benutzer, [
+            new RoleAssignment(Guid.NewGuid(), benutzer, Role.Member, ResourceScope.Tournament(meins)),
+        ]);
+
+        Assert.Contains(meins, mitglied.TournamentIds);
+        Assert.DoesNotContain(fremdes, mitglied.TournamentIds);
+        Assert.False(mitglied.Can(Permission.ManageTournament, ResourceScope.Tournament(meins)));
+        Assert.False(mitglied.Can(Permission.EnterResults, ResourceScope.Tournament(meins)));
+    }
+
+    [Fact]
     public void Ein_Benutzerkonto_braucht_Aussteller_und_Subject()
     {
         var aussteller = Assert.Throws<DomainException>(() =>

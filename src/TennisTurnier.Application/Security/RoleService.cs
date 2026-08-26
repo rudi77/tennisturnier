@@ -32,10 +32,11 @@ public sealed record GrantRoleRequest(string Email, Role Role);
 /// Zwei Regeln tragen ihn, und beide sind Sperren:
 ///
 ///  - **Keine Eskalation.** Erlaubt sind ausschließlich
-///    <see cref="Role.TournamentDirector"/> und <see cref="Role.Referee"/> im
-///    Scope dieses Turniers. Ein Turnierleiter, der eine globale Rolle vergeben
-///    könnte, machte sich selbst zum Systemadministrator — über den Umweg eines
-///    zweiten Kontos, das ihm gehört.
+///    <see cref="Role.TournamentDirector"/>, <see cref="Role.Referee"/> und
+///    <see cref="Role.Member"/> im Scope dieses Turniers. Ein Turnierleiter,
+///    der eine globale Rolle vergeben könnte, machte sich selbst zum
+///    Systemadministrator — über den Umweg eines zweiten Kontos, das ihm
+///    gehört.
 ///  - **Kein herrenloses Turnier.** Die letzte Turnierleiter-Zuweisung lässt
 ///    sich nicht entfernen. Ohne sie sähe niemand mehr das Turnier, und weil
 ///    der Query-Filter keinen zweiten Weg dorthin kennt, gäbe es auch keinen
@@ -192,11 +193,11 @@ public sealed class RoleService : IRoleService
     /// </summary>
     private static void RequireAssignableRole(Role role)
     {
-        if (role is not (Role.TournamentDirector or Role.Referee))
+        if (role is not (Role.TournamentDirector or Role.Referee or Role.Member))
         {
             throw new DomainException(
-                $"An einem Turnier lassen sich nur {Role.TournamentDirector} und {Role.Referee} " +
-                $"vergeben, angefragt war {role}.");
+                $"An einem Turnier lassen sich nur {Role.TournamentDirector}, {Role.Referee} " +
+                $"und {Role.Member} vergeben, angefragt war {role}.");
         }
     }
 }

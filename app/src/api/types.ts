@@ -147,16 +147,20 @@ export const Tiebreaker = {
 export type Tiebreaker = (typeof Tiebreaker)[keyof typeof Tiebreaker]
 
 /**
- * Vier Rollen, nicht mehr fünf: `ClubAdmin` und `Player` sind mit dem Verein
- * entfallen. `Organizer` ist neu und global — sein einziges Recht ist, ein
- * Turnier anzulegen; alles Weitere folgt aus der Turnierleiterrolle, die der
- * Anleger dabei bekommt.
+ * `ClubAdmin` und `Player` sind mit dem Verein entfallen. `Organizer` ist
+ * global — sein einziges Recht ist, ein Turnier anzulegen; alles Weitere folgt
+ * aus der Turnierleiterrolle, die der Anleger dabei bekommt.
+ *
+ * `Member` ist die Rolle, die ein Turnier zur Gruppe macht: sie gewährt kein
+ * einziges Recht und trotzdem alles, worauf es ankommt — man sieht sein
+ * Turnier. Sie steht am Ende, weil die Zahlen über die Leitung gehen.
  */
 export const Role = {
   SystemAdmin: 0,
   Organizer: 1,
   TournamentDirector: 2,
   Referee: 3,
+  Member: 4,
 } as const
 export type Role = (typeof Role)[keyof typeof Role]
 
