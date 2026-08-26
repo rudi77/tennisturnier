@@ -105,7 +105,6 @@ public sealed class SichtenUndPlaetzeApiTests : IClassFixture<TennisTurnierApiFa
         var derLeitung = Assert.Single(ausLeitungssicht!);
 
         Assert.Equal("anna@example.invalid", Assert.Single(derLeitung.Contacts).Email);
-        Assert.NotNull(derLeitung.ConfirmationCode);
 
         // Die Meldungsverwaltung ist die Innenansicht — für ihn verschlossen.
         var verwehrt = await schiri.GetAsync($"/api/tournaments/{turnierId}/entries");

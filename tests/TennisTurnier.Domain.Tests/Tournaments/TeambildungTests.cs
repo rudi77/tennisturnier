@@ -106,12 +106,12 @@ public sealed class TeambildungTests
         var imFeld = Assert.Single(turnier.AcceptedEntries);
         Assert.Equal(teamId, imFeld.Id);
 
-        // Die Meldungen bleiben bestehen — mitsamt ihrem Bestätigungscode.
+        // Die Meldungen bleiben bestehen — mit ihrem Zeitpunkt und ihrer
+        // Herkunft, an denen die Reihenfolge des Nachrückens hängt.
         Assert.All(meldungen, meldung =>
         {
             Assert.Equal(EntryStatus.Paired, meldung.Status);
             Assert.Equal(teamId, meldung.TeamEntryId);
-            Assert.NotEmpty(meldung.ConfirmationCode);
         });
 
         Assert.Equal([teamId], turnier.FormedTeams.Select(t => t.Id));

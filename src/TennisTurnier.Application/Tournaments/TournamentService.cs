@@ -595,7 +595,6 @@ public sealed class TournamentService : ITournamentService
                     entry.Status,
                     entry.Origin,
                     entry.RegisteredAt,
-                    entry.ConfirmationCode,
                     contactsByParticipant.GetValueOrDefault(entry.ParticipantId, []),
                     entry.TeamEntryId))
         ];

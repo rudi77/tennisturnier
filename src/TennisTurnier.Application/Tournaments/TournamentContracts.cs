@@ -164,11 +164,6 @@ public sealed record EntryDetail(
 /// hereinlässt, wer das Turnier verwaltet <em>und</em> die Innenansicht sehen
 /// darf; wer nur Ergebnisse einträgt, kommt gar nicht so weit.
 /// </param>
-/// <param name="ConfirmationCode">
-/// Aus demselben Grund hier: er ist der Weg eines Melders ohne Konto zu seiner
-/// Meldung — die Turnierleitung braucht ihn, wenn jemand anruft und ihn
-/// verlegt hat.
-/// </param>
 public sealed record EntryOverview(
     Guid Id,
     Guid ParticipantId,
@@ -177,7 +172,6 @@ public sealed record EntryOverview(
     EntryStatus Status,
     EntryOrigin Origin,
     DateTimeOffset RegisteredAt,
-    string? ConfirmationCode,
     IReadOnlyList<EntryContact> Contacts,
     Guid? TeamEntryId);
 

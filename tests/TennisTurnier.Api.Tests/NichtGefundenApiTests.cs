@@ -31,9 +31,11 @@ public sealed class NichtGefundenApiTests : IClassFixture<TennisTurnierApiFactor
             new TurnierWunsch { Teilnehmer = 2, Auslosen = false });
 
     [Fact]
-    public async Task Ein_Anmeldelink_ohne_Token_fuehrt_nirgendwohin()
+    public async Task Ein_Beitrittslink_ohne_Token_fuehrt_nirgendwohin()
     {
-        var response = await _factory.CreateClient().GetAsync("/public/registrations/%20%20");
+        var response = await _factory
+            .CreateClientAs($"neugierig-{Guid.NewGuid():N}")
+            .GetAsync("/api/join/%20%20");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

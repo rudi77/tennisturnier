@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Registration;
+using TennisTurnier.Application.Membership;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Tournaments;
 
@@ -83,8 +83,9 @@ public sealed class TeambildungApiTests : IClassFixture<TennisTurnierApiFactory>
         var link = await turnier.Admin.GetFromJsonAsync<RegistrationDetail>(
             $"/api/tournaments/{turnier.TournamentId}/registration", Json);
 
-        var ansicht = await _factory.CreateClient()
-            .GetFromJsonAsync<PublicRegistrationView>($"/public/registrations/{link!.Token}", Json);
+        var ansicht = await _factory
+            .CreateClientAs($"schleiferl-{Guid.NewGuid():N}", "wer@example.invalid")
+            .GetFromJsonAsync<JoinView>($"/api/join/{link!.Token}", Json);
 
         Assert.NotNull(ansicht);
         Assert.Equal(Discipline.Doubles, ansicht.Discipline);
@@ -99,22 +100,22 @@ public sealed class TeambildungApiTests : IClassFixture<TennisTurnierApiFactory>
         var link = await turnier.Admin.GetFromJsonAsync<RegistrationDetail>(
             $"/api/tournaments/{turnier.TournamentId}/registration", Json);
 
-        var client = _factory.CreateClient();
-
-        var allein = await client.PostAsJsonAsync(
-            $"/public/registrations/{link!.Token}",
-            new SelfRegistrationRequest(
-                "Anna", "Neu", "anna.neu@example.invalid", null, null, null, null, null),
-            Json);
+        var allein = await _factory
+            .CreateClientAs($"allein-{Guid.NewGuid():N}", "anna.neu@example.invalid")
+            .PostAsJsonAsync(
+                $"/api/join/{link!.Token}",
+                new JoinRequest(Play: true, "Anna", "Neu", null, null, null, null, null),
+                Json);
 
         Assert.Equal(HttpStatusCode.OK, allein.StatusCode);
 
         // Und mit Partner nicht: er ginge beim Auslosen der Teams verloren.
-        var mitPartner = await client.PostAsJsonAsync(
-            $"/public/registrations/{link.Token}",
-            new SelfRegistrationRequest(
-                "Eva", "Zweit", "eva.zweit@example.invalid", null, "Lisa", "Dritt", null, null),
-            Json);
+        var mitPartner = await _factory
+            .CreateClientAs($"paar-{Guid.NewGuid():N}", "eva.zweit@example.invalid")
+            .PostAsJsonAsync(
+                $"/api/join/{link.Token}",
+                new JoinRequest(Play: true, "Eva", "Zweit", null, "Lisa", "Dritt", null, null),
+                Json);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, mitPartner.StatusCode);
         Assert.Contains(

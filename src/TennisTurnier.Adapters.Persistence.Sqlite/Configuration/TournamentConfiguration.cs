@@ -158,7 +158,6 @@ public sealed class TournamentEntryConfiguration : IEntityTypeConfiguration<Tour
         builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(e => e.Origin).HasConversion<string>().HasMaxLength(20);
         builder.Property(e => e.RegisteredAt).IsRequired();
-        builder.Property(e => e.ConfirmationCode).IsRequired().HasMaxLength(32);
 
         // Kein Fremdschlüssel auf die Meldung des Teams: er zeigte innerhalb
         // derselben Tabelle auf eine Zeile desselben Aggregats, und EF Core

@@ -1,38 +1,40 @@
-using Microsoft.AspNetCore.RateLimiting;
-using TennisTurnier.Application.Registration;
+using TennisTurnier.Application.Membership;
 using TennisTurnier.Application.Tournaments;
 
 namespace TennisTurnier.Api.Endpoints;
 
 /// <summary>
-/// Die Selbstmeldung — von beiden Seiten.
+/// Der Beitritt — von beiden Seiten.
 ///
-/// Unter <c>/api</c> steht, was die Turnierleitung sieht: der Anmeldelink samt
-/// Bedingungen und Zählstand, die Meldungen mit Kontaktdaten. Unter
-/// <c>/public</c> steht der anonyme Weg, und der ist ausdrücklich karg — er
-/// nennt nur, was auf einem Aushang stünde.
+/// Unter <c>/api/tournaments/{id}</c> steht, was die Turnierleitung sieht: der
+/// Beitrittslink samt Bedingungen und Zählstand, die Meldungen mit
+/// Kontaktdaten. Unter <c>/api/join</c> steht der Weg dessen, der dem Link
+/// folgt — angemeldet, aber noch ohne Rolle am Turnier, und deshalb mit einer
+/// ausdrücklich kargen Auskunft: sie nennt nur, was auf einem Aushang stünde.
+///
+/// Angemeldet und trotzdem karg ist kein Widerspruch. Der Link ist die
+/// Eintrittskarte, nicht der Ausweis: wer ihn hat, darf herein — er hat ihn
+/// aber vielleicht nur weitergereicht bekommen, und bis zum Beitritt gehört er
+/// nicht dazu.
 ///
 /// Der Token gehört in den Pfad und nicht in den Query-String: er landet dort
 /// in Server- und Proxy-Protokollen mit ganzer Zeile, während der Pfad ohnehin
 /// protokolliert wird. Gegen den Referer steht <c>Referrer-Policy</c>, gegen
 /// ein durchgesickertes Token die Erneuerung.
 /// </summary>
-internal static class RegistrationEndpoints
+internal static class MembershipEndpoints
 {
-    /// <summary>Die Ratenbegrenzung der anonymen Endpunkte, je Aufrufer-IP.</summary>
-    public const string PublicPolicy = "oeffentliche-anmeldung";
-
-    public static IEndpointRouteBuilder MapRegistrationEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapMembershipEndpoints(this IEndpointRouteBuilder app)
     {
         MapManagement(app);
-        MapPublic(app);
+        MapJoin(app);
 
         return app;
     }
 
     private static void MapManagement(IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/tournaments/{tournamentId:guid}").WithTags("Anmeldung");
+        var group = app.MapGroup("/api/tournaments/{tournamentId:guid}").WithTags("Beitritt");
 
         group.MapGet("/registration", async (
             Guid tournamentId, ITournamentService service, CancellationToken ct) =>
@@ -63,22 +65,24 @@ internal static class RegistrationEndpoints
             Results.Ok(await service.ListEntriesAsync(tournamentId, ct))).WithTags("Meldungen");
     }
 
-    private static void MapPublic(IEndpointRouteBuilder app)
+    /// <summary>
+    /// Beitreten setzt ein Konto voraus — anonym gibt es hier nichts, auch
+    /// keine Auskunft. Wer nicht angemeldet ist, bekommt 401 und wird von der
+    /// Oberfläche zur Anmeldung geschickt; nach ihr steht er wieder hier.
+    /// </summary>
+    private static void MapJoin(IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/public/registrations")
-            .WithTags("Öffentlich")
-            .AllowAnonymous()
-            .RequireRateLimiting(PublicPolicy);
+        var group = app.MapGroup("/api/join").WithTags("Beitritt").RequireAuthorization();
 
         group.MapGet("/{token}", async (
-            string token, IRegistrationService service, CancellationToken ct) =>
+            string token, IJoinService service, CancellationToken ct) =>
             Results.Ok(await service.GetAsync(token, ct)));
 
         group.MapPost("/{token}", async (
             string token,
-            SelfRegistrationRequest request,
-            IRegistrationService service,
+            JoinRequest request,
+            IJoinService service,
             CancellationToken ct) =>
-            Results.Ok(await service.RegisterAsync(token, request, ct)));
+            Results.Ok(await service.JoinAsync(token, request, ct)));
     }
 }
