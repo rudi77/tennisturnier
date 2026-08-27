@@ -242,8 +242,8 @@ describe('FlowScreen — Spielen', () => {
     expect(onNavigate).toHaveBeenCalledWith('draw')
   })
 
-  it('zeigt ab dem Draw den Zuschauerlink', () => {
-    aufbau({ state: TournamentState.DrawGenerated })
+  it('zeigt ab dem Draw den Zuschauerlink — wenn das Turnier offen ist', () => {
+    aufbau({ state: TournamentState.DrawGenerated, isPublic: true })
 
     expect(screen.getByText('Zuschauer')).toBeInTheDocument()
     expect(screen.getByLabelText('Link zur Live-Ansicht')).toHaveValue(
@@ -257,8 +257,17 @@ describe('FlowScreen — Spielen', () => {
     expect(screen.queryByText('Zuschauer')).not.toBeInTheDocument()
   })
 
-  it('markiert den Zuschauerlink beim Fokussieren', () => {
+  it('nennt beim privaten Turnier den Weg statt eines Links, der nicht trägt', () => {
+    // Privat ist die Vorgabe (ADR-0012). Ein Link, den man weitergibt und der
+    // beim Empfänger auf „nicht öffentlich" läuft, wäre schlimmer als keiner.
     aufbau({ state: TournamentState.DrawGenerated })
+
+    expect(screen.queryByLabelText('Link zur Live-Ansicht')).not.toBeInTheDocument()
+    expect(screen.getByText(/Dieses Turnier ist privat/)).toBeInTheDocument()
+  })
+
+  it('markiert den Zuschauerlink beim Fokussieren', () => {
+    aufbau({ state: TournamentState.DrawGenerated, isPublic: true })
 
     const feld = screen.getByLabelText('Link zur Live-Ansicht') as HTMLInputElement
     const select = vi.spyOn(feld, 'select')
