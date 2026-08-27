@@ -15,8 +15,9 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M7 | Turniertag-Queue | Betrieb ohne starres Zeitraster | ✅ |
 | M8 | SwissFormat | Schweizer System ohne Wiederholungspaarungen | ✅ |
 | M9 | Turnier als Wurzel | Verein abgeschafft, Ort/Disziplin/Plätze am Turnier | ✅ |
-| M10 | Öffentliche Selbstmeldung | Melden über einen Link, ohne Konto | ✅ |
+| M10 | Öffentliche Selbstmeldung | Melden über einen Link, ohne Konto | ✅ (abgelöst von M12) |
 | M11 | Jeder gegen jeden, kurze Sätze | Vorlage „Jeder gegen jeden", Satzformat am Turnier | ✅ |
+| M12 | Turnier als Gruppe | Beitritt mit Konto, Einladungen, privat als Vorgabe | ✅ |
 
 M0–M4 ergeben die erste vorführbare Version. M5–M8 bauen darauf auf, ohne die
 bestehenden Verträge zu brechen.
@@ -131,14 +132,13 @@ sind die Stellschrauben dafür, und sie gehören dem Turnier
   Turnierleiter-Zuweisung ist nicht entfernbar (sonst sähe niemand mehr das
   Turnier, und es gäbe keinen Weg zurück).
 
-- **Melder ohne Konto sind unverifiziert.** Die Selbstmeldung nimmt Namen und
-  E-Mail-Adressen entgegen, ohne die Adresse zu bestätigen. Wer eine fremde
-  einträgt, meldet damit jemand anderen. Die Turnierleitung sieht die Adresse
-  und kann nachfragen; mehr gibt es in diesem Stand nicht. Eine Verifikation
-  hieße: eine E-Mail verschicken — also ein Postfach konfigurieren, eine
-  Zustellung überwachen und dem Melder eine zweite Hürde zumuten, die genau die
-  Niederschwelligkeit kostet, um derentwillen der Link existiert. Die
-  Entscheidung steht aus.
+- **Der Partner im Doppel ist unverifiziert.** Wer beitritt, hat seit
+  [ADR-0012](adr/0012-mitgliedschaft-statt-selbstmeldung.md) ein Konto — die
+  Adresse kommt vom Aussteller und nicht aus einem Formular. Offen bleibt der
+  Partner: er wird namentlich genannt und weiß davon zunächst nichts. Ein
+  Paar-Zustandsautomat (Partner bestätigt seine Teilnahme) wäre die saubere
+  Lösung; er kostet mehr, als er am Vereinsturnier einbringt, und ist deshalb
+  nicht gebaut.
 - **Für Kontaktdaten gibt es keine Aufbewahrungsfrist.** Was über die
   Selbstmeldung hereinkommt, bleibt unbegrenzt stehen. Das ist bei
   personenbezogenen Daten von Menschen ohne Konto der Punkt, an dem eine Regel
@@ -146,13 +146,15 @@ sind die Stellschrauben dafür, und sie gehören dem Turnier
   die Felder, an denen eine Löschregel ansetzen wird; sie stehen deshalb schon
   jetzt da. Offen ist die Frist selbst und die Frage, was mit einem Spieler
   geschieht, der in einem abgeschlossenen Turnier in der Tabelle steht.
-- **Ein noch nicht angemeldeter Benutzer lässt sich nicht berufen.** Berufen
-  wird über die E-Mail-Adresse eines bestehenden Kontos — Identitäten legt der
-  Identity Provider an, nicht diese Anwendung (ADR-0007). Wer als
-  Schiedsrichter vorgesehen ist, muss sich also einmal anmelden, bevor die
-  Turnierleitung ihn eintragen kann. Eine Einladung, die auf eine noch nicht
-  vorhandene Identität wartet, wäre ein eigener Zustand mit eigenem Ablauf und
-  eigenem Verfall; er ist nicht gebaut.
+- ~~**Ein noch nicht angemeldeter Benutzer lässt sich nicht berufen.**~~
+  Geschlossen mit [ADR-0012](adr/0012-mitgliedschaft-statt-selbstmeldung.md):
+  eine Berufung an eine unbekannte Adresse wird zur `Invitation` und beim
+  ersten Login eingelöst. Was offen bleibt: **zugestellt wird sie nicht.** Es
+  gibt keinen Mail-Adapter, die Turnierleitung teilt den Beitrittslink selbst.
+- **Aus einem Turnier austreten kann nur die Turnierleitung veranlassen.** Wer
+  eine Gruppe verlassen will, muss fragen. Ein Selbst-Austritt ist eine Zeile
+  im `RoleService` und eine Frage mehr in der Oberfläche (und die Meldung
+  auch?) — er ist bewusst nicht Teil von ADR-0012.
 - **Grenze der Deklarativität.** Ein genuin neuer Paarungsalgorithmus, den keines der
   vier Formate abbildet, braucht weiterhin eine neue `IPhaseFormat`-Implementierung
   und ein Deployment (siehe ADR-0001).
