@@ -41,6 +41,9 @@ public sealed class InMemoryTournamentRepository : ITournamentRepository
         CancellationToken cancellationToken = default) =>
         Task.FromResult(_tournaments.Values.FirstOrDefault(t => t.Registration.Token == token));
 
+    public Task<bool?> IsPublicAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_tournaments.TryGetValue(tournamentId, out var t) ? t.IsPublic : (bool?)null);
+
     public void Add(Tournament tournament) => _tournaments[tournament.Id] = tournament;
 
     public void Remove(Tournament tournament) => _tournaments.Remove(tournament.Id);

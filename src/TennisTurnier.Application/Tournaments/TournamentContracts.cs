@@ -97,7 +97,8 @@ public sealed record TournamentSummary(
     DateOnly? EndsOn,
     TournamentState State,
     SchedulingMode SchedulingMode,
-    int AcceptedEntries);
+    int AcceptedEntries,
+    bool IsPublic);
 
 /// <param name="MatchFormat">
 /// Das am Turnier eingestellte Satzformat, sofern eines eingestellt ist.
@@ -123,9 +124,16 @@ public sealed record TournamentDetail(
     MatchFormat EffectiveMatchFormat,
     IReadOnlyList<CourtDetail> Courts,
     IReadOnlyList<EntryDetail> Entries,
-    int Version);
+    int Version,
+    bool IsPublic);
 
 public sealed record VenueDetail(string Name, string? Address, string? City, string TimeZoneId);
+
+/// <param name="IsPublic">
+/// Wahr heißt: die Zuschaueransicht steht jedem offen, der die Adresse hat.
+/// Falsch heißt: nur den Mitgliedern dieses Turniers.
+/// </param>
+public sealed record SetVisibilityRequest(bool IsPublic);
 
 /// <summary>
 /// Der Anmeldelink samt seinen Bedingungen. Nur für die Turnierleitung — das

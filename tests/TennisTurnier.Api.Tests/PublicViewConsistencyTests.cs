@@ -51,6 +51,7 @@ public sealed class PublicViewConsistencyTests : IClassFixture<TennisTurnierApiF
                 Anlage = "TC Konsistenz",
                 Teilnehmer = participants,
                 Plaetze = 1,
+                Oeffentlich = true,
             });
 
         return (aufbau.Admin, aufbau.TournamentId);

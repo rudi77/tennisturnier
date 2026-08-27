@@ -187,7 +187,7 @@ public sealed class WeitereAbsagenApiTests : IClassFixture<TennisTurnierApiFacto
         // Änderung am Turnier zurückholen lassen.
         var turnier = await _factory.NeuesTurnierAsync(
             $"leitung-{Guid.NewGuid():N}",
-            new TurnierWunsch { Teilnehmer = 4 });
+            new TurnierWunsch { Teilnehmer = 4, Oeffentlich = true });
 
         using (var scope = _factory.CreateMigratedScope())
         {

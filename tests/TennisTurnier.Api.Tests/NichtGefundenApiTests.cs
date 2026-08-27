@@ -116,7 +116,7 @@ public sealed class NichtGefundenApiTests : IClassFixture<TennisTurnierApiFactor
         // Ein Aushang im Vereinsheim fragt so, und er soll dabei nichts laden.
         var turnier = await _factory.NeuesTurnierAsync(
             $"leitung-{Guid.NewGuid():N}",
-            new TurnierWunsch { Teilnehmer = 4 });
+            new TurnierWunsch { Teilnehmer = 4, Oeffentlich = true });
 
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.IfNoneMatch.Add(EntityTagHeaderValue.Any);

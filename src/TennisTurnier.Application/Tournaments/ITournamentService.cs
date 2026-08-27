@@ -125,6 +125,15 @@ public interface ITournamentService
     /// </summary>
     Task RotateRegistrationLinkAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Öffnet die Zuschaueransicht für Fremde — oder schließt sie wieder.
+    /// Vorgabe ist zu (ADR-0012).
+    /// </summary>
+    Task SetVisibilityAsync(
+        Guid tournamentId,
+        SetVisibilityRequest request,
+        CancellationToken cancellationToken = default);
+
     // --- Meldungen ---
 
     /// <summary>

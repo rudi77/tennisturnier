@@ -18,6 +18,7 @@ public sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournamen
         builder.Property(t => t.State).HasConversion<string>().HasMaxLength(30);
         builder.Property(t => t.SchedulingMode).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.Discipline).HasConversion<string>().HasMaxLength(20);
+        builder.Property(t => t.IsPublic).IsRequired();
         builder.Property(t => t.TeamFormation).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.FormatTemplateId).IsRequired();
 

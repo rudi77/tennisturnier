@@ -30,6 +30,19 @@ public interface ITournamentRepository
         string token,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Steht dieses Turnier auch Fremden offen?
+    ///
+    /// Die zweite Abfrage am Query-Filter vorbei, und aus demselben Grund wie
+    /// die erste: gefragt wird sie von jemandem ohne Rolle am Turnier, dem der
+    /// Filter alles ausblendet — und die Antwort ist genau die Erlaubnis, ihm
+    /// etwas zu zeigen. Sie liefert einen einzelnen Wahrheitswert und nicht das
+    /// Turnier, damit aus der Ausnahme kein Schlupfloch wird.
+    ///
+    /// <c>null</c> heißt: es gibt dieses Turnier nicht.
+    /// </summary>
+    Task<bool?> IsPublicAsync(Guid tournamentId, CancellationToken cancellationToken = default);
+
     void Add(Tournament tournament);
 
     /// <summary>

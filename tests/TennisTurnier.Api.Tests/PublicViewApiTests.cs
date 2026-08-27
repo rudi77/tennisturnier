@@ -58,6 +58,9 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
                 Teilnehmer = participants,
                 Kontaktdaten = true,
                 Plaetze = 1,
+                // Seit ADR-0012 ist privat die Vorgabe; wer die anonyme
+                // Ansicht prüft, öffnet das Turnier ausdrücklich.
+                Oeffentlich = true,
             });
 
         return (aufbau.Admin, aufbau.TournamentId);

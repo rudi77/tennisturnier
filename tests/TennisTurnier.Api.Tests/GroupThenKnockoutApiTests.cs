@@ -36,6 +36,7 @@ public sealed class GroupThenKnockoutApiTests : IClassFixture<TennisTurnierApiFa
                 Vorlage = BuiltInFormats.GroupThenKnockout.Name,
                 Anlage = "TC Gruppen",
                 Teilnehmer = participants,
+                Oeffentlich = true,
             });
 
         return (aufbau.Admin, aufbau.TournamentId);
