@@ -47,6 +47,15 @@ public sealed class TournamentRepository : ITournamentRepository
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(t => t.Registration.Token == token, cancellationToken);
 
+    public async Task<bool?> IsPublicAsync(
+        Guid tournamentId,
+        CancellationToken cancellationToken = default) =>
+        await _db.Tournaments
+            .IgnoreQueryFilters()
+            .Where(t => t.Id == tournamentId)
+            .Select(t => (bool?)t.IsPublic)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public void Add(Tournament tournament) => _db.Tournaments.Add(tournament);
 
     public void Remove(Tournament tournament) => _db.Tournaments.Remove(tournament);
@@ -83,6 +92,11 @@ public sealed class PlayerRepository : IPlayerRepository
 
     public Task<Player?> FindAsync(Guid playerId, CancellationToken cancellationToken = default) =>
         _db.Players.FirstOrDefaultAsync(p => p.Id == playerId, cancellationToken);
+
+    public Task<Player?> FindByUserAccountAsync(
+        Guid userAccountId,
+        CancellationToken cancellationToken = default) =>
+        _db.Players.FirstOrDefaultAsync(p => p.UserAccountId == userAccountId, cancellationToken);
 
     /// <summary>
     /// Sucht in Vor- und Nachname.

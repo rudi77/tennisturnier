@@ -231,10 +231,18 @@ Instanz, die nicht dem ganzen Internet offenstehen soll, gehört
 `Security__SelfServiceOrganizers` deshalb auf `false`, und die Turnierleitungen
 werden von Hand berufen.
 
-Ein Hinweis für Instanzen mit vielen Meldungen: die Schranke der anonymen
-Meldeendpunkte teilt nach IP, und hinter dem Proxy von Railway ist das die des
-Proxys. Wo das zu eng wird, hebt `Security__PublicRegistrationRequestsPerWindow`
-sie an.
+### Was eine bestehende Instanz nachziehen muss
+
+Der Realm wird nur eingespielt, solange es ihn noch nicht gibt. Wer MATCHDAY
+vor ADR-0012 aufgesetzt hat, bekommt zwei Einstellungen deshalb nicht
+automatisch und trägt sie in der Administrationsoberfläche nach:
+
+- **Realm → Login → User registration: On.** Ohne sie fehlt auf der
+  Anmeldemaske der Weg zum Registrieren — und damit der einzige Weg für
+  jemanden, der einem Beitrittslink folgt und noch kein Konto hat.
+- **Client `tennisturnier-api` → Valid post logout redirect URIs:
+  `<origin>/*`.** Ohne sie endet das Abmelden mit einem Fehler beim Aussteller
+  statt auf der Anmeldemaske.
 
 ## Tests
 
@@ -320,6 +328,35 @@ Die tragenden Entscheidungen samt verworfener Alternativen stehen in
 - [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler gehören keinem Turnier
   — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
 
+## Mitglieder: wer dazugehört
+
+Ein Turnier funktioniert wie eine Gruppe (ADR-0012). Wer dazugehört, sieht den
+ganzen Verlauf: Meldungen, Draw, Spielplan, Ergebnisse. Wer nicht dazugehört,
+sieht das Turnier nicht — auch nicht, dass es existiert.
+
+Hinein führen zwei Wege, und sie schließen einander nicht aus:
+
+- **Der Beitrittslink.** `?r=<token>` steht in den Meldungen zum Kopieren und
+  zum Teilen; er überlebt einen Meldeschluss und lässt sich erneuern, wenn er
+  in falsche Hände geraten ist. Wer ihm folgt und kein Konto hat, legt beim
+  Aussteller eines an und landet danach wieder dort, wo er hinwollte — die
+  Selbstanmeldung ist geblieben, nur nicht mehr anonym.
+- **Die persönliche Einladung.** Die Turnierleitung trägt eine E-Mail-Adresse
+  und eine Rolle ein. Gibt es dazu schon ein Konto, gilt sie sofort; sonst
+  wartet sie, bis sich jemand mit dieser Adresse zum ersten Mal anmeldet.
+  Verschickt wird nichts — MATCHDAY hat kein Postfach; die Turnierleitung
+  teilt den Link über den Kanal, über den sie ohnehin mit ihren Leuten redet.
+
+Beim Beitritt entscheidet jeder selbst, ob er mitspielt. Wer nur zusehen will —
+der Partner ohne eigene Meldung, der Vereinskollege — tritt bei, ohne sich zu
+melden.
+
+Drei Rollen lassen sich am Turnier vergeben: **Turnierleitung** (darf alles am
+Turnier), **Schiedsrichter** (trägt Ergebnisse ein) und **Mitglied** (sieht
+zu). Die letzte Turnierleitung lässt sich nicht entfernen, und eine globale
+Rolle lässt sich hier grundsätzlich nicht vergeben — sonst machte sich ein
+Turnierleiter über ein zweites Konto zum Systemadministrator.
+
 ## Doppel: wer mit wem
 
 Zwei Turniere, die sich für den Melder grundlegend unterscheiden — und die
@@ -334,8 +371,8 @@ Ausschreibung entscheidet welches:
 
 Im zweiten Fall ist ein Team eine eigene Meldung; die beiden Meldungen dahinter
 bleiben bestehen und stehen auf „im Team". Das ist keine Buchhaltung: sie sind
-die Anmeldungen zweier Menschen, samt Bestätigungscode und Meldezeitpunkt, und
-wer sie zusammenlegt, nimmt ihnen nicht den Weg zu ihrer eigenen Anmeldung. Ein
+die Meldungen zweier Menschen, samt Herkunft und Meldezeitpunkt, und wer sie
+zusammenlegt, nimmt ihnen nicht den Weg zu ihrer eigenen Meldung. Ein
 Team lässt sich jederzeit wieder auflösen, solange nicht ausgelost ist.
 
 Das Los nimmt echten Zufall. Für eine Vorführung oder eine Testumgebung lässt
@@ -419,8 +456,11 @@ ihn verlassen, und nicht erst, wenn jemand Zeit hatte, den Zettel auszufüllen.
 ## Öffentliche Ansicht
 
 `GET /public/tournaments/{id}` liefert ohne Anmeldung Bracket, Tabellen und die
-aktuelle Platzbelegung — mit `ETag` und `Cache-Control`; ein zweiter Abruf mit
-`If-None-Match` bekommt 304. Wer live zusehen will, abonniert im SignalR-Hub
+aktuelle Platzbelegung — sofern das Turnier öffentlich ist oder der Aufrufer
+selbst dazugehört. Mit `ETag` und `no-cache`: ein zweiter Abruf mit
+`If-None-Match` bekommt 304, aber gefragt wird jedes Mal. Eine Vorratshaltung
+im Browser oder im Zwischenspeicher überlebte das Zumachen eines Turniers, und
+das wäre ein Leck statt einer Ersparnis (ADR-0012). Wer live zusehen will, abonniert im SignalR-Hub
 `/hubs/tournament` sein Turnier und wird bei jeder inhaltlichen Änderung
 benachrichtigt. Der Push trägt nur Turnier-Id und ETag: geholt wird die Ansicht
 über denselben Endpunkt, den auch Polling benutzt.
@@ -439,12 +479,15 @@ Auslosung lässt sie wieder verschwinden.
 
 ### Zuschauen
 
-Zusehen darf jeder, der den Link hat: `?t=<turnier-id>` führt ohne Konto direkt
-auf die Zuschauerseite — kein Login davor, keine Navigation daneben, die
-ohnehin nur in eine Anmeldemaske führte. Die Turnierleitung findet den Link im
-Ablauf, sobald ausgelost ist, zum Kopieren und zum Teilen; anders als der
-Anmeldelink trägt er kein Token, weil es an dieser Antwort nichts zu schützen
-gibt.
+Ein Turnier ist privat, solange niemand es öffnet (ADR-0012). In den Meldungen
+steht der Schalter dafür; erst danach trägt `?t=<turnier-id>` — der Link, der
+ohne Konto direkt auf die Zuschauerseite führt, kein Login davor, keine
+Navigation daneben. Die Turnierleitung findet ihn im Ablauf, sobald ausgelost
+und geöffnet ist, zum Kopieren und zum Teilen; anders als der Beitrittslink
+trägt er kein Token, weil an dieser Antwort nichts mehr zu schützen ist, was
+die Projektion nicht ohnehin hergibt. Wer ihn auf ein privates Turnier
+anwendet, bekommt denselben Hinweis wie auf ein Turnier, das es nicht gibt —
+die Existenz ist selbst eine Auskunft (ADR-0004).
 
 Die Seite ist nach den Fragen geteilt, mit denen jemand herkommt, und nicht
 nach den Datenstrukturen der Antwort: was jetzt am Platz läuft und was als

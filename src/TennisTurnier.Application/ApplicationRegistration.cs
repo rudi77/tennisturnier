@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
-using TennisTurnier.Application.Registration;
+using TennisTurnier.Application.Membership;
 using TennisTurnier.Application.Security;
 using TennisTurnier.Application.Tournaments;
 
@@ -33,6 +33,7 @@ public static class ApplicationRegistration
         services.AddSingleton(tournamentOptions ?? new TournamentOptions());
         services.AddScoped<SystemAdminBootstrap>();
         services.AddScoped<OrganizerBootstrap>();
+        services.AddScoped<InvitationRedemption>();
 
         services.AddScoped<IMeService, MeService>();
         services.AddScoped<IRoleService, RoleService>();
@@ -46,7 +47,7 @@ public static class ApplicationRegistration
         services.AddScoped<IPublicViewService, PublicViewService>();
         services.AddScoped<ISchedulingService, SchedulingService>();
         services.AddScoped<ICourtQueueService, CourtQueueService>();
-        services.AddScoped<IRegistrationService, RegistrationService>();
+        services.AddScoped<IJoinService, JoinService>();
         services.AddScoped<IEntryImportService, EntryImportService>();
         services.AddScoped<ITeamFormationService, TeamFormationService>();
 

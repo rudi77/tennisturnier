@@ -22,7 +22,6 @@ interface Meldung {
   participantName: string
   status: number
   origin: number
-  confirmationCode: string | null
   contacts: { displayName: string; email: string | null }[]
 }
 
@@ -46,85 +45,32 @@ async function ergebnisEintragen(
   await expect(dialog).toBeHidden()
 }
 
-test('meldet sich über den Anmeldelink ohne Konto', async ({ page, api, browser }) => {
-  const turnier = await turnierMitFeld(api, 0)
-
-  await alsTurnierleitung(page, `/?screen=flow&t=${turnier.id}`)
-
-  // Die Turnierleitung nimmt den Link von diesem Bildschirm mit.
-  const link = page.getByLabel('Anmeldelink')
-  await expect(link).toBeVisible()
-  const adresse = await link.inputValue()
-  expect(adresse).toContain('?r=')
-
-  // Und jemand ohne Konto folgt ihm.
-  const melder = await browser.newContext()
-  const melderSeite = await melder.newPage()
-  await melderSeite.goto(adresse)
-
-  await expect(melderSeite.getByText(turnier.name)).toBeVisible()
-  await melderSeite.getByRole('textbox', { name: 'Vorname' }).fill('Anna')
-  await melderSeite.getByRole('textbox', { name: 'Nachname' }).fill('Müller')
-  await melderSeite.getByRole('textbox', { name: 'E-Mail' }).fill('anna@example.invalid')
-  await melderSeite.getByRole('button', { name: 'Meldung absenden' }).click()
-
-  await expect(melderSeite.getByText('Meldung angekommen')).toBeVisible()
-  const bestaetigung = melderSeite.locator('.md-panel').filter({ hasText: 'Meldung angekommen' })
-  const code = (await bestaetigung.locator('.md-num').first().textContent())?.trim()
-  expect(code).toBeTruthy()
-
-  // Dieselbe Meldung ein zweites Mal legt nichts Neues an und nennt denselben
-  // Code — die Idempotenz, ohne die der Link ein Wegwerfartikel wäre.
-  await melderSeite.goto(adresse)
-  await melderSeite.getByRole('textbox', { name: 'Vorname' }).fill('Anna')
-  await melderSeite.getByRole('textbox', { name: 'Nachname' }).fill('Müller')
-  await melderSeite.getByRole('textbox', { name: 'E-Mail' }).fill('anna@example.invalid')
-  await melderSeite.getByRole('button', { name: 'Meldung absenden' }).click()
-  await expect(melderSeite.getByText('Meldung angekommen')).toBeVisible()
-
-  await melder.close()
-
-  const meldungen = await api.get<Meldung[]>(`/api/tournaments/${turnier.id}/entries`)
-  expect(meldungen).toHaveLength(1)
-  expect(meldungen[0]!.origin).toBe(1)
-  expect(meldungen[0]!.confirmationCode).toBe(code)
-  expect(meldungen[0]!.contacts[0]!.email).toBe('anna@example.invalid')
-
-  // Die Turnierleitung sieht sie ohne Neuladen der Anwendung — sie holt beim
-  // Wechsel auf die Meldungen.
-  await page.getByRole('button', { name: 'Meldungen', exact: true }).click()
-  const zeile = page.locator('.md-entry').filter({ hasText: 'Müller, Anna' })
-  await expect(zeile).toHaveCount(1)
-  await expect(zeile).toContainText('Selbstmeldung')
-  // Die Kontaktdaten stehen hier, weil das Backend sie mitschickt — die
-  // Turnierleitung darf sie sehen, der Zuschauer nicht.
-  await expect(zeile).toContainText('anna@example.invalid')
-})
-
 test('nimmt eine Meldung an und setzt eine auf die Warteliste', async ({ page, api }) => {
   const turnier = await turnierMitFeld(api, 0)
 
-  // Zwei Selbstmeldungen über den anonymen Weg — so kommen sie in Wirklichkeit.
-  const { token } = await api.get<{ token: string }>(`/api/tournaments/${turnier.id}/registration`)
+  // Zwei offene Meldungen — woher sie kommen, ist hier gleich: geprüft wird,
+  // was die Turnierleitung mit ihnen macht. Den Weg über den Beitrittslink
+  // geht `beitritt.spec.ts`.
   for (const [vorname, nachname] of [
     ['Bea', 'Berger'],
     ['Carla', 'Christl'],
   ]) {
-    const response = await fetch(`http://localhost:5188/public/registrations/${token}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        firstName: vorname,
-        lastName: nachname,
-        email: `${vorname.toLowerCase()}@example.invalid`,
-        phone: null,
-        partnerFirstName: null,
-        partnerLastName: null,
-        partnerEmail: null,
-        teamName: null,
-      }),
+    const spieler = await api.post<{ id: string }>('/api/players', {
+      firstName: vorname,
+      lastName: nachname,
+      email: `${vorname!.toLowerCase()}@example.invalid`,
+      phone: null,
+      dateOfBirth: null,
     })
-    expect(response.ok, await response.text()).toBe(true)
+    const teilnehmer = await api.post<{ id: string }>('/api/participants', {
+      firstPlayerId: spieler.id,
+      secondPlayerId: null,
+      teamName: null,
+    })
+    await api.post(`/api/tournaments/${turnier.id}/entries`, {
+      participantId: teilnehmer.id,
+      seed: null,
+    })
   }
 
   await alsTurnierleitung(page, `/?screen=entries&t=${turnier.id}`)
@@ -199,6 +145,10 @@ test('zeigt den Stand über den Zuschauerlink ohne Konto', async ({ page, api, b
   await api.post(`/api/tournaments/${turnier.id}/registration/close`)
   await api.post(`/api/tournaments/${turnier.id}/draw`)
   await api.post(`/api/tournaments/${turnier.id}/start`)
+
+  // Privat ist die Vorgabe (ADR-0012): ohne diesen Schritt gibt es weder eine
+  // Zuschaueransicht noch einen Link, der auf sie zeigt.
+  await api.put(`/api/tournaments/${turnier.id}/visibility`, { isPublic: true })
 
   await alsTurnierleitung(page, `/?screen=flow&t=${turnier.id}`)
 

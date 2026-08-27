@@ -1,7 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TennisTurnier.Adapters.Identity.Oidc;
 using TennisTurnier.Adapters.Persistence.Sqlite;
@@ -59,31 +57,11 @@ builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 
-// Nur die anonymen Meldeendpunkte werden begrenzt. Alles unter /api steht hinter
-// der Anmeldung; wer dort zu viel anfragt, hat ein Konto, das man entziehen
-// kann. Der Melder ohne Konto hat keines — deshalb genau hier eine Schranke, und
-// deshalb keine anderswo, wo sie am Turniertag den Betrieb träfe.
-//
-// Ein CAPTCHA gibt es bewusst nicht: Niederschwelligkeit ist der Zweck des
-// Links. Getragen wird der Missbrauchsschutz von dieser Schranke, der Kapazität,
-// dem Meldeschluss, dem Zustandsautomaten und der Idempotenz zusammen.
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    options.AddPolicy(RegistrationEndpoints.PublicPolicy, http =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            Program.PartitionKeyOf(http),
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = builder.Configuration.GetValue(
-                    "Security:PublicRegistrationRequestsPerWindow",
-                    Program.RegistrationRequestsPerWindow),
-                Window = TimeSpan.FromMinutes(Program.RegistrationWindowMinutes),
-                QueueLimit = 0,
-            }));
-});
-
+// Hier stand eine Ratenbegrenzung für die anonymen Meldeendpunkte. Sie ist
+// mit ihnen entfallen: beitreten kann nur, wer angemeldet ist, und wer zu viel
+// anfragt, hat ein Konto, das man entziehen kann. Genau das war die
+// Begründung, warum überall sonst keine Schranke steht — sie gilt jetzt auch
+// hier.
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -99,19 +77,14 @@ app.UseStatusCodePages();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-// Der Anmeldetoken steht in der Adresszeile — ohne diese Kopfzeile stünde er
+// Der Beitrittstoken steht in der Adresszeile — ohne diese Kopfzeile stünde er
 // beim nächsten ausgehenden Link im Referer und damit im Protokoll eines
 // fremden Servers.
-//
-// Vor der Ratenbegrenzung: sie beantwortet abgewiesene Anfragen selbst, und eine
-// Kopfzeile, die ausgerechnet der abgewiesenen Antwort fehlt, wäre keine.
 app.Use(async (context, next) =>
 {
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
     await next(context);
 });
-
-app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -161,7 +134,7 @@ app.MapGet("/api/me", async (IMeService service, CancellationToken ct) =>
 
 app.MapTournamentEndpoints();
 app.MapMatchEndpoints();
-app.MapRegistrationEndpoints();
+app.MapMembershipEndpoints();
 app.MapRoleEndpoints();
 app.MapPublicEndpoints();
 app.MapHub<TournamentHub>("/hubs/tournament");
@@ -186,34 +159,4 @@ app.Run();
 /// </summary>
 public partial class Program
 {
-    /// <summary>
-    /// Anfragen je Zeitfenster und IP an die anonymen Meldeendpunkte.
-    ///
-    /// Großzügig genug für ein Doppel, das sich zu zweit vor demselben Router
-    /// meldet und das Formular ein paarmal korrigiert; eng genug, dass ein
-    /// Skript nicht in Ruhe durchläuft.
-    ///
-    /// Die Vorgabe steht hier, wo ihre Begründung steht, und nicht in der
-    /// Konfiguration. Übersteuerbar ist sie trotzdem
-    /// (<c>Security:PublicRegistrationRequestsPerWindow</c>) — ein Testlauf
-    /// stellt in Sekunden mehr Anfragen als ein Turnierwochenende, und ohne
-    /// diesen Schalter prüfte er nur noch die Schranke.
-    /// </summary>
-    internal const int RegistrationRequestsPerWindow = 20;
-
-    internal const int RegistrationWindowMinutes = 10;
-
-    /// <summary>
-    /// Der Partitionsschlüssel der Ratenbegrenzung: die IP des Aufrufers.
-    ///
-    /// Hinter einem Proxy ist sie ungenau; genauer ginge nur mit einer
-    /// Konfiguration, die davon abhängt, wie die Instanz betrieben wird. Ungenau
-    /// und vorhanden ist hier mehr wert als genau und ungebaut.
-    ///
-    /// Ohne IP — ein In-Memory-Testserver hat keine — teilen sich alle Aufrufer
-    /// eine Partition. Das ist die strengere Auslegung und damit die richtige:
-    /// die lockere hieße, dass eine fehlende IP die Schranke aushebelt.
-    /// </summary>
-    internal static string PartitionKeyOf(HttpContext context) =>
-        context.Connection.RemoteIpAddress?.ToString() ?? "unbekannt";
 }

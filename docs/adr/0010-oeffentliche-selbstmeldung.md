@@ -1,6 +1,12 @@
 # ADR-0010 — Öffentliche Selbstmeldung über einen Token-Link
 
-**Status:** Accepted
+**Status:** Superseded by [0012](0012-mitgliedschaft-statt-selbstmeldung.md)
+
+> Der Token-Link ist geblieben, die Anonymität dahinter nicht: seit ADR-0012
+> ist ein Turnier eine Gruppe, und wer beitritt, hat ein Konto. Was hier über
+> das Token, seine Erneuerung und die Datensparsamkeit der Projektion steht,
+> gilt weiter — der Bestätigungscode, der öffentliche Meldeendpunkt und der
+> Rate-Limiter davor sind entfallen.
 
 ## Kontext
 

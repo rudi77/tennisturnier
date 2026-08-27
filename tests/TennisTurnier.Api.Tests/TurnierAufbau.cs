@@ -99,6 +99,13 @@ internal sealed record TurnierWunsch
 
     public bool Auslosen { get; init; } = true;
 
+    /// <summary>
+    /// Öffnet die Zuschaueransicht für Fremde. Vorgabe ist zu — ein Turnier ist
+    /// zuerst eine Gruppe (ADR-0012), und wer die anonyme Ansicht prüft, sagt
+    /// das hier ausdrücklich.
+    /// </summary>
+    public bool Oeffentlich { get; init; }
+
     /// <summary>Rechnet einen Spielplanvorschlag und bestätigt ihn unverändert.</summary>
     public bool Spielplan { get; init; }
 
@@ -224,6 +231,16 @@ internal static class TurnierAufbau
             await GelungenAsync(
                 await admin.PostAsync($"/api/tournaments/{tournamentId}/draw", null),
                 $"Auslosen ({feldgroesse} Meldungen)");
+        }
+
+        if (w.Oeffentlich)
+        {
+            await GelungenAsync(
+                await admin.PutAsJsonAsync(
+                    $"/api/tournaments/{tournamentId}/visibility",
+                    new SetVisibilityRequest(IsPublic: true),
+                    Json),
+                "Turnier öffentlich schalten");
         }
 
         if (w.Spielplan)

@@ -147,16 +147,20 @@ export const Tiebreaker = {
 export type Tiebreaker = (typeof Tiebreaker)[keyof typeof Tiebreaker]
 
 /**
- * Vier Rollen, nicht mehr fünf: `ClubAdmin` und `Player` sind mit dem Verein
- * entfallen. `Organizer` ist neu und global — sein einziges Recht ist, ein
- * Turnier anzulegen; alles Weitere folgt aus der Turnierleiterrolle, die der
- * Anleger dabei bekommt.
+ * `ClubAdmin` und `Player` sind mit dem Verein entfallen. `Organizer` ist
+ * global — sein einziges Recht ist, ein Turnier anzulegen; alles Weitere folgt
+ * aus der Turnierleiterrolle, die der Anleger dabei bekommt.
+ *
+ * `Member` ist die Rolle, die ein Turnier zur Gruppe macht: sie gewährt kein
+ * einziges Recht und trotzdem alles, worauf es ankommt — man sieht sein
+ * Turnier. Sie steht am Ende, weil die Zahlen über die Leitung gehen.
  */
 export const Role = {
   SystemAdmin: 0,
   Organizer: 1,
   TournamentDirector: 2,
   Referee: 3,
+  Member: 4,
 } as const
 export type Role = (typeof Role)[keyof typeof Role]
 
@@ -235,6 +239,8 @@ export interface TournamentSummary {
   state: TournamentState
   schedulingMode: SchedulingMode
   acceptedEntries: number
+  /** Steht die Zuschaueransicht auch Fremden offen? Vorgabe: nein. */
+  isPublic: boolean
 }
 
 export interface TournamentDetail {
@@ -260,6 +266,8 @@ export interface TournamentDetail {
   courts: CourtDetail[]
   entries: EntryDetail[]
   version: number
+  /** Steht die Zuschaueransicht auch Fremden offen? Vorgabe: nein. */
+  isPublic: boolean
 }
 
 /**
@@ -313,9 +321,8 @@ export type EntryOrigin = (typeof EntryOrigin)[keyof typeof EntryOrigin]
 /**
  * Eine Meldung in der Meldungsverwaltung.
  *
- * `contacts` und `confirmationCode` bleiben leer beziehungsweise null, wenn der
- * Aufrufer kein `ViewInternals` hat — das entscheidet das Backend, nicht diese
- * Seite.
+ * `contacts` bleibt leer, wenn der Aufrufer kein `ViewInternals` hat — das
+ * entscheidet das Backend, nicht diese Seite.
  */
 export interface EntryOverview {
   id: string
@@ -325,7 +332,6 @@ export interface EntryOverview {
   status: EntryStatus
   origin: EntryOrigin
   registeredAt: string
-  confirmationCode: string | null
   contacts: EntryContact[]
   /** Die Meldung des Teams, in dem diese spielt — sonst leer. */
   teamEntryId: string | null
@@ -356,11 +362,13 @@ export interface RegistrationDetail {
 // ---------------------------------------------------------------------------
 
 /**
- * Was ein Melder ohne Konto zu sehen bekommt — absichtlich karg. Keine
- * Teilnehmerliste, keine Namen: sonst wäre der Anmeldelink ein Weg an der
- * öffentlichen Projektion vorbei (ADR-0003).
+ * Was jemand sieht, der einem Beitrittslink folgt — absichtlich karg. Keine
+ * Teilnehmerliste, keine Namen: sonst wäre der Link ein Weg an der öffentlichen
+ * Projektion vorbei (ADR-0003). Dass er angemeldet ist, ändert daran nichts:
+ * angemeldet ist noch nicht dabei.
  */
-export interface PublicRegistrationView {
+export interface JoinView {
+  tournamentId: string
   tournamentName: string
   venueName: string
   city: string | null
@@ -372,12 +380,19 @@ export interface PublicRegistrationView {
   /** null heißt unbegrenzt, 0 heißt: die nächste Meldung landet auf der Warteliste. */
   freeSlots: number | null
   deadline: string | null
+  /** Wer schon dabei ist, soll das erfahren, statt ein zweites Mal beizutreten. */
+  alreadyMember: boolean
 }
 
-export interface SelfRegistrationRequest {
-  firstName: string
-  lastName: string
-  email: string
+/**
+ * Ein Beitritt. Die E-Mail-Adresse fehlt hier — sie kommt aus dem Konto und
+ * nicht aus dem Formular.
+ */
+export interface JoinRequest {
+  /** Mitspielen oder nur dazugehören. */
+  play: boolean
+  firstName: string | null
+  lastName: string | null
   phone: string | null
   partnerFirstName: string | null
   partnerLastName: string | null
@@ -385,9 +400,16 @@ export interface SelfRegistrationRequest {
   teamName: string | null
 }
 
-export interface SelfRegistrationResult {
-  confirmationCode: string
-  status: EntryStatus
+export interface JoinResult {
+  tournamentId: string
+  /** Leer, wenn jemand beigetreten ist, ohne zu melden. */
+  entryId: string | null
+  status: EntryStatus | null
+}
+
+/** Öffnet die Zuschaueransicht für Fremde — oder schließt sie wieder. */
+export interface SetVisibilityRequest {
+  isPublic: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -395,11 +417,21 @@ export interface SelfRegistrationResult {
 // ---------------------------------------------------------------------------
 
 export interface TournamentRoleSummary {
+  /** Bei einer offenen Einladung die Kennung der Einladung. */
   assignmentId: string
+  /** Leer, solange es das Konto noch nicht gibt. */
   userId: string
   displayName: string | null
   email: string | null
   role: Role
+  /** Eingeladen, aber noch nie angemeldet. */
+  pending: boolean
+}
+
+/** Was aus einer Berufung wurde: eine Rolle oder eine wartende Einladung. */
+export interface GrantRoleResult {
+  id: string
+  invited: boolean
 }
 
 /**

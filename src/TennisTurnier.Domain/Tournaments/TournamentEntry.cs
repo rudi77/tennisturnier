@@ -1,5 +1,3 @@
-using System.Buffers.Text;
-using System.Security.Cryptography;
 using TennisTurnier.Domain.Common;
 
 namespace TennisTurnier.Domain.Tournaments;
@@ -7,31 +5,23 @@ namespace TennisTurnier.Domain.Tournaments;
 /// <summary>
 /// Woher eine Meldung stammt.
 ///
-/// Nicht bloß Statistik: eine Selbstmeldung kommt von einem Menschen ohne Konto,
-/// der über den Bestätigungscode zurückfindet und dessen Kontaktdaten unter die
-/// Aufbewahrungsfrist fallen. Eine von der Turnierleitung erfasste Meldung tut
-/// beides nicht.
+/// Nicht bloß Statistik: wer sich selbst gemeldet hat, hat ein Konto und ist
+/// Mitglied des Turniers — seine Kontaktdaten fallen unter die
+/// Aufbewahrungsfrist. Wen die Turnierleitung erfasst hat, hat vielleicht nie
+/// von MATCHDAY gehört.
 /// </summary>
 public enum EntryOrigin
 {
     /// <summary>Die Turnierleitung hat sie erfasst.</summary>
     Organiser,
 
-    /// <summary>Jemand hat sich über den Anmeldelink selbst gemeldet.</summary>
+    /// <summary>Jemand ist über den Beitrittslink beigetreten und hat gemeldet.</summary>
     SelfService,
 }
 
 /// <summary>Die Meldung eines Teilnehmers zu einem Turnier.</summary>
 public sealed class TournamentEntry : Entity
 {
-    /// <summary>
-    /// 48 Bit als Base64Url — acht Zeichen. Kurz genug, um ihn am Telefon
-    /// durchzugeben, und nicht zu erraten. Er ist kein Geheimnis, das etwas
-    /// schützt, sondern der Weg eines Melders ohne Konto zurück zu seiner
-    /// Meldung; ohne ihn hätte er gar keinen.
-    /// </summary>
-    private const int ConfirmationBytes = 6;
-
     internal TournamentEntry(
         Guid id,
         Guid tournamentId,
@@ -51,12 +41,13 @@ public sealed class TournamentEntry : Entity
         Status = EntryStatus.Applied;
         Origin = origin;
         RegisteredAt = registeredAt ?? DateTimeOffset.UtcNow;
-        ConfirmationCode = NewConfirmationCode();
         SetSeed(seed);
     }
 
     /// <summary>Konstruktor für den Persistenzadapter.</summary>
-    private TournamentEntry(Guid id) : base(id) => ConfirmationCode = string.Empty;
+    private TournamentEntry(Guid id) : base(id)
+    {
+    }
 
     public Guid TournamentId { get; private set; }
 
@@ -77,14 +68,6 @@ public sealed class TournamentEntry : Entity
     /// Meldungen die einzige nachvollziehbare Begründung dafür, wer nachrückt.
     /// </summary>
     public DateTimeOffset RegisteredAt { get; private set; }
-
-    /// <summary>
-    /// Der Code, mit dem ein Melder ohne Konto seine Meldung wiederfindet und
-    /// zurückziehen kann. Er entsteht für jede Meldung, auch für die von der
-    /// Turnierleitung erfasste — sonst gäbe es zwei Sorten Meldung, von denen
-    /// nur eine auskunftsfähig wäre.
-    /// </summary>
-    public string ConfirmationCode { get; private set; }
 
     /// <summary>
     /// Die Meldung des Teams, in dem diese Meldung spielt — leer, solange sie
@@ -143,6 +126,4 @@ public sealed class TournamentEntry : Entity
         TeamEntryId = null;
     }
 
-    private static string NewConfirmationCode() =>
-        Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(ConfirmationBytes));
 }

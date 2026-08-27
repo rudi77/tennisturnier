@@ -18,6 +18,7 @@ public sealed class TournamentConfiguration : IEntityTypeConfiguration<Tournamen
         builder.Property(t => t.State).HasConversion<string>().HasMaxLength(30);
         builder.Property(t => t.SchedulingMode).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.Discipline).HasConversion<string>().HasMaxLength(20);
+        builder.Property(t => t.IsPublic).IsRequired();
         builder.Property(t => t.TeamFormation).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.FormatTemplateId).IsRequired();
 
@@ -158,7 +159,6 @@ public sealed class TournamentEntryConfiguration : IEntityTypeConfiguration<Tour
         builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(e => e.Origin).HasConversion<string>().HasMaxLength(20);
         builder.Property(e => e.RegisteredAt).IsRequired();
-        builder.Property(e => e.ConfirmationCode).IsRequired().HasMaxLength(32);
 
         // Kein Fremdschlüssel auf die Meldung des Teams: er zeigte innerhalb
         // derselben Tabelle auf eine Zeile desselben Aggregats, und EF Core
@@ -219,6 +219,17 @@ public sealed class PlayerConfiguration : IEntityTypeConfiguration<Player>
         });
 
         builder.HasIndex(p => new { p.LastName, p.FirstName });
+
+        // Genau ein Spieler je Konto — und beliebig viele ohne. Der eindeutige
+        // Index lässt in SQLite wie in PostgreSQL mehrere NULL nebeneinander
+        // zu; das ist hier keine Nachlässigkeit, sondern die Regel: wer aus
+        // einer hochgeladenen Liste kommt, hat kein Konto.
+        //
+        // Kein Fremdschlüssel auf UserAccounts: die Spieler liegen außerhalb
+        // des Query-Filters (ADR-0008), die Konten dahinter — eine Beziehung
+        // zwischen beiden zöge die Konten in jede Spielerabfrage.
+        builder.Property(p => p.UserAccountId);
+        builder.HasIndex(p => p.UserAccountId).IsUnique();
     }
 }
 

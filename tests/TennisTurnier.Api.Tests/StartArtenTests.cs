@@ -70,18 +70,6 @@ public sealed class StartArtenTests
     }
 
     [Fact]
-    public void Ohne_erkennbare_Herkunft_teilen_sich_alle_eine_Schranke()
-    {
-        var ohne = new DefaultHttpContext();
-        Assert.Equal("unbekannt", Program.PartitionKeyOf(ohne));
-
-        var mit = new DefaultHttpContext();
-        mit.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.7");
-
-        Assert.Equal("203.0.113.7", Program.PartitionKeyOf(mit));
-    }
-
-    [Fact]
     public async Task Ein_zweiter_Start_legt_die_Vorlagen_nicht_erneut_an()
     {
         // Jeder Neustart sät. Legte er dabei ein zweites Mal an, stünde nach

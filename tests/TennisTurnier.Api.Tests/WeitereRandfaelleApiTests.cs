@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TennisTurnier.Application.Registration;
+using TennisTurnier.Application.Membership;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
@@ -45,18 +45,20 @@ public sealed class WeitereRandfaelleApiTests
         var link = await turnier.Admin.GetFromJsonAsync<RegistrationDetail>(
             $"/api/tournaments/{turnier.TournamentId}/registration", Json);
 
-        var response = await fabrik.CreateClient().PostAsJsonAsync(
-            $"/public/registrations/{link!.Token}",
-            new SelfRegistrationRequest(
-                "Anna",
-                "Neu",
-                "anna.neu@example.invalid",
-                null,
-                "Eva",
-                "Ohnemail",
-                PartnerEmail: null,
-                TeamName: null),
-            Json);
+        var response = await fabrik
+            .CreateClientAs($"melder-{Guid.NewGuid():N}", "anna.neu@example.invalid")
+            .PostAsJsonAsync(
+                $"/api/join/{link!.Token}",
+                new JoinRequest(
+                    Play: true,
+                    "Anna",
+                    "Neu",
+                    Phone: null,
+                    "Eva",
+                    "Ohnemail",
+                    PartnerEmail: null,
+                    TeamName: null),
+                Json);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }

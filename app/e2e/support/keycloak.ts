@@ -16,6 +16,14 @@ export const CLIENT_ID = 'tennisturnier-api'
 /** Die Testbenutzer des Realms; das Passwort ist jeweils der Benutzername. */
 export type Benutzer = 'systemadmin' | 'clubadmin' | 'referee'
 
+/**
+ * Die Marke, mit der ein Test sagt: ab jetzt bitte nicht mehr einpflanzen.
+ *
+ * Sie steht im sessionStorage und überlebt damit genau so lange wie die
+ * Sitzung, um die es geht.
+ */
+export const ABGEMELDET = 'matchday-test:abgemeldet'
+
 interface TokenAntwort {
   access_token: string
   id_token: string
@@ -68,6 +76,11 @@ function claims(jwt: string): Record<string, unknown> {
  * Neustart des Browsers überlebt, ist am Vereinsrechner im Turnierbüro eine
  * schlechte Idee. Playwrights `storageState` deckt ihn nicht ab, deshalb
  * geschieht es je Seite über ein Init-Skript.
+ *
+ * Nur, solange nichts dasteht: das Skript läuft bei jedem Laden, und ohne
+ * diese Bedingung pflanzte es die Sitzung nach einem Abmelden sofort wieder
+ * ein. Der Weg zum Aussteller wäre dann nicht zu prüfen — die Anwendung wäre
+ * beim Rücksprung wortlos wieder angemeldet.
  */
 export async function anmelden(page: Page, benutzer: Benutzer = 'clubadmin'): Promise<void> {
   const token = await tokenFuer(benutzer)
@@ -84,9 +97,10 @@ export async function anmelden(page: Page, benutzer: Benutzer = 'clubadmin'): Pr
   }
 
   await page.addInitScript(
-    ([schluessel, wert]) => {
+    ([schluessel, wert, abgemeldet]) => {
+      if (window.sessionStorage.getItem(abgemeldet as string)) return
       window.sessionStorage.setItem(schluessel as string, wert as string)
     },
-    [`oidc.user:${AUTHORITY}:${CLIENT_ID}`, JSON.stringify(user)],
+    [`oidc.user:${AUTHORITY}:${CLIENT_ID}`, JSON.stringify(user), ABGEMELDET],
   )
 }

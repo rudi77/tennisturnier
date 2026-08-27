@@ -59,6 +59,19 @@ internal static class TournamentEndpoints
             return Results.NoContent();
         });
 
+        // Ein Attribut und keine Handlung: die Sichtbarkeit lässt sich
+        // umschalten und wieder zurückschalten, und beides ist derselbe Zug.
+        // Ein POST /publish hätte kein Gegenstück, das genauso hieße.
+        tournaments.MapPut("/visibility", async (
+            Guid tournamentId,
+            SetVisibilityRequest request,
+            ITournamentService service,
+            CancellationToken ct) =>
+        {
+            await service.SetVisibilityAsync(tournamentId, request, ct);
+            return Results.NoContent();
+        });
+
         // Eigener Verb-Endpunkt und kein Zustandsübergang: Löschen ist keine
         // Station im Lebenszyklus, sondern sein Ende ohne Spur. Der Abbruch
         // daneben ist das Gegenteil — er beendet und lässt lesbar.

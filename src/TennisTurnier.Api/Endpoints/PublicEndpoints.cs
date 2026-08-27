@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.Net.Http.Headers;
 using TennisTurnier.Application.PublicView;
 
@@ -14,13 +14,6 @@ namespace TennisTurnier.Api.Endpoints;
 /// </summary>
 internal static class PublicEndpoints
 {
-    /// <summary>
-    /// Kurz genug, dass ein Ergebnis zeitnah ankommt, lang genug, dass ein
-    /// Aushang im Vereinsheim nicht jede Sekunde neu lädt. Wer es genauer
-    /// braucht, hört auf den SignalR-Push.
-    /// </summary>
-    private const int MaxAgeSeconds = 15;
-
     public static IEndpointRouteBuilder MapPublicEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/public/tournaments").WithTags("Öffentlich").AllowAnonymous();
@@ -39,11 +32,15 @@ internal static class PublicEndpoints
 
             var headers = http.Response.GetTypedHeaders();
             headers.ETag = new EntityTagHeaderValue(snapshot.ETag);
-            headers.CacheControl = new CacheControlHeaderValue
-            {
-                Public = true,
-                MaxAge = TimeSpan.FromSeconds(MaxAgeSeconds),
-            };
+            // Hier stand einmal eine Vorratshaltung von 15 Sekunden. Seit ein
+            // Turnier privat sein kann, wäre sie ein Leck: wer zusieht, während
+            // die Turnierleitung wieder zumacht, sähe weiter zu — und ein
+            // gemeinsamer Zwischenspeicher zeigte die Ansicht sogar jemandem,
+            // der sie nie geladen hat. `no-cache` heißt nicht „nicht
+            // speichern", sondern „jedes Mal nachfragen": das Ersparnis über
+            // den ETag bleibt, die Entscheidung über die Sichtbarkeit fällt
+            // aber wieder bei jedem Abruf.
+            headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
             headers.LastModified = snapshot.UpdatedAt;
 
             // Ein 304 spart bei einem Bracket mit 64 Matches den ganzen Body —

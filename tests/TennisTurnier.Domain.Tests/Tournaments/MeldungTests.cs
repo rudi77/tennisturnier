@@ -47,35 +47,6 @@ public sealed class MeldungTests
     }
 
     [Fact]
-    public void Jede_Meldung_bekommt_einen_eigenen_Bestaetigungscode()
-    {
-        // Auch die erfasste: sonst gäbe es zwei Sorten Meldung, von denen nur
-        // eine auskunftsfähig wäre — und die Turnierleitung müsste am Telefon
-        // erklären, warum.
-        var tournament = OffenesTurnier();
-
-        var codes = Enumerable.Range(0, 20)
-            .Select(_ => tournament.Enter(Guid.NewGuid(), Guid.NewGuid()).ConfirmationCode)
-            .ToList();
-
-        Assert.All(codes, code => Assert.False(string.IsNullOrWhiteSpace(code)));
-        Assert.Equal(20, codes.Distinct(StringComparer.Ordinal).Count());
-    }
-
-    [Fact]
-    public void Der_Bestaetigungscode_laesst_sich_am_Telefon_durchgeben()
-    {
-        // Base64Url über 48 Bit: acht Zeichen, keine Sonderzeichen, kein
-        // Padding. Ein Code, den niemand vorlesen kann, wäre kein Weg zurück.
-        var code = OffenesTurnier().Enter(Guid.NewGuid(), Guid.NewGuid()).ConfirmationCode;
-
-        Assert.Equal(8, code.Length);
-        Assert.All(code, character => Assert.True(
-            char.IsAsciiLetterOrDigit(character) || character is '-' or '_',
-            $"„{character}“ gehört nicht in einen Code, der vorgelesen wird."));
-    }
-
-    [Fact]
     public void Der_Zeitpunkt_bleibt_beim_Rueckzug_stehen()
     {
         // Bei erschöpfter Kapazität ist die Reihenfolge der Meldungen die

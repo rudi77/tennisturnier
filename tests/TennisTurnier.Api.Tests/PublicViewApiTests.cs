@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -58,6 +58,9 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
                 Teilnehmer = participants,
                 Kontaktdaten = true,
                 Plaetze = 1,
+                // Seit ADR-0012 ist privat die Vorgabe; wer die anonyme
+                // Ansicht prüft, öffnet das Turnier ausdrücklich.
+                Oeffentlich = true,
             });
 
         return (aufbau.Admin, aufbau.TournamentId);
@@ -159,7 +162,7 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
         var etag = first.Headers.ETag;
 
         Assert.NotNull(etag);
-        Assert.True(first.Headers.CacheControl!.Public);
+        Assert.True(first.Headers.CacheControl!.NoCache);
 
         var request = new HttpRequestMessage(HttpMethod.Get, $"/public/tournaments/{tournamentId}");
         request.Headers.IfNoneMatch.Add(etag);

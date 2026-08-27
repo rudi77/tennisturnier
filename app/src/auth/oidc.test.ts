@@ -249,3 +249,79 @@ describe('offener Betrieb', () => {
     expect(falsch.isOpenAccess).toBe(false)
   })
 })
+
+describe('die verwahrte Route', () => {
+  it('überlebt den Umweg über den Aussteller', async () => {
+    // Die Rücksprungadresse beim Aussteller ist die nackte Wurzel — sie muss
+    // dort eingetragen sein, und ein Eintrag je möglicher Adresse wäre nicht
+    // zu pflegen. Die Abfrage ginge auf dem Weg also verloren.
+    window.history.replaceState({}, '', '/?r=tok-abcdef')
+    const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: AUTHORITY })
+
+    oidc.stashRoute()
+
+    // So kommt der Browser vom Aussteller zurück: Wurzel plus Code.
+    window.history.replaceState({}, '', '/?code=abc&state=xyz')
+    oidc.clearCallbackParams()
+
+    expect(window.location.search).toBe('?r=tok-abcdef')
+  })
+
+  it('ist danach verbraucht — ein alter Link geht nicht zweimal auf', async () => {
+    window.history.replaceState({}, '', '/?r=tok-abcdef')
+    const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: AUTHORITY })
+
+    oidc.stashRoute()
+    window.history.replaceState({}, '', '/?code=abc')
+    oidc.clearCallbackParams()
+
+    window.history.replaceState({}, '', '/?code=def')
+    oidc.clearCallbackParams()
+
+    expect(window.location.search).toBe('')
+  })
+
+  it('räumt ohne verwahrte Route nur den Code weg', async () => {
+    const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: AUTHORITY })
+
+    window.history.replaceState({}, '', '/?code=abc&state=xyz')
+    oidc.clearCallbackParams()
+
+    expect(window.location.search).toBe('')
+  })
+
+  it('lässt die zurückgeholte Route beim zweiten Lauf stehen', async () => {
+    // `<StrictMode>` führt den Effekt zweimal aus. Der zweite Lauf findet die
+    // Verwahrung leer — und löschte ohne Sperre genau die Route wieder weg,
+    // die der erste gerade zurückgeholt hat. Genau so ging der Beitrittslink
+    // über der Anmeldung verloren.
+    window.history.replaceState({}, '', '/?r=tok-abcdef')
+    const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: AUTHORITY })
+
+    oidc.stashRoute()
+    window.history.replaceState({}, '', '/?code=abc&state=xyz')
+
+    oidc.clearCallbackParams()
+    oidc.clearCallbackParams()
+
+    expect(window.location.search).toBe('?r=tok-abcdef')
+  })
+
+  it('stößt den Router an — sonst liest niemand die neue Adresse', async () => {
+    // `replaceState` löst kein `popstate` aus, und `useRoute` hört auf nichts
+    // anderes.
+    window.history.replaceState({}, '', '/?r=tok-abcdef')
+    const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: AUTHORITY })
+
+    oidc.stashRoute()
+    window.history.replaceState({}, '', '/?code=abc')
+
+    const gehoert = vi.fn()
+    window.addEventListener('popstate', gehoert)
+    oidc.clearCallbackParams()
+    window.removeEventListener('popstate', gehoert)
+
+    expect(gehoert).toHaveBeenCalled()
+  })
+})
+

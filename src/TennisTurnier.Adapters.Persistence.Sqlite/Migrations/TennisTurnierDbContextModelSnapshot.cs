@@ -158,6 +158,9 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("UserAccountId")
+                        .HasColumnType("TEXT");
+
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Contact", "TennisTurnier.Domain.Players.Player.Contact#PlayerContact", b1 =>
                         {
                             b1.IsRequired();
@@ -178,6 +181,9 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                         });
 
                     b.HasKey("Id");
+
+                    b.HasIndex("UserAccountId")
+                        .IsUnique();
 
                     b.HasIndex("LastName", "FirstName");
 
@@ -267,6 +273,38 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                     b.HasIndex("CourtId", "SequenceOnCourt");
 
                     b.ToTable("CourtAssignments", (string)null);
+                });
+
+            modelBuilder.Entity("TennisTurnier.Domain.Security.Invitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TournamentId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("TournamentId", "Email", "Role")
+                        .IsUnique();
+
+                    b.ToTable("Invitations", (string)null);
                 });
 
             modelBuilder.Entity("TennisTurnier.Domain.Security.RoleAssignment", b =>
@@ -410,6 +448,9 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                     b.Property<Guid>("FormatTemplateId")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("MatchFormat")
                         .HasColumnType("TEXT")
                         .HasColumnName("MatchFormat");
@@ -515,11 +556,6 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
             modelBuilder.Entity("TennisTurnier.Domain.Tournaments.TournamentEntry", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ConfirmationCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Origin")

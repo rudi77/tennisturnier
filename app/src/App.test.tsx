@@ -24,11 +24,13 @@ const state = {
 }
 
 const signinRedirect = vi.fn(() => Promise.resolve())
+const signoutRedirect = vi.fn(() => Promise.resolve())
 const removeUser = vi.fn(() => Promise.resolve())
 
 const manager = {
   getUser: () => Promise.resolve(state.existing),
   signinRedirect,
+  signoutRedirect,
   removeUser,
   events: {
     addUserLoaded: () => {},
@@ -53,6 +55,7 @@ vi.mock('./auth/oidc', () => ({
   isRedirectCallback: () => false,
   completeSignin: () => Promise.resolve(state.existing!),
   clearCallbackParams: () => {},
+  stashRoute: () => {},
   displayName: (u: User | null) => (u?.profile.name as string | undefined) ?? '',
   initials: () => 'SM',
 }))
@@ -79,6 +82,7 @@ beforeEach(() => {
   state.openAccess = false
   state.existing = null
   signinRedirect.mockClear()
+  signoutRedirect.mockClear()
   removeUser.mockClear()
 })
 
@@ -104,31 +108,63 @@ describe('App — Eingang', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Anmeldung wird geprüft …')
   })
 
-  it('stellt den Anmeldelink vor die Anmeldemaske', async () => {
+  it('führt einen Beitrittslink durch die Anmeldung', async () => {
+    // Der Kern des Umbaus: der Link führt jetzt durch die Anmeldung statt an
+    // ihr vorbei — beitreten kann nur, wer ein Konto hat.
     bei('/?r=tok-abcdef')
     render(<App />)
 
-    // Ohne Ladeanzeige und ohne Maske: wer über einen Aushang kommt, soll kein
-    // Konto brauchen.
+    expect(await screen.findByText('Weiterleitung zur Anmeldung …')).toBeInTheDocument()
+    await waitFor(() => expect(signinRedirect).toHaveBeenCalled())
+  })
+
+  it('zeigt den Beitritt, sobald jemand angemeldet ist', async () => {
+    state.existing = angemeldet()
+    bei('/?r=tok-abcdef')
+    render(<App />)
+
     expect(await screen.findByText('Clubmeisterschaft 2026')).toBeInTheDocument()
-    expect(screen.queryByText('Turnierleitung')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Melden und beitreten/ })).toBeInTheDocument()
   })
 
-  it('zeigt ohne Anmeldung die Maske', async () => {
+  it('führt nach dem Beitritt in den Ablauf des Turniers', async () => {
+    state.existing = angemeldet()
+    bei('/?r=tok-abcdef')
     render(<App />)
 
-    expect(await screen.findByText('Turnierleitung')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Anmelden' })).toBeInTheDocument()
+    // Ohne zu melden: der Name steht in diesem Konto nicht getrennt, und für
+    // den Weg in den Ablauf macht es keinen Unterschied.
+    const u = userEvent()
+    await u.click(
+      await screen.findByRole('button', { name: 'Nur beitreten, ohne mitzuspielen' }),
+    )
+    await u.click(await screen.findByRole('button', { name: 'Turnier öffnen' }))
+
+    await waitFor(() => expect(window.location.search).toContain('screen=flow'))
+    expect(window.location.search).toContain(`t=${T}`)
+    expect(window.location.search).not.toContain('r=')
   })
 
-  it('führt von der Maske in die öffentliche Ansicht', async () => {
+  it('schickt ohne Anmeldung sofort zum Aussteller', async () => {
+    // Hier stand eine Startseite mit zwei Schaltflächen. Die eine war ein
+    // Zwischenschritt, der nichts fragte; die andere führte ohne Turnier auf
+    // eine leere Seite.
     render(<App />)
-    await screen.findByText('Turnierleitung')
 
-    await userEvent().click(screen.getByRole('button', { name: 'Öffentliche Live-Ansicht' }))
+    expect(await screen.findByText('Weiterleitung zur Anmeldung …')).toBeInTheDocument()
+    await waitFor(() => expect(signinRedirect).toHaveBeenCalledTimes(1))
+  })
 
-    expect(await screen.findByText('Live-Ansicht')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Anmelden' })).toBeInTheDocument()
+  it('leitet nach einem Fehlschlag nicht weiter, sondern erklärt ihn', async () => {
+    // Sonst entstünde eine Schleife, in der die Anwendung bei jedem Fehlschlag
+    // erneut wegschickt und niemand erfährt, warum.
+    signinRedirect.mockRejectedValueOnce(new Error('IdP nicht erreichbar'))
+    render(<App />)
+
+    expect(await screen.findByText('IdP nicht erreichbar')).toBeInTheDocument()
+
+    await userEvent().click(screen.getByRole('button', { name: 'Erneut versuchen' }))
+    expect(signinRedirect).toHaveBeenCalledTimes(2)
   })
 
   it('führt einen geteilten Zuschauerlink direkt zum Zusehen', async () => {
@@ -154,6 +190,16 @@ describe('App — Eingang', () => {
 
     expect(await screen.findByText('Clubmeisterschaft 2026')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Anmelden' })).not.toBeInTheDocument()
+  })
+
+  it('zeigt ohne Aussteller und ohne Turnier die Zuschauerseite', async () => {
+    // Es gibt nichts, wohin man leiten könnte. Die Zuschauerseite ist der
+    // einzige Teil, der ohne Anmeldung überhaupt etwas zeigen kann.
+    state.configured = false
+    bei('/')
+    render(<App />)
+
+    expect(await screen.findByText(/Die Adresse braucht die Turnier-Id/)).toBeInTheDocument()
   })
 
   it('geht im offenen Betrieb ohne Maske in den Arbeitsbereich', async () => {
@@ -287,7 +333,7 @@ describe('App — Arbeitsbereich', () => {
     await screen.findByRole('heading', { name: 'Ablauf' })
 
     await userEvent().click(screen.getByRole('button', { name: 'Abmelden' }))
-    expect(removeUser).toHaveBeenCalled()
+    expect(signoutRedirect).toHaveBeenCalled()
   })
 })
 

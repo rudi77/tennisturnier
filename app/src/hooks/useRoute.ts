@@ -43,13 +43,16 @@ function read(): Route {
 }
 
 /**
- * Die Adresse, unter der sich jemand ohne Konto zu diesem Turnier meldet.
+ * Die Adresse, unter der jemand diesem Turnier beitritt.
  *
  * Sie steht hier, weil `read()` daneben das andere Ende desselben Parameters
  * liest. Gebaut wurde sie vorher an zwei Stellen von Hand — und wer `?r=`
  * ändert, findet hier beide Enden nebeneinander statt einer davon.
+ *
+ * Der Parameter heißt weiterhin `r`: die Adresse steht auf ausgehängten
+ * Zetteln, und ein neuer Buchstabe machte sie ungültig.
  */
-export function registrationUrl(token: string): string {
+export function joinUrl(token: string): string {
   return `${window.location.origin}${window.location.pathname}?r=${encodeURIComponent(token)}`
 }
 

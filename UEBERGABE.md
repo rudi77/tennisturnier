@@ -1,5 +1,15 @@
 # Übergabe — Stand 6. August 2026
 
+> **Überholt an einer Stelle.** Dieses Dokument beschreibt den Stand vom
+> 6. August 2026 und bleibt als solcher stehen. Der Meldeweg darin — melden
+> über einen Link, ohne Konto — gilt seit
+> [ADR-0012](docs/adr/0012-mitgliedschaft-statt-selbstmeldung.md) nicht mehr:
+> ein Turnier ist eine Gruppe, der Link führt zum Beitritt, und wer beitritt,
+> hat ein Konto. Damit sind auch der Bestätigungscode und die Schranke vor den
+> anonymen Endpunkten entfallen; die Lücke „Einladung noch nicht angemeldeter
+> Benutzer" ist geschlossen. Der aktuelle Stand steht in `README.md` und
+> `docs/roadmap.md`.
+
 Branch `feature/erster-turnierablauf`, HEAD = `f355bae`, Arbeitsverzeichnis
 sauber, **682 Tests grün**, Frontend baut.
 
@@ -181,7 +191,8 @@ unbekannte Token, `[]` für Anonyme).
 | Frage | Datei |
 |---|---|
 | Warum der Verein weg ist | `docs/adr/0009-turnier-als-wurzelaggregat.md` |
-| Wie der Meldeweg funktioniert | `docs/adr/0010-oeffentliche-selbstmeldung.md` |
+| Wie der Beitritt funktioniert | `docs/adr/0012-mitgliedschaft-statt-selbstmeldung.md` |
+| Wie der Meldeweg davor funktionierte | `docs/adr/0010-oeffentliche-selbstmeldung.md` |
 | Was von ADR-0004/0008 noch gilt | Vermerk oben in beiden Dateien |
 | Offene Punkte, Milestones | `docs/roadmap.md` |
 | Wie ein Test ein Turnier aufbaut | `tests/TennisTurnier.Api.Tests/TurnierAufbau.cs` |

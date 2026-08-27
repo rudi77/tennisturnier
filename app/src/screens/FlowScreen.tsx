@@ -16,7 +16,7 @@ import {
   TournamentState,
   type TournamentDetail,
 } from '../api/types'
-import { publicUrl, registrationUrl } from '../hooks/useRoute'
+import { joinUrl, publicUrl } from '../hooks/useRoute'
 import type { ScreenId } from '../components/layout/AppNav'
 
 /**
@@ -238,7 +238,7 @@ function Actions({
               <input
                 className="md-input"
                 readOnly
-                value={registrationUrl(registration.data.token)}
+                value={joinUrl(registration.data.token)}
                 aria-label="Anmeldelink"
                 style={{ width: '100%', fontSize: 'var(--fs-xs)' }}
                 onFocus={(event) => event.currentTarget.select()}
@@ -248,7 +248,7 @@ function Actions({
             <div className="md-flow__row">
               {registration.data && (
                 <ShareLink
-                  url={registrationUrl(registration.data.token)}
+                  url={joinUrl(registration.data.token)}
                   label="Link kopieren"
                   shareTitle={tournament.name}
                   shareText={`Melde dich zu „${tournament.name}" an:`}
@@ -373,12 +373,25 @@ function Actions({
  * Er steht erst ab dem Draw, weil es vorher nichts zu sehen gibt: die
  * Projektion entsteht mit der Auslosung, und ein Link, der auf „noch keine
  * öffentliche Ansicht" führt, wäre ein Versprechen, das die Turnierleitung
- * einlösen müsste. Anders als der Anmeldelink braucht er kein Token — die
+ * einlösen müsste. Anders als der Beitrittslink braucht er kein Token — die
  * Turnier-Id genügt, und mehr als Namen, Ergebnisse und Zeiten gibt die
  * Projektion ohnehin nicht her.
+ *
+ * Und er steht nur bei einem öffentlichen Turnier. Ein Turnier ist seit
+ * ADR-0012 privat, solange niemand es öffnet; ein Link, den man weitergibt und
+ * der beim Empfänger auf „nicht öffentlich" läuft, wäre schlimmer als keiner.
  */
 function SpectatorLink({ tournament }: { tournament: TournamentDetail }) {
   const url = publicUrl(tournament.id)
+
+  if (!tournament.isPublic) {
+    return (
+      <div className="md-hint" style={{ marginTop: 'var(--sp-8)' }}>
+        Dieses Turnier ist privat: nur wer dazugehört, sieht es. Unter „Meldungen" lässt es sich
+        öffentlich stellen — dann steht hier auch ein Zuschauerlink.
+      </div>
+    )
+  }
 
   return (
     <div style={{ marginTop: 'var(--sp-8)' }}>

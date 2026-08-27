@@ -90,10 +90,10 @@ Siehe `.env.example`. Die vier, auf die es ankommt:
 src/
   api/          types.ts (Verträge) · client.ts (fetch + ProblemDetails)
                 endpoints.ts (Endpunkte 1:1) · realtime.ts (SignalR)
-  auth/         oidc.ts · AuthProvider.tsx · LoginScreen.tsx
+  auth/         oidc.ts · AuthProvider.tsx
   components/   core/ · layout/ (AppNav, AppBar, Sheet, ScreenHeader) · tournament/
   screens/      FlowScreen · TournamentsScreen · EntriesScreen · DrawScreen
-                BoardScreen · CreateScreen · RegistrationScreen · PublicScreen
+                BoardScreen · CreateScreen · JoinScreen · PublicScreen
   hooks/        useResource · useToast · usePublicView · useRoute
   lib/          time.ts (Zeitzone, TimeSpan) · labels.ts (deutsche Beschriftungen)
   styles/       tokens/ (unverändert aus dem Design System) · app.css
@@ -209,21 +209,27 @@ trotzdem *optional*:
   mit der das erste entsteht. Hier stand einmal ein `ClubScreen`, auf dem jemand
   einen Verein anlegen musste, bevor irgendetwas ging. Er ist mit ADR-0009
   entfallen; Plätze und ihre Zeiten entstehen jetzt beim Anlegen.
-- `RegistrationScreen` — die öffentliche Anmeldung, erreichbar über `?r=<token>`
-  und **vor** der Anmeldemaske. Wer über einen Aushang kommt, soll kein Konto
-  brauchen; eine Anmeldemaske davor nähme dem Link seinen Zweck (ADR-0010).
-- `EntriesScreen` — die Meldungsverwaltung: Anmeldelink samt Kapazität und
-  Meldeschluss, Meldungen annehmen oder auf die Warteliste, dazu das Panel, über
-  das Schiedsrichter und weitere Turnierleiter berufen werden. Kontaktdaten
-  stehen nur darin, wenn das Backend sie mitschickt — ein Ausblenden im Frontend
-  wäre kein Schutz, sondern eine Behauptung.
+- `JoinScreen` — der Beitritt, erreichbar über `?r=<token>` und **hinter** der
+  Anmeldung. Hier stand einmal ein `RegistrationScreen` ohne Konto davor; seit
+  ADR-0012 ist ein Turnier eine Gruppe, und wer beitritt, hat ein Konto. Der
+  Link bleibt derselbe: wer noch keines hat, legt beim Aussteller eines an und
+  landet danach wieder hier — dafür wird die Route über den Redirect verwahrt
+  (`stashRoute`/`restoreRoute` in `oidc.ts`). Zwei Schaltflächen, weil es zwei
+  Arten gibt dazuzugehören: mitspielen oder bloß zusehen.
+- `EntriesScreen` — die Meldungsverwaltung: Beitrittslink samt Kapazität und
+  Meldeschluss, der Schalter zwischen privat und öffentlich, Meldungen annehmen
+  oder auf die Warteliste, dazu das Panel, über das Schiedsrichter, weitere
+  Turnierleiter und Mitglieder berufen oder eingeladen werden. Eine Einladung an
+  eine Adresse ohne Konto steht dort als „eingeladen, noch nie angemeldet".
+  Kontaktdaten stehen nur darin, wenn das Backend sie mitschickt — ein
+  Ausblenden im Frontend wäre kein Schutz, sondern eine Behauptung.
 - `DrawPreparation` (im `DrawScreen`, solange kein Draw steht) — Meldung öffnen,
   Teilnehmer melden, Meldeschluss, auslosen. Die Endpunkte dafür lagen in
   `endpoints.ts`, aber kein Screen rief sie auf: ein angelegtes Turnier blieb im
   Zustand `Draft` stehen, und der Turniertag antwortete zu Recht mit „setzt eine
   Auslosung voraus", ohne den Weg dorthin zu zeigen. Eine hier erfasste Meldung
   wird gleich angenommen; Warteliste, Setzpositionen und Rückzug stehen im
-  `EntriesScreen`, wo sie hingehören — dort kommen seit ADR-0010 auch die
+  `EntriesScreen`, wo sie hingehören — dort kommen seit ADR-0012 auch die
   Meldungen an, die niemand erfasst hat.
 
 ---

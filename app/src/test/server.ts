@@ -25,7 +25,7 @@ import type {
   MeResponse,
   PhaseDetail,
   PlayerSummary,
-  PublicRegistrationView,
+  JoinView,
   PublicTournamentView,
   RegistrationDetail,
   SchedulePlanResult,
@@ -47,7 +47,7 @@ export interface FakeDb {
   board: CourtBoard[]
   plan: SchedulePlanResult
   registration: RegistrationDetail
-  publicRegistration: PublicRegistrationView
+  join: JoinView
   publicView: PublicTournamentView
   roles: TournamentRoleSummary[]
   templates: FormatTemplateSummary[]
@@ -80,7 +80,7 @@ function initial(): FakeDb {
     board: [fx.courtBoard(), fx.courtBoard({ courtId: IDS.court2, courtName: 'Platz 2', isCenterCourt: false, queue: [] })],
     plan: fx.schedulePlan(),
     registration: fx.registrationDetail(),
-    publicRegistration: fx.publicRegistrationView(),
+    join: fx.joinView(),
     publicView: fx.publicView(),
     roles: [fx.tournamentRole()],
     templates: [
@@ -319,15 +319,26 @@ export const handlers: HttpHandler[] = [
     return HttpResponse.json(db.publicView, { headers: { ETag: db.publicEtag } })
   }),
 
-  on('get', '/public/registrations/:token', ({ params }) =>
+  on('get', '/api/join/:token', ({ params }) =>
     params.token === 'unbekannt'
-      ? problem(404, 'Anmeldelink unbekannt.')
-      : HttpResponse.json(db.publicRegistration),
+      ? problem(404, 'Beitrittslink unbekannt.')
+      : HttpResponse.json(db.join),
   ),
 
-  on('post', '/public/registrations/:token', () =>
-    HttpResponse.json({ confirmationCode: 'XYZ789', status: 0 }, { status: 201 }),
-  ),
+  // Was zurückkommt, hängt davon ab, ob mitgespielt wird: ohne Meldung gibt es
+  // keine Meldungskennung — und genau daran unterscheidet die Oberfläche die
+  // beiden Bestätigungen.
+  on('post', '/api/join/:token', async ({ request }) => {
+    const body = (await request.json()) as { play: boolean }
+
+    return HttpResponse.json({
+      tournamentId: IDS.tournament,
+      entryId: body.play ? IDS.entry1 : null,
+      status: body.play ? 0 : null,
+    })
+  }),
+
+  on('put', '/api/tournaments/:id/visibility', noContent),
 
   // SignalR: der Hub wird in jsdom nicht ausgehandelt. Ein 404 auf `negotiate`
   // ist genau der Fall, für den `usePublicView` den Rückfall auf Polling hat —

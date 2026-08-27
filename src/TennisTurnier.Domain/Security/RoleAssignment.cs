@@ -61,6 +61,7 @@ public sealed class RoleAssignment : Entity
         Role.Organizer => ScopeType.Global,
         Role.TournamentDirector => ScopeType.Tournament,
         Role.Referee => ScopeType.Tournament,
+        Role.Member => ScopeType.Tournament,
         _ => throw new DomainException($"Unbekannte Rolle {role}."),
     };
 

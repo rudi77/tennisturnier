@@ -97,7 +97,8 @@ public sealed record TournamentSummary(
     DateOnly? EndsOn,
     TournamentState State,
     SchedulingMode SchedulingMode,
-    int AcceptedEntries);
+    int AcceptedEntries,
+    bool IsPublic);
 
 /// <param name="MatchFormat">
 /// Das am Turnier eingestellte Satzformat, sofern eines eingestellt ist.
@@ -123,9 +124,16 @@ public sealed record TournamentDetail(
     MatchFormat EffectiveMatchFormat,
     IReadOnlyList<CourtDetail> Courts,
     IReadOnlyList<EntryDetail> Entries,
-    int Version);
+    int Version,
+    bool IsPublic);
 
 public sealed record VenueDetail(string Name, string? Address, string? City, string TimeZoneId);
+
+/// <param name="IsPublic">
+/// Wahr heißt: die Zuschaueransicht steht jedem offen, der die Adresse hat.
+/// Falsch heißt: nur den Mitgliedern dieses Turniers.
+/// </param>
+public sealed record SetVisibilityRequest(bool IsPublic);
 
 /// <summary>
 /// Der Anmeldelink samt seinen Bedingungen. Nur für die Turnierleitung — das
@@ -164,11 +172,6 @@ public sealed record EntryDetail(
 /// hereinlässt, wer das Turnier verwaltet <em>und</em> die Innenansicht sehen
 /// darf; wer nur Ergebnisse einträgt, kommt gar nicht so weit.
 /// </param>
-/// <param name="ConfirmationCode">
-/// Aus demselben Grund hier: er ist der Weg eines Melders ohne Konto zu seiner
-/// Meldung — die Turnierleitung braucht ihn, wenn jemand anruft und ihn
-/// verlegt hat.
-/// </param>
 public sealed record EntryOverview(
     Guid Id,
     Guid ParticipantId,
@@ -177,7 +180,6 @@ public sealed record EntryOverview(
     EntryStatus Status,
     EntryOrigin Origin,
     DateTimeOffset RegisteredAt,
-    string? ConfirmationCode,
     IReadOnlyList<EntryContact> Contacts,
     Guid? TeamEntryId);
 

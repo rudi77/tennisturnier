@@ -19,21 +19,23 @@ import type {
   FormatDefinition,
   FormatTemplateDetail,
   FormatTemplateSummary,
+  GrantRoleResult,
   ImportEntriesResult,
+  JoinRequest,
+  JoinResult,
+  JoinView,
   MatchFormat,
   MatchOutcome,
   MeResponse,
   ParticipantSummary,
   PhaseDetail,
   PlayerSummary,
-  PublicRegistrationView,
   PublicTournamentView,
   RegistrationDetail,
   Role,
   SchedulePlanResult,
-  SelfRegistrationRequest,
-  SelfRegistrationResult,
   SetScore,
+  SetVisibilityRequest,
   StandingsDetail,
   TeamFormation,
   TournamentDetail,
@@ -205,6 +207,13 @@ export const tournaments = {
   rotateRegistrationLink: (id: string) =>
     http.post<void>(`/api/tournaments/${id}/registration/link/rotate`),
 
+  /**
+   * Öffnet die Zuschaueransicht für Fremde — oder schließt sie wieder. Ein
+   * Attribut und keine Handlung: beide Richtungen sind derselbe Zug.
+   */
+  setVisibility: (id: string, body: SetVisibilityRequest) =>
+    http.put<void>(`/api/tournaments/${id}/visibility`, body),
+
   // --- Rollen ---
   // Vergeben lassen sich ausschließlich TournamentDirector und Referee, und nur
   // an diesem Turnier. Eine globale Rolle weist die API mit 422 ab — die
@@ -212,29 +221,31 @@ export const tournaments = {
 
   roles: (id: string) => http.get<TournamentRoleSummary[]>(`/api/tournaments/${id}/roles`),
 
-  /** Berufen wird über die E-Mail-Adresse eines bestehenden Kontos. */
+  /**
+   * Berufen oder einladen. Gibt es zu der Adresse ein Konto, bekommt es die
+   * Rolle sofort; sonst wartet eine Einladung auf die erste Anmeldung.
+   */
   grantRole: (id: string, body: { email: string; role: Role }) =>
-    http.post<{ id: string }>(`/api/tournaments/${id}/roles`, body),
+    http.post<GrantRoleResult>(`/api/tournaments/${id}/roles`, body),
 
   revokeRole: (id: string, assignmentId: string) =>
     http.del<void>(`/api/tournaments/${id}/roles/${assignmentId}`),
 }
 
-// --- Öffentliche Selbstmeldung ----------------------------------------------
+// --- Beitritt ---------------------------------------------------------------
 
 /**
- * Der anonyme Meldeweg.
+ * Der Weg, den ein geteilter Link öffnet.
  *
- * Ohne Token im Header und ohne Anmeldung: autorisiert ist er allein durch das
- * Token im Pfad. Ein mitgeschicktes Zugangstoken würde nur suggerieren, die
- * Antwort hinge davon ab.
+ * Autorisiert ist er durch zweierlei: das Token im Pfad — es ist die
+ * Eintrittskarte — und die Anmeldung. Ohne Konto antwortet der Server mit 401,
+ * und die Oberfläche schickt zur Anmeldung, die danach hierher zurückführt.
  */
-export const publicRegistration = {
-  get: (token: string) =>
-    http.get<PublicRegistrationView>(`/public/registrations/${encodeURIComponent(token)}`),
+export const join = {
+  get: (token: string) => http.get<JoinView>(`/api/join/${encodeURIComponent(token)}`),
 
-  submit: (token: string, body: SelfRegistrationRequest) =>
-    http.post<SelfRegistrationResult>(`/public/registrations/${encodeURIComponent(token)}`, body),
+  submit: (token: string, body: JoinRequest) =>
+    http.post<JoinResult>(`/api/join/${encodeURIComponent(token)}`, body),
 }
 
 // --- Formatvorlagen ---------------------------------------------------------

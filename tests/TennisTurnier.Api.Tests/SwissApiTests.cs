@@ -34,6 +34,7 @@ public sealed class SwissApiTests : IClassFixture<TennisTurnierApiFactory>
                 Name = "Schweizer Turnier",
                 Anlage = "TC Schweiz",
                 Teilnehmer = participants,
+                Oeffentlich = true,
             });
 
         return (aufbau.Admin, aufbau.TournamentId);

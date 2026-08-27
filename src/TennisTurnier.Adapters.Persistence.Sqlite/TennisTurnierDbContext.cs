@@ -42,6 +42,8 @@ public sealed class TennisTurnierDbContext : DbContext
 
     public DbSet<RoleAssignment> RoleAssignments => Set<RoleAssignment>();
 
+    public DbSet<Invitation> Invitations => Set<Invitation>();
+
     /// <summary>
     /// Die öffentliche Projektion (ADR-0003). Bewusst ohne Query-Filter — sie
     /// wird von Zuschauern ohne Anmeldung gelesen.

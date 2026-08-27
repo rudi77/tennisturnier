@@ -38,6 +38,7 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
                 Teilnehmer = participants,
                 Plaetze = courts,
                 Platzzeiten = true,
+                Oeffentlich = true,
                 Spielplan = true,
                 Turniertag = true,
 

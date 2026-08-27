@@ -102,8 +102,22 @@ public sealed class Tournament : Entity
     /// </summary>
     public IReadOnlyList<TournamentCourt> Courts => _courts;
 
-    /// <summary>Der Weg, auf dem sich jemand ohne Konto zu diesem Turnier meldet.</summary>
+    /// <summary>Der Weg, auf dem jemand diesem Turnier beitritt.</summary>
     public RegistrationLink Registration { get; private set; }
+
+    /// <summary>
+    /// Darf die öffentliche Ansicht auch sehen, wer nicht dazugehört?
+    ///
+    /// Vorgabe nein. Ein Turnier ist zuerst eine Gruppe: seine Mitglieder sehen
+    /// es, sonst niemand. Der Clubhaus-Monitor und der Link, der in der
+    /// Vereinsgruppe herumgeht, sind der andere Fall — er ist gewollt, aber er
+    /// ist eine Entscheidung und keine Voreinstellung.
+    ///
+    /// Der Schalter gilt nur nach außen. Wer eine Rolle am Turnier hat, sieht
+    /// die Zuschaueransicht immer — auch die Vorschau darauf, was Fremde sähen,
+    /// wenn man sie öffnete.
+    /// </summary>
+    public bool IsPublic { get; private set; }
 
     /// <summary>
     /// Wann gespielt wird — oder leer, solange es noch nicht feststeht.
@@ -199,6 +213,25 @@ public sealed class Tournament : Entity
     {
         RequireNotFinished();
         SetDates(startsOn, endsOn);
+        Touch();
+    }
+
+    /// <summary>
+    /// Öffnet das Turnier für Fremde — oder schließt es wieder.
+    ///
+    /// Auch nach dem Ende erlaubt, anders als die übrigen Änderungen: dass ein
+    /// abgeschlossenes Turnier seine Ergebnisse noch zeigen darf, ist eine
+    /// gewöhnliche Entscheidung — und der Weg zurück muss offen bleiben, wenn
+    /// jemand feststellt, dass die Liste doch nicht ins Netz gehört.
+    /// </summary>
+    public void SetVisibility(bool isPublic)
+    {
+        if (IsPublic == isPublic)
+        {
+            return;
+        }
+
+        IsPublic = isPublic;
         Touch();
     }
 

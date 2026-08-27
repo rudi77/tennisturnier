@@ -4,6 +4,7 @@ import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { MatchdayMark } from '../components/core/MatchdayMark'
 import { StatusChip } from '../components/core/StatusChip'
 import { ShareLink } from '../components/tournament/ShareLink'
+import { ApiError } from '../api/client'
 import { usePublicView } from '../hooks/usePublicView'
 import { publicUrl } from '../hooks/useRoute'
 import { useWorkspaceOptional } from '../state/WorkspaceContext'
@@ -90,6 +91,14 @@ export function PublicScreen({
           ? 'Die Adresse braucht die Turnier-Id: ?t=<guid>. Den vollständigen Link gibt die Turnierleitung heraus.'
           : 'Kein Turnier ausgewählt.'
       }
+    />
+  ) : state.error instanceof ApiError && state.error.isNotFound ? (
+    // Ein privates Turnier und eines, das es nicht gibt, sind von außen nicht
+    // zu unterscheiden — das ist Absicht (ADR-0004/0012). Der Hinweis sagt
+    // deshalb beides und nennt den Weg hinein: einen Beitrittslink.
+    <Empty
+      title="Dieses Turnier ist nicht öffentlich"
+      hint="Entweder gibt es das Turnier nicht, oder es ist privat — dann sehen es nur seine Mitglieder. Wer dazugehören soll, bekommt von der Turnierleitung einen Beitrittslink."
     />
   ) : state.error ? (
     <ErrorBlock error={state.error} onRetry={() => void state.reload()} />

@@ -1,8 +1,10 @@
 {
   "realm": "tennisturnier",
+  "displayName": "MATCHDAY",
+  "displayNameHtml": "<strong>MATCHDAY</strong>",
   "enabled": true,
   "sslRequired": "external",
-  "registrationAllowed": false,
+  "registrationAllowed": true,
   "accessTokenLifespan": 3600,
   "clients": [
     {
@@ -34,7 +36,10 @@
             "access.token.claim": "true"
           }
         }
-      ]
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:5000/*##http://localhost:5001/*##http://192.168.2.213:5000/*##${MATCHDAY_ORIGIN:http://localhost:5000}/*"
+      }
     }
   ],
   "users": [
@@ -102,5 +107,10 @@
         "useJwksUrl": "true"
       }
     }
-  ]
+  ],
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "duplicateEmailsAllowed": false
 }

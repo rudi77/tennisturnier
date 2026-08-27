@@ -99,16 +99,50 @@ public sealed class PublicViewService : IPublicViewService
         _clock = clock;
     }
 
+    /// <summary>
+    /// Die öffentliche Ansicht — für den, der sie sehen darf.
+    ///
+    /// Das ist seit ADR-0012 nicht mehr jeder: ein Turnier ist zuerst eine
+    /// Gruppe. Wer eine Rolle daran hat, sieht sie immer — auch als Vorschau
+    /// darauf, was Fremde sähen. Alle anderen nur, wenn die Turnierleitung das
+    /// Turnier ausdrücklich geöffnet hat.
+    ///
+    /// Wer nicht darf, bekommt <c>null</c> und damit dieselbe Antwort wie bei
+    /// einem Turnier, das es nicht gibt: ein 404. Ein 403 verriete, dass es
+    /// existiert — dieselbe Regel wie beim Query-Filter (ADR-0004).
+    /// </summary>
     public async Task<PublicTournamentSnapshot?> GetAsync(
         Guid tournamentId,
         CancellationToken cancellationToken = default)
     {
+        if (!await MayViewAsync(tournamentId, cancellationToken))
+        {
+            return null;
+        }
+
         var projection = await _projections.FindAsync(tournamentId, cancellationToken);
 
         return projection is null
             ? null
             : new PublicTournamentSnapshot(
                 projection.Json, projection.ETag, projection.UpdatedAt, projection.Version);
+    }
+
+    /// <summary>
+    /// Die Sichtbarkeit wird über den Repositoryweg erfragt und nicht über den
+    /// Query-Filter: der Aufrufer ist hier meistens gar nicht angemeldet, und
+    /// für ihn wäre jedes Turnier unsichtbar — auch das geöffnete.
+    /// </summary>
+    private async Task<bool> MayViewAsync(Guid tournamentId, CancellationToken cancellationToken)
+    {
+        var user = _userContext.Current;
+
+        if (user.IsSystemAdmin || user.TournamentIds.Contains(tournamentId))
+        {
+            return true;
+        }
+
+        return await _tournaments.IsPublicAsync(tournamentId, cancellationToken) == true;
     }
 
     public async Task RebuildOnDemandAsync(Guid tournamentId, CancellationToken cancellationToken = default)

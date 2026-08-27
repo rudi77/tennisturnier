@@ -41,7 +41,7 @@ public sealed class TournamentHubTests : IClassFixture<TennisTurnierApiFactory>
     {
         var aufbau = await _factory.NeuesTurnierAsync(
             "hub-admin",
-            new TurnierWunsch { Anlage = "TC Hub", Teilnehmer = 4 });
+            new TurnierWunsch { Anlage = "TC Hub", Teilnehmer = 4, Oeffentlich = true });
 
         return (aufbau.Admin, aufbau.TournamentId);
     }

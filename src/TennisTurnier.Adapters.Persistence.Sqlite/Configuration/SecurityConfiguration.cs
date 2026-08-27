@@ -22,6 +22,36 @@ public sealed class UserAccountConfiguration : IEntityTypeConfiguration<UserAcco
     }
 }
 
+/// <summary>
+/// Die Einladung, die auf ihr Konto wartet.
+///
+/// Kein Fremdschlüssel auf ein Konto — es gibt ja gerade keines. Und keiner
+/// auf das Turnier: die Einladung ist wie die Rollenzuweisung Grundlage der
+/// Sichtbarkeit und darf nicht in deren Query-Filter geraten.
+/// </summary>
+public sealed class InvitationConfiguration : IEntityTypeConfiguration<Invitation>
+{
+    public void Configure(EntityTypeBuilder<Invitation> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.ToTable("Invitations");
+        builder.HasKey(i => i.Id);
+
+        builder.Property(i => i.TournamentId).IsRequired();
+        builder.Property(i => i.Email).IsRequired().HasMaxLength(320);
+        builder.Property(i => i.Role).HasConversion<string>().HasMaxLength(30);
+        builder.Property(i => i.CreatedAt).IsRequired();
+
+        // Der Weg beim ersten Login geht über die Adresse allein.
+        builder.HasIndex(i => i.Email);
+
+        // Dieselbe Rolle zweimal an dieselbe Adresse ist keine zweite
+        // Einladung, sondern der zweite Klick auf dieselbe Schaltfläche.
+        builder.HasIndex(i => new { i.TournamentId, i.Email, i.Role }).IsUnique();
+    }
+}
+
 public sealed class RoleAssignmentConfiguration : IEntityTypeConfiguration<RoleAssignment>
 {
     public void Configure(EntityTypeBuilder<RoleAssignment> builder)

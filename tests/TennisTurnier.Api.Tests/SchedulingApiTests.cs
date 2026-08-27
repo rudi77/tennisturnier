@@ -38,6 +38,7 @@ public sealed class SchedulingApiTests : IClassFixture<TennisTurnierApiFactory>
                 Plaetze = courts,
                 CenterCourt = true,
                 Platzzeiten = true,
+                Oeffentlich = true,
             });
 
         return (aufbau.Admin, aufbau.TournamentId);

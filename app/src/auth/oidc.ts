@@ -105,9 +105,53 @@ export function completeSignin(manager: UserManager): Promise<User> {
   return pendingExchange
 }
 
-/** Entfernt code/state aus der Adresszeile, damit ein Neuladen nicht scheitert. */
+/**
+ * Wohin jemand wollte, bevor er zur Anmeldung geschickt wurde.
+ *
+ * Die Navigation dieser Anwendung steht in der Adresszeile („?screen=board",
+ * „?r=<token>"), die Rücksprungadresse beim Aussteller ist aber die nackte
+ * Wurzel — sie muss dort eingetragen sein, und ein Eintrag je möglicher
+ * Adresse wäre nicht zu pflegen. Die Abfrage geht auf dem Weg also verloren.
+ *
+ * Sie wartet deshalb hier. In der Sitzung und nicht dauerhaft: sie gilt für
+ * genau eine Anmeldung, und ein Beitrittslink, den man vor zwei Tagen geöffnet
+ * hat, soll nicht plötzlich wieder aufgehen.
+ */
+const ROUTE_KEY = 'matchday:zurueck'
+
+export function stashRoute(): void {
+  window.sessionStorage.setItem(ROUTE_KEY, window.location.search)
+}
+
+/** Die verwahrte Abfrage — und sie ist danach verbraucht. */
+export function restoreRoute(): string {
+  const verwahrt = window.sessionStorage.getItem(ROUTE_KEY) ?? ''
+  window.sessionStorage.removeItem(ROUTE_KEY)
+  return verwahrt
+}
+
+/**
+ * Entfernt code/state aus der Adresszeile, damit ein Neuladen nicht scheitert
+ * — und stellt dabei her, wohin der Anmeldende ursprünglich wollte.
+ */
 export function clearCallbackParams(): void {
-  window.history.replaceState({}, document.title, window.location.pathname)
+  const verwahrt = restoreRoute()
+
+  // Nichts zu entfernen und nichts zurückzuholen: dann auch nicht schreiben.
+  // `<StrictMode>` führt den Effekt zweimal aus, und der zweite Lauf fände die
+  // Verwahrung leer — ohne diese Sperre löschte er genau die Route wieder aus
+  // der Adresszeile, die der erste gerade zurückgeholt hat.
+  if (!verwahrt && !isRedirectCallback()) {
+    return
+  }
+
+  window.history.replaceState({}, document.title, window.location.pathname + verwahrt)
+
+  // `replaceState` löst von sich aus kein `popstate` aus, der Router hört
+  // aber genau darauf. Ohne diesen Anstoß bliebe die wiederhergestellte
+  // Route eine Zeile in der Adresszeile, die niemand liest — und wer über
+  // einen Beitrittslink kam, stünde nach der Anmeldung im Nirgendwo.
+  window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
 export function displayName(user: User | null): string {

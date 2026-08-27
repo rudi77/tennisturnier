@@ -141,7 +141,8 @@ public sealed class TournamentService : ITournamentService
                 t.EndsOn,
                 t.State,
                 t.SchedulingMode,
-                t.AcceptedEntries.Count))];
+                t.AcceptedEntries.Count,
+                t.IsPublic))];
 
     public async Task<TournamentDetail> GetAsync(Guid tournamentId, CancellationToken cancellationToken = default)
     {
@@ -179,7 +180,8 @@ public sealed class TournamentService : ITournamentService
                     e.Status,
                     e.TeamEntryId))
                 .ToList(),
-            tournament.Version);
+            tournament.Version,
+            tournament.IsPublic);
     }
 
     private static CourtDetail Describe(TournamentCourt court) => new(
@@ -553,6 +555,16 @@ public sealed class TournamentService : ITournamentService
         CancellationToken cancellationToken = default) =>
         MutateAsync(tournamentId, t => t.RotateRegistrationLink(), cancellationToken);
 
+    public Task SetVisibilityAsync(
+        Guid tournamentId,
+        SetVisibilityRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return MutateAsync(tournamentId, t => t.SetVisibility(request.IsPublic), cancellationToken);
+    }
+
     // --- Meldungen --------------------------------------------------------
 
     /// <summary>
@@ -595,7 +607,6 @@ public sealed class TournamentService : ITournamentService
                     entry.Status,
                     entry.Origin,
                     entry.RegisteredAt,
-                    entry.ConfirmationCode,
                     contactsByParticipant.GetValueOrDefault(entry.ParticipantId, []),
                     entry.TeamEntryId))
         ];

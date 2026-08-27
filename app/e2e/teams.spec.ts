@@ -77,11 +77,13 @@ test('stellt ein Team von Hand und löst es wieder auf', async ({ page, api }) =
   await expect(page.getByText('2 ohne Team')).toBeVisible()
 })
 
-test('fragt im Meldeformular keinen Partner', async ({ page, api }) => {
+test('fragt beim Beitritt keinen Partner', async ({ page, api }) => {
   const turnier = await turnierMitFeld(api, 0, { discipline: 1, teamFormation: 1 })
   const link = await api.get<{ token: string }>(`/api/tournaments/${turnier.id}/registration`)
 
-  await page.goto(`/?r=${encodeURIComponent(link.token)}`)
+  // Ein anderes Konto: wer schon dazugehört, bekommt kein Meldeformular mehr,
+  // sondern den Hinweis, dass er drin ist.
+  await alsTurnierleitung(page, `/?r=${encodeURIComponent(link.token)}`, 'referee')
 
   await expect(page.getByLabel('Vorname', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Vorname des Partners')).toHaveCount(0)

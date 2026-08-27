@@ -16,8 +16,9 @@ noch einmal von vorn beginnt.
 | [0007](0007-externer-identity-provider.md) | Externer Identity Provider, Rollen bleiben in der Anwendung | Accepted |
 | [0008](0008-spielerstammdaten.md) | Spieler existieren vereinsübergreifend | Superseded by 0009 |
 | [0009](0009-turnier-als-wurzelaggregat.md) | Das Turnier ist die Wurzel, der Verein entfällt | Accepted |
-| [0010](0010-oeffentliche-selbstmeldung.md) | Öffentliche Selbstmeldung über einen Token-Link | Accepted |
+| [0010](0010-oeffentliche-selbstmeldung.md) | Öffentliche Selbstmeldung über einen Token-Link | Superseded by 0012 |
 | [0011](0011-satzformat-am-turnier.md) | Das Satzformat gehört dem Turnier, nicht der Vorlage | Accepted |
+| [0012](0012-mitgliedschaft-statt-selbstmeldung.md) | Das Turnier ist eine Gruppe: Mitgliedschaft statt anonymer Selbstmeldung | Accepted |
 
 ## Status
 
