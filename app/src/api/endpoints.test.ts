@@ -19,8 +19,8 @@ import {
   formatTemplates,
   matches,
   me,
+  join,
   players,
-  publicRegistration,
   schedule,
   tournaments,
 } from './endpoints'
@@ -255,38 +255,53 @@ describe('tournaments', () => {
   })
 })
 
-describe('publicRegistration', () => {
-  it('holt die karge Ansicht des Melders', async () => {
-    const view = await publicRegistration.get('tok-abcdef')
+describe('join', () => {
+  it('holt die karge Auskunft am Link', async () => {
+    const view = await join.get('tok-abcdef')
     expect(view.tournamentName).toBe('Clubmeisterschaft 2026')
-    expect(letzterAufruf().path).toBe('/public/registrations/tok-abcdef')
+    expect(letzterAufruf().path).toBe('/api/join/tok-abcdef')
   })
 
   it('kodiert das Token für den Pfad', async () => {
-    await publicRegistration.get('a b/c')
-    expect(letzterAufruf().path).toBe('/public/registrations/a%20b%2Fc')
+    await join.get('a b/c')
+    expect(letzterAufruf().path).toBe('/api/join/a%20b%2Fc')
   })
 
   it('meldet ein unbekanntes Token als 404', async () => {
-    await expect(publicRegistration.get('unbekannt')).rejects.toSatisfy(
-      (error: ApiError) => error.isNotFound,
-    )
+    await expect(join.get('unbekannt')).rejects.toSatisfy((error: ApiError) => error.isNotFound)
   })
 
-  it('schickt die Meldung ab', async () => {
+  it('tritt bei und meldet zugleich', async () => {
     const body = {
+      play: true,
       firstName: 'S',
       lastName: 'Moser',
-      email: 's@example.invalid',
       phone: null,
       partnerFirstName: null,
       partnerLastName: null,
       partnerEmail: null,
       teamName: null,
     }
-    const ergebnis = await publicRegistration.submit('tok-abcdef', body)
-    expect(ergebnis.confirmationCode).toBe('XYZ789')
-    expect(lastBody('POST', '/public/registrations/tok-abcdef')).toEqual(body)
+    const ergebnis = await join.submit('tok-abcdef', body)
+
+    expect(ergebnis.entryId).toBe(IDS.entry1)
+    expect(lastBody('POST', '/api/join/tok-abcdef')).toEqual(body)
+  })
+
+  it('tritt auch bei, ohne mitzuspielen — dann gibt es keine Meldung', async () => {
+    const ergebnis = await join.submit('tok-abcdef', {
+      play: false,
+      firstName: null,
+      lastName: null,
+      phone: null,
+      partnerFirstName: null,
+      partnerLastName: null,
+      partnerEmail: null,
+      teamName: null,
+    })
+
+    expect(ergebnis.entryId).toBeNull()
+    expect(ergebnis.status).toBeNull()
   })
 })
 

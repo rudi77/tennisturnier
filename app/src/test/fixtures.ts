@@ -44,7 +44,7 @@ import {
   type PublicCourtView,
   type PublicMatchView,
   type PublicPhaseView,
-  type PublicRegistrationView,
+  type JoinView,
   type PublicTournamentView,
   type QueuedMatch,
   type RegistrationDetail,
@@ -149,7 +149,6 @@ export function entryOverview(over: Partial<EntryOverview> = {}): EntryOverview 
     status: EntryStatus.Accepted,
     origin: EntryOrigin.Organiser,
     registeredAt: '2026-05-01T09:00:00+00:00',
-    confirmationCode: 'ABC123',
     teamEntryId: null,
     contacts: [
       {
@@ -173,6 +172,7 @@ export function tournamentSummary(over: Partial<TournamentSummary> = {}): Tourna
     endsOn: '2026-05-17',
     state: TournamentState.Draft,
     schedulingMode: SchedulingMode.Planning,
+    isPublic: false,
     acceptedEntries: 4,
     ...over,
   }
@@ -220,6 +220,7 @@ export function tournamentDetail(over: Partial<TournamentDetail> = {}): Tourname
       entry({ id: IDS.entry4, participantId: IDS.participant4, participantName: 'T. Wagner', seed: null }),
     ],
     version: 1,
+    isPublic: false,
     ...over,
   }
 }
@@ -409,10 +410,9 @@ export function registrationDetail(over: Partial<RegistrationDetail> = {}): Regi
   }
 }
 
-export function publicRegistrationView(
-  over: Partial<PublicRegistrationView> = {},
-): PublicRegistrationView {
+export function joinView(over: Partial<JoinView> = {}): JoinView {
   return {
+    tournamentId: IDS.tournament,
     tournamentName: 'Clubmeisterschaft 2026',
     venueName: 'TC Musterstadt',
     city: 'Musterstadt',
@@ -423,6 +423,7 @@ export function publicRegistrationView(
     isOpen: true,
     freeSlots: 5,
     deadline: '2026-05-10T22:00:00+00:00',
+    alreadyMember: false,
     ...over,
   }
 }
@@ -434,6 +435,7 @@ export function tournamentRole(over: Partial<TournamentRoleSummary> = {}): Tourn
     displayName: 'Rudi Turnierleitung',
     email: 'rudi@example.invalid',
     role: Role.TournamentDirector,
+    pending: false,
     ...over,
   }
 }

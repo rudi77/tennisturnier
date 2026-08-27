@@ -25,8 +25,10 @@ const state = {
 }
 
 const signinRedirect = vi.fn(() => Promise.resolve())
+const signoutRedirect = vi.fn(() => Promise.resolve())
 const removeUser = vi.fn(() => Promise.resolve())
 const clearCallbackParams = vi.fn()
+const stashRoute = vi.fn()
 
 const events = {
   loaded: [] as ((user: User) => void)[],
@@ -39,6 +41,7 @@ const manager = {
     state.getUserError ? Promise.reject(state.getUserError) : Promise.resolve(state.existing),
   ),
   signinRedirect,
+  signoutRedirect,
   removeUser,
   events: {
     addUserLoaded: (handler: (user: User) => void) => events.loaded.push(handler),
@@ -73,12 +76,12 @@ vi.mock('./oidc', () => ({
     return state.signedIn!
   },
   clearCallbackParams,
+  stashRoute,
   displayName: (u: User | null) => (u?.profile.name as string | undefined) ?? '',
   initials: (u: User | null) => ((u?.profile.name as string | undefined) ?? '··').slice(0, 2),
 }))
 
 const { AuthProvider, useAuth } = await import('./AuthProvider')
-const { LoginScreen } = await import('./LoginScreen')
 const { setTokenProvider } = await import('../api/client')
 
 function alsBenutzer(over: Partial<User> = {}): User {
@@ -130,6 +133,7 @@ beforeEach(() => {
   events.unloaded = []
   events.expired = []
   signinRedirect.mockClear()
+  signoutRedirect.mockClear()
   removeUser.mockClear()
   clearCallbackParams.mockClear()
 })
@@ -315,13 +319,41 @@ describe('AuthProvider', () => {
     )
   })
 
-  it('meldet nur lokal ab — nicht am IdP', async () => {
+  it('meldet auch beim Aussteller ab und nicht bloß hier', async () => {
+    // Hier stand einmal das Gegenteil. Mit persönlichen Konten ist die
+    // überlebende Sitzung der Fehler: „Abmelden" hieß, dass der nächste Klick
+    // auf „Anmelden" wortlos denselben Menschen zurückbrachte.
     state.existing = alsBenutzer()
     aufbau()
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
 
     await userEvent().click(screen.getByRole('button', { name: 'abmelden' }))
-    expect(removeUser).toHaveBeenCalled()
+    expect(signoutRedirect).toHaveBeenCalled()
+    expect(removeUser).not.toHaveBeenCalled()
+  })
+
+  it('meldet, wenn der Weg zum Abmelden scheitert', async () => {
+    signoutRedirect.mockRejectedValueOnce(new Error('IdP nicht erreichbar'))
+    state.existing = alsBenutzer()
+    aufbau()
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
+
+    await userEvent().click(screen.getByRole('button', { name: 'abmelden' }))
+    await waitFor(() =>
+      expect(screen.getByTestId('error')).toHaveTextContent('IdP nicht erreichbar'),
+    )
+  })
+
+  it('nennt auch beim Abmelden einen unbekannten Fehlschlag beim Namen', async () => {
+    signoutRedirect.mockRejectedValueOnce('kaputt' as unknown as Error)
+    state.existing = alsBenutzer()
+    aufbau()
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
+
+    await userEvent().click(screen.getByRole('button', { name: 'abmelden' }))
+    await waitFor(() =>
+      expect(screen.getByTestId('error')).toHaveTextContent('Abmelden nicht möglich.'),
+    )
   })
 
   it('tut ohne konfigurierte Authority gar nichts', async () => {
@@ -335,7 +367,7 @@ describe('AuthProvider', () => {
     await userEvent().click(screen.getByRole('button', { name: 'abmelden' }))
 
     expect(signinRedirect).not.toHaveBeenCalled()
-    expect(removeUser).not.toHaveBeenCalled()
+    expect(signoutRedirect).not.toHaveBeenCalled()
   })
 
   it('gibt dem API-Client das jeweils aktuelle Token', async () => {
@@ -363,70 +395,5 @@ describe('AuthProvider', () => {
 
     await http.get('/api/probe')
     expect(gesehen).toBe('Bearer tok-123')
-  })
-})
-
-describe('LoginScreen', () => {
-  function maske() {
-    const onPublicView = vi.fn()
-    render(
-      <AuthProvider>
-        <LoginScreen onPublicView={onPublicView} />
-      </AuthProvider>,
-    )
-    return onPublicView
-  }
-
-  it('nennt die Anmeldung und wer die Rollen vergibt', async () => {
-    maske()
-    expect(screen.getByText('Turnierleitung')).toBeInTheDocument()
-    expect(
-      screen.getByText(/Die Rollen vergibt die Anwendung, nicht der IdP/),
-    ).toBeInTheDocument()
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Anmelden' })).not.toBeDisabled(),
-    )
-  })
-
-  it('stellt die öffentliche Ansicht daneben — sie braucht kein Konto', async () => {
-    const onPublicView = maske()
-
-    await userEvent().click(screen.getByRole('button', { name: 'Öffentliche Live-Ansicht' }))
-    expect(onPublicView).toHaveBeenCalled()
-  })
-
-  it('führt zum IdP', async () => {
-    maske()
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Anmelden' })).not.toBeDisabled(),
-    )
-
-    await userEvent().click(screen.getByRole('button', { name: 'Anmelden' }))
-    expect(signinRedirect).toHaveBeenCalled()
-  })
-
-  it('sagt ohne Authority, welche Variable fehlt', async () => {
-    state.configured = false
-    maske()
-
-    // Die Server-Variable zuerst: eine ausgelieferte Instanz bekommt ihre
-    // Anmeldedaten über /config.js, und wer dort VITE_OIDC_AUTHORITY sucht,
-    // sucht an einem Ort, den es im Bild gar nicht mehr gibt.
-    expect(screen.getByText('Oidc__Authority')).toBeInTheDocument()
-    expect(screen.getByText('VITE_OIDC_AUTHORITY')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Anmelden' })).toBeDisabled()
-  })
-
-  it('sperrt den Knopf, solange die Anmeldung geprüft wird', () => {
-    maske()
-    expect(screen.getByRole('button', { name: 'Anmelden' })).toBeDisabled()
-  })
-
-  it('zeigt einen Fehlschlag an', async () => {
-    state.redirectCallback = true
-    state.completeError = new Error('Code not valid')
-    maske()
-
-    expect(await screen.findByText('Code not valid')).toBeInTheDocument()
   })
 })

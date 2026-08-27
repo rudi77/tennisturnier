@@ -54,12 +54,12 @@ describe('EntriesScreen — ohne Turnier', () => {
   })
 })
 
-describe('EntriesScreen — Anmeldelink', () => {
+describe('EntriesScreen — Beitrittslink', () => {
   it('zeigt Link, Zählstand und offene Kapazität', async () => {
     db.registration = fx.registrationDetail({ capacity: null })
     aufbau()
 
-    const feld = await screen.findByLabelText('Anmeldelink')
+    const feld = await screen.findByLabelText('Beitrittslink')
     expect(feld).toHaveValue(`${window.location.origin}/?r=tok-abcdef`)
     expect(
       screen.getByText('3 gemeldet · 4 im Feld · 1 Warteliste · Kapazität offen'),
@@ -73,7 +73,7 @@ describe('EntriesScreen — Anmeldelink', () => {
 
   it('markiert den Link beim Fokussieren', async () => {
     aufbau()
-    const feld = (await screen.findByLabelText('Anmeldelink')) as HTMLInputElement
+    const feld = (await screen.findByLabelText('Beitrittslink')) as HTMLInputElement
     const select = vi.spyOn(feld, 'select')
 
     feld.focus()
@@ -82,7 +82,7 @@ describe('EntriesScreen — Anmeldelink', () => {
 
   it('speichert Kapazität und Meldeschluss', async () => {
     aufbau()
-    await screen.findByLabelText('Anmeldelink')
+    await screen.findByLabelText('Beitrittslink')
     const u = user()
 
     await u.type(screen.getByLabelText('Kapazität (leer = offen)'), '8')
@@ -102,7 +102,7 @@ describe('EntriesScreen — Anmeldelink', () => {
 
   it('lässt beides leer, wo nichts eingetragen ist', async () => {
     aufbau()
-    await screen.findByLabelText('Anmeldelink')
+    await screen.findByLabelText('Beitrittslink')
 
     await user().click(screen.getByRole('button', { name: 'Bedingungen speichern' }))
 
@@ -124,7 +124,7 @@ describe('EntriesScreen — Anmeldelink', () => {
       ),
     )
     aufbau()
-    await screen.findByLabelText('Anmeldelink')
+    await screen.findByLabelText('Beitrittslink')
 
     await user().click(screen.getByRole('button', { name: 'Bedingungen speichern' }))
 
@@ -135,7 +135,7 @@ describe('EntriesScreen — Anmeldelink', () => {
 
   it('erneuert den Link und sagt, was das für den alten heißt', async () => {
     aufbau()
-    await screen.findByLabelText('Anmeldelink')
+    await screen.findByLabelText('Beitrittslink')
 
     await user().click(screen.getByRole('button', { name: 'Erneuern' }))
 
@@ -143,7 +143,7 @@ describe('EntriesScreen — Anmeldelink', () => {
       expect(callsTo('POST', `/api/tournaments/${T}/registration/link/rotate`)).toBe(1),
     )
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Neuer Anmeldelink — der alte ist ab sofort wertlos',
+      'Neuer Beitrittslink — der alte ist ab sofort wertlos',
     )
   })
 
@@ -157,7 +157,7 @@ describe('EntriesScreen — Anmeldelink', () => {
       ),
     )
     aufbau()
-    await screen.findByLabelText('Anmeldelink')
+    await screen.findByLabelText('Beitrittslink')
 
     await user().click(screen.getByRole('button', { name: 'Erneuern' }))
 
@@ -166,15 +166,30 @@ describe('EntriesScreen — Anmeldelink', () => {
 
   it('zeigt gar nichts, solange der Link nicht geladen ist', () => {
     aufbau()
-    expect(screen.queryByLabelText('Anmeldelink')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Beitrittslink')).not.toBeInTheDocument()
+  })
+})
+
+describe('EntriesScreen — Sichtbarkeit', () => {
+  it('schaltet das Turnier öffentlich und lädt es danach neu', async () => {
+    // Der Schalter steht hier, weil hier auch der Beitrittslink steht: beides
+    // beantwortet dieselbe Frage — wer sieht dieses Turnier.
+    const { reloadTournament } = aufbau()
+
+    await user().click(await screen.findByRole('button', { name: 'Öffentlich' }))
+
+    await waitFor(() =>
+      expect(lastBody('PUT', `/api/tournaments/${T}/visibility`)).toEqual({ isPublic: true }),
+    )
+    expect(reloadTournament).toHaveBeenCalled()
   })
 })
 
 describe('EntriesScreen — Rollen', () => {
-  it('nennt, wer mitarbeitet, mit Name und E-Mail', async () => {
+  it('nennt, wer dazugehört, mit Name und E-Mail', async () => {
     aufbau()
 
-    expect(await screen.findByText('Wer mitarbeitet')).toBeInTheDocument()
+    expect(await screen.findByText('Wer dazugehört')).toBeInTheDocument()
     expect(screen.getByText('Rudi Turnierleitung')).toBeInTheDocument()
     expect(screen.getByText('· rudi@example.invalid')).toBeInTheDocument()
     // Einmal als Chip an der Zeile, einmal als Option im Auswahlfeld.
@@ -197,7 +212,7 @@ describe('EntriesScreen — Rollen', () => {
 
   it('schützt die letzte Turnierleitung vor dem Entzug', async () => {
     aufbau()
-    await screen.findByText('Wer mitarbeitet')
+    await screen.findByText('Wer dazugehört')
 
     const knopf = screen.getByRole('button', { name: 'Entziehen' })
     expect(knopf).toBeDisabled()
@@ -233,16 +248,16 @@ describe('EntriesScreen — Rollen', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Rolle entzogen')
   })
 
-  it('beruft über die E-Mail-Adresse', async () => {
+  it('lädt über die E-Mail-Adresse ein', async () => {
     aufbau()
-    await screen.findByText('Wer mitarbeitet')
+    await screen.findByText('Wer dazugehört')
     const u = user()
 
-    expect(screen.getByRole('button', { name: 'Berufen' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Einladen' })).toBeDisabled()
 
     await u.type(screen.getByLabelText('E-Mail-Adresse'), '  neu@example.invalid  ')
     await u.selectOptions(screen.getByLabelText('Rolle'), String(Role.TournamentDirector))
-    await u.click(screen.getByRole('button', { name: 'Berufen' }))
+    await u.click(screen.getByRole('button', { name: 'Einladen' }))
 
     await waitFor(() =>
       expect(lastBody('POST', `/api/tournaments/${T}/roles`)).toEqual({
@@ -253,31 +268,89 @@ describe('EntriesScreen — Rollen', () => {
     expect(screen.getByLabelText('E-Mail-Adresse')).toHaveValue('')
   })
 
-  it('bietet nur die beiden Rollen an, die es am Turnier gibt', async () => {
+  it('sagt, wenn nur eine Einladung entstanden ist', async () => {
+    // Zwei Ausgänge, zwei Meldungen: „eingeladen" heißt, dass noch gar nichts
+    // passiert ist, was der Eingeladene merken könnte.
+    server.use(
+      http.post(`/api/tournaments/${T}/roles`, () =>
+        HttpResponse.json({ id: fx.IDS.role, invited: true }, { status: 201 }),
+      ),
+    )
     aufbau()
-    await screen.findByText('Wer mitarbeitet')
+    await screen.findByText('Wer dazugehört')
 
-    const optionen = within(screen.getByLabelText('Rolle')).getAllByRole('option')
-    expect(optionen.map((o) => o.textContent)).toEqual(['Schiedsrichter', 'Turnierleitung'])
+    await user().type(screen.getByLabelText('E-Mail-Adresse'), 'kommt.noch@example.invalid')
+    await user().click(screen.getByRole('button', { name: 'Einladen' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Eingeladen — die Rolle bekommt er bei seiner ersten Anmeldung',
+    )
   })
 
-  it('meldet eine abgewiesene Berufung', async () => {
+  it('sagt beim bestehenden Konto, dass die Rolle sofort gilt', async () => {
+    aufbau()
+    await screen.findByText('Wer dazugehört')
+
+    await user().type(screen.getByLabelText('E-Mail-Adresse'), 'da@example.invalid')
+    await user().click(screen.getByRole('button', { name: 'Einladen' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Rolle vergeben')
+  })
+
+  it('zeigt eine offene Einladung als solche und nimmt sie zurück', async () => {
+    db.roles = [
+      fx.tournamentRole(),
+      fx.tournamentRole({
+        assignmentId: 'einladung-1',
+        userId: '00000000-0000-0000-0000-000000000000',
+        displayName: null,
+        email: 'wartet@example.invalid',
+        role: Role.Member,
+        pending: true,
+      }),
+    ]
+    aufbau()
+    await screen.findByText('Wer dazugehört')
+
+    expect(screen.getByText(/eingeladen, noch nie angemeldet/)).toBeInTheDocument()
+
+    await user().click(screen.getByRole('button', { name: 'Zurücknehmen' }))
+
+    await waitFor(() =>
+      expect(callsTo('DELETE', `/api/tournaments/${T}/roles/einladung-1`)).toBe(1),
+    )
+    expect(await screen.findByRole('status')).toHaveTextContent('Einladung zurückgenommen')
+  })
+
+  it('bietet die drei Rollen an, die es am Turnier gibt', async () => {
+    aufbau()
+    await screen.findByText('Wer dazugehört')
+
+    const optionen = within(screen.getByLabelText('Rolle')).getAllByRole('option')
+    expect(optionen.map((o) => o.textContent)).toEqual([
+      'Mitglied',
+      'Schiedsrichter',
+      'Turnierleitung',
+    ])
+  })
+
+  it('meldet eine abgewiesene Einladung', async () => {
     server.use(
       http.post(`/api/tournaments/${T}/roles`, () =>
         HttpResponse.json(
-          { detail: 'Kein Konto mit dieser Adresse.', status: 422 },
+          { detail: 'Das geht so nicht.', status: 422 },
           { status: 422, headers: { 'Content-Type': 'application/problem+json' } },
         ),
       ),
     )
     aufbau()
-    await screen.findByText('Wer mitarbeitet')
+    await screen.findByText('Wer dazugehört')
 
     await user().type(screen.getByLabelText('E-Mail-Adresse'), 'neu@example.invalid')
-    await user().click(screen.getByRole('button', { name: 'Berufen' }))
+    await user().click(screen.getByRole('button', { name: 'Einladen' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Berufen: Kein Konto mit dieser Adresse.',
+      'Einladen: Das geht so nicht.',
     )
   })
 
@@ -309,13 +382,12 @@ describe('EntriesScreen — Meldungen', () => {
     ])
   })
 
-  it('nennt Herkunft, Zeitpunkt und Bestätigungscode', async () => {
+  it('nennt Herkunft und Zeitpunkt', async () => {
     db.entries = [fx.entryOverview({ origin: EntryOrigin.SelfService })]
     aufbau()
 
     await screen.findByText('S. Moser')
-    expect(zeile('S. Moser')).toHaveTextContent('Selbstmeldung')
-    expect(zeile('S. Moser')).toHaveTextContent('ABC123')
+    expect(zeile('S. Moser')).toHaveTextContent('selbst beigetreten')
   })
 
   it('nennt die Turnierleitung als Herkunft, wo sie erfasst hat', async () => {
@@ -325,7 +397,7 @@ describe('EntriesScreen — Meldungen', () => {
   })
 
   it('lässt den Code weg, wo keiner mitkommt', async () => {
-    db.entries = [fx.entryOverview({ confirmationCode: null })]
+    db.entries = [fx.entryOverview({ seed: null })]
     aufbau()
 
     await screen.findByText('S. Moser')

@@ -16,7 +16,7 @@ import {
   TournamentState,
   type TournamentDetail,
 } from '../api/types'
-import { publicUrl, registrationUrl } from '../hooks/useRoute'
+import { joinUrl, publicUrl } from '../hooks/useRoute'
 import type { ScreenId } from '../components/layout/AppNav'
 
 /**
@@ -238,7 +238,7 @@ function Actions({
               <input
                 className="md-input"
                 readOnly
-                value={registrationUrl(registration.data.token)}
+                value={joinUrl(registration.data.token)}
                 aria-label="Anmeldelink"
                 style={{ width: '100%', fontSize: 'var(--fs-xs)' }}
                 onFocus={(event) => event.currentTarget.select()}
@@ -248,7 +248,7 @@ function Actions({
             <div className="md-flow__row">
               {registration.data && (
                 <ShareLink
-                  url={registrationUrl(registration.data.token)}
+                  url={joinUrl(registration.data.token)}
                   label="Link kopieren"
                   shareTitle={tournament.name}
                   shareText={`Melde dich zu „${tournament.name}" an:`}

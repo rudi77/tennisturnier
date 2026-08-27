@@ -15,6 +15,7 @@ import {
   isAuthConfigured,
   isOpenAccess,
   isRedirectCallback,
+  stashRoute,
   userManager,
 } from './oidc'
 import { setTokenProvider } from '../api/client'
@@ -119,6 +120,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(() => {
     if (!userManager) return
     setError(null)
+
+    // Wohin er wollte, bevor er weggeschickt wird: die Rücksprungadresse beim
+    // Aussteller ist die nackte Wurzel, und ohne diese Zeile landete jeder
+    // Beitrittslink nach der Anmeldung im Ablauf irgendeines Turniers.
+    stashRoute()
+
     void userManager.signinRedirect().catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : 'Anmeldung nicht möglich.')
     })
@@ -126,9 +133,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     if (!userManager) return
-    // Nur lokal abmelden: ein End-Session-Redirect würde am Vereinsrechner auch
-    // andere Anwendungen desselben Realms abmelden.
-    void userManager.removeUser()
+
+    // Beim Aussteller abmelden und nicht bloß hier. Hier stand einmal das
+    // Gegenteil, mit der Begründung, ein Rücksprung meldete am Vereinsrechner
+    // auch andere Anwendungen desselben Realms ab. Mit persönlichen Konten ist
+    // die überlebende Sitzung der Fehler: „Abmelden" hieß, dass der nächste
+    // Klick auf „Anmelden" wortlos denselben Menschen zurückbrachte.
+    void userManager.signoutRedirect().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : 'Abmelden nicht möglich.')
+    })
   }, [])
 
   const value = useMemo<AuthState>(

@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
 import { TeamPanel } from '../components/tournament/TeamPanel'
+import { VisibilityPanel } from '../components/tournament/VisibilityPanel'
 import { ShareLink } from '../components/tournament/ShareLink'
-import { registrationUrl } from '../hooks/useRoute'
+import { joinUrl } from '../hooks/useRoute'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { useResource } from '../hooks/useResource'
 import { useToast } from '../hooks/useToast'
@@ -142,6 +143,8 @@ export function EntriesScreen() {
         />
       )}
 
+      <VisibilityPanel tournament={tournament} onChanged={() => void reloadTournament()} />
+
       <RolePanel tournamentId={tournament.id} />
 
       {entries.error ? (
@@ -213,7 +216,7 @@ function LinkPanel({
 
   if (!detail) return null
 
-  const url = registrationUrl(detail.token)
+  const url = joinUrl(detail.token)
 
   const save = async () => {
     setBusy(true)
@@ -236,7 +239,7 @@ function LinkPanel({
     try {
       await tournamentApi.rotateRegistrationLink(tournamentId)
       onChanged()
-      show('Neuer Anmeldelink — der alte ist ab sofort wertlos')
+      show('Neuer Beitrittslink — der alte ist ab sofort wertlos')
     } catch (cause) {
       showError(cause, 'Link erneuern')
     } finally {
@@ -247,12 +250,12 @@ function LinkPanel({
   return (
     <div className="md-panel" style={{ padding: 'var(--sp-10)', marginBottom: 'var(--sp-8)' }}>
       <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 'var(--fw-bold)', marginBottom: 3 }}>
-        Anmeldelink
+        Beitrittslink
       </div>
       <div className="md-hint" style={{ marginBottom: 'var(--sp-8)' }}>
-        Wer ihn hat, kann sich ohne Konto melden. Er entsteht mit dem Turnier und überlebt
-        eine zurückgenommene Auslosung — ob gemeldet werden kann, entscheidet der Zustand des
-        Turniers, nicht die Existenz des Links.
+        Wer ihn hat, tritt bei — ein Konto braucht er dafür, anlegen kann er es unterwegs. Der
+        Link entsteht mit dem Turnier und überlebt eine zurückgenommene Auslosung; ob gemeldet
+        werden kann, entscheidet der Zustand des Turniers und nicht die Existenz des Links.
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -260,7 +263,7 @@ function LinkPanel({
           className="md-input"
           readOnly
           value={url}
-          aria-label="Anmeldelink"
+          aria-label="Beitrittslink"
           style={{ flex: '1 1 260px' }}
           onFocus={(event) => event.currentTarget.select()}
         />
@@ -268,8 +271,8 @@ function LinkPanel({
           url={url}
           label="Link kopieren"
           shareTitle={tournamentName}
-          shareText={`Melde dich zu „${tournamentName}" an:`}
-          copiedMessage="Anmeldelink kopiert"
+          shareText={`Mach mit bei „${tournamentName}":`}
+          copiedMessage="Beitrittslink kopiert"
           className="md-btn"
         />
         <button type="button" className="md-btn" disabled={busy} onClick={() => void rotate()}>
@@ -322,14 +325,13 @@ function LinkPanel({
 }
 
 /**
- * Wer dieses Turnier führt und wer Ergebnisse einträgt.
+ * Wer zu diesem Turnier gehört — und was er darf.
  *
- * Berufen wird über die E-Mail-Adresse eines bestehenden Kontos — Identitäten
- * legt der Identity Provider an, nicht diese Anwendung (ADR-0007). Wen es hier
- * noch nicht gibt, muss sich einmal anmelden; die Einladung eines Unbekannten
- * ist ein benannter offener Punkt.
+ * Eingeladen wird über eine E-Mail-Adresse. Gibt es dazu ein Konto, bekommt es
+ * die Rolle sofort; sonst wartet eine Einladung auf die erste Anmeldung
+ * (ADR-0012). Wer als Mitglied eingeladen ist, sieht das Turnier — mehr nicht.
  *
- * Zwei Auswahlmöglichkeiten und nicht vier: eine globale Rolle wiese die API
+ * Drei Auswahlmöglichkeiten und nicht fünf: eine globale Rolle wiese die API
  * ohnehin ab. Sie hier anzubieten hieße, eine Schaltfläche zu zeigen, die
  * nichts als einen Fehler auslösen kann.
  */
@@ -341,12 +343,16 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
   const [role, setRole] = useState<Role>(Role.Referee)
   const [busy, setBusy] = useState(false)
 
-  const run = async (what: string, action: () => Promise<unknown>) => {
+  /**
+   * Die Handlung darf ihre eigene Meldung zurückgeben — „eingeladen" und
+   * „Rolle vergeben" gehen über denselben Knopf und sind trotzdem zweierlei.
+   */
+  const run = async (what: string, action: () => Promise<string | void>) => {
     setBusy(true)
     try {
-      await action()
+      const meldung = await action()
       await roles.reload()
-      show(what)
+      show(meldung || what)
     } catch (cause) {
       showError(cause, what)
     } finally {
@@ -359,11 +365,12 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
   return (
     <div className="md-panel" style={{ padding: 'var(--sp-10)', marginBottom: 'var(--sp-8)' }}>
       <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 'var(--fw-bold)', marginBottom: 3 }}>
-        Wer mitarbeitet
+        Wer dazugehört
       </div>
       <div className="md-hint" style={{ marginBottom: 'var(--sp-8)' }}>
-        Turnierleitung führt das Turnier, Schiedsrichter tragen Ergebnisse ein. Beide Rollen
-        gelten nur für dieses Turnier.
+        Mitglieder sehen das Turnier, Schiedsrichter tragen Ergebnisse ein, die Turnierleitung
+        führt es. Alle drei Rollen gelten nur für dieses Turnier. Wen es hier noch nicht gibt,
+        wird eingeladen — die Rolle bekommt er bei seiner ersten Anmeldung.
       </div>
 
       {roles.error ? (
@@ -380,6 +387,11 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
                 {entry.email && entry.displayName ? (
                   <span style={{ color: 'var(--fg-3)' }}> · {entry.email}</span>
                 ) : null}
+                {/* Der Unterschied, den die Turnierleitung sehen soll: der eine
+                    ist dabei, auf den anderen wartet man noch. */}
+                {entry.pending && (
+                  <span style={{ color: 'var(--fg-3)' }}> · eingeladen, noch nie angemeldet</span>
+                )}
               </div>
 
               <span className="md-pill" aria-pressed={false} style={{ pointerEvents: 'none' }}>
@@ -396,12 +408,12 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
                     : undefined
                 }
                 onClick={() =>
-                  void run('Rolle entzogen', () =>
+                  void run(entry.pending ? 'Einladung zurückgenommen' : 'Rolle entzogen', () =>
                     tournamentApi.revokeRole(tournamentId, entry.assignmentId),
                   )
                 }
               >
-                Entziehen
+                {entry.pending ? 'Zurücknehmen' : 'Entziehen'}
               </button>
             </div>
           ))}
@@ -424,6 +436,7 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
           aria-label="Rolle"
           onChange={(event) => setRole(Number(event.target.value) as Role)}
         >
+          <option value={Role.Member}>{roleLabel[Role.Member]}</option>
           <option value={Role.Referee}>{roleLabel[Role.Referee]}</option>
           <option value={Role.TournamentDirector}>{roleLabel[Role.TournamentDirector]}</option>
         </select>
@@ -432,13 +445,23 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
           className="md-btn"
           disabled={busy || !email.trim()}
           onClick={() =>
-            void run('Berufen', async () => {
-              await tournamentApi.grantRole(tournamentId, { email: email.trim(), role })
+            void run('Einladen', async () => {
+              const ergebnis = await tournamentApi.grantRole(tournamentId, {
+                email: email.trim(),
+                role,
+              })
               setEmail('')
+
+              // Zwei Ausgänge, zwei Meldungen: „eingeladen" heißt, dass noch
+              // gar nichts passiert ist, was der Eingeladene merken könnte —
+              // den Link muss die Turnierleitung selbst schicken.
+              return ergebnis.invited
+                ? 'Eingeladen — die Rolle bekommt er bei seiner ersten Anmeldung'
+                : 'Rolle vergeben'
             })
           }
         >
-          Berufen
+          Einladen
         </button>
       </div>
     </div>
@@ -470,10 +493,9 @@ function Row({
       </div>
 
       <div className="md-num md-entry__meta">
-        {entry.origin === EntryOrigin.SelfService ? 'Selbstmeldung' : 'von der Turnierleitung'}
+        {entry.origin === EntryOrigin.SelfService ? 'selbst beigetreten' : 'von der Turnierleitung'}
         {' · '}
         {new Date(entry.registeredAt).toLocaleString('de-AT')}
-        {entry.confirmationCode ? ` · ${entry.confirmationCode}` : ''}
       </div>
 
       {entry.contacts.length > 0 && (

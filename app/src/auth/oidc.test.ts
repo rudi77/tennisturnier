@@ -249,3 +249,45 @@ describe('offener Betrieb', () => {
     expect(falsch.isOpenAccess).toBe(false)
   })
 })
+
+describe('die verwahrte Route', () => {
+  it('überlebt den Umweg über den Aussteller', async () => {
+    // Die Rücksprungadresse beim Aussteller ist die nackte Wurzel — sie muss
+    // dort eingetragen sein, und ein Eintrag je möglicher Adresse wäre nicht
+    // zu pflegen. Die Abfrage ginge auf dem Weg also verloren.
+    window.history.replaceState({}, '', '/?r=tok-abcdef')
+    const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: AUTHORITY })
+
+    oidc.stashRoute()
+
+    // So kommt der Browser vom Aussteller zurück: Wurzel plus Code.
+    window.history.replaceState({}, '', '/?code=abc&state=xyz')
+    oidc.clearCallbackParams()
+
+    expect(window.location.search).toBe('?r=tok-abcdef')
+  })
+
+  it('ist danach verbraucht — ein alter Link geht nicht zweimal auf', async () => {
+    window.history.replaceState({}, '', '/?r=tok-abcdef')
+    const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: AUTHORITY })
+
+    oidc.stashRoute()
+    window.history.replaceState({}, '', '/?code=abc')
+    oidc.clearCallbackParams()
+
+    window.history.replaceState({}, '', '/?code=def')
+    oidc.clearCallbackParams()
+
+    expect(window.location.search).toBe('')
+  })
+
+  it('räumt ohne verwahrte Route nur den Code weg', async () => {
+    const oidc = await ladeMit({ VITE_OIDC_AUTHORITY: AUTHORITY })
+
+    window.history.replaceState({}, '', '/?code=abc&state=xyz')
+    oidc.clearCallbackParams()
+
+    expect(window.location.search).toBe('')
+  })
+})
+

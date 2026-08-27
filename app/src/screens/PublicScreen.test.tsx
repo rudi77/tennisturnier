@@ -52,6 +52,22 @@ async function reiter(name: string): Promise<void> {
   await user().click(await screen.findByRole('button', { name }))
 }
 
+describe('PublicScreen — privat', () => {
+  it('sagt bei einem 404, dass das Turnier nicht öffentlich ist', async () => {
+    // Ein privates Turnier und eines, das es nicht gibt, sind von außen nicht
+    // zu unterscheiden — das ist Absicht (ADR-0004/0012). Der Hinweis sagt
+    // deshalb beides und nennt den Weg hinein.
+    server.use(
+      http.get('/public/tournaments/:id', () => new HttpResponse(null, { status: 404 })),
+    )
+    mitLink()
+    alsZuschauer()
+
+    expect(await screen.findByText('Dieses Turnier ist nicht öffentlich')).toBeInTheDocument()
+    expect(screen.getByText(/Beitrittslink/)).toBeInTheDocument()
+  })
+})
+
 describe('PublicScreen — Zugang', () => {
   it('nimmt im Arbeitsbereich das gewählte Turnier', async () => {
     imArbeitsbereich()

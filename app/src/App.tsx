@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { AuthProvider, useAuth } from './auth/AuthProvider'
-import { LoginScreen } from './auth/LoginScreen'
 import { ToastProvider } from './hooks/useToast'
 import { Toast } from './components/layout/Toast'
 import { AppNav, type ScreenId } from './components/layout/AppNav'
@@ -14,7 +13,7 @@ import type { TournamentDetail } from './api/types'
 import { BoardScreen } from './screens/BoardScreen'
 import { DrawScreen } from './screens/DrawScreen'
 import { EntriesScreen } from './screens/EntriesScreen'
-import { RegistrationScreen } from './screens/RegistrationScreen'
+import { JoinScreen } from './screens/JoinScreen'
 import { TournamentsScreen } from './screens/TournamentsScreen'
 import { FlowScreen } from './screens/FlowScreen'
 import { CreateScreen } from './screens/CreateScreen'
@@ -34,46 +33,31 @@ export function App() {
 }
 
 function Root() {
-  const { status, configured, login, openAccess } = useAuth()
-  const { registrationToken, tournamentId } = useRoute()
-  const [publicOnly, setPublicOnly] = useState(false)
-
-  // Der Anmeldelink steht vor der Anmeldemaske — und vor der Ladeanzeige. Wer
-  // über einen Aushang hierherkommt, soll kein Konto brauchen; genau das war
-  // der Zweck des Links, und eine Anmeldemaske davor nähme ihn zurück.
-  if (registrationToken) {
-    return <RegistrationScreen token={registrationToken} />
-  }
+  const { status, configured, error, login } = useAuth()
+  const { registrationToken, tournamentId, navigate } = useRoute()
 
   if (status === 'loading') {
     return <Loading label="Anmeldung wird geprüft …" />
   }
 
-  // Wer mit einem Turnier in der Adresse kommt, will zusehen — und zwar sofort.
-  // Die Anmeldemaske stand hier auch vor diesem Fall und machte aus einem Link,
-  // der in der WhatsApp-Gruppe des Vereins herumgeht, eine Aufforderung zur
-  // Anmeldung. Wer sich anmelden will, tut es aus der Zuschauerseite heraus;
-  // sein Turnier bleibt dabei gewählt, weil es in der Adresse steht.
-  //
-  // Ohne Turnier bleibt es bei der Maske: die öffentliche Ansicht ohne Id wäre
-  // eine leere Seite mit einem Hinweis auf einen Link, den der Besucher nicht
-  // hat.
-  const spectator = publicOnly || tournamentId !== null
-
-  // Die öffentliche Ansicht ist der andere Teil ohne Anmeldung — sie steht
-  // deshalb auch ohne konfigurierte Authority offen.
-  if (status === 'anonymous' && !spectator) {
-    return <LoginScreen onPublicView={() => setPublicOnly(true)} />
+  // Wer einem Beitrittslink folgt, braucht ein Konto — er bekommt es auf dem
+  // Weg. Der Link führt jetzt durch die Anmeldung statt an ihr vorbei: das ist
+  // der Unterschied zwischen einer Meldung und einer Mitgliedschaft (ADR-0012).
+  if (registrationToken) {
+    return status === 'authenticated' ? (
+      <JoinScreen
+        token={registrationToken}
+        onJoined={(id) => navigate({ tournamentId: id, screen: 'flow', registrationToken: null })}
+      />
+    ) : (
+      <ToLogin configured={configured} error={error} login={login} />
+    )
   }
 
-  // Wer zusieht, bekommt die Zuschauerseite und sonst nichts: kein Arbeitsbereich,
-  // keine Navigation. Sie stand hier einmal mit — und jeder ihrer Punkte warf
-  // zurück auf die Anmeldemaske, weil hinter keinem von ihnen etwas Abrufbares
-  // liegt. Eine Navigation, die nur wegführt, ist keine.
-  if (status === 'anonymous' || (!configured && !openAccess)) {
-    // „Anmelden" führt zum Identity Provider und nicht zurück auf die Maske:
-    // die Maske hat genau diesen einen Knopf, und ein Zwischenschritt, der
-    // nichts fragt, ist keiner.
+  // Wer mit einem Turnier in der Adresse kommt, will zusehen — und zwar sofort.
+  // Ob er darf, entscheidet das Turnier: privat ist die Vorgabe, und die
+  // Zuschauerseite sagt es ihm, statt ihn zur Anmeldung zu schicken.
+  if (status === 'anonymous' && tournamentId !== null) {
     return (
       <PublicScreen
         standalone
@@ -82,7 +66,66 @@ function Root() {
     )
   }
 
+  // Und sonst führt der Weg zur Anmeldung. Hier stand eine Startseite mit zwei
+  // Schaltflächen — „Anmelden" und „Öffentliche Live-Ansicht". Die erste war
+  // ein Zwischenschritt, der nichts fragte; die zweite führte ohne Turnier auf
+  // eine leere Seite mit dem Hinweis auf einen Link, den der Besucher nicht
+  // hat. Die Maske des Ausstellers ist der Einstieg: dort steht auch der Weg
+  // über Google und der zum Registrieren.
+  if (status === 'anonymous') {
+    return <ToLogin configured={configured} error={error} login={login} />
+  }
+
   return <AppShell />
+}
+
+/**
+ * Weiterleitung zum Aussteller.
+ *
+ * Einmal je Seitenaufbau, und nur solange nichts schiefgegangen ist: ohne
+ * beides entstünde eine Schleife, in der die Anwendung bei jedem Fehlschlag
+ * erneut wegschickt und der Benutzer nie erfährt, warum.
+ *
+ * Ohne konfigurierten Aussteller gibt es nichts, wohin man leiten könnte. Dann
+ * bleibt die Zuschauerseite — sie ist der einzige Teil, der ohne Anmeldung
+ * überhaupt etwas zeigen kann.
+ */
+function ToLogin({
+  configured,
+  error,
+  login,
+}: {
+  configured: boolean
+  error: string | null
+  login: () => void
+}) {
+  const geschickt = useRef(false)
+
+  useEffect(() => {
+    if (!configured || error || geschickt.current) return
+    geschickt.current = true
+    login()
+  }, [configured, error, login])
+
+  if (!configured) {
+    return <PublicScreen standalone />
+  }
+
+  if (error) {
+    return (
+      <div className="md-section">
+        <ErrorBlock
+          error={new Error(error)}
+          onRetry={() => {
+            geschickt.current = true
+            login()
+          }}
+        />
+      </div>
+    )
+  }
+
+  return <Loading label="Weiterleitung zur Anmeldung …" />
 }
 
 function AppShell() {

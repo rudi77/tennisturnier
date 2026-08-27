@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { publicUrl, registrationUrl, useRoute } from './useRoute'
+import { joinUrl, publicUrl, useRoute } from './useRoute'
 
 describe('useRoute', () => {
   it('liest die drei Formen aus der Adresszeile', () => {
@@ -85,11 +85,11 @@ describe('useRoute', () => {
   })
 })
 
-describe('registrationUrl', () => {
-  it('baut den teilbaren Anmeldelink', () => {
-    expect(registrationUrl('tok abc/1')).toBe(
-      `${window.location.origin}/?r=tok%20abc%2F1`,
-    )
+describe('joinUrl', () => {
+  it('baut den teilbaren Beitrittslink', () => {
+    // Der Parameter heißt weiterhin `r`: die Adresse steht auf ausgehängten
+    // Zetteln, und ein neuer Buchstabe machte sie ungültig.
+    expect(joinUrl('tok abc/1')).toBe(`${window.location.origin}/?r=tok%20abc%2F1`)
   })
 })
 
