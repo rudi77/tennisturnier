@@ -136,7 +136,7 @@ public sealed class WeitereAbsagenApiTests : IClassFixture<TennisTurnierApiFacto
     }
 
     [Fact]
-    public async Task Berufen_wird_ueber_eine_Adresse()
+    public async Task Eingeladen_wird_ueber_eine_Adresse()
     {
         var turnier = await _factory.NeuesTurnierAsync(
             $"leitung-{Guid.NewGuid():N}",
@@ -148,7 +148,7 @@ public sealed class WeitereAbsagenApiTests : IClassFixture<TennisTurnierApiFacto
             Json);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.Contains("über die E-Mail-Adresse", await DetailAsync(response), StringComparison.Ordinal);
+        Assert.Contains("über eine E-Mail-Adresse", await DetailAsync(response), StringComparison.Ordinal);
     }
 
     [Fact]

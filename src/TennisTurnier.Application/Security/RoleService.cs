@@ -5,20 +5,41 @@ using TennisTurnier.Domain.Security;
 
 namespace TennisTurnier.Application.Security;
 
-/// <summary>Wer an einem Turnier welche Rolle hat.</summary>
+/// <summary>
+/// Wer an einem Turnier welche Rolle hat — und wer eine bekommen soll, sobald
+/// er sich zum ersten Mal anmeldet.
+/// </summary>
+/// <param name="AssignmentId">
+/// Bei einer offenen Einladung die Kennung der Einladung. Beide werden über
+/// denselben Weg zurückgenommen, und für die Oberfläche ist es dieselbe Zeile
+/// mit demselben Knopf daneben.
+/// </param>
+/// <param name="UserId">Leer, solange es das Konto noch nicht gibt.</param>
+/// <param name="Pending">
+/// Eingeladen, aber noch nie angemeldet. Die Turnierleitung soll den
+/// Unterschied sehen: der eine ist dabei, auf den anderen wartet man.
+/// </param>
 public sealed record TournamentRoleSummary(
     Guid AssignmentId,
     Guid UserId,
     string? DisplayName,
     string? Email,
-    Role Role);
+    Role Role,
+    bool Pending = false);
 
 /// <param name="Email">
-/// Die Adresse eines <em>bestehenden</em> Kontos. Berufen lässt sich nur, wer
-/// sich schon einmal angemeldet hat — die Einladung eines noch nicht
-/// angemeldeten Benutzers bleibt ein offener Punkt (ADR-0007).
+/// Die Adresse. Gibt es dazu ein Konto, bekommt es die Rolle sofort; sonst
+/// wartet eine Einladung darauf, beim ersten Login eingelöst zu werden
+/// (ADR-0007, ADR-0012).
 /// </param>
 public sealed record GrantRoleRequest(string Email, Role Role);
+
+/// <param name="Invited">
+/// Wahr, wenn es zu der Adresse noch kein Konto gab. Dann ist nichts
+/// geschehen, was der Eingeladene schon merken könnte — die Turnierleitung
+/// muss ihm den Weg selbst schicken.
+/// </param>
+public sealed record GrantRoleResult(Guid Id, bool Invited);
 
 /// <summary>
 /// Schiedsrichter und weitere Turnierleiter berufen und entziehen.
@@ -48,7 +69,7 @@ public interface IRoleService
         Guid tournamentId,
         CancellationToken cancellationToken = default);
 
-    Task<Guid> GrantAsync(
+    Task<GrantRoleResult> GrantAsync(
         Guid tournamentId,
         GrantRoleRequest request,
         CancellationToken cancellationToken = default);
@@ -60,22 +81,28 @@ public sealed class RoleService : IRoleService
 {
     private readonly ITournamentRepository _tournaments;
     private readonly IRoleAssignmentRepository _roles;
+    private readonly IInvitationRepository _invitations;
     private readonly IUserDirectory _directory;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
+    private readonly IClock _clock;
 
     public RoleService(
         ITournamentRepository tournaments,
         IRoleAssignmentRepository roles,
+        IInvitationRepository invitations,
         IUserDirectory directory,
         IUnitOfWork unitOfWork,
-        IUserContext userContext)
+        IUserContext userContext,
+        IClock clock)
     {
         _tournaments = tournaments;
         _roles = roles;
+        _invitations = invitations;
         _directory = directory;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
+        _clock = clock;
     }
 
     public async Task<IReadOnlyList<TournamentRoleSummary>> ListAsync(
@@ -90,6 +117,8 @@ public sealed class RoleService : IRoleService
 
         var byId = accounts.ToDictionary(a => a.Id);
 
+        var invitations = await _invitations.ListByTournamentAsync(tournamentId, cancellationToken);
+
         return
         [
             .. assignments
@@ -101,11 +130,35 @@ public sealed class RoleService : IRoleService
                     a.UserId,
                     byId[a.UserId].DisplayName,
                     byId[a.UserId].Email,
-                    a.Role))
+                    a.Role)),
+
+            // Danach, wer noch nicht da ist. In einer Liste und nicht in einer
+            // zweiten daneben: für die Turnierleitung ist es dieselbe Frage —
+            // wer gehört zu diesem Turnier — und die Antwort „noch nicht
+            // angemeldet" gehört in dieselbe Zeile.
+            .. invitations
+                .OrderBy(i => i.Role)
+                .ThenBy(i => i.Email, StringComparer.Ordinal)
+                .Select(i => new TournamentRoleSummary(
+                    i.Id,
+                    Guid.Empty,
+                    DisplayName: null,
+                    i.Email,
+                    i.Role,
+                    Pending: true)),
         ];
     }
 
-    public async Task<Guid> GrantAsync(
+    /// <summary>
+    /// Vergibt die Rolle — oder legt eine Einladung an, wenn es zu der Adresse
+    /// noch kein Konto gibt.
+    ///
+    /// Bis hierher endete dieser Weg an einer Fehlermeldung: „berufen lässt
+    /// sich nur, wer sich schon einmal angemeldet hat". Sie war richtig und
+    /// trotzdem eine Sackgasse — wer jemanden einladen wollte, musste ihn
+    /// zuerst dazu bringen, sich anzumelden, ohne ihm sagen zu können, wofür.
+    /// </summary>
+    public async Task<GrantRoleResult> GrantAsync(
         Guid tournamentId,
         GrantRoleRequest request,
         CancellationToken cancellationToken = default)
@@ -117,25 +170,37 @@ public sealed class RoleService : IRoleService
 
         if (string.IsNullOrWhiteSpace(request.Email))
         {
-            throw new DomainException("Berufen wird über die E-Mail-Adresse eines bestehenden Kontos.");
+            throw new DomainException("Eingeladen wird über eine E-Mail-Adresse.");
         }
 
-        var account = await _directory.FindByEmailAsync(request.Email.Trim(), cancellationToken)
-            ?? throw new DomainException(
-                $"Zu „{request.Email.Trim()}“ gibt es kein Konto. Berufen lässt sich nur, wer sich " +
-                "schon einmal angemeldet hat.");
+        var email = request.Email.Trim();
 
+        return await _directory.FindByEmailAsync(email, cancellationToken) is { } account
+            ? new GrantRoleResult(
+                await AssignAsync(tournamentId, account.Id, request.Role, cancellationToken),
+                Invited: false)
+            : new GrantRoleResult(
+                await InviteAsync(tournamentId, email, request.Role, cancellationToken),
+                Invited: true);
+    }
+
+    private async Task<Guid> AssignAsync(
+        Guid tournamentId,
+        Guid userId,
+        Role role,
+        CancellationToken cancellationToken)
+    {
         var existing = await _roles.ListByTournamentAsync(tournamentId, cancellationToken);
 
         // Idempotent: dieselbe Rolle noch einmal zu vergeben ist keine
         // Änderung, sondern der zweite Klick auf dieselbe Schaltfläche.
-        if (existing.FirstOrDefault(a => a.UserId == account.Id && a.Role == request.Role) is { } already)
+        if (existing.FirstOrDefault(a => a.UserId == userId && a.Role == role) is { } already)
         {
             return already.Id;
         }
 
         var assignment = new RoleAssignment(
-            Guid.NewGuid(), account.Id, request.Role, ResourceScope.Tournament(tournamentId));
+            Guid.NewGuid(), userId, role, ResourceScope.Tournament(tournamentId));
 
         _roles.Add(assignment);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -143,12 +208,51 @@ public sealed class RoleService : IRoleService
         return assignment.Id;
     }
 
+    private async Task<Guid> InviteAsync(
+        Guid tournamentId,
+        string email,
+        Role role,
+        CancellationToken cancellationToken)
+    {
+        var offen = await _invitations.ListByTournamentAsync(tournamentId, cancellationToken);
+
+        if (offen.FirstOrDefault(i =>
+            string.Equals(i.Email, email, StringComparison.OrdinalIgnoreCase)
+            && i.Role == role) is { } bereits)
+        {
+            return bereits.Id;
+        }
+
+        var invitation = new Invitation(Guid.NewGuid(), tournamentId, email, role, _clock.Now);
+
+        _invitations.Add(invitation);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return invitation.Id;
+    }
+
+    /// <summary>
+    /// Nimmt eine Rolle zurück — oder eine Einladung, die noch auf ihr Konto
+    /// wartet. Für die Turnierleitung ist beides derselbe Knopf an derselben
+    /// Zeile, und deshalb derselbe Endpunkt.
+    /// </summary>
     public async Task RevokeAsync(
         Guid tournamentId,
         Guid assignmentId,
         CancellationToken cancellationToken = default)
     {
         await RequireManagementAsync(tournamentId, cancellationToken);
+
+        var invitations = await _invitations.ListByTournamentAsync(tournamentId, cancellationToken);
+
+        if (invitations.FirstOrDefault(i => i.Id == assignmentId) is { } invitation)
+        {
+            // Keine Prüfung auf die letzte Turnierleitung: eine Einladung führt
+            // niemanden, sie wartet nur.
+            _invitations.Remove(invitation);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return;
+        }
 
         var assignments = await _roles.ListByTournamentAsync(tournamentId, cancellationToken);
 

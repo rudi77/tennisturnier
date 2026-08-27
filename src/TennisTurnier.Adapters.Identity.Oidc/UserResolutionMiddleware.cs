@@ -35,6 +35,7 @@ internal sealed class UserResolutionMiddleware : IMiddleware
     private readonly IUserDirectory _directory;
     private readonly SystemAdminBootstrap _bootstrap;
     private readonly OrganizerBootstrap _organizers;
+    private readonly InvitationRedemption _invitations;
     private readonly BootstrapAdminOptions _options;
     private readonly ILogger<UserResolutionMiddleware> _logger;
 
@@ -43,6 +44,7 @@ internal sealed class UserResolutionMiddleware : IMiddleware
         IUserDirectory directory,
         SystemAdminBootstrap bootstrap,
         OrganizerBootstrap organizers,
+        InvitationRedemption invitations,
         BootstrapAdminOptions options,
         ILogger<UserResolutionMiddleware> logger)
     {
@@ -50,6 +52,7 @@ internal sealed class UserResolutionMiddleware : IMiddleware
         _directory = directory;
         _bootstrap = bootstrap;
         _organizers = organizers;
+        _invitations = invitations;
         _options = options;
         _logger = logger;
     }
@@ -175,6 +178,20 @@ internal sealed class UserResolutionMiddleware : IMiddleware
         {
             _logger.LogInformation(
                 "Konto {UserId} ({Subject}) wurde als Veranstalter freigeschaltet.",
+                account.Id,
+                account.SubjectId);
+
+            assignments = await _directory.GetAssignmentsAsync(account.Id, cancellationToken);
+        }
+
+        // Zuletzt, was jemand anderes für dieses Konto hinterlegt hat, bevor es
+        // das Konto gab: die Einladungen an seine Adresse. Sie kommen nach den
+        // beiden Bootstraps, weil sie deren Ergebnis brauchen — wer hier schon
+        // eine Rolle am Turnier hat, bekommt keine zweite.
+        if (await _invitations.ApplyAsync(account, cancellationToken))
+        {
+            _logger.LogInformation(
+                "Konto {UserId} ({Subject}) hat offene Einladungen eingelöst.",
                 account.Id,
                 account.SubjectId);
 

@@ -25,8 +25,15 @@ internal static class RoleEndpoints
             IRoleService service,
             CancellationToken ct) =>
         {
-            var id = await service.GrantAsync(tournamentId, request, ct);
-            return Results.Created($"/api/tournaments/{tournamentId}/roles/{id}", new { id });
+            var ergebnis = await service.GrantAsync(tournamentId, request, ct);
+
+            // Auch die Einladung ist ein Created: es ist etwas entstanden, das
+            // sich unter derselben Adresse zurücknehmen lässt. Was es ist,
+            // sagt „invited" — die Oberfläche meldet danach entweder „berufen"
+            // oder „eingeladen, wird beim ersten Login Mitglied".
+            return Results.Created(
+                $"/api/tournaments/{tournamentId}/roles/{ergebnis.Id}",
+                new { id = ergebnis.Id, invited = ergebnis.Invited });
         });
 
         group.MapDelete("/{assignmentId:guid}", async (

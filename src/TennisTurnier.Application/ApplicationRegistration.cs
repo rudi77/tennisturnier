@@ -33,6 +33,7 @@ public static class ApplicationRegistration
         services.AddSingleton(tournamentOptions ?? new TournamentOptions());
         services.AddScoped<SystemAdminBootstrap>();
         services.AddScoped<OrganizerBootstrap>();
+        services.AddScoped<InvitationRedemption>();
 
         services.AddScoped<IMeService, MeService>();
         services.AddScoped<IRoleService, RoleService>();

@@ -262,23 +262,213 @@ public sealed class RollenApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
-    public async Task Wer_noch_nie_angemeldet_war_laesst_sich_nicht_berufen()
+    public async Task Wer_noch_nie_angemeldet_war_wird_eingeladen()
     {
-        // Die Grenze, die ADR-0007 zieht: Identitäten legt der Identity
-        // Provider an, nicht diese Anwendung. Die Einladung eines noch nicht
-        // angemeldeten Benutzers bleibt ein benannter offener Punkt — und der
-        // Fehler sagt genau das, statt still nichts zu tun.
+        // Hier endete die Rollenvergabe bis zuletzt an einer Fehlermeldung:
+        // „berufen lässt sich nur, wer sich schon einmal angemeldet hat". Sie
+        // war richtig und trotzdem eine Sackgasse — wer jemanden einladen
+        // wollte, musste ihn zuerst dazu bringen, sich anzumelden, ohne ihm
+        // sagen zu können, wofür (ADR-0007, jetzt ADR-0012).
         var (leitung, tournamentId) = await TurnierAsync();
+        var email = $"kommt.noch.{Guid.NewGuid():N}"[..24] + "@example.invalid";
 
         var response = await leitung.PostAsJsonAsync(
             $"/api/tournaments/{tournamentId}/roles",
-            new GrantRoleRequest("niemand@example.invalid", Role.Referee),
+            new GrantRoleRequest(email, Role.Referee),
             Json);
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.Contains(
-            "angemeldet",
-            await response.Content.ReadAsStringAsync(),
-            StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.True(
+            (await response.Content.ReadFromJsonAsync<JsonElement>(Json))
+            .GetProperty("invited").GetBoolean());
+
+        // Sie steht in derselben Liste wie die Berufenen — als Zeile, auf die
+        // man wartet.
+        var rollen = await leitung.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        var offen = Assert.Single(rollen!, r => r.Pending);
+        Assert.Equal(email.ToLowerInvariant(), offen.Email);
+        Assert.Equal(Role.Referee, offen.Role);
+        Assert.Equal(Guid.Empty, offen.UserId);
+        Assert.Null(offen.DisplayName);
+    }
+
+    [Fact]
+    public async Task Zweimal_einladen_legt_nur_eine_Einladung_an()
+    {
+        var (leitung, tournamentId) = await TurnierAsync();
+        var email = $"doppelt.{Guid.NewGuid():N}"[..24] + "@example.invalid";
+        var wunsch = new GrantRoleRequest(email, Role.Member);
+
+        await leitung.PostAsJsonAsync($"/api/tournaments/{tournamentId}/roles", wunsch, Json);
+        await leitung.PostAsJsonAsync($"/api/tournaments/{tournamentId}/roles", wunsch, Json);
+
+        var rollen = await leitung.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        Assert.Single(rollen!, r => r.Pending);
+    }
+
+    [Fact]
+    public async Task Dieselbe_Adresse_laesst_sich_zu_zwei_Rollen_einladen()
+    {
+        // Zwei Einladungen, nicht eine ueberschriebene: wer als Mitglied und
+        // als Schiedsrichter vorgesehen ist, ist beides.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var email = $"zweifach.{Guid.NewGuid():N}"[..24] + "@example.invalid";
+        var andere = $"jemand.{Guid.NewGuid():N}"[..24] + "@example.invalid";
+
+        // Eine fremde Adresse steht schon da — sie darf die zweite Einladung
+        // weder verhindern noch beantworten.
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(andere, Role.Member),
+            Json);
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Member),
+            Json);
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Referee),
+            Json);
+
+        var rollen = await leitung.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        Assert.Equal(3, rollen!.Count(r => r.Pending));
+        Assert.Equal(2, rollen!.Count(r => r.Pending && r.Email == email.ToLowerInvariant()));
+    }
+
+    [Fact]
+    public async Task Eine_Einladung_laesst_sich_wieder_zuruecknehmen()
+    {
+        // Sie verfällt nicht — zurücknehmen ist der Weg, der gebraucht wird.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var email = $"doch.nicht.{Guid.NewGuid():N}"[..24] + "@example.invalid";
+
+        var angelegt = await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Referee),
+            Json);
+
+        var id = (await angelegt.Content.ReadFromJsonAsync<JsonElement>(Json))
+            .GetProperty("id").GetGuid();
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await leitung.DeleteAsync($"/api/tournaments/{tournamentId}/roles/{id}")).StatusCode);
+
+        var rollen = await leitung.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        Assert.DoesNotContain(rollen!, r => r.Pending);
+    }
+
+    [Fact]
+    public async Task Eine_Einladung_wird_bei_der_ersten_Anmeldung_eingeloest()
+    {
+        // Der Weg, den ADR-0007 skizziert hat: eine Vorabzuweisung, eingelöst
+        // beim ersten Login. Vorher gab es sie nicht.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var email = $"neu.{Guid.NewGuid():N}"[..24] + "@example.invalid";
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Referee),
+            Json);
+
+        // Jetzt kommt er zum ersten Mal — dasselbe Konto gab es vorher nicht.
+        var eingeladener = _factory.CreateClientAs($"eingeladen-{Guid.NewGuid():N}", email);
+
+        var me = await eingeladener.GetFromJsonAsync<MeResponse>("/api/me", Json);
+        Assert.Contains(me!.Roles, r => r.Role == Role.Referee && r.ResourceId == tournamentId);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await eingeladener.GetAsync($"/api/tournaments/{tournamentId}")).StatusCode);
+
+        // Und die Einladung ist verbraucht: in der Liste steht jetzt ein
+        // Mensch mit Konto und keine offene Zeile mehr.
+        var rollen = await leitung.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        Assert.DoesNotContain(rollen!, r => r.Pending);
+        Assert.Contains(rollen!, r => r.Role == Role.Referee && r.Email == email.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Die_Schreibweise_der_Adresse_entscheidet_nichts()
+    {
+        // „Anna@Verein.at" und „anna@verein.at" sind derselbe Mensch. Stünde
+        // beides nebeneinander, bekäme er seine Rolle je nach Schreibweise
+        // seines Ausstellers — oder eben nicht.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var email = $"Gross.{Guid.NewGuid():N}"[..24] + "@Example.Invalid";
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Member),
+            Json);
+
+        var client = _factory.CreateClientAs(
+            $"gross-{Guid.NewGuid():N}", email.ToLowerInvariant());
+
+        var me = await client.GetFromJsonAsync<MeResponse>("/api/me", Json);
+        Assert.Contains(me!.Roles, r => r.Role == Role.Member && r.ResourceId == tournamentId);
+    }
+
+    [Fact]
+    public async Task Eine_Einladung_an_jemanden_der_schon_dabei_ist_verschwindet_trotzdem()
+    {
+        // Er ist inzwischen selbst beigetreten oder wurde von Hand berufen. Die
+        // Einladung ist damit erledigt — bliebe sie stehen, stünde sie für
+        // immer in der Liste.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var email = $"schon.da.{Guid.NewGuid():N}"[..24] + "@example.invalid";
+        var subject = $"schon-da-{Guid.NewGuid():N}";
+
+        // Erst einladen, solange es das Konto noch nicht gibt.
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Referee),
+            Json);
+
+        // Dann meldet er sich an — die Einladung wird eingelöst.
+        var client = _factory.CreateClientAs(subject, email);
+        await client.GetAsync("/api/me");
+
+        // Und noch einmal: jetzt gibt es keine Einladung mehr einzulösen.
+        var me = await client.GetFromJsonAsync<MeResponse>("/api/me", Json);
+
+        Assert.Single(me!.Roles, r => r.Role == Role.Referee && r.ResourceId == tournamentId);
+    }
+
+    [Fact]
+    public async Task Ohne_Adresse_am_Konto_bleibt_die_Einladung_stehen()
+    {
+        // Nicht jeder Aussteller liefert eine E-Mail. Ohne sie fehlt der
+        // Schlüssel — die Einladung geht dann an niemanden, statt an den
+        // Falschen.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var email = $"wartet.{Guid.NewGuid():N}"[..24] + "@example.invalid";
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Member),
+            Json);
+
+        var ohneAdresse = _factory.CreateClientAs($"ohne-mail-{Guid.NewGuid():N}");
+        var me = await ohneAdresse.GetFromJsonAsync<MeResponse>("/api/me", Json);
+
+        Assert.DoesNotContain(me!.Roles, r => r.ResourceId == tournamentId);
+
+        var rollen = await leitung.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        Assert.Single(rollen!, r => r.Pending);
     }
 }
