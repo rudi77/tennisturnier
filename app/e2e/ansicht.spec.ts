@@ -50,10 +50,23 @@ test('Aufnahmen am Telefon', async ({ page, api }) => {
     await page.screenshot({ path: `test-results/ansicht/handy-${screen}.png`, fullPage: true })
   }
 
+  // Der Beitritt — mit einem anderen Konto, denn wer schon dazugehört, sieht
+  // kein Formular mehr, sondern den Hinweis, dass er drin ist.
   const link = await api.get<{ token: string }>(`/api/tournaments/${turnier.id}/registration`)
-  await page.goto(`/?r=${encodeURIComponent(link.token)}`)
+  await alsTurnierleitung(page, `/?r=${encodeURIComponent(link.token)}`, 'referee')
   await expect(page.getByRole('textbox', { name: 'Vorname' })).toBeVisible()
-  await page.screenshot({ path: 'test-results/ansicht/handy-meldeformular.png', fullPage: true })
+  await page.screenshot({ path: 'test-results/ansicht/handy-beitritt.png', fullPage: true })
+
+  // Und die Maske des Ausstellers, die jetzt der Einstieg ist: dort stehen der
+  // Weg über Google und der zum Registrieren.
+  const ohneKonto = await page.context().browser()!.newContext({
+    viewport: { width: 390, height: 844 },
+  })
+  const fremd = await ohneKonto.newPage()
+  await fremd.goto('/')
+  await fremd.waitForURL(/realms\/tennisturnier/)
+  await fremd.screenshot({ path: 'test-results/ansicht/handy-anmeldung.png', fullPage: true })
+  await ohneKonto.close()
 })
 
 test('Aufnahmen am Schreibtisch', async ({ page, api }) => {
@@ -67,4 +80,22 @@ test('Aufnahmen am Schreibtisch', async ({ page, api }) => {
   await page.getByRole('button', { name: 'Meldungen', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Meldungen' })).toBeVisible()
   await page.screenshot({ path: 'test-results/ansicht/desktop-meldungen.png', fullPage: true })
+
+  // Das, was ADR-0012 gebracht hat, im Bild: der Schalter zwischen privat und
+  // öffentlich, und die Liste derer, die dazugehören — samt einer Einladung an
+  // jemanden, den es noch gar nicht gibt.
+  await page.getByLabel('E-Mail-Adresse').fill('neue.mitspielerin@example.invalid')
+  await page.getByLabel('Rolle').selectOption(String(4))
+  await page.getByRole('button', { name: 'Einladen' }).click()
+  await expect(page.getByText(/eingeladen, noch nie angemeldet/)).toBeVisible()
+
+  await page
+    .locator('.md-panel', { hasText: 'Wer dazugehört' })
+    .screenshot({ path: 'test-results/ansicht/desktop-mitglieder.png' })
+
+  await page.getByRole('button', { name: 'Öffentlich' }).click()
+  await expect(page.getByLabel('Zuschauerlink')).toBeVisible()
+  await page
+    .locator('.md-panel', { hasText: 'Wer zusehen darf' })
+    .screenshot({ path: 'test-results/ansicht/desktop-sichtbarkeit.png' })
 })

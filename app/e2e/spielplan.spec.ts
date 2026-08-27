@@ -85,6 +85,10 @@ test('führt am Turniertag über Aufruf, Start und Platz frei', async ({ page, a
   await api.post(`/api/tournaments/${turnier.id}/start`)
   await api.post(`/api/tournaments/${turnier.id}/schedule/proposal`)
 
+  // Am Ende sieht ein Zuschauer zu — dafür muss das Turnier offen sein
+  // (ADR-0012).
+  await api.put(`/api/tournaments/${turnier.id}/visibility`, { isPublic: true })
+
   // Der Plan wird über die Oberfläche übernommen — der Zustand, von dem aus
   // ein Turniertag überhaupt beginnt.
   await alsTurnierleitung(page, `/?screen=board&t=${turnier.id}`)

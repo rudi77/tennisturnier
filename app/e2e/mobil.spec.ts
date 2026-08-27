@@ -43,19 +43,22 @@ test('kein Bildschirm ragt über den rechten Rand', async ({ page, api }) => {
   }
 })
 
-test('auch die Seiten ohne Anmeldung passen', async ({ page, api }) => {
+test('auch die Seiten außerhalb des Arbeitsbereichs passen', async ({ page, api }) => {
   const turnier = await turnierMitFeld(api, 6)
+  await api.put(`/api/tournaments/${turnier.id}/visibility`, { isPublic: true })
 
-  const link = await api.get<{ token: string }>(`/api/tournaments/${turnier.id}/registration`)
-  await page.goto(`/?r=${encodeURIComponent(link.token)}`)
-  await expect(page.getByRole('textbox', { name: 'Vorname' })).toBeVisible()
-  expect(await ueberstand(page), 'Das Meldeformular ist zu breit').toBe(0)
-
-  // Ohne Auslosung gibt es noch keine öffentliche Projektion — die Seite
-  // sagt das und ist trotzdem eine Seite, die passen muss.
+  // Zuerst die Zuschauerseite, und zwar ohne jede Sitzung: ohne Auslosung gibt
+  // es noch keine Projektion — die Seite sagt das und ist trotzdem eine Seite,
+  // die passen muss.
   await page.goto(`/?t=${turnier.id}`)
   await expect(page.locator('.md-public--standalone')).toBeVisible()
   expect(await ueberstand(page), 'Die Zuschauerseite ist zu breit').toBe(0)
+
+  // Und der Beitritt, den seit ADR-0012 nur sieht, wer ein Konto hat.
+  const link = await api.get<{ token: string }>(`/api/tournaments/${turnier.id}/registration`)
+  await alsTurnierleitung(page, `/?r=${encodeURIComponent(link.token)}`, 'referee')
+  await expect(page.getByRole('textbox', { name: 'Vorname' })).toBeVisible()
+  expect(await ueberstand(page), 'Der Beitritt ist zu breit').toBe(0)
 })
 
 test('die Fußleiste steht in Daumenreichweite und verdeckt nichts', async ({ page, api }) => {
