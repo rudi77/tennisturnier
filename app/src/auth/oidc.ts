@@ -135,11 +135,23 @@ export function restoreRoute(): string {
  * — und stellt dabei her, wohin der Anmeldende ursprünglich wollte.
  */
 export function clearCallbackParams(): void {
-  window.history.replaceState(
-    {},
-    document.title,
-    window.location.pathname + restoreRoute(),
-  )
+  const verwahrt = restoreRoute()
+
+  // Nichts zu entfernen und nichts zurückzuholen: dann auch nicht schreiben.
+  // `<StrictMode>` führt den Effekt zweimal aus, und der zweite Lauf fände die
+  // Verwahrung leer — ohne diese Sperre löschte er genau die Route wieder aus
+  // der Adresszeile, die der erste gerade zurückgeholt hat.
+  if (!verwahrt && !isRedirectCallback()) {
+    return
+  }
+
+  window.history.replaceState({}, document.title, window.location.pathname + verwahrt)
+
+  // `replaceState` löst von sich aus kein `popstate` aus, der Router hört
+  // aber genau darauf. Ohne diesen Anstoß bliebe die wiederhergestellte
+  // Route eine Zeile in der Adresszeile, die niemand liest — und wer über
+  // einen Beitrittslink kam, stünde nach der Anmeldung im Nirgendwo.
+  window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
 export function displayName(user: User | null): string {
