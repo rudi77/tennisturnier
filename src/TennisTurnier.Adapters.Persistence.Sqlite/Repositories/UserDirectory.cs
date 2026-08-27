@@ -24,8 +24,32 @@ public sealed class UserDirectory : IUserDirectory
         {
             account = new UserAccount(Guid.NewGuid(), issuer, subjectId, email, displayName);
             _db.UserAccounts.Add(account);
-            await _db.SaveChangesAsync(cancellationToken);
-            return account;
+
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+                return account;
+            }
+            catch (DbUpdateException)
+            {
+                // Der erste Aufruf nach einer Anmeldung kommt selten allein: die
+                // Oberfläche fragt Turniere, Rollen und sich selbst zugleich, und
+                // jede dieser Anfragen läuft durch die Benutzerauflösung. Zwei
+                // davon finden kein Konto, beide legen eines an — und der
+                // eindeutige Index über (Issuer, SubjectId) lässt nur eines
+                // durch. Sein Verstoß bedeutet hier nichts anderes, als dass
+                // jemand anderes schneller war, und das ist das gewünschte
+                // Ergebnis.
+                _db.Entry(account).State = EntityState.Detached;
+
+                account = await _db.UserAccounts.FirstOrDefaultAsync(
+                    u => u.Issuer == issuer && u.SubjectId == subjectId, cancellationToken);
+
+                if (account is null)
+                {
+                    throw;
+                }
+            }
         }
 
         // Nur schreiben, wenn sich wirklich etwas geändert hat — sonst erzeugt

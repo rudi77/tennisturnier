@@ -117,6 +117,59 @@ public sealed class UserDirectoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Zwei_gleichzeitige_erste_Anmeldungen_ergeben_ein_Konto()
+    {
+        // Der erste Aufruf nach einer Anmeldung kommt selten allein: die
+        // Oberflaeche fragt Turniere, Rollen und sich selbst zugleich, und jede
+        // dieser Anfragen laeuft durch die Benutzerauflösung. Zwei davon finden
+        // kein Konto, beide legen eines an — und der eindeutige Index laesst nur
+        // eines durch.
+        await using var setup = _database.NewContext();
+
+        var dazwischen = new SchreibtDazwischen(() =>
+        {
+            using var anderer = _database.NewContext();
+            anderer.UserAccounts.Add(
+                new UserAccount(Guid.NewGuid(), Issuer, "sub-gleichzeitig", "wer@example.invalid", "Wer"));
+            anderer.SaveChanges();
+        });
+
+        await using var db = _database.NewContext(dazwischen);
+
+        var konto = await new UserDirectory(db).EnsureAccountAsync(
+            Issuer, "sub-gleichzeitig", "wer@example.invalid", "Wer");
+
+        Assert.True(dazwischen.HatGeschrieben);
+        Assert.Equal("sub-gleichzeitig", konto.SubjectId);
+
+        // Und es ist das eine Konto, das der Schnellere angelegt hat.
+        await using var pruefen = _database.NewContext();
+        Assert.Single(pruefen.UserAccounts.Where(u => u.SubjectId == "sub-gleichzeitig"));
+    }
+
+    [Fact]
+    public async Task Ein_anderer_Fehler_beim_Anlegen_wird_nicht_verschluckt()
+    {
+        // Ein Wettlauf endet damit, dass das Konto danach dasteht. Steht es
+        // nicht da, war es kein Wettlauf, sondern ein Fehler — und er muss nach
+        // oben, statt als „jemand war schneller" durchzugehen.
+        await using var db = _database.NewContext(new WirftBeimSpeichern());
+
+        await Assert.ThrowsAsync<DbUpdateException>(() =>
+            new UserDirectory(db).EnsureAccountAsync(Issuer, "sub-kaputt", null, null));
+    }
+
+    /// <summary>Lässt jeden Speichervorgang scheitern — ohne Wettlauf dahinter.</summary>
+    private sealed class WirftBeimSpeichern : ISaveChangesInterceptor
+    {
+        public ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            throw new DbUpdateException("Die Datenbank mag heute nicht.");
+    }
+
+    [Fact]
     public async Task Ein_anderer_Schreibfehler_wird_nicht_verschluckt()
     {
         // Dieselbe Kennung, anderer Scope: der Primärschlüssel schlägt zu, und
