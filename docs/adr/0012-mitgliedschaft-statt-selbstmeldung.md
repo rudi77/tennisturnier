@@ -206,6 +206,23 @@ gemeldet hat und wer auf der Warteliste steht. Das ist die Innenansicht aus
 ADR-0003 und bleibt bei der Turnierleitung. Wer im Feld steht, geht ohnehin aus
 dem Draw hervor.
 
+**Im offenen Betrieb gibt es keine Gruppe.** Läuft eine Instanz ohne Aussteller
+(`Security:OpenAccess`), gilt jeder Aufruf als derselbe Benutzer — dann ist
+jeder, der den Beitrittslink öffnet, bereits Mitglied, weil er derselbe ist wie
+der, der das Turnier angelegt hat. Der Link trägt trotzdem: er zeigt das
+Turnier und führt hinein.
+
+Er tat es eine Zeit lang nicht. `/api/join` steht hinter `RequireAuthorization`,
+und ohne Aussteller registriert der Identity-Adapter kein Anmeldeverfahren —
+die Autorisierung forderte einen Ausweis an, fand niemanden, der ihn ausstellt,
+und der Aufruf endete mit einer 500. Deshalb ist die Vorgabe im offenen Betrieb
+erfüllbar: es gibt einen Benutzer, jeder Aufruf ist er, und autorisiert zu sein
+ist dann keine Frage mehr. Wer prüft, ob dieser Benutzer etwas *darf*, fragt
+weiterhin die Rechtematrix.
+
+Wer die Gruppe wirklich will, braucht den Aussteller. Der offene Betrieb ist
+der Schritt davor, nicht daneben.
+
 **Bestehende Keycloak-Instanzen ziehen nicht automatisch nach.** Der
 Realm-Import greift nur beim ersten Start gegen eine leere Datenbank.
 `registrationAllowed` und `post.logout.redirect.uris` müssen dort von Hand in

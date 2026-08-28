@@ -1,8 +1,9 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using TennisTurnier.Application.Membership;
 using TennisTurnier.Application.Security;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
@@ -101,6 +102,107 @@ public sealed class OffenerBetriebTests
             "/api/tournaments", Json);
 
         Assert.Contains(seineTurniere!, t => t.Name == "Nachmittagsturnier");
+    }
+
+    [Fact]
+    public async Task Der_Beitrittslink_traegt_auch_ohne_Anmeldeverfahren()
+    {
+        // Der Fehler, den eine ausgelieferte Instanz gezeigt hat: `/api/join`
+        // steht hinter `RequireAuthorization`, und ohne Aussteller gibt es kein
+        // Verfahren, mit dem sich jemand ausweisen könnte. Die Autorisierung
+        // forderte trotzdem einen Ausweis an, fand niemanden, der ihn ausstellt,
+        // und der Aufruf endete mit „No authenticationScheme was specified" —
+        // einer 500 auf den Weg, der offenstehen sollte. Jeder geteilte Link war
+        // damit tot.
+        //
+        // `testSchema: false` ist hier der Kern des Tests und keine Beiläufigkeit:
+        // mit dem Testschema gibt es ein Verfahren, die Autorisierung antwortete
+        // sauber mit 401 statt zu werfen, und der Fehler bliebe unsichtbar —
+        // genau deshalb ist er durch alle bestehenden Läufe gekommen.
+        using var fabrik = new TennisTurnierApiFactory([], openAccess: true, testSchema: false);
+        var client = fabrik.CreateClient();
+
+        var vorlagen = await client.GetFromJsonAsync<List<FormatTemplateSummary>>(
+            "/api/format-templates", Json);
+
+        var angelegt = await client.PostAsJsonAsync(
+            "/api/tournaments",
+            new CreateTournamentRequest(
+                "Turnier mit geteiltem Link",
+                "TC Offen",
+                null,
+                "Maria Alm",
+                "Europe/Vienna",
+                Discipline.Singles,
+                new DateOnly(2026, 6, 6),
+                new DateOnly(2026, 6, 6),
+                vorlagen!.Single(v => v.Name == BuiltInFormats.Knockout.Name).Id),
+            Json);
+
+        var turnier = (await angelegt.Content.ReadFromJsonAsync<TournamentDetail>(Json))!;
+
+        await client.PostAsync($"/api/tournaments/{turnier.Id}/registration/open", null);
+
+        var link = await client.GetFromJsonAsync<RegistrationDetail>(
+            $"/api/tournaments/{turnier.Id}/registration", Json);
+
+        var ansicht = await client.GetAsync($"/api/join/{link!.Token}");
+
+        Assert.Equal(HttpStatusCode.OK, ansicht.StatusCode);
+
+        var beitritt = (await ansicht.Content.ReadFromJsonAsync<JoinView>(Json))!;
+
+        Assert.Equal(turnier.Id, beitritt.TournamentId);
+        Assert.True(beitritt.IsOpen);
+
+        // Und dazu gehört er schon: im offenen Betrieb gibt es einen Benutzer,
+        // und der hat das Turnier angelegt.
+        Assert.True(beitritt.AlreadyMember);
+    }
+
+    [Fact]
+    public async Task Auch_der_Beitritt_selbst_geht_ohne_Anmeldeverfahren()
+    {
+        // Nicht nur die Auskunft, auch die Handlung: `POST` steht hinter
+        // derselben Sperre.
+        using var fabrik = new TennisTurnierApiFactory([], openAccess: true, testSchema: false);
+        var client = fabrik.CreateClient();
+
+        var vorlagen = await client.GetFromJsonAsync<List<FormatTemplateSummary>>(
+            "/api/format-templates", Json);
+
+        var angelegt = await client.PostAsJsonAsync(
+            "/api/tournaments",
+            new CreateTournamentRequest(
+                "Turnier zum Beitreten",
+                "TC Offen",
+                null,
+                "Maria Alm",
+                "Europe/Vienna",
+                Discipline.Singles,
+                new DateOnly(2026, 6, 6),
+                new DateOnly(2026, 6, 6),
+                vorlagen!.Single(v => v.Name == BuiltInFormats.Knockout.Name).Id),
+            Json);
+
+        var turnier = (await angelegt.Content.ReadFromJsonAsync<TournamentDetail>(Json))!;
+
+        await client.PostAsync($"/api/tournaments/{turnier.Id}/registration/open", null);
+
+        var link = await client.GetFromJsonAsync<RegistrationDetail>(
+            $"/api/tournaments/{turnier.Id}/registration", Json);
+
+        var antwort = await client.PostAsJsonAsync(
+            $"/api/join/{link!.Token}",
+            new JoinRequest(true, "Anna", "Müller", null, null, null, null, null),
+            Json);
+
+        Assert.Equal(HttpStatusCode.OK, antwort.StatusCode);
+
+        var ergebnis = (await antwort.Content.ReadFromJsonAsync<JoinResult>(Json))!;
+
+        Assert.Equal(turnier.Id, ergebnis.TournamentId);
+        Assert.NotNull(ergebnis.EntryId);
     }
 
     [Fact]

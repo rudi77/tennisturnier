@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
@@ -52,6 +52,7 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     private readonly int _publicRegistrationLimit;
     private readonly int? _teamDrawSeed;
     private readonly bool _openAccess;
+    private readonly bool _testSchema;
 
     private readonly Lock _migrationGate = new();
     private bool _migrated;
@@ -73,12 +74,14 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         IReadOnlyList<string> bootstrapSystemAdmins,
         int publicRegistrationLimit = Unbegrenzt,
         int? teamDrawSeed = null,
-        bool openAccess = false)
+        bool openAccess = false,
+        bool testSchema = true)
     {
         _bootstrapSystemAdmins = bootstrapSystemAdmins;
         _publicRegistrationLimit = publicRegistrationLimit;
         _teamDrawSeed = teamDrawSeed;
         _openAccess = openAccess;
+        _testSchema = testSchema;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -122,11 +125,19 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
-            services
-                .AddAuthentication(HeaderAuthenticationHandler.SchemeName)
-                .AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>(
-                    HeaderAuthenticationHandler.SchemeName,
-                    _ => { });
+            // Ohne Testschema läuft die Anwendung so, wie sie im offenen
+            // Betrieb tatsächlich läuft: ganz ohne Anmeldeverfahren. Das
+            // Testschema ist sonst überall die Bequemlichkeit, mit der ein Test
+            // sich ausweist — hier wäre es die Bequemlichkeit, mit der ein
+            // Fehler unentdeckt bleibt.
+            if (_testSchema)
+            {
+                services
+                    .AddAuthentication(HeaderAuthenticationHandler.SchemeName)
+                    .AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>(
+                        HeaderAuthenticationHandler.SchemeName,
+                        _ => { });
+            }
 
             services.AddSingleton<IClock>(Clock);
         });
