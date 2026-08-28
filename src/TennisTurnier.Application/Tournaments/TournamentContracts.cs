@@ -1,4 +1,4 @@
-using TennisTurnier.Domain.Formats;
+﻿using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Application.Tournaments;
@@ -125,7 +125,27 @@ public sealed record TournamentDetail(
     IReadOnlyList<CourtDetail> Courts,
     IReadOnlyList<EntryDetail> Entries,
     int Version,
-    bool IsPublic);
+    bool IsPublic,
+    TournamentAbilities You);
+
+/// <summary>
+/// Was der Aufrufer an diesem Turnier darf.
+///
+/// Sie steht hier, weil sonst die Oberfläche raten müsste. Seit ADR-0012 sieht
+/// ein Turnier auch, wer es nicht führt — und eine Maske, die einem Mitglied
+/// „Turnier löschen" anbietet, ist eine Sackgasse: der Server weist es zu Recht
+/// ab, aber erst nach dem Klick. Die Rechte kennt er ohnehin schon, also sagt
+/// er sie.
+///
+/// Kein Ersatz für die Prüfung am Endpunkt: das hier ist eine Auskunft für die
+/// Darstellung, keine Zusicherung. Entschieden wird weiterhin im Anwendungsfall.
+/// </summary>
+/// <param name="CanManage">
+/// Das Turnier führen: Stammdaten, Plätze, Meldungen, Draw, Spielplan,
+/// Sichtbarkeit, Rollen.
+/// </param>
+/// <param name="CanEnterResults">Ergebnisse eintragen und korrigieren.</param>
+public sealed record TournamentAbilities(bool CanManage, bool CanEnterResults);
 
 public sealed record VenueDetail(string Name, string? Address, string? City, string TimeZoneId);
 
