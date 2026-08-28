@@ -56,14 +56,30 @@ export function AppNav({
   user,
   onLogout,
   openAccess = false,
+  manages = true,
 }: {
   screen: ScreenId
   onNavigate: (id: ScreenId) => void
   user: User | null
   onLogout: () => void
   openAccess?: boolean
+  /**
+   * Führt der Angemeldete das gewählte Turnier?
+   *
+   * Nur die Beschriftung hängt daran: für ein Mitglied ist derselbe Schirm
+   * nicht die Meldungsverwaltung, sondern die Liste derer, die dazugehören
+   * (ADR-0012). Ein Ziel weniger wäre schlechter — der Weg dorthin soll
+   * überall gleich sein.
+   */
+  manages?: boolean
 }) {
   const [more, setMore] = useState(false)
+
+  const primary = manages
+    ? PRIMARY
+    : PRIMARY.map((item) =>
+        item.id === 'entries' ? { ...item, label: 'Mitglieder', short: 'Mitglied' } : item,
+      )
 
   const go = (id: ScreenId) => {
     setMore(false)
@@ -78,7 +94,7 @@ export function AppNav({
           <span className="md-nav__wordmark">MATCHDAY</span>
         </div>
 
-        {PRIMARY.map((item) => (
+        {primary.map((item) => (
           <NavButton key={item.id} item={item} current={screen === item.id} onClick={go} />
         ))}
 

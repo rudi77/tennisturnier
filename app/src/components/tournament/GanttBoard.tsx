@@ -125,6 +125,7 @@ export function GanttBoard({
   timeZone,
   onOpenResult,
   onDropMatch,
+  readOnly = false,
 }: {
   courts: CourtDetail[]
   scheduled: ScheduledMatch[]
@@ -133,6 +134,11 @@ export function GanttBoard({
   timeZone: string
   onOpenResult: (match: MatchDetail) => void
   onDropMatch: (matchId: string, courtId: string) => void
+  /**
+   * Zusehen statt planen: kein Ziehen, kein Öffnen einer Ergebnismaske. Für
+   * jemanden, der zum Turnier gehört, aber es nicht führt (ADR-0012).
+   */
+  readOnly?: boolean
 }) {
   const [dragId, setDragId] = useState<string | null>(null)
   const [overCourt, setOverCourt] = useState<string | null>(null)
@@ -200,13 +206,17 @@ export function GanttBoard({
                 position: 'relative',
               }}
               onDragOver={(event) => {
+                if (readOnly) return
                 event.preventDefault()
                 setOverCourt(court.id)
               }}
               onDragLeave={() => setOverCourt((current) => (current === court.id ? null : current))}
               onDrop={() => {
                 setOverCourt(null)
-                if (dragId) onDropMatch(dragId, court.id)
+                // Auch hier und nicht nur an `onDragOver`: ohne `preventDefault`
+                // nimmt zwar kein Browser den Wurf an, aber eine Zusage, die an
+                // einer ausgelassenen Zeile hängt, ist keine.
+                if (dragId && !readOnly) onDropMatch(dragId, court.id)
                 setDragId(null)
               }}
             >
@@ -258,6 +268,7 @@ export function GanttBoard({
                     range={range}
                     onDragStart={() => setDragId(entry.match.id)}
                     onOpen={() => onOpenResult(entry.match)}
+                    readOnly={readOnly}
                   />
                 ))}
               </div>
@@ -332,12 +343,14 @@ function Card({
   range,
   onDragStart,
   onOpen,
+  readOnly,
 }: {
   entry: ScheduledMatch
   timeZone: string
   range: DayRange
   onDragStart: () => void
   onOpen: () => void
+  readOnly: boolean
 }) {
   const { match } = entry
   const assignment = match.assignment
@@ -366,13 +379,13 @@ function Card({
   return (
     <div
       className={className}
-      draggable
+      draggable={!readOnly}
       onDragStart={onDragStart}
-      onClick={onOpen}
-      role="button"
-      tabIndex={0}
+      onClick={() => !readOnly && onOpen()}
+      role={readOnly ? undefined : 'button'}
+      tabIndex={readOnly ? undefined : 0}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
+        if (!readOnly && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault()
           onOpen()
         }

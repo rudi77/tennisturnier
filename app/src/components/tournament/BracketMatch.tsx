@@ -13,6 +13,9 @@ import { sideName } from '../../lib/labels'
  * anklickbar, weil es als entschieden gilt — die Maske ging auf und konnte
  * nichts speichern, denn die Domäne weist ein Ergebnis für ein Freilos ab.
  *
+ * Ohne `onOpen` ist gar nichts anklickbar: dann sieht jemand zu, der keine
+ * Ergebnisse einträgt, und das Bracket ist eine Anzeige.
+ *
  * Ein Freilos wird außerdem gedämpft gezeichnet. Es sieht sonst aus wie eine
  * gespielte Partie, und wer den Namen des Freilosgegners eine Runde weiter
  * stehen sieht, hält das für ein Ergebnis. Gespielt wurde nichts — er ist
@@ -25,12 +28,12 @@ export function BracketMatch({
 }: {
   match: MatchDetail
   compact?: boolean
-  onOpen: (match: MatchDetail) => void
+  onOpen: ((match: MatchDetail) => void) | null
 }) {
   const finished = match.status === MatchStatus.Finished
   const running = match.assignment?.status === AssignmentStatus.Running
   const bye = match.score?.outcome === MatchOutcome.Bye
-  const clickable = !bye && (match.status === MatchStatus.Ready || finished)
+  const clickable = onOpen !== null && !bye && (match.status === MatchStatus.Ready || finished)
 
   const winner = match.score?.winnerSide ?? null
   const setsFor = (side: 1 | 2) =>
@@ -52,7 +55,8 @@ export function BracketMatch({
       type="button"
       className={className}
       disabled={!clickable}
-      onClick={() => clickable && onOpen(match)}
+      // `disabled` schließt den Klick ohne Handler bereits aus.
+      onClick={() => onOpen!(match)}
       style={{
         width: compact ? '100%' : 'var(--bracket-card-width)',
         cursor: clickable ? 'pointer' : 'default',

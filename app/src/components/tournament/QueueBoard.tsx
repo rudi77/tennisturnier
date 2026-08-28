@@ -20,12 +20,19 @@ export function QueueBoard({
   busyAssignmentId,
   onAction,
   onDropMatch,
+  readOnly = false,
 }: {
   boards: CourtBoard[]
   timeZone: string
   busyAssignmentId: string | null
   onAction: (action: QueueAction, entry: QueuedMatch) => void
   onDropMatch: (matchId: string, courtId: string) => void
+  /**
+   * Zusehen statt bedienen: keine Knöpfe an den Karten, kein Ziehen. Für
+   * jemanden, der zum Turnier gehört, aber es nicht führt — die Reihenfolge
+   * am Platz ist für ihn eine Auskunft (ADR-0012).
+   */
+  readOnly?: boolean
 }) {
   const [dragMatchId, setDragMatchId] = useState<string | null>(null)
 
@@ -44,9 +51,9 @@ export function QueueBoard({
             <div
               key={board.courtId}
               className={`md-queue__col${live ? ' md-queue__col--live' : ''}`}
-              onDragOver={(event) => event.preventDefault()}
+              onDragOver={(event) => !readOnly && event.preventDefault()}
               onDrop={() => {
-                if (dragMatchId) onDropMatch(dragMatchId, board.courtId)
+                if (dragMatchId && !readOnly) onDropMatch(dragMatchId, board.courtId)
                 setDragMatchId(null)
               }}
             >
@@ -99,6 +106,7 @@ export function QueueBoard({
                     busy={busyAssignmentId === current.assignmentId}
                     onAction={onAction}
                     onDragStart={() => setDragMatchId(current.matchId)}
+                    readOnly={readOnly}
                   />
                 )}
                 {board.queue.map((entry, index) => (
@@ -110,6 +118,7 @@ export function QueueBoard({
                     busy={busyAssignmentId === entry.assignmentId}
                     onAction={onAction}
                     onDragStart={() => setDragMatchId(entry.matchId)}
+                    readOnly={readOnly}
                   />
                 ))}
                 {!current && board.queue.length === 0 && (
@@ -133,6 +142,7 @@ function QueueCard({
   busy,
   onAction,
   onDragStart,
+  readOnly,
 }: {
   entry: QueuedMatch
   position: number
@@ -140,6 +150,7 @@ function QueueCard({
   busy: boolean
   onAction: (action: QueueAction, entry: QueuedMatch) => void
   onDragStart: () => void
+  readOnly: boolean
 }) {
   const running = entry.status === AssignmentStatus.Running
   const called = entry.status === AssignmentStatus.Called
@@ -158,7 +169,7 @@ function QueueCard({
   return (
     <div
       className={className}
-      draggable
+      draggable={!readOnly}
       onDragStart={onDragStart}
       style={{
         boxShadow: position === 0 ? 'var(--shadow-sm)' : 'none',
@@ -220,20 +231,20 @@ function QueueCard({
       )}
 
       <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 9, flexWrap: 'wrap' }}>
-        {callable && (
+        {!readOnly && callable && (
           <Action label="Aufrufen" variant="md-btn--call" busy={busy} onClick={() => onAction('call', entry)} />
         )}
-        {called && (
+        {!readOnly && called && (
           <Action label="Start" variant="md-btn--primary" busy={busy} onClick={() => onAction('start', entry)} />
         )}
-        {running && (
+        {!readOnly && running && (
           <>
             <Action label="Ergebnis" variant="md-btn--primary" busy={busy} onClick={() => onAction('result', entry)} />
             <Action label="Platz frei" busy={busy} onClick={() => onAction('finish', entry)} />
             <Action label="Pause" busy={busy} onClick={() => onAction('suspend', entry)} />
           </>
         )}
-        {suspended && (
+        {!readOnly && suspended && (
           <Action label="Fortsetzen" variant="md-btn--primary" busy={busy} onClick={() => onAction('resume', entry)} />
         )}
       </div>

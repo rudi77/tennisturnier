@@ -7,7 +7,11 @@ import { QueueBoard } from './QueueBoard'
 
 const WIEN = 'Europe/Vienna'
 
-function aufbau(boards: CourtBoard[], busyAssignmentId: string | null = null) {
+function aufbau(
+  boards: CourtBoard[],
+  busyAssignmentId: string | null = null,
+  readOnly = false,
+) {
   const onAction = vi.fn()
   const onDropMatch = vi.fn()
   const result = render(
@@ -17,6 +21,7 @@ function aufbau(boards: CourtBoard[], busyAssignmentId: string | null = null) {
       busyAssignmentId={busyAssignmentId}
       onAction={onAction}
       onDropMatch={onDropMatch}
+      readOnly={readOnly}
     />,
   )
   return { onAction, onDropMatch, ...result }
@@ -277,5 +282,52 @@ describe('QueueBoard', () => {
     fireEvent.drop(spalten[1]!)
 
     expect(onDropMatch).toHaveBeenCalledWith(fx.IDS.match1, fx.IDS.court2)
+  })
+})
+
+describe('QueueBoard — nur zusehen', () => {
+  // Für jemanden, der zum Turnier gehört, es aber nicht führt: die
+  // Reihenfolge am Platz ist eine Auskunft und keine Bedienoberfläche.
+  it('zeigt die Warteschlange ohne einen einzigen Knopf', () => {
+    aufbau(
+      [
+        fx.courtBoard({
+          current: fx.queuedMatch({ status: AssignmentStatus.Running, side1: 'S. Moser' }),
+          queue: [
+            fx.queuedMatch({
+              assignmentId: fx.IDS.assignment2,
+              matchId: fx.IDS.match2,
+              side1: 'A. Huber',
+              sequenceOnCourt: 2,
+            }),
+          ],
+        }),
+      ],
+      null,
+      true,
+    )
+
+    expect(screen.getByText('S. Moser')).toBeInTheDocument()
+    expect(screen.getByText('A. Huber')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('lässt auch nichts umhängen', () => {
+    const { onDropMatch, container } = aufbau(
+      [
+        fx.courtBoard({ current: null, queue: [fx.queuedMatch({ side1: 'S. Moser' })] }),
+        fx.courtBoard({ courtId: fx.IDS.court2, courtName: 'Platz 2', current: null, queue: [] }),
+      ],
+      null,
+      true,
+    )
+
+    const spalten = [...container.querySelectorAll('.md-queue__col')]
+
+    fireEvent.dragStart(karteMit('S. Moser'))
+    fireEvent.drop(spalten[1]!)
+
+    expect(onDropMatch).not.toHaveBeenCalled()
+    expect(karteMit('S. Moser')).toHaveAttribute('draggable', 'false')
   })
 })

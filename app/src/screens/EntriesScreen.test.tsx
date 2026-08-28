@@ -54,6 +54,56 @@ describe('EntriesScreen — ohne Turnier', () => {
   })
 })
 
+describe('EntriesScreen — als Mitglied', () => {
+  // Für ein Mitglied ist dieser Bildschirm die Gruppe. Meldungen samt
+  // Kontaktdaten sind die Innenansicht und gehören der Turnierleitung
+  // (ADR-0003); vorher stand hier für jeden dasselbe, und die halbe Seite
+  // bestand aus Fehlermeldungen.
+  const mitglied = { you: fx.NUR_MITGLIED }
+
+  it('zeigt, wer dazugehört — und sonst nichts', async () => {
+    aufbau(true, mitglied)
+
+    expect(screen.getByRole('heading', { name: 'Mitglieder' })).toBeInTheDocument()
+    expect(await screen.findByText('Wer dazugehört')).toBeInTheDocument()
+
+    expect(screen.queryByLabelText('Beitrittslink')).not.toBeInTheDocument()
+    expect(screen.queryByText('Teilnehmerliste hochladen')).not.toBeInTheDocument()
+    expect(screen.queryByText('Wer zusehen darf')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Annehmen' })).not.toBeInTheDocument()
+  })
+
+  it('fragt weder Meldungen noch Anmeldelink ab', async () => {
+    // Beide hängen an ManageTournament: es wären zwei abgewiesene Anfragen,
+    // die niemand gestellt haben wollte.
+    aufbau(true, mitglied)
+    await screen.findByText('Wer dazugehört')
+
+    expect(callsTo('GET', `/api/tournaments/${T}/entries`)).toBe(0)
+    expect(callsTo('GET', `/api/tournaments/${T}/registration`)).toBe(0)
+  })
+
+  it('sagt, dass die Liste noch unterwegs ist', () => {
+    // Der Kasten steht beim Mitglied allein auf dem Bildschirm: ein leerer
+    // Rahmen sähe aus wie eine Gruppe ohne Mitglieder.
+    aufbau(true, mitglied)
+
+    expect(screen.getByText('Mitglieder werden geladen …')).toBeInTheDocument()
+  })
+
+  it('lässt niemanden berufen und niemanden entziehen', async () => {
+    aufbau(true, mitglied)
+    await screen.findByText('Wer dazugehört')
+
+    expect(screen.queryByLabelText('E-Mail-Adresse')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Einladen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Entziehen' })).not.toBeInTheDocument()
+
+    expect(screen.getByText(/Wer dazukommt oder geht, entscheidet die Turnierleitung/))
+      .toBeInTheDocument()
+  })
+})
+
 describe('EntriesScreen — Beitrittslink', () => {
   it('zeigt Link, Zählstand und offene Kapazität', async () => {
     db.registration = fx.registrationDetail({ capacity: null })
@@ -563,8 +613,9 @@ describe('EntriesScreen — Meldungen', () => {
   })
 
   it('zeigt die Ladeanzeige, solange nichts da ist', () => {
+    // Zwei Anzeigen zugleich: die Mitgliederliste kommt über dieselbe Seite.
     aufbau()
-    expect(screen.getByRole('status')).toHaveTextContent('Meldungen werden geladen …')
+    expect(screen.getByText('Meldungen werden geladen …')).toBeInTheDocument()
   })
 
   it('meldet einen Fehler und bietet einen zweiten Anlauf', async () => {

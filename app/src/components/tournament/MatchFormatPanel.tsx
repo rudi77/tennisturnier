@@ -64,7 +64,9 @@ export function MatchFormatPanel({
           </div>
         </div>
 
-        {!frozen && (
+        {/* Das Format steht für jeden da — gespielt wird danach. Ändern darf
+            es nur, wer das Turnier führt. */}
+        {!frozen && tournament.you.canManage && (
           <button type="button" className="md-btn" onClick={() => setOpen((it) => !it)}>
             {open ? 'Schließen' : 'Ändern'}
           </button>
