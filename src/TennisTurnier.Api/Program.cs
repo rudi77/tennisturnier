@@ -1,5 +1,6 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using TennisTurnier.Adapters.Identity.Oidc;
 using TennisTurnier.Adapters.Persistence.Sqlite;
@@ -48,6 +49,26 @@ builder.Services.AddApplication(security, tournaments);
 builder.Services.AddSqlitePersistence(builder.Configuration.GetConnectionString("Default")!);
 builder.Services.AddOidcIdentity(oidc);
 builder.Services.AddHeuristicScheduling();
+
+// Im offenen Betrieb ist Autorisierung keine Frage mehr.
+//
+// Ohne Aussteller registriert der Identity-Adapter kein Anmeldeverfahren — es
+// gibt dann keines, mit dem sich jemand ausweisen könnte. Ein Endpunkt hinter
+// `RequireAuthorization` verlangte trotzdem einen Ausweis, die Autorisierung
+// forderte ihn an, und weil kein Verfahren da ist, das ihn ausstellt, endete
+// der Aufruf mit „No authenticationScheme was specified" — einer 500 auf einen
+// Weg, der einfach offenstehen sollte. Genau so war der Beitrittslink auf einer
+// offenen Instanz unbenutzbar.
+//
+// Die Vorgabe wird deshalb erfüllbar. Das ist keine Lücke, sondern dieselbe
+// Aussage wie überall sonst im offenen Betrieb: es gibt einen Benutzer, jeder
+// Aufruf ist er, und die Benutzerauflösung setzt ihn (ADR-0007). Wer prüft,
+// ob dieser eine Benutzer etwas darf, fragt weiterhin die Rechtematrix.
+if (security.OpenAccess)
+{
+    builder.Services.AddAuthorization(o =>
+        o.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
+}
 
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSignalR();

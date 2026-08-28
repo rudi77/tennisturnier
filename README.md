@@ -334,6 +334,12 @@ Ein Turnier funktioniert wie eine Gruppe (ADR-0012). Wer dazugehört, sieht den
 ganzen Verlauf: Meldungen, Draw, Spielplan, Ergebnisse. Wer nicht dazugehört,
 sieht das Turnier nicht — auch nicht, dass es existiert.
 
+Das setzt einen Aussteller voraus. Läuft die Instanz im offenen Betrieb
+(`Security__OpenAccess`), gibt es genau einen Benutzer, und jeder Aufruf ist
+er — dann ist jeder, der den Beitrittslink öffnet, schon Mitglied. Der Link
+funktioniert, aber eine Gruppe entsteht dabei nicht. Wer sie will, richtet
+Keycloak ein und setzt `Oidc__Authority`.
+
 Hinein führen zwei Wege, und sie schließen einander nicht aus:
 
 - **Der Beitrittslink.** `?r=<token>` steht in den Meldungen zum Kopieren und
