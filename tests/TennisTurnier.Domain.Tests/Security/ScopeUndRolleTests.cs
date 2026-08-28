@@ -1,4 +1,4 @@
-using TennisTurnier.Domain.Common;
+﻿using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Security;
 
 namespace TennisTurnier.Domain.Tests.Security;
@@ -80,12 +80,14 @@ public sealed class ScopeUndRolleTests
     }
 
     [Fact]
-    public void Ein_Mitglied_darf_nichts_und_gehoert_zum_Turnier()
+    public void Ein_Mitglied_sieht_wer_dazugehoert_und_sonst_nichts()
     {
-        // Die Rolle, die ein Turnier zur Gruppe macht. Sie gewaehrt kein
-        // einziges Recht — sichtbar wird das Turnier ueber den Query-Filter,
-        // der an der Zuweisung haengt und nicht an der Rechtematrix.
-        Assert.Empty(Permissions.Of(Role.Member));
+        // Die Rolle, die ein Turnier zur Gruppe macht. Ein einziges Recht, und
+        // es ist ein Leserecht: eine Gruppe, in der niemand sieht, wer sonst
+        // dabei ist, waere keine. Alles andere — Spielplan, Draw, Ergebnisse —
+        // kommt nicht aus der Rechtematrix, sondern aus dem Query-Filter, der
+        // an der Zuweisung haengt.
+        Assert.Equal([Permission.ViewMembers], Permissions.Of(Role.Member));
 
         var turnier = Guid.NewGuid();
         var zuweisung = new RoleAssignment(
