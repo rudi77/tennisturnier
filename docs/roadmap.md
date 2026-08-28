@@ -151,6 +151,11 @@ sind die Stellschrauben dafür, und sie gehören dem Turnier
   eine Berufung an eine unbekannte Adresse wird zur `Invitation` und beim
   ersten Login eingelöst. Was offen bleibt: **zugestellt wird sie nicht.** Es
   gibt keinen Mail-Adapter, die Turnierleitung teilt den Beitrittslink selbst.
+- **Ein Mitglied sieht keine Meldungsliste.** Es sieht die Gruppe, den Draw,
+  den Spielplan und die Ergebnisse — nicht aber, wer sich mit welcher Adresse
+  gemeldet hat und wer auf der Warteliste steht. Das ist die Innenansicht aus
+  [ADR-0003](adr/0003-getrenntes-read-modell.md) und bleibt bei der
+  Turnierleitung. Wer im Feld steht, geht aus dem Draw hervor.
 - **Aus einem Turnier austreten kann nur die Turnierleitung veranlassen.** Wer
   eine Gruppe verlassen will, muss fragen. Ein Selbst-Austritt ist eine Zeile
   im `RoleService` und eine Frage mehr in der Oberfläche (und die Meldung

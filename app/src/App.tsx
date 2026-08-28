@@ -228,6 +228,7 @@ function AppShell() {
           user={user}
           onLogout={logout}
           openAccess={openAccess}
+          manages={tournament.data?.you.canManage ?? true}
         />
         <main className="md-view">
           {/* Die Kopfleiste steht hier und nicht in den Bildschirmen: welches
