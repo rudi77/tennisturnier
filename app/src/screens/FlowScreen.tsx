@@ -89,7 +89,11 @@ export function FlowScreen({ onNavigate }: { onNavigate: (id: ScreenId) => void 
       <section className="md-section">
         <ScreenHeader
           title="Ablauf"
-          lead="Was als Nächstes zu tun ist — von oben nach unten."
+          lead={
+            tournament.you.canManage
+              ? 'Was als Nächstes zu tun ist — von oben nach unten.'
+              : 'Wo das Turnier gerade steht — von oben nach unten.'
+          }
         />
         <ol className="md-flow">
           {STEPS.map((step, index) => (
@@ -124,11 +128,16 @@ export function FlowScreen({ onNavigate }: { onNavigate: (id: ScreenId) => void 
             In einem der fünf Schritte stünde es genau dort und sonst nirgends. */}
         <MatchFormatPanel tournament={tournament} onChanged={reloadTournament} />
 
-        <TournamentActions
-          tournament={tournament}
-          onChanged={reloadTournament}
-          onDeleted={() => onNavigate('tournaments')}
-        />
+        {/* Abbrechen und Löschen sind Handlungen der Turnierleitung. Sie einem
+            Mitglied anzubieten hieße, ihm einen Weg zu zeigen, den der Server
+            zu Recht verweigert — erst nach dem Klick. */}
+        {tournament.you.canManage && (
+          <TournamentActions
+            tournament={tournament}
+            onChanged={reloadTournament}
+            onDeleted={() => onNavigate('tournaments')}
+          />
+        )}
       </section>
     </>
   )
@@ -194,13 +203,34 @@ function Actions({
   const registration = useResource(
     () => tournamentApi.registration(tournament.id),
     [tournament.id],
-    { enabled: step === 'entries' && tournament.state === TournamentState.RegistrationOpen },
+    {
+      // Auch die Abfrage hängt am Recht: der Link gehört der Turnierleitung,
+      // und ein Mitglied bekäme hier ein 404 — eine abgewiesene Anfrage, die
+      // niemand gestellt haben wollte.
+      enabled:
+        step === 'entries' &&
+        tournament.state === TournamentState.RegistrationOpen &&
+        tournament.you.canManage,
+    },
   )
 
   const entries = tournament.entries.filter((entry) => entry.status !== EntryStatus.Withdrawn)
   const accepted = entries.filter((entry) => entry.status === EntryStatus.Accepted)
 
   if (step === 'entries') {
+    if (!tournament.you.canManage) {
+      return (
+        <div className="md-flow__actions">
+          <div className="md-flow__count">
+            <strong>{accepted.length}</strong> im Feld
+          </div>
+          <div className="md-hint">
+            Die Turnierleitung sammelt noch. Sobald ausgelost ist, stehen hier Draw und Spielplan.
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="md-flow__actions">
         {tournament.state === TournamentState.Draft ? (
@@ -289,6 +319,16 @@ function Actions({
   }
 
   if (step === 'draw') {
+    if (!tournament.you.canManage) {
+      return (
+        <div className="md-flow__actions">
+          <div className="md-hint">
+            Die Meldung ist zu. Ausgelost wird von der Turnierleitung — danach steht das Feld.
+          </div>
+        </div>
+      )
+    }
+
     const enough = accepted.length >= 2
 
     return (
@@ -331,14 +371,12 @@ function Actions({
   if (step === 'play') {
     return (
       <div className="md-flow__actions">
-        <div className="md-hint">
-          {tournament.state === TournamentState.DrawGenerated
-            ? 'Der Draw steht. Mit dem Start beginnt die Ergebniserfassung — das letzte Ergebnis schließt das Turnier von selbst ab.'
-            : 'Ergebnisse werden im Bracket erfasst. Der Sieger rückt automatisch weiter.'}
-        </div>
+        <div className="md-hint">{playHint(tournament)}</div>
         <div className="md-flow__row">
           <button type="button" className="md-btn md-btn--primary" onClick={() => onNavigate('draw')}>
-            {tournament.state === TournamentState.DrawGenerated ? 'Bracket ansehen' : 'Ergebnisse erfassen'}
+            {tournament.state !== TournamentState.DrawGenerated && tournament.you.canEnterResults
+              ? 'Ergebnisse erfassen'
+              : 'Bracket ansehen'}
           </button>
         </div>
 
@@ -368,6 +406,22 @@ function Actions({
 }
 
 /**
+ * Was im Schritt „Spielen" dasteht.
+ *
+ * Drei Fälle: vor dem Start, beim Eintragenden und beim Zusehenden. Als
+ * verschachteltes Ternär im Markup wäre das nicht mehr zu lesen.
+ */
+function playHint(tournament: TournamentDetail): string {
+  if (tournament.state === TournamentState.DrawGenerated) {
+    return 'Der Draw steht. Mit dem Start beginnt die Ergebniserfassung — das letzte Ergebnis schließt das Turnier von selbst ab.'
+  }
+
+  return tournament.you.canEnterResults
+    ? 'Ergebnisse werden im Bracket erfasst. Der Sieger rückt automatisch weiter.'
+    : 'Es wird gespielt. Im Bracket steht, was entschieden ist — der Sieger rückt automatisch weiter.'
+}
+
+/**
  * Der Link für alle anderen.
  *
  * Er steht erst ab dem Draw, weil es vorher nichts zu sehen gibt: die
@@ -385,6 +439,13 @@ function SpectatorLink({ tournament }: { tournament: TournamentDetail }) {
   const url = publicUrl(tournament.id)
 
   if (!tournament.isPublic) {
+    // Für ein Mitglied gar nichts: es kann die Sichtbarkeit nicht ändern, und
+    // ein Hinweis auf einen Schalter, den es nicht hat, ist keine Auskunft,
+    // sondern eine Aufforderung ins Leere.
+    if (!tournament.you.canManage) {
+      return null
+    }
+
     return (
       <div className="md-hint" style={{ marginTop: 'var(--sp-8)' }}>
         Dieses Turnier ist privat: nur wer dazugehört, sieht es. Unter „Meldungen" lässt es sich

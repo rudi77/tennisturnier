@@ -27,7 +27,7 @@ function karte(over: Parameters<typeof fx.assignment>[0] = {}, matchOver: Parame
   }
 }
 
-function aufbau(courts: CourtDetail[], scheduled: ScheduledMatch[]) {
+function aufbau(courts: CourtDetail[], scheduled: ScheduledMatch[], readOnly = false) {
   const onOpenResult = vi.fn()
   const onDropMatch = vi.fn()
   const result = render(
@@ -38,6 +38,7 @@ function aufbau(courts: CourtDetail[], scheduled: ScheduledMatch[]) {
       timeZone={WIEN}
       onOpenResult={onOpenResult}
       onDropMatch={onDropMatch}
+      readOnly={readOnly}
     />,
   )
   return { onOpenResult, onDropMatch, ...result }
@@ -262,6 +263,40 @@ describe('GanttBoard — Karten', () => {
 
     fireEvent.keyDown(karteEl, { key: 'a' })
     expect(onOpenResult).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('GanttBoard — nur zusehen', () => {
+  // Wer zum Turnier gehört, es aber nicht führt, sieht denselben Plan — und
+  // bekommt keine Werkzeuge dazu (ADR-0012).
+  it('lässt keine Karte anklicken', () => {
+    const { onOpenResult } = aufbau([platz()], [karte()], true)
+    const karte1 = screen.getByTitle('S. Moser vs L. Berger')
+
+    fireEvent.click(karte1)
+    fireEvent.keyDown(karte1, { key: 'Enter' })
+
+    expect(onOpenResult).not.toHaveBeenCalled()
+    expect(karte1).not.toHaveAttribute('role', 'button')
+  })
+
+  it('lässt keine Karte umhängen', () => {
+    const { onDropMatch, container } = aufbau(
+      [platz(), platz({ id: fx.IDS.court2, name: 'Platz 2' })],
+      [karte()],
+      true,
+    )
+
+    const spalten = [...container.querySelectorAll('div[style*="position: relative"]')]
+
+    fireEvent.dragStart(screen.getByTitle('S. Moser vs L. Berger'))
+    fireEvent.dragOver(spalten[1]!)
+    fireEvent.drop(spalten[1]!)
+
+    // Ohne `preventDefault` nimmt der Browser den Wurf gar nicht erst an; die
+    // Spalte hebt sich auch nicht hervor.
+    expect(spalten[1]).not.toHaveClass('md-gantt__col--drop')
+    expect(onDropMatch).not.toHaveBeenCalled()
   })
 })
 

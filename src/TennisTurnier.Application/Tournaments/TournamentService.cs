@@ -1,4 +1,4 @@
-using TennisTurnier.Application.Common;
+﻿using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
 using TennisTurnier.Domain.Common;
@@ -181,7 +181,21 @@ public sealed class TournamentService : ITournamentService
                     e.TeamEntryId))
                 .ToList(),
             tournament.Version,
-            tournament.IsPublic);
+            tournament.IsPublic,
+            AbilitiesFor(tournament.Id));
+    }
+
+    /// <summary>
+    /// Was der Aufrufer hier darf — dieselbe Matrix, die auch die Endpunkte
+    /// befragen, nur einmal vorweg beantwortet.
+    /// </summary>
+    private TournamentAbilities AbilitiesFor(Guid tournamentId)
+    {
+        var scope = ResourceScope.Tournament(tournamentId);
+
+        return new TournamentAbilities(
+            User.Can(Permission.ManageTournament, scope),
+            User.Can(Permission.EnterResults, scope));
     }
 
     private static CourtDetail Describe(TournamentCourt court) => new(

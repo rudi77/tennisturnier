@@ -79,6 +79,11 @@ export function DrawScreen() {
 
   const tournamentId = tournament?.id ?? null
 
+  // Wer keine Ergebnisse einträgt, bekommt keinen Handler — und damit ein
+  // Bracket, das sich ansehen und nicht anklicken lässt. Ein Match, das
+  // aufgeht und nichts speichern kann, wäre eine Sackgasse.
+  const eintragen = (tournament?.you.canEnterResults ?? false) ? setEditing : null
+
   const phases = useResource(
     () => bracketApi.phases(tournamentId as string),
     [tournamentId],
@@ -145,6 +150,11 @@ export function DrawScreen() {
         />
         {!tournament ? (
           <Empty title="Kein Turnier ausgewählt" />
+        ) : beforeDraw && !tournament.you.canManage ? (
+          <Empty
+            title="Noch nicht ausgelost"
+            hint="Sobald die Turnierleitung ausgelost hat, steht hier das Bracket."
+          />
         ) : beforeDraw ? (
           // Nicht nur der Befund „kein Draw", sondern der Weg dorthin: Meldung
           // öffnen, Teilnehmer melden, Meldeschluss, auslosen. Ohne ihn bleibt
@@ -212,9 +222,9 @@ export function DrawScreen() {
               </div>
             </div>
 
-            {style === 'tree' && <TreeView rounds={rounds} onOpen={setEditing} />}
-            {style === 'cols' && <ColumnsView rounds={rounds} onOpen={setEditing} />}
-            {style === 'list' && <ListView rounds={rounds} onOpen={setEditing} />}
+            {style === 'tree' && <TreeView rounds={rounds} onOpen={eintragen} />}
+            {style === 'cols' && <ColumnsView rounds={rounds} onOpen={eintragen} />}
+            {style === 'list' && <ListView rounds={rounds} onOpen={eintragen} />}
           </>
         )}
       </section>
@@ -279,7 +289,13 @@ function withSlots(rounds: Round[]): { round: Round; inTree: MatchDetail[]; asid
  * Behälter wie die Karten und bekam damit deren Abstand als Abstand zu sich
  * selbst — und der wächst je Runde. Sie steht jetzt daneben.
  */
-function TreeView({ rounds, onOpen }: { rounds: Round[]; onOpen: (match: MatchDetail) => void }) {
+function TreeView({
+  rounds,
+  onOpen,
+}: {
+  rounds: Round[]
+  onOpen: ((match: MatchDetail) => void) | null
+}) {
   const columns = useMemo(() => withSlots(rounds), [rounds])
 
   return (
@@ -323,7 +339,13 @@ function TreeView({ rounds, onOpen }: { rounds: Round[]; onOpen: (match: MatchDe
   )
 }
 
-function ColumnsView({ rounds, onOpen }: { rounds: Round[]; onOpen: (match: MatchDetail) => void }) {
+function ColumnsView({
+  rounds,
+  onOpen,
+}: {
+  rounds: Round[]
+  onOpen: ((match: MatchDetail) => void) | null
+}) {
   return (
     <div className="md-panel" style={{ overflowX: 'auto', padding: 18 }}>
       <div style={{ display: 'flex', gap: 'var(--sp-7)', minWidth: 1080, alignItems: 'flex-start' }}>
@@ -357,7 +379,13 @@ function ColumnsView({ rounds, onOpen }: { rounds: Round[]; onOpen: (match: Matc
   )
 }
 
-function ListView({ rounds, onOpen }: { rounds: Round[]; onOpen: (match: MatchDetail) => void }) {
+function ListView({
+  rounds,
+  onOpen,
+}: {
+  rounds: Round[]
+  onOpen: ((match: MatchDetail) => void) | null
+}) {
   return (
     <div style={{ maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
       {rounds.map((round) => {

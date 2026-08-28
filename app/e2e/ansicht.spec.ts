@@ -99,3 +99,33 @@ test('Aufnahmen am Schreibtisch', async ({ page, api }) => {
     .locator('.md-panel', { hasText: 'Wer zusehen darf' })
     .screenshot({ path: 'test-results/ansicht/desktop-sichtbarkeit.png' })
 })
+
+test('Aufnahmen aus Sicht eines Mitglieds', async ({ page, api }) => {
+  // Die Gegenprobe zu allem darüber: derselbe Bildschirm, andere Rolle.
+  const turnier = await turnierMitFeld(api, 4)
+  await api.post(`/api/tournaments/${turnier.id}/registration/close`)
+  await api.post(`/api/tournaments/${turnier.id}/draw`)
+  await api.post(`/api/tournaments/${turnier.id}/start`)
+
+  const link = await api.get<{ token: string }>(`/api/tournaments/${turnier.id}/registration`)
+
+  await alsTurnierleitung(page, `/?r=${encodeURIComponent(link.token)}`, 'referee')
+  await page.getByRole('button', { name: /^Beitreten$|^Nur beitreten/ }).click()
+  await page.getByRole('button', { name: 'Turnier öffnen' }).click()
+  await expect(page.getByRole('navigation', { name: 'Hauptnavigation' })).toBeVisible()
+
+  for (const [screen, marke, datei] of [
+    ['flow', 'Ablauf', 'mitglied-ablauf'],
+    ['entries', 'Mitglieder', 'mitglied-gruppe'],
+    ['draw', 'Draw & Bracket', 'mitglied-draw'],
+    ['board', 'Spielplan', 'mitglied-plan'],
+  ] as const) {
+    await page.goto(`/?screen=${screen}&t=${turnier.id}`)
+    await expect(page.getByRole('heading', { name: marke })).toBeVisible()
+
+    // Die Überschrift steht sofort, der Inhalt kommt nach — ohne dieses
+    // Warten fotografierte der Lauf die Ladeanzeige.
+    await expect(page.locator('.md-empty')).toHaveCount(0)
+    await page.screenshot({ path: `test-results/ansicht/${datei}.png`, fullPage: true })
+  }
+})

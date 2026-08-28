@@ -1,4 +1,4 @@
-namespace TennisTurnier.Domain.Security;
+﻿namespace TennisTurnier.Domain.Security;
 
 /// <summary>
 /// Die Rollen-Rechte-Matrix — eine einzige Tabelle, damit die Antwort auf
@@ -30,18 +30,23 @@ public static class Permissions
                 Permission.ManageTournament,
                 Permission.EnterResults,
                 Permission.ViewInternals,
+                Permission.ViewMembers,
             },
 
             [Role.Referee] = new HashSet<Permission>
             {
                 Permission.EnterResults,
+                Permission.ViewMembers,
             },
 
-            // Bewusst leer und trotzdem eingetragen: das Mitglied darf nichts
-            // tun, aber es sieht sein Turnier — die Sichtbarkeit kommt aus dem
-            // Query-Filter, der an der Rollenzuweisung hängt, nicht aus dieser
-            // Matrix. Fehlte der Eintrag, sähe es hier aus wie ein Versehen.
-            [Role.Member] = None,
+            // Ein einziges Recht, und es ist ein Leserecht: das Mitglied sieht,
+            // wer sonst dazugehört. Was es darüber hinaus sieht — Spielplan,
+            // Draw, Ergebnisse — kommt nicht aus dieser Matrix, sondern aus dem
+            // Query-Filter, der an der Rollenzuweisung hängt.
+            [Role.Member] = new HashSet<Permission>
+            {
+                Permission.ViewMembers,
+            },
         };
 
     public static IReadOnlySet<Permission> Of(Role role) =>

@@ -221,9 +221,18 @@ export function tournamentDetail(over: Partial<TournamentDetail> = {}): Tourname
     ],
     version: 1,
     isPublic: false,
+    // Die Vorgabe ist die Turnierleitung: die allermeisten Tests prüfen, was
+    // sie sieht. Wer das Mitglied prüft, sagt es ausdrücklich.
+    you: { canManage: true, canEnterResults: true },
     ...over,
   }
 }
+
+/** Was ein Mitglied darf: zusehen. */
+export const NUR_MITGLIED = { canManage: false, canEnterResults: false }
+
+/** Was ein Schiedsrichter darf: Ergebnisse eintragen, sonst nichts. */
+export const NUR_SCHIEDSRICHTER = { canManage: false, canEnterResults: true }
 
 export function assignment(over: Partial<CourtAssignmentDetail> = {}): CourtAssignmentDetail {
   return {

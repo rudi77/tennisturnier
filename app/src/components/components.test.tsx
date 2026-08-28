@@ -359,6 +359,16 @@ describe('AppNav', () => {
     return { onNavigate, onLogout }
   }
 
+  it('nennt den zweiten Schirm für ein Mitglied bei seinem Namen', () => {
+    // Dasselbe Ziel, ein anderer Inhalt: wer das Turnier nicht führt, findet
+    // dort keine Meldungsverwaltung, sondern die Gruppe (ADR-0012). Ein Ziel
+    // weniger wäre schlechter — der Weg soll überall gleich sein.
+    nav({ manages: false })
+
+    expect(screen.getByRole('button', { name: 'Mitglieder' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Meldungen' })).not.toBeInTheDocument()
+  })
+
   it('führt die vier des Turniertags und merkt sich, wo man ist', () => {
     nav()
 

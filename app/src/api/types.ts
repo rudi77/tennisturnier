@@ -268,6 +268,26 @@ export interface TournamentDetail {
   version: number
   /** Steht die Zuschaueransicht auch Fremden offen? Vorgabe: nein. */
   isPublic: boolean
+  /** Was der Aufrufer hier darf. */
+  you: TournamentAbilities
+}
+
+/**
+ * Was der Angemeldete an diesem Turnier darf — vom Server beantwortet, damit
+ * die Maske nicht raten muss.
+ *
+ * Seit ADR-0012 sieht ein Turnier auch, wer es nicht führt. Eine Maske, die
+ * einem Mitglied „Turnier löschen" anbietet, ist eine Sackgasse: der Server
+ * weist es zu Recht ab, aber erst nach dem Klick.
+ *
+ * Kein Ersatz für die Prüfung dort — das hier entscheidet über die
+ * Darstellung, nicht über den Zugriff.
+ */
+export interface TournamentAbilities {
+  /** Das Turnier führen: Stammdaten, Plätze, Meldungen, Draw, Spielplan, Rollen. */
+  canManage: boolean
+  /** Ergebnisse eintragen und korrigieren. */
+  canEnterResults: boolean
 }
 
 /**

@@ -56,16 +56,21 @@ export function EntriesScreen() {
 
   const tournamentId = tournament?.id ?? null
 
+  // Meldungen und Anmeldelink sind die Innenansicht: sie hängen an
+  // ManageTournament, und ein Mitglied bekäme hier zweimal ein 404. Die
+  // Bedingung steht deshalb an der Abfrage und nicht erst an der Darstellung.
+  const fuehrt = tournament?.you.canManage ?? false
+
   const entries = useResource(
     () => tournamentApi.entries(tournamentId as string),
     [tournamentId],
-    { enabled: !!tournamentId },
+    { enabled: !!tournamentId && fuehrt },
   )
 
   const registration = useResource(
     () => tournamentApi.registration(tournamentId as string),
     [tournamentId],
-    { enabled: !!tournamentId },
+    { enabled: !!tournamentId && fuehrt },
   )
 
   const [busy, setBusy] = useState<string | null>(null)
@@ -91,6 +96,18 @@ export function EntriesScreen() {
           title="Kein Turnier"
           hint={'Oben in der Kopfleiste eines auswählen — oder unter „Mehr“ ein neues anlegen.'}
         />
+      </section>
+    )
+  }
+
+  if (!fuehrt) {
+    // Für ein Mitglied ist dieser Bildschirm die Gruppe und nicht die
+    // Meldungsverwaltung: Meldungen samt Kontaktdaten sind die Innenansicht,
+    // und die gehört der Turnierleitung (ADR-0003).
+    return (
+      <section className="md-section">
+        <ScreenHeader title="Mitglieder" lead={`Wer zu „${tournament.name}" gehört.`} />
+        <RolePanel tournamentId={tournament.id} canManage={false} />
       </section>
     )
   }
@@ -145,7 +162,7 @@ export function EntriesScreen() {
 
       <VisibilityPanel tournament={tournament} onChanged={() => void reloadTournament()} />
 
-      <RolePanel tournamentId={tournament.id} />
+      <RolePanel tournamentId={tournament.id} canManage />
 
       {entries.error ? (
         <ErrorBlock error={entries.error} onRetry={() => void entries.reload()} />
@@ -335,7 +352,15 @@ function LinkPanel({
  * ohnehin ab. Sie hier anzubieten hieße, eine Schaltfläche zu zeigen, die
  * nichts als einen Fehler auslösen kann.
  */
-function RolePanel({ tournamentId }: { tournamentId: string }) {
+/**
+ * Wer dazugehört.
+ *
+ * Zwei Leser, zwei Ansichten. Die Turnierleitung sieht Adressen, offene
+ * Einladungen und die Knöpfe zum Entziehen; ein Mitglied sieht die Namen und
+ * die Rollen. Was es nicht sieht, bekommt es auch vom Server nicht — die
+ * Auswahl fällt dort, hier wird sie nur nicht angeboten.
+ */
+function RolePanel({ tournamentId, canManage }: { tournamentId: string; canManage: boolean }) {
   const { show, showError } = useToast()
   const roles = useResource(() => tournamentApi.roles(tournamentId), [tournamentId])
 
@@ -360,7 +385,10 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
     }
   }
 
-  const directors = (roles.data ?? []).filter((r) => r.role === Role.TournamentDirector).length
+  // Einmal entpackt: das zweite `?? []` weiter unten konnte den leeren Fall
+  // gar nicht mehr erreichen — es steht hinter der Ladeanzeige.
+  const mitglieder = roles.data ?? []
+  const directors = mitglieder.filter((r) => r.role === Role.TournamentDirector).length
 
   return (
     <div className="md-panel" style={{ padding: 'var(--sp-10)', marginBottom: 'var(--sp-8)' }}>
@@ -369,20 +397,29 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
       </div>
       <div className="md-hint" style={{ marginBottom: 'var(--sp-8)' }}>
         Mitglieder sehen das Turnier, Schiedsrichter tragen Ergebnisse ein, die Turnierleitung
-        führt es. Alle drei Rollen gelten nur für dieses Turnier. Wen es hier noch nicht gibt,
-        wird eingeladen — die Rolle bekommt er bei seiner ersten Anmeldung.
+        führt es. Alle drei Rollen gelten nur für dieses Turnier.{' '}
+        {canManage
+          ? 'Wen es hier noch nicht gibt, wird eingeladen — die Rolle bekommt er bei seiner ersten Anmeldung.'
+          : 'Wer dazukommt oder geht, entscheidet die Turnierleitung.'}
       </div>
 
       {roles.error ? (
         <ErrorBlock error={roles.error} onRetry={() => void roles.reload()} />
+      ) : roles.loading && !roles.data ? (
+        // Beim Mitglied steht dieser Kasten allein auf dem Bildschirm — ein
+        // leerer Rahmen sähe dort aus wie eine Gruppe ohne Mitglieder.
+        <Loading label="Mitglieder werden geladen …" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-          {(roles.data ?? []).map((entry) => (
+          {mitglieder.map((entry) => (
             <div
               key={entry.assignmentId}
               style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}
             >
-              <div style={{ flex: '1 1 200px', fontSize: 'var(--fs-sm)' }}>
+              {/* `minWidth: 0` und eine kleine Basis: sonst drückte ein
+                  langer Name die Rolle am Telefon in die nächste Zeile, und
+                  die Liste sähe aus wie zwei. */}
+              <div style={{ flex: '1 1 120px', minWidth: 0, fontSize: 'var(--fs-sm)' }}>
                 {entry.displayName ?? entry.email ?? entry.userId}
                 {entry.email && entry.displayName ? (
                   <span style={{ color: 'var(--fg-3)' }}> · {entry.email}</span>
@@ -398,72 +435,78 @@ function RolePanel({ tournamentId }: { tournamentId: string }) {
                 {roleLabel[entry.role]}
               </span>
 
-              <button
-                type="button"
-                className="md-btn"
-                disabled={busy || (entry.role === Role.TournamentDirector && directors === 1)}
-                title={
-                  entry.role === Role.TournamentDirector && directors === 1
-                    ? 'Die letzte Turnierleitung lässt sich nicht entziehen — ohne sie sähe niemand mehr dieses Turnier.'
-                    : undefined
-                }
-                onClick={() =>
-                  void run(entry.pending ? 'Einladung zurückgenommen' : 'Rolle entzogen', () =>
-                    tournamentApi.revokeRole(tournamentId, entry.assignmentId),
-                  )
-                }
-              >
-                {entry.pending ? 'Zurücknehmen' : 'Entziehen'}
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  className="md-btn"
+                  disabled={busy || (entry.role === Role.TournamentDirector && directors === 1)}
+                  title={
+                    entry.role === Role.TournamentDirector && directors === 1
+                      ? 'Die letzte Turnierleitung lässt sich nicht entziehen — ohne sie sähe niemand mehr dieses Turnier.'
+                      : undefined
+                  }
+                  onClick={() =>
+                    void run(entry.pending ? 'Einladung zurückgenommen' : 'Rolle entzogen', () =>
+                      tournamentApi.revokeRole(tournamentId, entry.assignmentId),
+                    )
+                  }
+                >
+                  {entry.pending ? 'Zurücknehmen' : 'Entziehen'}
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 'var(--sp-4)', marginTop: 'var(--sp-8)', flexWrap: 'wrap' }}>
-        <input
-          className="md-input"
-          type="email"
-          value={email}
-          aria-label="E-Mail-Adresse"
-          placeholder="name@example.org"
-          onChange={(event) => setEmail(event.target.value)}
-          style={{ flex: '1 1 220px' }}
-        />
-        <select
-          className="md-input"
-          value={role}
-          aria-label="Rolle"
-          onChange={(event) => setRole(Number(event.target.value) as Role)}
-        >
-          <option value={Role.Member}>{roleLabel[Role.Member]}</option>
-          <option value={Role.Referee}>{roleLabel[Role.Referee]}</option>
-          <option value={Role.TournamentDirector}>{roleLabel[Role.TournamentDirector]}</option>
-        </select>
-        <button
-          type="button"
-          className="md-btn"
-          disabled={busy || !email.trim()}
-          onClick={() =>
-            void run('Einladen', async () => {
-              const ergebnis = await tournamentApi.grantRole(tournamentId, {
-                email: email.trim(),
-                role,
-              })
-              setEmail('')
+      {/* Berufen und einladen darf, wer das Turnier führt. Für ein
+          Mitglied wäre das Feld ein Angebot, das der Server ablehnt. */}
+      {canManage && (
+        <div style={{ display: 'flex', gap: 'var(--sp-4)', marginTop: 'var(--sp-8)', flexWrap: 'wrap' }}>
+          <input
+            className="md-input"
+            type="email"
+            value={email}
+            aria-label="E-Mail-Adresse"
+            placeholder="name@example.org"
+            onChange={(event) => setEmail(event.target.value)}
+            style={{ flex: '1 1 220px' }}
+          />
+          <select
+            className="md-input"
+            value={role}
+            aria-label="Rolle"
+            onChange={(event) => setRole(Number(event.target.value) as Role)}
+          >
+            <option value={Role.Member}>{roleLabel[Role.Member]}</option>
+            <option value={Role.Referee}>{roleLabel[Role.Referee]}</option>
+            <option value={Role.TournamentDirector}>{roleLabel[Role.TournamentDirector]}</option>
+          </select>
+          <button
+            type="button"
+            className="md-btn"
+            disabled={busy || !email.trim()}
+            onClick={() =>
+              void run('Einladen', async () => {
+                const ergebnis = await tournamentApi.grantRole(tournamentId, {
+                  email: email.trim(),
+                  role,
+                })
+                setEmail('')
 
-              // Zwei Ausgänge, zwei Meldungen: „eingeladen" heißt, dass noch
-              // gar nichts passiert ist, was der Eingeladene merken könnte —
-              // den Link muss die Turnierleitung selbst schicken.
-              return ergebnis.invited
-                ? 'Eingeladen — die Rolle bekommt er bei seiner ersten Anmeldung'
-                : 'Rolle vergeben'
-            })
-          }
-        >
-          Einladen
-        </button>
-      </div>
+                // Zwei Ausgänge, zwei Meldungen: „eingeladen" heißt, dass noch
+                // gar nichts passiert ist, was der Eingeladene merken könnte —
+                // den Link muss die Turnierleitung selbst schicken.
+                return ergebnis.invited
+                  ? 'Eingeladen — die Rolle bekommt er bei seiner ersten Anmeldung'
+                  : 'Rolle vergeben'
+              })
+            }
+          >
+            Einladen
+          </button>
+        </div>
+      )}
     </div>
   )
 }

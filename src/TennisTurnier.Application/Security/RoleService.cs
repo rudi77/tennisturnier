@@ -1,4 +1,4 @@
-using TennisTurnier.Application.Common;
+﻿using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Security;
@@ -105,11 +105,24 @@ public sealed class RoleService : IRoleService
         _clock = clock;
     }
 
+    /// <summary>
+    /// Wer dazugehört — in zwei Ausführlichkeiten.
+    ///
+    /// Die Turnierleitung sieht die Liste, die sie zum Führen braucht: Adressen
+    /// und daneben, wen sie eingeladen hat, der aber noch nie da war. Ein
+    /// Mitglied sieht die Namen und sonst nichts. Eine Gruppe, in der niemand
+    /// sieht, wer sonst dabei ist, wäre keine (ADR-0012) — aber die Adresse
+    /// eines anderen ist deswegen noch nicht jedermanns Sache, und eine offene
+    /// Einladung ist eine Absicht der Turnierleitung und keine Auskunft an alle.
+    /// </summary>
     public async Task<IReadOnlyList<TournamentRoleSummary>> ListAsync(
         Guid tournamentId,
         CancellationToken cancellationToken = default)
     {
-        await RequireManagementAsync(tournamentId, cancellationToken);
+        await RequireAsync(tournamentId, Permission.ViewMembers, cancellationToken);
+
+        var fuehrt = _userContext.Current.Can(
+            Permission.ManageTournament, ResourceScope.Tournament(tournamentId));
 
         var assignments = await _roles.ListByTournamentAsync(tournamentId, cancellationToken);
         var accounts = await _directory.FindManyAsync(
@@ -117,7 +130,9 @@ public sealed class RoleService : IRoleService
 
         var byId = accounts.ToDictionary(a => a.Id);
 
-        var invitations = await _invitations.ListByTournamentAsync(tournamentId, cancellationToken);
+        var invitations = fuehrt
+            ? await _invitations.ListByTournamentAsync(tournamentId, cancellationToken)
+            : [];
 
         return
         [
@@ -129,7 +144,7 @@ public sealed class RoleService : IRoleService
                     a.Id,
                     a.UserId,
                     byId[a.UserId].DisplayName,
-                    byId[a.UserId].Email,
+                    fuehrt ? byId[a.UserId].Email : null,
                     a.Role)),
 
             // Danach, wer noch nicht da ist. In einer Liste und nicht in einer
@@ -279,12 +294,18 @@ public sealed class RoleService : IRoleService
     /// Erst laden, dann prüfen: ein Turnier außerhalb des Scopes endet damit als
     /// 404 und nicht als 403 — ein 403 verriete seine Existenz (ADR-0004).
     /// </summary>
-    private async Task RequireManagementAsync(Guid tournamentId, CancellationToken cancellationToken)
+    private Task RequireManagementAsync(Guid tournamentId, CancellationToken cancellationToken) =>
+        RequireAsync(tournamentId, Permission.ManageTournament, cancellationToken);
+
+    private async Task RequireAsync(
+        Guid tournamentId,
+        Permission permission,
+        CancellationToken cancellationToken)
     {
         _ = await _tournaments.FindAsync(tournamentId, cancellationToken)
             ?? throw new NotFoundException("Turnier", tournamentId);
 
-        _userContext.Current.Require(Permission.ManageTournament, ResourceScope.Tournament(tournamentId));
+        _userContext.Current.Require(permission, ResourceScope.Tournament(tournamentId));
     }
 
     /// <summary>

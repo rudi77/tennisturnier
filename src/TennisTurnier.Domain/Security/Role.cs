@@ -1,4 +1,4 @@
-namespace TennisTurnier.Domain.Security;
+﻿namespace TennisTurnier.Domain.Security;
 
 /// <summary>
 /// Rollen nach ADR-0004. Jede Rolle gilt in einem <see cref="ResourceScope"/>,
@@ -73,4 +73,15 @@ public enum Permission
 
     /// <summary>Nicht-öffentliche Daten sehen: Kontaktdaten, interne Notizen.</summary>
     ViewInternals,
+
+    /// <summary>
+    /// Sehen, wer zu diesem Turnier gehört — die Namen, nicht die Adressen.
+    ///
+    /// Bewusst getrennt von <see cref="ViewInternals"/>: eine Gruppe, in der
+    /// niemand sieht, wer sonst dabei ist, ist keine (ADR-0012). Das Mitglied
+    /// bekommt deshalb genau dieses eine Recht und sonst keines. Adressen und
+    /// offene Einladungen bleiben der Turnierleitung vorbehalten — sie hängen
+    /// an <see cref="ManageTournament"/>.
+    /// </summary>
+    ViewMembers,
 }

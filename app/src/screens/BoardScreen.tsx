@@ -50,6 +50,10 @@ export function BoardScreen() {
   const tournamentId = tournament?.id ?? null
   const matchDay = tournament?.schedulingMode === SchedulingMode.MatchDay
 
+  // Wer das Turnier führt, plant; wer dazugehört, sieht nach, wann er dran
+  // ist. Beide bekommen denselben Plan, nur einer bekommt die Werkzeuge.
+  const fuehrt = tournament?.you.canManage ?? false
+
   const phases = useResource(
     () => bracketApi.phases(tournamentId as string),
     [tournamentId],
@@ -152,14 +156,16 @@ export function BoardScreen() {
   }, [phases, boards, matchDay])
 
   const switchMode = async (next: SchedulingMode) => {
-    if (!tournamentId || next === tournament?.schedulingMode) return
+    // Ohne Turnier steht die Leiste gar nicht da — sie hängt an `fuehrt`, und
+    // das ist ohne Turnier falsch. Zu prüfen bleibt der Modus, der schon gilt.
+    if (next === (matchDay ? SchedulingMode.MatchDay : SchedulingMode.Planning)) return
     setSwitching(true)
     try {
       if (next === SchedulingMode.MatchDay) {
-        await tournamentApi.switchToMatchDay(tournamentId)
+        await tournamentApi.switchToMatchDay(tournamentId as string)
         show('Turniertagmodus aktiv — ab jetzt zählt die Reihenfolge auf dem Platz, nicht das Zeitraster')
       } else {
-        await tournamentApi.switchToPlanning(tournamentId)
+        await tournamentApi.switchToPlanning(tournamentId as string)
         show('Planungsmodus aktiv — Uhrzeiten sind wieder Schätzungen aus dem gerechneten Plan')
       }
       setProposal(null)
@@ -321,6 +327,9 @@ export function BoardScreen() {
           }
           stats={kpis}
         >
+          {/* Der Wechsel zwischen Planung und Turniertag ist ein
+              Zustandsübergang am Turnier und keine Ansichtsoption. */}
+          {fuehrt && (
           <div className="md-pillbar">
             <button
               type="button"
@@ -341,6 +350,7 @@ export function BoardScreen() {
               Turniertag
             </button>
           </div>
+          )}
         </ScreenHeader>
         {!tournament ? (
           <Empty
@@ -386,19 +396,21 @@ export function BoardScreen() {
                     ))}
                   </select>
                 )}
-                <button
-                  type="button"
-                  className="md-btn md-btn--primary"
-                  onClick={() => void runSolver(tournament.id)}
-                  disabled={busy === 'solver' || matchDay}
-                  title={
-                    matchDay
-                      ? 'Im Turniertagmodus wird nicht neu gerechnet — die Reihenfolge auf dem Platz ist die Aussage.'
-                      : undefined
-                  }
-                >
-                  {busy === 'solver' ? 'Rechnet …' : 'Auto-Plan berechnen'}
-                </button>
+                {fuehrt && (
+                  <button
+                    type="button"
+                    className="md-btn md-btn--primary"
+                    onClick={() => void runSolver(tournament.id)}
+                    disabled={busy === 'solver' || matchDay}
+                    title={
+                      matchDay
+                        ? 'Im Turniertagmodus wird nicht neu gerechnet — die Reihenfolge auf dem Platz ist die Aussage.'
+                        : undefined
+                    }
+                  >
+                    {busy === 'solver' ? 'Rechnet …' : 'Auto-Plan berechnen'}
+                  </button>
+                )}
                 <button type="button" className="md-btn" onClick={() => window.print()}>
                   Aushang drucken
                 </button>
@@ -425,9 +437,11 @@ export function BoardScreen() {
               }}
             >
               <TimeLegend />
-              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', paddingTop: 9 }}>
-                Karten per Drag &amp; Drop auf einen anderen Platz ziehen.
-              </div>
+              {fuehrt && (
+                <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', paddingTop: 9 }}>
+                  Karten per Drag &amp; Drop auf einen anderen Platz ziehen.
+                </div>
+              )}
             </div>
 
             {phases.loading && !phases.data ? (
@@ -442,6 +456,7 @@ export function BoardScreen() {
                   busyAssignmentId={busy}
                   onAction={(action, entry) => void queueAction(action, entry)}
                   onDropMatch={(matchId, courtId) => void dropMatch(matchId, courtId)}
+                  readOnly={!fuehrt}
                 />
               ) : (
                 <Loading label="Plätze werden geladen …" />
@@ -454,6 +469,7 @@ export function BoardScreen() {
                 timeZone={timeZone}
                 onOpenResult={(match) => setEditing(match)}
                 onDropMatch={(matchId, courtId) => void dropMatch(matchId, courtId)}
+                readOnly={!fuehrt}
               />
             )}
           </>

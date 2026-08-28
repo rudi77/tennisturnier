@@ -147,14 +147,6 @@ describe('BoardScreen — Moduswechsel', () => {
     expect(callsTo('POST', `/api/tournaments/${T}/scheduling/planning`)).toBe(0)
   })
 
-  it('tut ohne Turnier gar nichts', async () => {
-    aufbau(null)
-
-    await user().click(screen.getByRole('button', { name: 'Turniertag' }))
-
-    expect(callsTo('POST', `/api/tournaments/${T}/scheduling/match-day`)).toBe(0)
-  })
-
   it('meldet einen abgewiesenen Wechsel', async () => {
     server.use(
       http.post(`/api/tournaments/${T}/scheduling/match-day`, () =>

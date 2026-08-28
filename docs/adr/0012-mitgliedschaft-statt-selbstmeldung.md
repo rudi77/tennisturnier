@@ -51,9 +51,11 @@ Einladung.** Gewählt.
 Turniers hängt schon heute vollständig an den Rollenzuweisungen — der
 Query-Filter im `TennisTurnierDbContext` fragt `SeesEverything ||
 TournamentIds.Contains(t.Id)`. Ein neuer Wert im Enum fällt dort ohne
-Änderung hinein. In der Rechtematrix steht `[Role.Member] = []`: ein Mitglied
-darf nichts tun, es sieht nur — und das kommt aus dem Filter, nicht aus der
-Matrix.
+Änderung hinein.
+
+In der Rechtematrix trägt das Mitglied genau ein Recht: `ViewMembers`. Alles,
+was es darüber hinaus sieht — Draw, Spielplan, Ergebnisse — kommt aus dem
+Filter und nicht aus der Matrix.
 
 Rollen liegen als String in der Datenbank (`HasConversion<string>`), ein neuer
 Enum-Wert braucht deshalb keine Migration.
@@ -129,6 +131,47 @@ stehen auch der Weg über Google und der zum Registrieren. Eine eigene
 Anmeldemaske in der Anwendung wäre eine zweite Stelle, an der Identität
 aussieht, als entstünde sie hier (ADR-0007).
 
+## Nachtrag: die Gruppe muss man auch sehen können
+
+Der erste Wurf gab dem Mitglied kein einziges Recht. Das Modell stimmte — die
+Sichtbarkeit hängt am Filter —, und trotzdem war das Ergebnis keine Gruppe: wer
+beitrat, sah nicht, wer sonst dabei ist. Die Mitgliederliste hing an
+`ManageTournament`, und ein Mitglied bekam darauf ein 404.
+
+Bei WhatsApp ist die Mitgliederliste das Erste, was man aufmacht. Deshalb jetzt
+`Permission.ViewMembers`, getrennt von `ViewInternals`:
+
+- **Das Mitglied** sieht Namen und Rollen.
+- **Die Turnierleitung** sieht zusätzlich Adressen und offene Einladungen —
+  die Liste, die sie zum Führen braucht.
+
+Die Adresse eines anderen ist keine Auskunft an die Gruppe, und eine offene
+Einladung ist eine Absicht der Turnierleitung. `RoleService.ListAsync`
+beantwortet deshalb dieselbe Frage in zwei Ausführlichkeiten.
+
+### Und die Maske muss es wissen
+
+Derselbe Durchgang brachte einen zweiten Fund, der schwerer wog: die Oberfläche
+kannte die Rolle gar nicht. Sie bot dem Mitglied „Turnier abbrechen",
+„Turnier löschen", „Ergebnisse erfassen", den Sichtbarkeitsschalter und das
+Einladen-Feld an — dazu drei Anfragen, die der Server zu Recht abwies, und zwei
+Fehlermeldungen als halbe Seite. Bei der Turnierleitung fiel das nie auf, weil
+sie alles darf.
+
+`TournamentDetail` trägt deshalb `You: TournamentAbilities` mit `CanManage` und
+`CanEnterResults`. Der Server kennt beides ohnehin, wenn er das Turnier
+herausgibt; es zu verschweigen zwang die Maske zum Raten.
+
+**Es ist eine Auskunft für die Darstellung und keine Zusicherung.** Entschieden
+wird weiterhin im Anwendungsfall. Ein Frontend, das die Prüfung ersetzt, wäre
+keine Sicherheit, sondern eine Vereinbarung mit sich selbst.
+
+Was daran hängt: der Ablauf zeigt dem Mitglied den Stand statt der nächsten
+Handlung; „Meldungen" heißt für es „Mitglieder" und zeigt nur die Gruppe; das
+Bracket lässt sich ansehen und nicht anklicken; der Spielplan steht ohne
+Werkzeuge da. Auch die Abfragen hängen daran — was ein Mitglied nicht sehen
+darf, holt die Maske gar nicht erst.
+
 ## Konsequenzen
 
 **Die Hürde ist wieder da, und das ist beabsichtigt.** Wer melden will,
@@ -156,6 +199,12 @@ mehr nicht.
 **Selbst austreten geht nicht.** Wer eine Gruppe verlassen will, muss die
 Turnierleitung fragen. Das ist eine Lücke, kein Entwurf; sie steht in der
 Roadmap.
+
+**Das Mitglied sieht keine Meldungsliste.** Es sieht die Gruppe, den Draw, den
+Spielplan und die Ergebnisse — aber nicht, wer sich mit welcher Adresse
+gemeldet hat und wer auf der Warteliste steht. Das ist die Innenansicht aus
+ADR-0003 und bleibt bei der Turnierleitung. Wer im Feld steht, geht ohnehin aus
+dem Draw hervor.
 
 **Bestehende Keycloak-Instanzen ziehen nicht automatisch nach.** Der
 Realm-Import greift nur beim ersten Start gegen eine leere Datenbank.

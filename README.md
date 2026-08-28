@@ -357,6 +357,18 @@ zu). Die letzte Turnierleitung lässt sich nicht entfernen, und eine globale
 Rolle lässt sich hier grundsätzlich nicht vergeben — sonst machte sich ein
 Turnierleiter über ein zweites Konto zum Systemadministrator.
 
+Wer dazugehört, sieht auch, wer sonst dazugehört: Namen und Rollen. Adressen
+und offene Einladungen sieht nur die Turnierleitung — die Adresse eines anderen
+ist keine Auskunft an die Gruppe.
+
+Was ein Mitglied darf, weiß auch die Oberfläche: `GET /api/tournaments/{id}`
+liefert unter `you` mit, ob der Aufrufer führt und ob er Ergebnisse einträgt.
+Der Ablauf zeigt ihm dann den Stand statt der nächsten Handlung, „Meldungen"
+heißt für ihn „Mitglieder", das Bracket lässt sich ansehen und nicht
+anklicken, und der Spielplan steht ohne Werkzeuge da. Entschieden wird
+trotzdem am Endpunkt — die Auskunft ist für die Darstellung, nicht statt der
+Prüfung.
+
 ## Doppel: wer mit wem
 
 Zwei Turniere, die sich für den Melder grundlegend unterscheiden — und die

@@ -46,6 +46,81 @@ function schrittZustaende(): string[] {
   )
 }
 
+describe('FlowScreen — als Mitglied', () => {
+  // Was ein Mitglied sieht, ist der Stand — nicht die Werkzeuge. Vorher stand
+  // hier „Turnier löschen" neben „Ergebnisse erfassen", und beides wies der
+  // Server ab: die Maske bot Züge an, die es nicht gibt (ADR-0012).
+  const mitglied = { you: fx.NUR_MITGLIED }
+
+  it('sagt, wo das Turnier steht, statt was zu tun ist', () => {
+    aufbau({ ...mitglied, state: TournamentState.RegistrationOpen })
+
+    expect(screen.getByText(/Wo das Turnier gerade steht/)).toBeInTheDocument()
+  })
+
+  it('zeigt bei den Meldungen den Stand und keinen Anmeldelink', () => {
+    aufbau({ ...mitglied, state: TournamentState.RegistrationOpen })
+
+    expect(aktuellerSchritt()).toHaveTextContent('im Feld')
+    expect(screen.getByText(/Die Turnierleitung sammelt noch/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Anmeldelink')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Meldung schließen' })).not.toBeInTheDocument()
+  })
+
+  it('holt den Anmeldelink gar nicht erst', async () => {
+    // Er hängt an ManageTournament: die Abfrage endete mit einem 404, das
+    // niemand gestellt haben wollte.
+    aufbau({ ...mitglied, state: TournamentState.RegistrationOpen })
+
+    await waitFor(() => expect(screen.getByText(/Die Turnierleitung sammelt noch/)).toBeVisible())
+    expect(callsTo('GET', `/api/tournaments/${T}/registration`)).toBe(0)
+  })
+
+  it('bietet beim Auslosen nichts an', () => {
+    aufbau({ ...mitglied, state: TournamentState.RegistrationClosed })
+
+    expect(screen.getByText(/Ausgelost wird von der Turnierleitung/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Auslosen' })).not.toBeInTheDocument()
+  })
+
+  it('führt im laufenden Turnier ins Bracket, nicht in die Erfassung', async () => {
+    const { onNavigate } = aufbau({ ...mitglied, state: TournamentState.InProgress })
+
+    expect(screen.getByText(/Im Bracket steht, was entschieden ist/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ergebnisse erfassen' })).not.toBeInTheDocument()
+
+    await user().click(screen.getByRole('button', { name: 'Bracket ansehen' }))
+    expect(onNavigate).toHaveBeenCalledWith('draw')
+  })
+
+  it('schweigt beim privaten Turnier über die Sichtbarkeit', () => {
+    // Ein Hinweis auf einen Schalter, den es nicht hat, wäre eine
+    // Aufforderung ins Leere.
+    aufbau({ ...mitglied, state: TournamentState.DrawGenerated })
+
+    expect(screen.queryByText(/Dieses Turnier ist privat/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Link zur Live-Ansicht')).not.toBeInTheDocument()
+  })
+
+  it('lässt weder abbrechen noch löschen noch das Format ändern', () => {
+    aufbau({ ...mitglied, state: TournamentState.RegistrationOpen })
+
+    expect(screen.queryByRole('button', { name: 'Turnier abbrechen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Turnier löschen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ändern' })).not.toBeInTheDocument()
+
+    // Das Satzformat selbst steht da: gespielt wird danach, auch für ihn.
+    expect(screen.getByText('Satzformat')).toBeInTheDocument()
+  })
+
+  it('sieht den Zuschauerlink, sobald das Turnier offen ist', () => {
+    // Er trägt dann auch für ihn — teilen darf ihn jeder, der ihn hat.
+    aufbau({ ...mitglied, state: TournamentState.DrawGenerated, isPublic: true })
+
+    expect(screen.getByLabelText('Link zur Live-Ansicht')).toBeInTheDocument()
+  })
+})
+
 describe('FlowScreen — ohne Turnier', () => {
   it('sagt, dass keines gewählt ist', () => {
     // Gewählt wird in der Kopfleiste der Hülle und nicht mehr hier: dieselbe

@@ -30,6 +30,25 @@ function aufbau(
   return { reloadTournament }
 }
 
+describe('DrawScreen — als Mitglied', () => {
+  it('zeigt vor der Auslosung den Befund statt des Wegs dorthin', () => {
+    // Der Weg — Meldung öffnen, melden, Meldeschluss, auslosen — gehört der
+    // Turnierleitung. Ein Mitglied bekäme dort lauter abgewiesene Anfragen.
+    aufbau({ you: fx.NUR_MITGLIED, state: TournamentState.RegistrationOpen })
+
+    expect(screen.getByText('Noch nicht ausgelost')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Auslosen' })).not.toBeInTheDocument()
+  })
+
+  it('lässt das Bracket ansehen und nicht anklicken', async () => {
+    // Ein Match, das aufgeht und nichts speichern kann, wäre eine Sackgasse.
+    aufbau({ you: fx.NUR_MITGLIED, state: TournamentState.InProgress })
+
+    const karten = await screen.findAllByRole('button', { name: /Moser/ })
+    expect(karten.every((karte) => (karte as HTMLButtonElement).disabled)).toBe(true)
+  })
+})
+
 describe('DrawScreen — Rahmen', () => {
   it('sagt ohne Turnier, dass keines gewählt ist', () => {
     aufbau(null)

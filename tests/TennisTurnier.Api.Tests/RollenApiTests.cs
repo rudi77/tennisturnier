@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Security;
@@ -470,5 +470,105 @@ public sealed class RollenApiTests : IClassFixture<TennisTurnierApiFactory>
             $"/api/tournaments/{tournamentId}/roles", Json);
 
         Assert.Single(rollen!, r => r.Pending);
+    }
+
+    [Fact]
+    public async Task Ein_Mitglied_sieht_wer_dazugehoert()
+    {
+        // Der Punkt, an dem die Gruppe vorher keine war: wer beitrat, sah
+        // niemanden — die Liste hing an ManageTournament, und ein Mitglied
+        // bekam ein 404. Jetzt trägt sie Permission.ViewMembers.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var (mitglied, email) = await AngemeldeterBenutzerAsync("liste");
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Member),
+            Json);
+
+        var rollen = await mitglied.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        // Es sieht sich selbst und die Turnierleitung — mit Namen.
+        Assert.Equal(2, rollen!.Count);
+        Assert.Contains(rollen, r => r.Role == Role.TournamentDirector);
+        Assert.Contains(rollen, r => r.Role == Role.Member);
+    }
+
+    [Fact]
+    public async Task Ein_Mitglied_sieht_weder_Adressen_noch_offene_Einladungen()
+    {
+        // Wer dazugehört, ist eine Auskunft an die Gruppe. Die Adresse eines
+        // anderen ist es nicht, und eine offene Einladung ist eine Absicht der
+        // Turnierleitung — beides bleibt bei ihr.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var (mitglied, email) = await AngemeldeterBenutzerAsync("sparsam");
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Member),
+            Json);
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest($"noch.nicht.{Guid.NewGuid():N}"[..28] + "@example.invalid", Role.Member),
+            Json);
+
+        var ausSicht = await mitglied.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        Assert.All(ausSicht!, r => Assert.Null(r.Email));
+        Assert.DoesNotContain(ausSicht!, r => r.Pending);
+
+        // Die Turnierleitung sieht beides — sonst wüsste sie nicht, auf wen
+        // sie noch wartet.
+        var ausLeitung = await leitung.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        Assert.Contains(ausLeitung!, r => r.Email == email);
+        Assert.Single(ausLeitung!, r => r.Pending);
+    }
+
+    [Fact]
+    public async Task Ein_Fremder_sieht_die_Liste_weiterhin_nicht()
+    {
+        // Sie hängt am Turnier und nicht am Angemeldetsein: wer nicht
+        // dazugehört, bekommt 404 — nicht 403, der verriete die Existenz.
+        var (_, tournamentId) = await TurnierAsync();
+        var fremder = _factory.CreateClientAs($"fremd-{Guid.NewGuid():N}");
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await fremder.GetAsync($"/api/tournaments/{tournamentId}/roles")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Das_Turnier_sagt_dem_Aufrufer_was_er_darf()
+    {
+        // Damit die Maske nicht raten muss. Sie ist eine Auskunft für die
+        // Darstellung und keine Zusicherung — entschieden wird weiterhin am
+        // Endpunkt.
+        var (leitung, tournamentId) = await TurnierAsync();
+        var (mitglied, mitgliedMail) = await AngemeldeterBenutzerAsync("darf");
+        var (schiri, schiriMail) = await AngemeldeterBenutzerAsync("pfeift");
+
+        foreach (var (mail, rolle) in new[] { (mitgliedMail, Role.Member), (schiriMail, Role.Referee) })
+        {
+            await leitung.PostAsJsonAsync(
+                $"/api/tournaments/{tournamentId}/roles",
+                new GrantRoleRequest(mail, rolle),
+                Json);
+        }
+
+        var alsLeitung = await leitung.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+        var alsMitglied = await mitglied.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+        var alsSchiri = await schiri.GetFromJsonAsync<TournamentDetail>(
+            $"/api/tournaments/{tournamentId}", Json);
+
+        Assert.Equal(new TournamentAbilities(true, true), alsLeitung!.You);
+        Assert.Equal(new TournamentAbilities(false, false), alsMitglied!.You);
+        Assert.Equal(new TournamentAbilities(false, true), alsSchiri!.You);
     }
 }
