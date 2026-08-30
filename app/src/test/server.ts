@@ -23,6 +23,7 @@ import type {
   DrawTeamsResult,
   ImportEntriesResult,
   MeResponse,
+  ConnectionView,
   FeedPage,
   PhaseDetail,
   PlayerProfileView,
@@ -60,6 +61,7 @@ export interface FakeDb {
   /** Das eigene Profil. `null` heißt: zum Konto gehört noch kein Spieler. */
   myProfile: PlayerProfileView | null
   feed: FeedPage
+  connections: ConnectionView[]
   importResult: ImportEntriesResult
   drawTeamsResult: DrawTeamsResult
   /** Der ETag, den die öffentliche Ansicht ausliefert. */
@@ -130,6 +132,7 @@ function initial(): FakeDb {
     },
     myProfile: fx.playerProfile({ isSelf: true }),
     feed: fx.feedPage(),
+    connections: [fx.connection()],
     importResult: { imported: 2, skipped: 1, problems: [] },
     drawTeamsResult: { formed: 2, leftOver: 0 },
     publicEtag: '"etag-1"',
@@ -333,6 +336,9 @@ export const handlers: HttpHandler[] = [
       { status: 201 },
     ),
   ),
+
+  // --- Kontakte ---
+  on('get', '/api/me/connections', () => HttpResponse.json(db.connections)),
 
   // --- Feed ---
   on('get', '/api/tournaments/:id/feed', ({ params }) =>

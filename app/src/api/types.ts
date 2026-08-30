@@ -969,3 +969,22 @@ export interface FeedPage {
   before: string | null
   canWrite: boolean
 }
+
+/**
+ * Jemand, mit dem der Aufrufer gespielt hat (ADR-0013).
+ *
+ * Es gibt keine Freundschaftsanfrage: der Graph entsteht aus gespielten
+ * Matches und ist am ersten Tag gefüllt.
+ */
+export interface ConnectionView {
+  playerId: string
+  displayName: string
+  /** Matches auf derselben Seite — im Doppel. Im Einzel immer 0. */
+  together: number
+  against: number
+  won: number
+  lost: number
+  lastPlayedOn: string | null
+  lastTournamentName: string
+  sharedTournaments: number
+}

@@ -10,6 +10,7 @@ import { ApiError, http, apiUrl, authToken } from './client'
 import type {
   AssignCourtResult,
   ConfirmedAssignment,
+  ConnectionView,
   CourtBoard,
   CourtLocation,
   CourtSurface,
@@ -64,6 +65,11 @@ export const me = {
  * ohnehin sehen darf. Ein Spieler, mit dem er keines teilt, antwortet mit 404 —
  * wie alles, was außerhalb des Query-Filters liegt.
  */
+export const connections = {
+  /** Mit wem der Aufrufer gespielt hat. Nur die eigenen — siehe ADR-0013. */
+  listMine: () => http.get<ConnectionView[]>('/api/me/connections'),
+}
+
 export const profiles = {
   get: (playerId: string) => http.get<PlayerProfileView>(`/api/players/${playerId}/profile`),
 

@@ -15,6 +15,7 @@ export type ScreenId =
   | 'public'
   | 'profile'
   | 'feed'
+  | 'connections'
 
 interface Item {
   id: ScreenId
@@ -58,6 +59,7 @@ const SECONDARY: Item[] = [
   // führt. Der Weg dorthin führt meistens über einen Namen und nicht über
   // diesen Eintrag.
   { id: 'profile', label: 'Mein Profil', short: 'Profil', icon: 'profile' },
+  { id: 'connections', label: 'Mitspieler', short: 'Leute', icon: 'entries' },
 ]
 
 /**

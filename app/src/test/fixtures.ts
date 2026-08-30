@@ -42,6 +42,7 @@ import {
   type MatchFormat,
   type MeResponse,
   type PhaseDetail,
+  type ConnectionView,
   type FeedPage,
   type FeedPostView,
   type PlayerProfileView,
@@ -728,6 +729,22 @@ export function feedPage(over: Partial<FeedPage> = {}): FeedPage {
     posts: [feedMessage(), feedEvent()],
     before: null,
     canWrite: true,
+    ...over,
+  }
+}
+
+/** Ein Mitspieler, wie der Kontaktgraph ihn liefert (ADR-0013). */
+export function connection(over: Partial<ConnectionView> = {}): ConnectionView {
+  return {
+    playerId: IDS.player2,
+    displayName: 'Berger, Lena',
+    together: 0,
+    against: 3,
+    won: 2,
+    lost: 1,
+    lastPlayedOn: '2026-05-16',
+    lastTournamentName: 'Clubmeisterschaft 2026',
+    sharedTournaments: 2,
     ...over,
   }
 }

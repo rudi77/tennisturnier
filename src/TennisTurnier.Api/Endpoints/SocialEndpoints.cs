@@ -18,8 +18,25 @@ internal static class SocialEndpoints
     {
         MapProfiles(app);
         MapFeed(app);
+        MapConnections(app);
 
         return app;
+    }
+
+    /// <summary>
+    /// Mit wem der Aufrufer gespielt hat (ADR-0013).
+    ///
+    /// Nur die eigenen: der Kontaktgraph eines Fremden ist eine Aussage über
+    /// dessen Mitspieler und nicht über ihn — wer ihn sehen will, sieht sein
+    /// Profil an, und dort steht, was er mit dem Fragenden zu tun hat.
+    /// </summary>
+    private static void MapConnections(IEndpointRouteBuilder app)
+    {
+        app.MapGet("/api/me/connections", async (
+            IConnectionService service, CancellationToken ct) =>
+            Results.Ok(await service.ListMineAsync(ct)))
+            .WithTags("Kontakte")
+            .RequireAuthorization();
     }
 
     /// <summary>
