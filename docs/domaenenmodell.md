@@ -1,16 +1,19 @@
 # Das Domänenmodell
 
-Stand `f355bae`, Branch `feature/erster-turnierablauf`.
+Stand: nach M15 (Profil, Feed, Kontakte, Verabredungen).
 
 Diese Datei zeichnet nach, was in `src/TennisTurnier.Domain` steht. Sie ersetzt
 keine ADR — das *Warum* steht dort, hier steht das *Was*. Wenn beide sich
 widersprechen, gilt der Code.
 
+> `domaenenmodell.html` daneben ist ein älterer Export dieser Datei aus VS Code
+> und wird nicht mitgepflegt. Maßgeblich ist das Markdown.
+
 ## Lesehilfe
 
 - **Aggregatwurzeln** sind fett benannt: `Tournament`, `Phase`, `Participant`,
   `Player`, `CourtAssignment`, `FormatTemplate`, `UserAccount`,
-  `TournamentProjection`.
+  `TournamentProjection`, `TournamentPost`, `PlayDate`.
 - **(VO)** kennzeichnet ein Wertobjekt. Es hat keine eigene Identität und wird
   mit seinem Besitzer geschrieben — in der Datenbank meist als Spalten derselben
   Zeile oder als JSON.
@@ -337,8 +340,15 @@ Die Rechte-Matrix steht an einer einzigen Stelle (`Security/Permissions.cs`):
 |---|---|---|
 | `SystemAdmin` | Global | alle |
 | `Organizer` | Global | `CreateTournament` |
-| `TournamentDirector` | Tournament | `ManageTournament`, `EnterResults`, `ViewInternals` |
-| `Referee` | Tournament | `EnterResults` |
+| `TournamentDirector` | Tournament | `ManageTournament`, `EnterResults`, `ViewInternals`, `ViewMembers`, `WriteInFeed` |
+| `Referee` | Tournament | `EnterResults`, `ViewMembers`, `WriteInFeed` |
+| `Member` | Tournament | `ViewMembers`, `WriteInFeed` |
+
+`Member` ist die Rolle, die ein Turnier zur Gruppe macht (ADR-0012). Ihre zwei
+Rechte betreffen beide die Gruppe: sie sieht, wer dazugehört, und sie darf im
+Feed schreiben (ADR-0014). Alles Weitere, was ein Mitglied sieht — Draw,
+Spielplan, Ergebnisse —, kommt nicht aus dieser Matrix, sondern aus dem
+Query-Filter, der an der Rollenzuweisung hängt.
 
 `Organizer` ist global und trotzdem harmlos: sein einziges Recht beantwortet
 „wer darf herein", nicht „wer sieht was". Wer ein Turnier anlegt, wird dessen
@@ -386,6 +396,99 @@ am Turniertag eine Zusage (ADR-0002).
 
 ---
 
+## 5. Das soziale Umfeld
+
+Drei Bausteine stehen neben dem Turnierkern. Zwei davon gehören einem Turnier
+und erben dessen Sichtbarkeit; der dritte gehört keinem und trägt seine eigene.
+
+```mermaid
+erDiagram
+    TOURNAMENT {
+        Guid Id PK
+    }
+
+    TOURNAMENT_POST {
+        Guid Id PK "UUIDv7 — zeitgeordnet"
+        Guid TournamentId FK
+        PostKind Kind "Message / Joined / DrawGenerated / ResultRecorded / ScheduleConfirmed / StateChanged"
+        Guid AuthorUserId "leer bei einem Ereignis"
+        string Text "fertig geschrieben, nicht gerendert"
+        Guid MatchId "worüber berichtet wird"
+    }
+
+    POST_COMMENT {
+        Guid Id PK
+        Guid PostId FK
+        Guid AuthorUserId
+        string Text
+    }
+
+    PLAY_DATE {
+        Guid Id PK
+        Guid HostUserId "kein Turnier — die Wurzel ist sie selbst"
+        Discipline Discipline "bestimmt RequiredPlayers"
+        string VenueName "freier Text, kein Platz"
+        bool IsCancelled "das Einzige am Zustand, was gespeichert wird"
+    }
+
+    PLAY_DATE_INVITATION {
+        Guid Id PK
+        Guid PlayDateId FK
+        Guid UserId "daran hängt die Sichtbarkeit"
+        Guid PlayerId "daran hängt der Weg ins Profil"
+        InvitationResponse Response "Pending / Accepted / Declined"
+    }
+
+    PLAYER {
+        Guid Id PK
+        Guid UserAccountId "die Brücke zwischen Spieler und Konto"
+    }
+
+    TOURNAMENT ||--o{ TOURNAMENT_POST : "hat einen Feed"
+    TOURNAMENT_POST ||--o{ POST_COMMENT : "hat Antworten"
+    PLAY_DATE ||--o{ PLAY_DATE_INVITATION : "lädt ein"
+    PLAY_DATE_INVITATION }o--|| PLAYER : "zeigt auf"
+```
+
+### Was an diesem Bild wichtig ist
+
+**`TournamentPost.Text` ist ein Text und kein Verweis.** Auch bei einem
+Ereignis: „Anna Müller schlägt Lena Berger 6:4 6:2" wird beim Eintragen des
+Ergebnisses geschrieben und danach nicht mehr angefasst. Ein Eintrag, der zur
+Anzeigezeit aus dem Match gerendert würde, wäre normalisiert und immer aktuell —
+und genau deshalb falsch, denn ein Feed ist ein Protokoll (ADR-0014). Eine
+Korrektur schreibt eine zweite Zeile.
+
+**Die Id ist eine UUIDv7.** Der Feed sortiert nach `CreatedAt`, und zwei
+Einträge können denselben Zeitstempel tragen — ein Beitritt und die Meldung dazu
+entstehen im selben Aufruf. Als Stichentscheid taugt eine zufällige Guid nicht;
+eine v7 trägt ihre Entstehungszeit vorn und ordnet damit richtig, auch als Text,
+in dem SQLite sie ablegt.
+
+**`PlayDate` hat kein Turnier — und das ist die Entscheidung.** ADR-0009 sagt,
+was die Wurzel *eines Turniers* ist, nicht, dass es nur eine Sorte Wurzel gäbe.
+Sie kennt keine Phase, keinen Draw und kein Ergebnis. Deshalb greift auf ihr
+auch der Query-Filter aus ADR-0004 nicht: sie trägt ihren eigenen, und er lautet
+„der Gastgeber und die Eingeladenen, sonst niemand" (ADR-0015).
+
+**Am Zustand einer Verabredung wird genau eines gespeichert: `IsCancelled`.**
+`RequiredPlayers` folgt aus der Disziplin (Einzel zwei, sonst vier), `Committed`
+aus den Zusagen samt Gastgeber, `IsConfirmed` aus beidem und „vorbei" aus der
+Uhr. Drei Zustände zu pflegen hieße, drei Gelegenheiten zu haben, sie falsch zu
+setzen.
+
+**`Player.Profile` (VO)** trägt die zwei Angaben, die niemand berechnen kann —
+einen Text über sich und den Heimatverein. Sie liegen bewusst neben
+`PlayerContact` und nicht darin: Kontakt ist das, was nie nach außen darf,
+Profil das, was ausdrücklich dafür geschrieben wurde (ADR-0013).
+
+**Die Spielhistorie ist kein Aggregat.** Bilanz, Turniere und die letzten
+Matches eines Spielers werden bei jedem Aufruf über den sichtbaren Ausschnitt
+gerechnet — es gibt dafür keine Tabelle und keine Projektion. Der
+Kontaktgraph fällt aus derselben Rechnung ab.
+
+---
+
 ## Wo man weiterliest
 
 | Frage | Datei |
@@ -397,4 +500,8 @@ am Turniertag eine Zusage (ADR-0002).
 | Warum der Spieler keine Vereinsbindung hat | `docs/adr/0008-spielerstammdaten.md` (Superseded) |
 | Warum der Zähler fachlich und nicht `rowversion` ist | `docs/adr/0006-sqlite-als-startdatenbank.md` |
 | Warum der Verein weg ist | `docs/adr/0009-turnier-als-wurzelaggregat.md` |
-| Wie der Meldeweg ohne Konto funktioniert | `docs/adr/0010-oeffentliche-selbstmeldung.md` |
+| Wie der Meldeweg ohne Konto funktioniert | `docs/adr/0010-oeffentliche-selbstmeldung.md` (Superseded) |
+| Warum ein Turnier eine Gruppe ist | `docs/adr/0012-mitgliedschaft-statt-selbstmeldung.md` |
+| Warum ein Profil für zwei Betrachter verschieden aussieht | `docs/adr/0013-spielerprofil-und-verbindungen.md` |
+| Warum ein Feed-Eintrag seinen Text mitbringt | `docs/adr/0014-turnierfeed.md` |
+| Warum eine Verabredung kein Turnier mit einem Match ist | `docs/adr/0015-verabredungen.md` |

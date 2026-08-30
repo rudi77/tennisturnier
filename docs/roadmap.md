@@ -18,6 +18,9 @@ Die Reihenfolge folgt der Abhängigkeit der Bausteine, nicht ihrer Sichtbarkeit.
 | M10 | Öffentliche Selbstmeldung | Melden über einen Link, ohne Konto | ✅ (abgelöst von M12) |
 | M11 | Jeder gegen jeden, kurze Sätze | Vorlage „Jeder gegen jeden", Satzformat am Turnier | ✅ |
 | M12 | Turnier als Gruppe | Beitritt mit Konto, Einladungen, privat als Vorgabe | ✅ |
+| M13 | Spielerprofil | Turnierübergreifende Historie, Bilanz, Kontaktgraph | ✅ |
+| M14 | Turnierfeed | Chronik und Beiträge in der Gruppe, Kommentare, Push | ✅ |
+| M15 | Verabredungen | Spielen zwischen den Turnieren, ohne Turnier | ✅ |
 
 M0–M4 ergeben die erste vorführbare Version. M5–M8 bauen darauf auf, ohne die
 bestehenden Verträge zu brechen.
@@ -29,6 +32,26 @@ Anwendung, und was zugesagt ist, gilt für ein Turnier. M10 schließt die letzte
 der vier Lücken, die den Umbau ausgelöst haben: bis dahin war „Meldung offen"
 eine Behauptung, denn melden konnte nur die Turnierleitung
 ([ADR-0010](adr/0010-oeffentliche-selbstmeldung.md)).
+
+M13 bis M15 sind der Schritt von der Turnierverwaltung zum Netzwerk. Sie sind
+in dieser Reihenfolge gebaut, weil jeder auf dem vorigen steht: das Profil
+beantwortet „wer ist das", der Feed „was ist los", der Kontaktgraph fällt aus
+dem Profil ab, und die Verabredung braucht ihn, um zu wissen, wen sie fragen
+darf.
+
+Die tragende Entscheidung steht in [ADR-0013](adr/0013-spielerprofil-und-verbindungen.md):
+**ein Profil zeigt, was der Fragende ohnehin sehen darf.** Gerechnet wird über
+die Turniere im Query-Filter des Aufrufers, und damit ist die Zugriffsregel
+keine zusätzliche Prüfung, sondern dieselbe wie überall. Der Preis ist eine
+Zahl, die relativ zum Betrachter gilt — eine „wahre" Gesamtbilanz gäbe es nur
+um den Preis, private Turniere über die Hintertür sichtbar zu machen.
+
+M15 steht ausdrücklich neben ADR-0009 und nicht dagegen
+([ADR-0015](adr/0015-verabredungen.md)): eine Verabredung ist kein Turnier mit
+einem Match, sondern ein eigenes Aggregat ohne Phase, Draw und Ergebnis. Was sie
+nicht hat, ist die Entscheidung — ein Spielstand ohne Schiedsrichter und ohne
+Ausschreibung ist eine Behauptung, und weil hier keine Wertung gebaut wird,
+kostet der Verzicht nichts.
 
 M11 kommt aus dem Durchklicken: „Jeder gegen jeden" fehlte als eigene Vorlage —
 die Liga daneben spielt Hin- und Rückrunde und ist damit doppelt so lang —, und
@@ -51,6 +74,26 @@ sind die Stellschrauben dafür, und sie gehören dem Turnier
   Code, nicht von Hand gepflegt.
 
 ## Bewusst offene Punkte
+
+- **Kein turnierübergreifendes Rating.** Es wäre der naheliegende nächste
+  Schritt nach dem Profil und ist bewusst nicht gebaut. Es bräuchte eine Bilanz
+  über *alle* Turniere, und die gibt es nach ADR-0013 nicht — jede Zahl im
+  Profil gilt relativ zum Fragenden. Eine Wertungszahl, die für zwei Betrachter
+  verschieden ausfällt, wäre keine. Sie käme entweder mit einer Projektion
+  außerhalb des Query-Filters oder gar nicht; beides ist eine eigene
+  Entscheidung.
+- **Keine Benachrichtigungen.** Ein Feed, den man sieht, wenn man hinschaut,
+  ist der erste Schritt; einer, der auf dem Telefon klingelt, hat eigene Kosten
+  — Zustellwege, Abmeldung, Stille zur Nachtzeit. Bis dahin trägt der
+  SignalR-Hinweis die Aktualisierung für den, der die Seite offen hat.
+- **Eine Verabredung hat keinen Feed.** Kommentieren ließe sich über dasselbe
+  Muster wie in ADR-0014 nachrüsten; bis dahin trägt sie eine Notiz des
+  Gastgebers, und das ist für „Samstag 9 Uhr, Platz 2" genug.
+- **Eine Verabredung hinterlässt keine Spur im Kontaktgraphen.** Wer regelmäßig
+  mit jemandem spielt, ohne je gemeinsam an einem Turnier teilzunehmen, steht
+  nicht in dessen Kontakten. Das ist der Preis dafür, keine unbelegten
+  Ergebnisse zu führen — vermeidbar nur mit einer Bestätigung durch beide
+  Seiten, also mit einem zweiten Zustandsautomaten.
 
 - **Der Solver optimiert nicht, er legt.** `HeuristicScheduleSolver` arbeitet
   eine Prioritätenliste nach kritischer Pfadtiefe ab und nimmt je Match den
