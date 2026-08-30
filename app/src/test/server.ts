@@ -24,6 +24,7 @@ import type {
   ImportEntriesResult,
   MeResponse,
   PhaseDetail,
+  PlayerProfileView,
   PlayerSummary,
   JoinView,
   PublicTournamentView,
@@ -53,6 +54,10 @@ export interface FakeDb {
   templates: FormatTemplateSummary[]
   templateDetails: FormatTemplateDetail[]
   players: PlayerSummary[]
+  /** Profile nach Spieler-Id. Was nicht darin steht, antwortet mit 404 — wie die API. */
+  profiles: Record<string, PlayerProfileView>
+  /** Das eigene Profil. `null` heißt: zum Konto gehört noch kein Spieler. */
+  myProfile: PlayerProfileView | null
   importResult: ImportEntriesResult
   drawTeamsResult: DrawTeamsResult
   /** Der ETag, den die öffentliche Ansicht ausliefert. */
@@ -109,6 +114,19 @@ function initial(): FakeDb {
       { id: IDS.player1, displayName: 'S. Moser' },
       { id: IDS.player2, displayName: 'L. Berger' },
     ],
+    profiles: {
+      [IDS.player1]: fx.playerProfile(),
+      [IDS.player2]: fx.playerProfile({
+        playerId: IDS.player2,
+        displayName: 'Berger, Lena',
+        firstName: 'Lena',
+        lastName: 'Berger',
+        bio: null,
+        homeClub: null,
+        hasAccount: false,
+      }),
+    },
+    myProfile: fx.playerProfile({ isSelf: true }),
     importResult: { imported: 2, skipped: 1, problems: [] },
     drawTeamsResult: { formed: 2, leftOver: 0 },
     publicEtag: '"etag-1"',
@@ -274,6 +292,38 @@ export const handlers: HttpHandler[] = [
     return HttpResponse.json(db.players.filter((p) => p.displayName.toLowerCase().includes(q)))
   }),
   on('post', '/api/players', () => HttpResponse.json({ id: IDS.player1 }, { status: 201 })),
+
+  // --- Profil ---
+  on('get', '/api/players/:playerId/profile', ({ params }) => {
+    const found = db.profiles[params.playerId!]
+    return found ? HttpResponse.json(found) : problem(404, 'Spieler nicht gefunden.', 'Nicht gefunden')
+  }),
+
+  on('get', '/api/me/profile', () =>
+    db.myProfile ? HttpResponse.json(db.myProfile) : new HttpResponse(null, { status: 204 }),
+  ),
+
+  on('put', '/api/me/profile', async ({ request }) => {
+    const body = (await request.json()) as {
+      firstName: string
+      lastName: string
+      bio: string | null
+      homeClub: string | null
+    }
+
+    db.myProfile = fx.playerProfile({
+      ...(db.myProfile ?? {}),
+      isSelf: true,
+      hasAccount: true,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      displayName: `${body.lastName}, ${body.firstName}`,
+      bio: body.bio,
+      homeClub: body.homeClub,
+    })
+
+    return HttpResponse.json(db.myProfile)
+  }),
   on('post', '/api/participants', () =>
     HttpResponse.json(
       { id: IDS.participant3, displayName: 'A. Huber', playerIds: [IDS.player1] },

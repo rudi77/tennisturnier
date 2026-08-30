@@ -37,9 +37,19 @@ function aufbau(
   return { reloadTournament }
 }
 
-/** Die Zeile, in der dieser Teilnehmer steht. */
+/**
+ * Die Karte zu einer Meldung.
+ *
+ * Gesucht wird ausdrücklich die Überschrift der Karte und nicht irgendein
+ * Vorkommen des Namens: seit der Name in der Kontaktzeile ins Profil führt,
+ * steht derselbe Text zweimal in derselben Karte.
+ */
 function zeile(name: string): HTMLElement {
-  const row = screen.getByText(name).closest('.md-entry')
+  const heading = screen
+    .getAllByText(name)
+    .find((element) => element.classList.contains('md-entry__name'))
+
+  const row = heading?.closest('.md-entry')
   if (!row) throw new Error(`Keine Zeile für „${name}".`)
   return row as HTMLElement
 }
@@ -101,6 +111,20 @@ describe('EntriesScreen — als Mitglied', () => {
 
     expect(screen.getByText(/Wer dazukommt oder geht, entscheidet die Turnierleitung/))
       .toBeInTheDocument()
+  })
+})
+
+describe('EntriesScreen — der Weg zum Menschen', () => {
+  it('führt vom Namen einer Meldung ins Profil', async () => {
+    window.history.replaceState({}, '', '/?screen=entries')
+    aufbau()
+    await screen.findAllByText('S. Moser')
+
+    const link = within(zeile('S. Moser')).getByRole('button', { name: 'S. Moser' })
+    await user().click(link)
+
+    expect(window.location.search).toContain('screen=profile')
+    expect(window.location.search).toContain(`p=${fx.IDS.player1}`)
   })
 })
 
@@ -436,13 +460,13 @@ describe('EntriesScreen — Meldungen', () => {
     db.entries = [fx.entryOverview({ origin: EntryOrigin.SelfService })]
     aufbau()
 
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
     expect(zeile('S. Moser')).toHaveTextContent('selbst beigetreten')
   })
 
   it('nennt die Turnierleitung als Herkunft, wo sie erfasst hat', async () => {
     aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
     expect(zeile('S. Moser')).toHaveTextContent('von der Turnierleitung')
   })
 
@@ -450,13 +474,13 @@ describe('EntriesScreen — Meldungen', () => {
     db.entries = [fx.entryOverview({ seed: null })]
     aufbau()
 
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
     expect(zeile('S. Moser')).not.toHaveTextContent('ABC123')
   })
 
   it('zeigt Kontaktdaten, wenn das Backend sie mitschickt', async () => {
     aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
 
     expect(zeile('S. Moser')).toHaveTextContent('S. Moser · moser@example.invalid · +43 1 234')
   })
@@ -465,14 +489,14 @@ describe('EntriesScreen — Meldungen', () => {
     db.entries = [fx.entryOverview({ contacts: [] })]
     aufbau()
 
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
     expect(zeile('S. Moser')).not.toHaveTextContent('moser@example.invalid')
   })
 
   it('nimmt eine Meldung an und lädt alles zusammen nach', async () => {
     db.entries = [fx.entryOverview({ status: EntryStatus.Applied })]
     const { reloadTournament } = aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
 
     await user().click(within(zeile('S. Moser')).getByRole('button', { name: 'Annehmen' }))
 
@@ -486,7 +510,7 @@ describe('EntriesScreen — Meldungen', () => {
   it('setzt auf die Warteliste und zieht zurück', async () => {
     db.entries = [fx.entryOverview({ status: EntryStatus.Applied })]
     aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
     const u = user()
 
     await u.click(within(zeile('S. Moser')).getByRole('button', { name: 'Warteliste' }))
@@ -503,7 +527,7 @@ describe('EntriesScreen — Meldungen', () => {
   it('sperrt den Zug, der schon gilt', async () => {
     db.entries = [fx.entryOverview({ status: EntryStatus.Accepted })]
     aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
 
     expect(within(zeile('S. Moser')).getByRole('button', { name: 'Annehmen' })).toBeDisabled()
     expect(within(zeile('S. Moser')).getByRole('button', { name: 'Warteliste' })).not.toBeDisabled()
@@ -512,7 +536,7 @@ describe('EntriesScreen — Meldungen', () => {
   it('speichert die Setzposition beim Verlassen des Feldes', async () => {
     db.entries = [fx.entryOverview({ seed: null })]
     aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
     const u = user()
 
     const feld = screen.getByLabelText('Setzposition von S. Moser')
@@ -528,7 +552,7 @@ describe('EntriesScreen — Meldungen', () => {
 
   it('nimmt eine Setzposition zurück, wo das Feld geleert wird', async () => {
     aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
     const u = user()
 
     const feld = screen.getByLabelText('Setzposition von S. Moser')
@@ -544,7 +568,7 @@ describe('EntriesScreen — Meldungen', () => {
 
   it('schickt nichts, wo sich die Setzposition nicht geändert hat', async () => {
     aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
 
     screen.getByLabelText('Setzposition von S. Moser').focus()
     await user().tab()
@@ -563,7 +587,7 @@ describe('EntriesScreen — Meldungen', () => {
       ),
     )
     aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
 
     await user().click(within(zeile('S. Moser')).getByRole('button', { name: 'Annehmen' }))
 
@@ -584,7 +608,7 @@ describe('EntriesScreen — Meldungen', () => {
       }),
     )
     aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
 
     await user().click(within(zeile('S. Moser')).getByRole('button', { name: 'Annehmen' }))
 
@@ -596,7 +620,7 @@ describe('EntriesScreen — Meldungen', () => {
 
   it('lädt nach einem Import Meldungen und Turnier nach', async () => {
     const { reloadTournament } = aufbau()
-    await screen.findByText('S. Moser')
+    await screen.findAllByText('S. Moser')
 
     await user().type(screen.getByLabelText('Teilnehmerliste einfügen'), 'Anna;Müller')
     await user().click(screen.getByRole('button', { name: 'Übernehmen' }))

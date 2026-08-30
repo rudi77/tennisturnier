@@ -5,7 +5,15 @@ import { MatchdayMark } from '../core/MatchdayMark'
 import { Sheet } from './Sheet'
 import { displayName } from '../../auth/oidc'
 
-export type ScreenId = 'flow' | 'tournaments' | 'entries' | 'board' | 'draw' | 'create' | 'public'
+export type ScreenId =
+  | 'flow'
+  | 'tournaments'
+  | 'entries'
+  | 'board'
+  | 'draw'
+  | 'create'
+  | 'public'
+  | 'profile'
 
 interface Item {
   id: ScreenId
@@ -39,6 +47,11 @@ const SECONDARY: Item[] = [
   // verschiedener Wirkung sind einer zu viel.
   { id: 'create', label: 'Neues Turnier', short: 'Neu', icon: 'create' },
   { id: 'public', label: 'Live-Ansicht', short: 'Live', icon: 'live' },
+  // Das Profil steht bei den selteneren Zielen und nicht in der Fußleiste: es
+  // wird geöffnet, wenn man jemanden anschaut, nicht während man ein Turnier
+  // führt. Der Weg dorthin führt meistens über einen Namen und nicht über
+  // diesen Eintrag.
+  { id: 'profile', label: 'Mein Profil', short: 'Profil', icon: 'profile' },
 ]
 
 /**

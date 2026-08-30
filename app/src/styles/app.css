@@ -2202,3 +2202,70 @@ body {
   .md-live-dot { animation: none; }
   * { transition-duration: 1ms !important; }
 }
+
+/* --- Profil, Verbindungen, Verabredungen -------------------------------------
+   Die sozialen Ansichten. Sie borgen sich Karte, Zeile und Formular von den
+   Turnierschirmen; eigen ist ihnen nur, was es dort nicht gibt — ein
+   Fließtext über einen Menschen, ein Sieg-Niederlage-Zeichen und ein Verweis,
+   der wie ein Link aussieht, ohne einer zu sein. */
+
+.md-profile__block {
+  padding: var(--sp-10);
+  margin-top: var(--sp-8);
+}
+
+.md-panel__title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  margin: 0 0 var(--sp-6);
+}
+
+.md-profile__bio {
+  margin: var(--sp-6) 0 0;
+  max-width: 62ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Ein Buchstabe statt eines Wortes: die Zeile trägt schon Gegner, Turnier und
+   Satzstand, und „Sieg" davor drängt das Wesentliche aus dem Bild. Der Name
+   für Vorlesegeräte steht daneben in aria-label. */
+.md-profile__won,
+.md-profile__lost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.md-profile__won {
+  background: var(--success);
+  color: var(--fg-on-dark);
+}
+
+.md-profile__lost {
+  background: var(--line-soft);
+  color: var(--fg-2);
+}
+
+/* Ein Verweis, der kein Link ist: er wechselt den Bildschirm, ohne die Seite
+   neu zu laden. Als <a href> geschrieben wäre er ein Versprechen, das die
+   Anwendung nicht hält — Mittelklick öffnete eine leere Seite. */
+.md-linkbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--court-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.md-linkbtn:hover {
+  color: var(--court-900);
+}

@@ -41,6 +41,7 @@ import {
   type MatchFormat,
   type MeResponse,
   type PhaseDetail,
+  type PlayerProfileView,
   type PublicCourtView,
   type PublicMatchView,
   type PublicPhaseView,
@@ -77,6 +78,7 @@ export const IDS = {
   participant4: 'p0000000-0000-0000-0000-000000000004',
   player1: 'a0000000-0000-0000-0000-000000000001',
   player2: 'a0000000-0000-0000-0000-000000000002',
+  player3: 'a0000000-0000-0000-0000-000000000003',
   phase: 'f0000000-0000-0000-0000-000000000001',
   match1: 'd0000000-0000-0000-0000-000000000001',
   match2: 'd0000000-0000-0000-0000-000000000002',
@@ -611,3 +613,76 @@ export function publicView(over: Partial<PublicTournamentView> = {}): PublicTour
 }
 
 export const OUTCOMES = MatchOutcome
+
+/**
+ * Ein Spielerprofil, wie ADR-0013 es liefert: zwei Matches, eines gewonnen,
+ * eines verloren, in einem Turnier.
+ */
+export function playerProfile(over: Partial<PlayerProfileView> = {}): PlayerProfileView {
+  return {
+    playerId: IDS.player1,
+    displayName: 'Moser, Sabine',
+    firstName: 'Sabine',
+    lastName: 'Moser',
+    bio: 'Spielt seit 2009, am liebsten Doppel.',
+    homeClub: 'TC Musterstadt',
+    isSelf: false,
+    hasAccount: true,
+    record: {
+      played: 2,
+      won: 1,
+      lost: 1,
+      tournaments: 1,
+      setsWon: 3,
+      setsLost: 2,
+      lastPlayedOn: '2026-05-16',
+    },
+    tournaments: [
+      {
+        tournamentId: IDS.tournament,
+        name: 'Clubmeisterschaft 2026',
+        discipline: Discipline.Singles,
+        startsOn: '2026-05-16',
+        endsOn: '2026-05-17',
+        state: TournamentState.InProgress,
+        status: EntryStatus.Accepted,
+        participantName: 'Moser, Sabine',
+        played: 2,
+        won: 1,
+      },
+    ],
+    matches: [
+      {
+        matchId: IDS.match1,
+        tournamentId: IDS.tournament,
+        tournamentName: 'Clubmeisterschaft 2026',
+        phaseName: 'Hauptrunde',
+        matchName: 'Halbfinale',
+        ownName: 'Moser, Sabine',
+        opponentName: 'Berger, Lena',
+        opponents: [{ playerId: IDS.player2, displayName: 'Berger, Lena' }],
+        partner: null,
+        won: true,
+        outcome: MatchOutcome.Normal,
+        score: '6:4 6:2',
+        playedAt: '2026-05-16T10:30:00+00:00',
+      },
+      {
+        matchId: IDS.match2,
+        tournamentId: IDS.tournament,
+        tournamentName: 'Clubmeisterschaft 2026',
+        phaseName: 'Hauptrunde',
+        matchName: 'Finale',
+        ownName: 'Moser, Sabine',
+        opponentName: 'Huber, Anna',
+        opponents: [{ playerId: IDS.player3, displayName: 'Huber, Anna' }],
+        partner: null,
+        won: false,
+        outcome: MatchOutcome.Normal,
+        score: '4:6 6:3 7:10',
+        playedAt: '2026-05-17T09:00:00+00:00',
+      },
+    ],
+    ...over,
+  }
+}

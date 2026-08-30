@@ -833,3 +833,87 @@ export interface DrawTeamsResult {
   formed: number
   leftOver: number
 }
+
+// ---------------------------------------------------------------------------
+// Profil, Verbindungen, Verabredungen — was aus der Turnierverwaltung ein
+// Netzwerk macht
+// ---------------------------------------------------------------------------
+
+/**
+ * Ein Spieler als Verweis. Gerade so viel, dass ein Name dasteht und sein
+ * Profil sich öffnen lässt.
+ */
+export interface PlayerLink {
+  playerId: string
+  displayName: string
+}
+
+/**
+ * Die Bilanz eines Spielers — relativ zum Fragenden.
+ *
+ * Gerechnet wird über die Turniere, die der Aufrufer ohnehin sehen darf
+ * (ADR-0013). Zwei Personen bekommen zu demselben Spieler verschiedene Zahlen,
+ * und die Oberfläche sagt das, statt es zu verschweigen.
+ */
+export interface PlayerRecordView {
+  played: number
+  won: number
+  lost: number
+  tournaments: number
+  setsWon: number
+  setsLost: number
+  lastPlayedOn: string | null
+}
+
+export interface PlayerTournamentView {
+  tournamentId: string
+  name: string
+  discipline: Discipline
+  startsOn: string | null
+  endsOn: string | null
+  state: TournamentState
+  status: EntryStatus
+  participantName: string
+  played: number
+  won: number
+}
+
+export interface PlayerMatchView {
+  matchId: string
+  tournamentId: string
+  tournamentName: string
+  phaseName: string
+  matchName: string
+  ownName: string
+  opponentName: string
+  opponents: PlayerLink[]
+  partner: PlayerLink | null
+  won: boolean
+  outcome: MatchOutcome
+  /** Fertig formatiert — die Sätze einzeln zu übertragen hieße, sie hier noch einmal zu setzen. */
+  score: string
+  playedAt: string | null
+}
+
+export interface PlayerProfileView {
+  playerId: string
+  displayName: string
+  firstName: string
+  lastName: string
+  bio: string | null
+  homeClub: string | null
+  /** Nur dann darf die Oberfläche die Felder zum Bearbeiten anbieten. */
+  isSelf: boolean
+  /** Wer aus einer hochgeladenen Liste kommt, hat kein Konto — und niemanden, der über ihn schreibt. */
+  hasAccount: boolean
+  record: PlayerRecordView
+  tournaments: PlayerTournamentView[]
+  matches: PlayerMatchView[]
+}
+
+export interface UpdateMyProfileRequest {
+  firstName: string
+  lastName: string
+  bio: string | null
+  homeClub: string | null
+}

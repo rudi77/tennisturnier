@@ -29,6 +29,7 @@ import type {
   MeResponse,
   ParticipantSummary,
   PhaseDetail,
+  PlayerProfileView,
   PlayerSummary,
   PublicTournamentView,
   RegistrationDetail,
@@ -41,6 +42,7 @@ import type {
   TournamentDetail,
   TournamentRoleSummary,
   TournamentSummary,
+  UpdateMyProfileRequest,
 } from './types'
 
 // --- Wer fragt --------------------------------------------------------------
@@ -48,6 +50,26 @@ import type {
 export const me = {
   /** Benutzer samt Rollen — damit die Oberfläche weiß, was sie anbieten darf. */
   get: () => http.get<MeResponse>('/api/me'),
+}
+
+// --- Profil -----------------------------------------------------------------
+
+/**
+ * Das Spielerprofil (ADR-0013).
+ *
+ * Was darin steht, hängt am Fragenden: gerechnet wird über die Turniere, die er
+ * ohnehin sehen darf. Ein Spieler, mit dem er keines teilt, antwortet mit 404 —
+ * wie alles, was außerhalb des Query-Filters liegt.
+ */
+export const profiles = {
+  get: (playerId: string) => http.get<PlayerProfileView>(`/api/players/${playerId}/profile`),
+
+  /** `null` heißt: zum Konto gehört noch kein Spieler. Kein Fehler. */
+  mine: () => http.get<PlayerProfileView | null>('/api/me/profile'),
+
+  /** Legt beim ersten Mal den eigenen Spieler an und antwortet mit dem fertigen Profil. */
+  save: (body: UpdateMyProfileRequest) =>
+    http.put<PlayerProfileView>('/api/me/profile', body),
 }
 
 // --- Turniere ---------------------------------------------------------------
