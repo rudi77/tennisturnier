@@ -54,6 +54,19 @@ public interface IPlayerHistoryStore
         IReadOnlyCollection<Guid> userAccountIds,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Die Konten zu mehreren Spielern — die Gegenrichtung von
+    /// <see cref="PlayerIdsOfAccountsAsync"/>.
+    ///
+    /// Der Weg vom Kontakt zur Einladung (ADR-0015): eingeladen wird aus dem
+    /// Kontaktgraphen, und der kennt Spieler; antworten kann nur ein Konto.
+    /// Spieler ohne Konto fehlen im Ergebnis, und genau daran erkennt der
+    /// Anwendungsfall, wen er nicht einladen kann.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> AccountIdsOfPlayersAsync(
+        IReadOnlyCollection<Guid> playerIds,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Anzeigenamen zu Spieler-Ids — für Partner, Gegner und Kontakte.</summary>
     Task<IReadOnlyDictionary<Guid, string>> DisplayNamesAsync(
         IReadOnlyCollection<Guid> playerIds,

@@ -19,6 +19,12 @@ namespace TennisTurnier.Application.Social;
 /// Wann zuletzt. Ohne Platzzuweisung gibt es keine Uhrzeit — dann steht hier der
 /// Beginn des Turniers, und wo auch der fehlt, gar nichts.
 /// </param>
+/// <param name="CanBeInvited">
+/// Gehört zu diesem Spieler ein Konto? Nur dann lässt er sich zu einer
+/// Verabredung einladen — ohne Konto sähe er die Einladung nicht und könnte
+/// nicht zusagen (ADR-0015). Die Liste sagt es vorher, statt die Einladung
+/// hinterher abzuweisen.
+/// </param>
 /// <param name="LastTournamentName">
 /// Wo zuletzt. Es ist der Anknüpfungspunkt: „gegen Lena beim Clubturnier" sagt
 /// mehr als eine Zahl.
@@ -32,4 +38,5 @@ public sealed record ConnectionView(
     int Lost,
     DateOnly? LastPlayedOn,
     string LastTournamentName,
-    int SharedTournaments);
+    int SharedTournaments,
+    bool CanBeInvited);

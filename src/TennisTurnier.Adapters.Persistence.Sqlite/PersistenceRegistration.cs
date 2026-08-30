@@ -40,6 +40,7 @@ public static class PersistenceRegistration
         services.AddScoped<IRoleAssignmentRepository, RoleAssignmentRepository>();
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<IFeedRepository, FeedRepository>();
+        services.AddScoped<IPlayDateRepository, PlayDateRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;

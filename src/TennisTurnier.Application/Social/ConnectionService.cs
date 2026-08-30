@@ -73,8 +73,15 @@ public sealed class ConnectionService : IConnectionService
 
         var names = await _history.DisplayNamesAsync([.. tallies.Keys], cancellationToken);
 
+        // Wer ein Konto hat, lässt sich einladen. Die Liste sagt es hier,
+        // damit die Oberfläche es nicht raten muss (ADR-0015).
+        var accounts = await _history.AccountIdsOfPlayersAsync([.. tallies.Keys], cancellationToken);
+
         return [.. tallies
-            .Select(pair => pair.Value.ToView(pair.Key, names.GetValueOrDefault(pair.Key, "Unbekannt")))
+            .Select(pair => pair.Value.ToView(
+                pair.Key,
+                names.GetValueOrDefault(pair.Key, "Unbekannt"),
+                accounts.ContainsKey(pair.Key)))
             // Wer zuletzt mitgespielt hat, steht oben: das ist die Reihenfolge,
             // in der man jemanden sucht. Die Zahl der Matches entscheidet nur
             // dort, wo kein Datum vorliegt.
@@ -132,9 +139,9 @@ public sealed class ConnectionService : IConnectionService
             Touch(match);
         }
 
-        public ConnectionView ToView(Guid playerId, string displayName) =>
+        public ConnectionView ToView(Guid playerId, string displayName, bool canBeInvited) =>
             new(playerId, displayName, _together, _against, _won, _lost,
-                _lastPlayedOn, _lastTournament, _tournaments.Count);
+                _lastPlayedOn, _lastTournament, _tournaments.Count, canBeInvited);
 
         /// <summary>
         /// Die Matches kommen jüngste zuerst — das erste, das hier ankommt, ist

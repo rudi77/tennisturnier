@@ -49,6 +49,12 @@ public sealed class TennisTurnierDbContext : DbContext
     public DbSet<TournamentPost> TournamentPosts => Set<TournamentPost>();
 
     /// <summary>
+    /// Verabredungen außerhalb jedes Turniers (ADR-0015). Sie haben keine
+    /// Sichtbarkeit zu erben und tragen deshalb ihre eigene.
+    /// </summary>
+    public DbSet<PlayDate> PlayDates => Set<PlayDate>();
+
+    /// <summary>
     /// Die öffentliche Projektion (ADR-0003). Bewusst ohne Query-Filter — sie
     /// wird von Zuschauern ohne Anmeldung gelesen.
     /// </summary>
@@ -141,6 +147,15 @@ public sealed class TennisTurnierDbContext : DbContext
         // dort eine zweite Wahrheit über dieselbe Grenze.
         modelBuilder.Entity<TournamentPost>()
             .HasQueryFilter(post => SeesEverything || Tournaments.Any(t => t.Id == post.TournamentId));
+
+        // Eine Verabredung gehört keinem Turnier (ADR-0015) und kann dessen
+        // Filter nicht erben. Ihre eigene Regel ist die knappste denkbare: wer
+        // sie ausgerichtet hat oder eingeladen ist, sieht sie — sonst niemand.
+        modelBuilder.Entity<PlayDate>()
+            .HasQueryFilter(date =>
+                SeesEverything
+                || date.HostUserId == CallerId
+                || date.Invitations.Any(invitation => invitation.UserId == CallerId));
 
         // Die öffentliche Projektion bekommt bewusst keinen Filter: sie enthält
         // nur, was jeder sehen darf, und wird ohne Anmeldung gelesen (ADR-0003).

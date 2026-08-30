@@ -25,6 +25,7 @@ import type {
   MeResponse,
   ConnectionView,
   FeedPage,
+  PlayDateView,
   PhaseDetail,
   PlayerProfileView,
   PlayerSummary,
@@ -62,6 +63,7 @@ export interface FakeDb {
   myProfile: PlayerProfileView | null
   feed: FeedPage
   connections: ConnectionView[]
+  playDates: PlayDateView[]
   importResult: ImportEntriesResult
   drawTeamsResult: DrawTeamsResult
   /** Der ETag, den die öffentliche Ansicht ausliefert. */
@@ -133,6 +135,7 @@ function initial(): FakeDb {
     myProfile: fx.playerProfile({ isSelf: true }),
     feed: fx.feedPage(),
     connections: [fx.connection()],
+    playDates: [fx.playDate()],
     importResult: { imported: 2, skipped: 1, problems: [] },
     drawTeamsResult: { formed: 2, leftOver: 0 },
     publicEtag: '"etag-1"',
@@ -336,6 +339,45 @@ export const handlers: HttpHandler[] = [
       { status: 201 },
     ),
   ),
+
+  // --- Verabredungen ---
+  on('get', '/api/play-dates', () => HttpResponse.json(db.playDates)),
+
+  on('post', '/api/play-dates', async ({ request }) => {
+    const body = (await request.json()) as { title: string; invitees: string[] }
+    const created = fx.playDate({ id: 'neue-runde', title: body.title })
+    db.playDates = [...db.playDates, created]
+    return HttpResponse.json(created, { status: 201 })
+  }),
+
+  on('post', '/api/play-dates/:id/invitations', ({ params }) =>
+    HttpResponse.json(db.playDates.find((date) => date.id === params.id)),
+  ),
+
+  on('post', '/api/play-dates/:id/response', async ({ params, request }) => {
+    const body = (await request.json()) as { accepted: boolean }
+
+    db.playDates = db.playDates.map((date) =>
+      date.id === params.id
+        ? {
+            ...date,
+            myResponse: body.accepted ? 1 : 2,
+            committed: body.accepted ? date.committed + 1 : date.committed,
+            missing: body.accepted ? Math.max(0, date.missing - 1) : date.missing,
+            isConfirmed: body.accepted && date.missing <= 1,
+          }
+        : date,
+    )
+
+    return HttpResponse.json(db.playDates.find((date) => date.id === params.id))
+  }),
+
+  on('delete', '/api/play-dates/:id', ({ params }) => {
+    db.playDates = db.playDates.map((date) =>
+      date.id === params.id ? { ...date, isCancelled: true } : date,
+    )
+    return HttpResponse.json(db.playDates.find((date) => date.id === params.id))
+  }),
 
   // --- Kontakte ---
   on('get', '/api/me/connections', () => HttpResponse.json(db.connections)),

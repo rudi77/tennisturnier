@@ -17,6 +17,7 @@ import {
   EntryOrigin,
   EntryStatus,
   FinalSetMode,
+  InvitationResponse,
   MatchOutcome,
   MatchStatus,
   PostKind,
@@ -43,6 +44,7 @@ import {
   type MeResponse,
   type PhaseDetail,
   type ConnectionView,
+  type PlayDateView,
   type FeedPage,
   type FeedPostView,
   type PlayerProfileView,
@@ -95,6 +97,8 @@ export const IDS = {
   post1: '01900000-0000-7000-8000-000000000001',
   post2: '01900000-0000-7000-8000-000000000002',
   comment1: '01900000-0000-7000-8000-000000000011',
+  playDate: '01900000-0000-7000-8000-000000000021',
+  otherUser: 'u0000000-0000-0000-0000-000000000002',
 } as const
 
 export const DEFAULT_FORMAT: MatchFormat = {
@@ -745,6 +749,41 @@ export function connection(over: Partial<ConnectionView> = {}): ConnectionView {
     lastPlayedOn: '2026-05-16',
     lastTournamentName: 'Clubmeisterschaft 2026',
     sharedTournaments: 2,
+    canBeInvited: true,
+    ...over,
+  }
+}
+
+/**
+ * Eine Verabredung, die der Angemeldete ausrichtet und für die noch einer
+ * fehlt (ADR-0015).
+ */
+export function playDate(over: Partial<PlayDateView> = {}): PlayDateView {
+  return {
+    id: IDS.playDate,
+    title: 'Samstag früh eine Runde?',
+    discipline: Discipline.Singles,
+    venueName: 'TC Musterstadt, Platz 2',
+    startsAt: '2026-06-20T07:00:00+00:00',
+    endsAt: '2026-06-20T08:00:00+00:00',
+    note: 'Bringt Bälle mit.',
+    host: { userId: IDS.user, displayName: 'Rudi Turnierleitung', playerId: IDS.player1 },
+    guests: [
+      {
+        userId: IDS.otherUser,
+        playerId: IDS.player2,
+        displayName: 'Berger, Lena',
+        response: InvitationResponse.Pending,
+      },
+    ],
+    requiredPlayers: 2,
+    committed: 1,
+    missing: 1,
+    isConfirmed: false,
+    isCancelled: false,
+    isPast: false,
+    isHost: true,
+    myResponse: null,
     ...over,
   }
 }

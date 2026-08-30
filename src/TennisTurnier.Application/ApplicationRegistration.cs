@@ -54,6 +54,7 @@ public static class ApplicationRegistration
         services.AddScoped<IPlayerProfileService, PlayerProfileService>();
         services.AddScoped<IFeedService, FeedService>();
         services.AddScoped<IConnectionService, ConnectionService>();
+        services.AddScoped<IPlayDateService, PlayDateService>();
         services.AddScoped<FeedRecorder>();
 
         return services;

@@ -2355,3 +2355,27 @@ body {
 .md-feed__composer .md-field {
   width: 100%;
 }
+
+/* --- Verabredungen ----------------------------------------------------------- */
+
+.md-playdate--off {
+  opacity: 0.6;
+}
+
+.md-playdate__person + .md-playdate__person::before {
+  content: ' · ';
+  color: var(--fg-3);
+}
+
+.md-playdate__role {
+  color: var(--fg-3);
+}
+
+/* Zwei Spalten, sobald Platz ist: eine Liste von zwanzig Namen untereinander
+   schiebt den Absenden-Knopf aus dem Bild. */
+.md-playdate__picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0;
+}

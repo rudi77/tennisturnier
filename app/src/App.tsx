@@ -21,6 +21,7 @@ import { PublicScreen } from './screens/PublicScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { FeedScreen } from './screens/FeedScreen'
 import { ConnectionsScreen } from './screens/ConnectionsScreen'
+import { PlayDatesScreen } from './screens/PlayDatesScreen'
 
 const SCREENS: ScreenId[] = [
   'flow',
@@ -33,6 +34,7 @@ const SCREENS: ScreenId[] = [
   'profile',
   'feed',
   'connections',
+  'play-dates',
 ]
 
 export function App() {
@@ -308,5 +310,7 @@ function Screen({
       return <FeedScreen />
     case 'connections':
       return <ConnectionsScreen />
+    case 'play-dates':
+      return <PlayDatesScreen />
   }
 }

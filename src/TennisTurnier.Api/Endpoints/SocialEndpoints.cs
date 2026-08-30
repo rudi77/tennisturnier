@@ -19,8 +19,57 @@ internal static class SocialEndpoints
         MapProfiles(app);
         MapFeed(app);
         MapConnections(app);
+        MapPlayDates(app);
 
         return app;
+    }
+
+    /// <summary>
+    /// Verabredungen außerhalb jedes Turniers (ADR-0015).
+    ///
+    /// Nicht unter <c>/api/tournaments</c>, weil sie zu keinem gehören — und
+    /// das ist die ganze Entscheidung dahinter. Wer sie sieht, entscheidet ihr
+    /// eigener Query-Filter: der Gastgeber und die Eingeladenen, sonst niemand.
+    /// </summary>
+    private static void MapPlayDates(IEndpointRouteBuilder app)
+    {
+        var dates = app.MapGroup("/api/play-dates").WithTags("Verabredungen").RequireAuthorization();
+
+        dates.MapGet("/", async (
+            IPlayDateService service, CancellationToken ct, bool includePast = false) =>
+            Results.Ok(await service.ListMineAsync(includePast, ct)));
+
+        dates.MapPost("/", async (
+            CreatePlayDateRequest request, IPlayDateService service, CancellationToken ct) =>
+        {
+            var created = await service.CreateAsync(request, ct);
+            return Results.Created($"/api/play-dates/{created.Id}", created);
+        });
+
+        dates.MapPost("/{playDateId:guid}/invitations", async (
+            Guid playDateId,
+            InviteToPlayDateRequest request,
+            IPlayDateService service,
+            CancellationToken ct) =>
+            Results.Ok(await service.InviteAsync(playDateId, request, ct)));
+
+        // Ein eigener Endpunkt und kein Feld im PUT: zu- und absagen ist eine
+        // Handlung mit Folgen für alle anderen — die Runde steht danach oder
+        // eben nicht.
+        dates.MapPost("/{playDateId:guid}/response", async (
+            Guid playDateId,
+            RespondToPlayDateRequest request,
+            IPlayDateService service,
+            CancellationToken ct) =>
+            Results.Ok(await service.RespondAsync(playDateId, request, ct)));
+
+        // DELETE und nicht POST /cancel: für den Eingeladenen ist die Absage
+        // das Ende der Verabredung. Dass die Zeile stehen bleibt, damit niemand
+        // vergeblich am Platz steht, ist eine Frage der Ablage und nicht der
+        // Bedeutung.
+        dates.MapDelete("/{playDateId:guid}", async (
+            Guid playDateId, IPlayDateService service, CancellationToken ct) =>
+            Results.Ok(await service.CancelAsync(playDateId, ct)));
     }
 
     /// <summary>

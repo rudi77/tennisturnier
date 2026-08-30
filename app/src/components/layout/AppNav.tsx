@@ -16,6 +16,7 @@ export type ScreenId =
   | 'profile'
   | 'feed'
   | 'connections'
+  | 'play-dates'
 
 interface Item {
   id: ScreenId
@@ -60,6 +61,7 @@ const SECONDARY: Item[] = [
   // diesen Eintrag.
   { id: 'profile', label: 'Mein Profil', short: 'Profil', icon: 'profile' },
   { id: 'connections', label: 'Mitspieler', short: 'Leute', icon: 'entries' },
+  { id: 'play-dates', label: 'Verabredungen', short: 'Termin', icon: 'board' },
 ]
 
 /**

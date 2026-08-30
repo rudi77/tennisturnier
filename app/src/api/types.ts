@@ -987,4 +987,61 @@ export interface ConnectionView {
   lastPlayedOn: string | null
   lastTournamentName: string
   sharedTournaments: number
+  /** Gehört zu diesem Spieler ein Konto? Nur dann lässt er sich einladen. */
+  canBeInvited: boolean
+}
+
+/** Wie jemand auf eine Einladung geantwortet hat (ADR-0015). */
+export const InvitationResponse = { Pending: 0, Accepted: 1, Declined: 2 } as const
+export type InvitationResponse = (typeof InvitationResponse)[keyof typeof InvitationResponse]
+
+export interface PlayDateAuthorView {
+  userId: string
+  displayName: string
+  playerId: string | null
+}
+
+export interface PlayDateGuestView {
+  userId: string
+  playerId: string
+  displayName: string
+  response: InvitationResponse
+}
+
+/**
+ * Eine Spielverabredung außerhalb jedes Turniers (ADR-0015).
+ *
+ * Kein Draw, kein Ergebnis, kein Zustandsautomat: gespeichert wird nur, ob
+ * abgesagt wurde. Ob genug zugesagt haben, ergibt sich aus den Antworten; ob sie
+ * vorbei ist, aus der Uhr.
+ */
+export interface PlayDateView {
+  id: string
+  title: string
+  discipline: Discipline
+  venueName: string
+  startsAt: string
+  endsAt: string
+  note: string | null
+  host: PlayDateAuthorView
+  guests: PlayDateGuestView[]
+  requiredPlayers: number
+  committed: number
+  /** Wie viele noch fehlen. Die Zahl, wegen der jemand die Liste ansieht. */
+  missing: number
+  isConfirmed: boolean
+  isCancelled: boolean
+  isPast: boolean
+  isHost: boolean
+  myResponse: InvitationResponse | null
+}
+
+export interface CreatePlayDateRequest {
+  title: string
+  discipline: Discipline
+  venueName: string
+  startsAt: string
+  durationMinutes: number
+  note: string | null
+  invitees: string[]
 }

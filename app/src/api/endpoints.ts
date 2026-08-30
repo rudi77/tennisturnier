@@ -11,6 +11,7 @@ import type {
   AssignCourtResult,
   ConfirmedAssignment,
   ConnectionView,
+  CreatePlayDateRequest,
   CourtBoard,
   CourtLocation,
   CourtSurface,
@@ -33,6 +34,7 @@ import type {
   MeResponse,
   ParticipantSummary,
   PhaseDetail,
+  PlayDateView,
   PlayerProfileView,
   PlayerSummary,
   PublicTournamentView,
@@ -68,6 +70,29 @@ export const me = {
 export const connections = {
   /** Mit wem der Aufrufer gespielt hat. Nur die eigenen — siehe ADR-0013. */
   listMine: () => http.get<ConnectionView[]>('/api/me/connections'),
+}
+
+/**
+ * Verabredungen außerhalb jedes Turniers (ADR-0015).
+ *
+ * Nicht unter `/api/tournaments`, weil sie zu keinem gehören — und das ist die
+ * ganze Entscheidung dahinter.
+ */
+export const playDates = {
+  listMine: (includePast = false) =>
+    http.get<PlayDateView[]>(`/api/play-dates?includePast=${includePast}`),
+
+  create: (body: CreatePlayDateRequest) => http.post<PlayDateView>('/api/play-dates', body),
+
+  invite: (playDateId: string, invitees: string[]) =>
+    http.post<PlayDateView>(`/api/play-dates/${playDateId}/invitations`, { invitees }),
+
+  /** Zu- oder absagen. Danach steht die Runde — oder eben nicht. */
+  respond: (playDateId: string, accepted: boolean) =>
+    http.post<PlayDateView>(`/api/play-dates/${playDateId}/response`, { accepted }),
+
+  /** Absagen. Endgültig — die Zeile bleibt stehen, damit niemand vergeblich am Platz steht. */
+  cancel: (playDateId: string) => http.del<PlayDateView>(`/api/play-dates/${playDateId}`),
 }
 
 export const profiles = {
