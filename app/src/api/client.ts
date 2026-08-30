@@ -88,6 +88,16 @@ export function setTokenProvider(provider: () => string | null): void {
   tokenProvider = provider
 }
 
+/**
+ * Das Token des Angemeldeten, oder nichts.
+ *
+ * Für den einen Aufruf, der nicht über `request` läuft: die öffentliche
+ * Projektion holt sich ihren ETag selbst und braucht das Token trotzdem.
+ */
+export function authToken(): string | null {
+  return tokenProvider()
+}
+
 const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export function apiUrl(path: string): string {

@@ -31,7 +31,10 @@ export default defineConfig({
   // Bildschirme in Telefon- und Schreibtischgröße ab, damit jemand sie ansieht.
   // Im regulären Durchgang hätte er nichts zu sagen und kostete zwei Minuten —
   // aufgerufen wird er von Hand: `npx playwright test ansicht --grep .`
-  testIgnore: process.env.MATCHDAY_ANSICHT ? [] : ['**/ansicht.spec.ts'],
+  testIgnore: [
+    ...(process.env.MATCHDAY_ANSICHT ? [] : ['**/ansicht.spec.ts']),
+    ...(process.env.MATCHDAY_DURCHLAUF ? [] : ['**/durchlauf.spec.ts']),
+  ],
 
   fullyParallel: false,
   workers: 1,

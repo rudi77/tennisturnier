@@ -7,7 +7,7 @@
  */
 
 import { HttpResponse, http } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { IDS } from '../test/fixtures'
 import { db, lastBody, server } from '../test/server'
 import { ApiError } from './client'
@@ -24,9 +24,14 @@ import {
   schedule,
   tournaments,
 } from './endpoints'
+import { setTokenProvider } from './client'
 import { CourtLocation, CourtSurface, Discipline, MatchOutcome, Role } from './types'
 
 const T = IDS.tournament
+
+// Der Anbieter ist modulweit: bliebe er stehen, liefe jeder folgende Test mit
+// einem Token, das er nie gesetzt hat.
+afterEach(() => setTokenProvider(() => null))
 
 /** Der zuletzt beantwortete Aufruf. */
 function letzterAufruf(): { method: string; path: string; body: unknown } {
@@ -506,17 +511,37 @@ describe('fetchPublicView', () => {
     expect(ergebnis).toEqual({ view: null, etag: '"etag-1"', notModified: true })
   })
 
-  it('geht ohne Token hinaus — der Endpunkt ist ausdrücklich anonym', async () => {
-    let seen: string | null = 'x'
+  /** Was der Server an Authorization zu sehen bekommt. */
+  function mitschnitt(): () => string | null {
+    let gesehen: string | null = 'nichts abgefragt'
     server.use(
       http.get('/public/tournaments/:id', ({ request }) => {
-        seen = request.headers.get('Authorization')
+        gesehen = request.headers.get('Authorization')
         return HttpResponse.json(db.publicView)
       }),
     )
+    return () => gesehen
+  }
+
+  it('nimmt das Token mit, wenn eines da ist', async () => {
+    // Hier stand einmal das Gegenteil, mit der Begründung, der Endpunkt sei
+    // ausdrücklich anonym. Seit ADR-0012 hängt die Antwort am Aufrufer: ein
+    // Turnier ist privat, solange niemand es öffnet, und wer dazugehört, sieht
+    // die Projektion trotzdem. Ohne Token sah die Turnierleitung ihre eigene
+    // Live-Ansicht nicht mehr — und weil privat die Vorgabe ist, traf das
+    // jedes Turnier.
+    const gesehen = mitschnitt()
+    setTokenProvider(() => 'tok-123')
 
     await fetchPublicView(T, null)
-    expect(seen).toBeNull()
+    expect(gesehen()).toBe('Bearer tok-123')
+  })
+
+  it('geht ohne Token hinaus, wenn keines da ist — anonym bleibt anonym', async () => {
+    const gesehen = mitschnitt()
+
+    await fetchPublicView(T, null)
+    expect(gesehen()).toBeNull()
   })
 
   it('meldet einen Fehlschlag als ApiError', async () => {
