@@ -6,7 +6,7 @@
  * um die andere zu finden.
  */
 
-import { ApiError, http, apiUrl } from './client'
+import { ApiError, http, apiUrl, authToken } from './client'
 import type {
   AssignCourtResult,
   ConfirmedAssignment,
@@ -400,8 +400,15 @@ export interface PublicViewResult {
  * Ein 304 spart bei einem Bracket mit 64 Matches den ganzen Body — und am
  * Turniertag hängen viele Clients an derselben Ansicht.
  *
- * Ohne Token: der Endpunkt ist ausdrücklich anonym, und ein mitgeschicktes
- * Token würde nur suggerieren, die Antwort hinge davon ab.
+ * Mit Token, falls eines da ist. Hier stand einmal das Gegenteil — der
+ * Endpunkt sei ausdrücklich anonym, ein Token suggeriere nur, die Antwort
+ * hinge davon ab. Seit ADR-0012 hängt sie davon ab: ein Turnier ist privat,
+ * solange niemand es öffnet, und wer dazugehört, sieht die Projektion
+ * trotzdem. Ohne Token sah die Turnierleitung ihre eigene Live-Ansicht nicht
+ * mehr — und weil privat die Vorgabe ist, traf das jedes Turnier.
+ *
+ * Anonym bleibt der Endpunkt: ohne Token geht der Aufruf wie zuvor, und ein
+ * öffentliches Turnier antwortet jedem.
  */
 export async function fetchPublicView(
   tournamentId: string,
@@ -410,6 +417,9 @@ export async function fetchPublicView(
 ): Promise<PublicViewResult> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (etag) headers['If-None-Match'] = etag
+
+  const token = authToken()
+  if (token) headers.Authorization = `Bearer ${token}`
 
   const response = await fetch(apiUrl(`/public/tournaments/${tournamentId}`), { headers, signal })
 

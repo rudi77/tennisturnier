@@ -299,4 +299,34 @@ describe('JoinScreen — nur dazugehören', () => {
     await user().click(screen.getByRole('button', { name: 'Turnier öffnen' }))
     expect(onJoined).toHaveBeenCalledWith(fx.IDS.tournament)
   })
+
+  it('lässt das Mitglied trotzdem melden — nur eben nicht ein zweites Mal beitreten', async () => {
+    // Dazugehören und gemeldet sein ist zweierlei. Wer über den Link kommt und
+    // schon Mitglied ist, will in aller Regel genau das eine: mitspielen.
+    db.join = fx.joinView({ alreadyMember: true })
+    aufbau()
+
+    await screen.findByLabelText('Vorname')
+    expect(screen.getByRole('button', { name: 'Melden' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Nur beitreten, ohne mitzuspielen' }),
+    ).not.toBeInTheDocument()
+
+    await user().click(screen.getByRole('button', { name: 'Melden' }))
+
+    await waitFor(() =>
+      expect(lastBody('POST', '/api/join/tok-abcdef')).toMatchObject({ play: true }),
+    )
+  })
+
+  it('bietet dem Mitglied bei geschlossener Meldung gar nichts mehr an', async () => {
+    // Ein Knopf „Beitreten" für jemanden, der drin ist, wäre eine Zusage ohne
+    // Inhalt — der Weg hinein steht oben.
+    db.join = fx.joinView({ alreadyMember: true, isOpen: false })
+    aufbau()
+
+    expect(await screen.findByText(/Du gehörst schon dazu/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Beitreten' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Turnier öffnen' })).toBeInTheDocument()
+  })
 })

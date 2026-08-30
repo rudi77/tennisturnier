@@ -68,8 +68,10 @@ export function JoinScreen({
 
             {view.data.alreadyMember && (
               <div className="md-hint" style={{ marginTop: 'var(--sp-6)' }}>
-                Du gehörst schon dazu. Über „Turnier öffnen" geht es hinein — melden kannst du
-                dich hier trotzdem, falls du es noch nicht getan hast.
+                Du gehörst schon dazu. Über „Turnier öffnen" geht es hinein
+                {view.data.isOpen
+                  ? ' — melden kannst du dich hier trotzdem, falls du es noch nicht getan hast.'
+                  : '.'}
               </div>
             )}
 
@@ -99,12 +101,19 @@ export function JoinScreen({
             )}
           </div>
 
-          <Form
-            token={token}
-            needsPartner={view.data.needsPartner}
-            canPlay={view.data.isOpen}
-            onDone={setResult}
-          />
+          {/* Wer schon dazugehört und bei geschlossener Meldung herkommt, hat
+              hier nichts mehr zu tun: „Turnier öffnen" steht oben, und ein
+              Knopf „Beitreten" für jemanden, der drin ist, wäre eine Zusage
+              ohne Inhalt. */}
+          {(view.data.isOpen || !view.data.alreadyMember) && (
+            <Form
+              token={token}
+              needsPartner={view.data.needsPartner}
+              canPlay={view.data.isOpen}
+              alreadyMember={view.data.alreadyMember}
+              onDone={setResult}
+            />
+          )}
         </>
       )}
     </div>
@@ -123,11 +132,14 @@ function Form({
   token,
   needsPartner,
   canPlay,
+  alreadyMember,
   onDone,
 }: {
   token: string
   needsPartner: boolean
   canPlay: boolean
+  /** Gehört der Aufrufer schon dazu? Dann geht es hier nur noch ums Melden. */
+  alreadyMember: boolean
   onDone: (result: JoinResult) => void
 }) {
   const { user } = useAuth()
@@ -283,21 +295,24 @@ function Form({
             disabled={busy || !complete}
             onClick={() => void submit(true)}
           >
-            {busy ? 'Wird gesendet …' : 'Melden und beitreten'}
+            {busy ? 'Wird gesendet …' : alreadyMember ? 'Melden' : 'Melden und beitreten'}
           </button>
 
           {/* Der zweite Weg, und er ist keine Nebensache: der Partner ohne
               eigene Meldung und der Vereinskollege, der nur den Spielplan
-              sehen will, gehören genauso dazu. */}
-          <button
-            type="button"
-            className="md-btn md-btn--wide"
-            style={{ marginTop: 'var(--sp-4)' }}
-            disabled={busy}
-            onClick={() => void submit(false)}
-          >
-            Nur beitreten, ohne mitzuspielen
-          </button>
+              sehen will, gehören genauso dazu. Wer schon dazugehört, bekommt
+              ihn nicht — beitreten kann man nur einmal. */}
+          {!alreadyMember && (
+            <button
+              type="button"
+              className="md-btn md-btn--wide"
+              style={{ marginTop: 'var(--sp-4)' }}
+              disabled={busy}
+              onClick={() => void submit(false)}
+            >
+              Nur beitreten, ohne mitzuspielen
+            </button>
+          )}
         </>
       ) : (
         <button
