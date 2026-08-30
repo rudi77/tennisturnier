@@ -198,7 +198,10 @@ function Matches({
         {rows.map((row) => (
           <div className="md-rows__row" key={row.matchId}>
             <div className="md-rows__main">
-              <div className="md-rows__lead">
+              {/* `md-rows__pair` und nicht `md-rows__lead`: Letzteres ist 62
+                  Pixel breit und trägt am Spielplan die Uhrzeit. Hier steht
+                  eine ganze Zeile mit Namen — sie wäre in 62 Pixel gequetscht. */}
+              <div className="md-rows__pair">
                 <span
                   className={row.won ? 'md-profile__won' : 'md-profile__lost'}
                   aria-label={row.won ? 'Sieg' : 'Niederlage'}
