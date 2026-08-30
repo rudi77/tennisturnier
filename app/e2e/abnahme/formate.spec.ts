@@ -129,11 +129,12 @@ async function spieleAllesDurch(api: ApiKlient, turnierId: string): Promise<numb
  *
  * `baum` meint die Phase, die der Draw zuerst zeigt — bei der Komposition ist
  * das die Gruppenphase, und die zeichnet keinen. Dass die K.-o.-Phase daneben
- * sehr wohl einen hat, prüft `zweitePhaseMitBaum`.
+ * sehr wohl einen hat, prüft `zweitePhaseMitBaum`. Eine Tabelle führt jeder
+ * Modus — beim K.-o. ist sie die Rangliste des Feldes.
  */
 const MODI = [
-  { name: 'K.-o.-System', wahl: /K\.-o\.-System/, feld: 4, baum: true, tabelle: false },
-  { name: 'Jeder gegen jeden', wahl: /Jeder gegen jeden/, feld: 4, baum: false, tabelle: true },
+  { name: 'K.-o.-System', wahl: /K\.-o\.-System/, feld: 4, baum: true },
+  { name: 'Jeder gegen jeden', wahl: /Jeder gegen jeden/, feld: 4, baum: false },
   {
     name: 'Gruppenphase mit K.-o.',
     wahl: /Gruppenphase mit/,
@@ -142,9 +143,8 @@ const MODI = [
     feld: 8,
     baum: false,
     zweitePhaseMitBaum: true,
-    tabelle: true,
   },
-  { name: 'Schweizer System', wahl: /Schweizer System/, feld: 4, baum: false, tabelle: true },
+  { name: 'Schweizer System', wahl: /Schweizer System/, feld: 4, baum: false },
 ] as const
 
 for (const modus of MODI) {
@@ -180,12 +180,17 @@ for (const modus of MODI) {
       await expect(seite.getByRole('button', { name: 'Baum mit Verbindungen' })).toHaveCount(1)
     }
 
-    // Und die Tabelle nur dort, wo gezählt wird.
+    // Und die Tabelle: jeder Modus führt eine, auch das K.-o.-System — dort
+    // ist sie die Rangliste des Feldes.
+    //
+    // Gewartet wird auf den Reiter, nicht auf „Draw": den gibt es auch ohne
+    // Projektion, und eine Zusicherung auf „nicht vorhanden" wäre erfüllt,
+    // bevor die Daten überhaupt da sind. Genau so war diese Prüfung einmal
+    // grün, ohne etwas zu prüfen.
     await seite.goto(`/?screen=public&t=${turnier.id}`)
-    await expect(seite.getByRole('button', { name: 'Draw' })).toBeVisible()
-    await expect(seite.getByRole('button', { name: 'Tabellen' })).toHaveCount(
-      modus.tabelle ? 1 : 0,
-    )
+    await seite.getByRole('button', { name: 'Tabellen' }).click()
+
+    await expect(seite.locator('.md-table tbody tr').first()).toBeVisible()
 
     await seite.context().close()
   })

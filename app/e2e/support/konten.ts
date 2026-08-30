@@ -39,11 +39,20 @@ export interface Mensch {
 
 let laufendeNummer = 0
 
-/** Der Verwalterzugang. Einmal je Lauf geholt, er lebt lange genug. */
-let verwalterToken: string | null = null
+/**
+ * Der Verwalterzugang, mit Ablauf.
+ *
+ * Hier stand er einmal ohne — „einmal je Lauf geholt, er lebt lange genug".
+ * Er lebt sechzig Sekunden. Ein kurzer Lauf merkte davon nichts, die volle
+ * Abnahme dauert Minuten, und ab der Mitte scheiterte jedes neue Konto an
+ * einem 401. Deshalb mit Ablaufzeit und etwas Vorlauf.
+ */
+let verwalterToken: { wert: string; gueltigBis: number } | null = null
 
 async function verwalter(): Promise<string> {
-  if (verwalterToken) return verwalterToken
+  if (verwalterToken && Date.now() < verwalterToken.gueltigBis) {
+    return verwalterToken.wert
+  }
 
   const antwort = await fetch(
     `${KEYCLOAK}/realms/master/protocol/openid-connect/token`,
@@ -66,8 +75,15 @@ async function verwalter(): Promise<string> {
     )
   }
 
-  verwalterToken = ((await antwort.json()) as { access_token: string }).access_token
-  return verwalterToken
+  const { access_token, expires_in } = (await antwort.json()) as {
+    access_token: string
+    expires_in: number
+  }
+
+  // Zehn Sekunden Vorlauf: ein Token, das während der Anfrage abläuft, ist
+  // dasselbe Problem, nur seltener.
+  verwalterToken = { wert: access_token, gueltigBis: Date.now() + (expires_in - 10) * 1000 }
+  return verwalterToken.wert
 }
 
 /**

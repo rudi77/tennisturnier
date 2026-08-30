@@ -28,30 +28,27 @@ Deshalb: Aufbau über die API, Handlung über die Oberfläche.
 
 ## Was abgedeckt ist
 
+38 Durchläufe, rund dreieinhalb Minuten.
+
 | Datei | Meilenstein / ADR | Was geprüft wird |
 | --- | --- | --- |
 | `mitgliedschaft.spec.ts` | M12, ADR-0012 | Beitritt mit und ohne Meldung, zweimal derselbe Link, ohne Anmeldung, bei geschlossener Meldung; die drei Rollen berufen und wieder entziehen |
 | `meldungen.spec.ts` | M2, M10→M12 | annehmen, Warteliste, zurückziehen, Setzposition; Kapazität und der volle Fall; Liste aus der Datei samt Doppelerkennung |
-| `formate.spec.ts` | M3, M5, M8, M11, ADR-0001 | alle vier Modi vom Anlegen bis zum Endstand; Baum nur bei K.-o., Tabelle nur wo gezählt wird, bei der Komposition je Phase |
-| `ergebnisse.spec.ts` | M3, ADR-0011 | glattes Ergebnis und Propagierung; die Prüfung gegen das Satzformat *vor* dem Absenden; Aufgabe mitten im Satz, Nichtantreten; Korrektur; Freilos |
+| `formate.spec.ts` | M3, M5, M8, M11, ADR-0001 | alle vier Modi vom Anlegen bis zum Endstand; Baum nur bei K.-o. und bei der Komposition je Phase; die Tabelle in jedem Modus mit Zeilen |
+| `ergebnisse.spec.ts` | M3, ADR-0011 | glattes Ergebnis und Propagierung; die Prüfung gegen das Satzformat *vor* dem Absenden; Aufgabe mitten im Satz, Nichtantreten; Korrektur durch Überschreiben; Freilos |
+| `doppel.spec.ts` | ADR-0001, M11 | gemeldete Paare mit Partnerfeldern; von der Turnierleitung gestellte Teams samt Auflösen; das Paar im Draw |
+| `spielplan.spec.ts` | M6, M7, ADR-0002 | Vorschlag rechnen, übernehmen, verwerfen; Umhängen per Drag & Drop; Turniertag mit Aufrufen, Start und Platz frei; die Unterbrechung samt ihrer Lücke |
+| `sozial.spec.ts` | M13–M15, ADR-0014, ADR-0015 | die zweite Zeile nach einer Ergebniskorrektur; Rechte am eigenen und fremden Beitrag; eine Runde vorschlagen, absagen, zurückziehen; einladen nur, mit wem man gespielt hat |
 | `sichten.spec.ts` | ADR-0003, ADR-0004, ADR-0012, ADR-0013 | was Mitglied, Schiedsrichter und Fremder sehen und dürfen; Profil 404 für Fremde und 200 für Mitspieler; privat/öffentlich in beide Richtungen |
+| `oeffentlich.spec.ts` | M4, ADR-0003 | die Seite ohne Konto samt Reitern; keine Kontaktdaten; Aushangmodus; die Ansicht vor der Auslosung |
 
-## Was noch fehlt
+## Was bewusst offen bleibt
 
-Ehrlich benannt, damit niemand die Abdeckung für vollständig hält:
-
-- **Spielplan und Turniertag** (M6, M7, ADR-0002). Der schnelle Durchgang deckt
-  ihn in `e2e/spielplan.spec.ts` ab — Vorschlag, Übernehmen, Verwerfen, Queue
-  mit Aufrufen/Start/Platz frei. Was fehlt, sind die Kombinationen: Umhängen
-  per Drag & Drop, Pause und Fortsetzen, Platzzeiten über mehrere Tage.
-- **Feed, Profil, Mitspieler, Verabredungen im Lebenszyklus** (M13–M15). Der
-  glückliche Weg steht in `e2e/soziales.spec.ts`; es fehlen Absage, Zurückziehen
-  einer Runde, die zweite Zeile nach einer Ergebniskorrektur und die Rechte am
-  fremden Beitrag.
-- **Doppel** in der Breite: gemeldete Paare gegen von der Turnierleitung
-  gestellte Teams, quer durch Meldung, Draw und Ergebnis.
-- **Die öffentliche Ansicht** in ihren Reitern, der Aushangmodus und der Push
-  über SignalR.
+- **Der Push über SignalR.** Er trägt nur Kennung und ETag; geprüft ist, dass
+  die Ansicht nach einem Neuladen stimmt, nicht dass sie von selbst nachzieht.
+- **Mehrtägige Turniere** mit Platzzeiten je Tag.
+- **Der Schwarm**: viele Meldungen, viele Plätze, lange Turniertage. Die
+  Abnahme prüft Verhalten, nicht Last.
 
 ## Was die Abnahme gefunden hat
 
@@ -64,6 +61,21 @@ Beim Bau, nicht im Nachhinein — das ist ihr Zweck:
 2. **Der Kasten für die Teilnehmerliste versprach zu viel.** „Wer schon im Feld
    steht, wird übersprungen" gilt nur für Zeilen mit Adresse; ohne Adresse
    entsteht bewusst ein zweiter Eintrag. Der Text sagt das jetzt.
-3. **`matches.clearResult` ruft niemand.** Der Client bringt den Aufruf samt
+3. **Eine unterbrochene Partie verschwindet vom Platzbrett.** „Pause" gibt den
+   Platz frei — ausdrücklich so gewollt —, aber die unterbrochene Zuweisung
+   steht danach in keiner Schlange, und der Knopf „Fortsetzen", den
+   `QueueBoard` kennt, kann nie erscheinen. Über die API geht es weiter. Nicht
+   behoben: die Fortsetzung gehörte außerhalb der Plätze, etwa als eigener
+   Abschnitt „unterbrochen" — das ist ein Entwurf und keine Reparatur.
+4. **Ein öffentliches Turnier vor der Auslosung sagt „nicht öffentlich".** Die
+   Projektion entsteht erst mit dem Draw, und der Zuschauer bekommt dieselbe
+   404 wie bei einem privaten Turnier. Bei einem offenen Turnier verriete
+   „noch nicht ausgelost" nichts — unterscheiden kann die Oberfläche die
+   beiden Fälle heute nur nicht.
+5. **`matches.clearResult` ruft niemand.** Der Client bringt den Aufruf samt
    Test mit, keine Maske benutzt ihn — korrigiert wird durch Überschreiben.
-   Festgehalten, nicht entfernt: das ist eine Entscheidung für den Eigentümer.
+
+Und zwei Fehler in der Abnahme selbst, die sie an sich selbst gefunden hat:
+ein Prädikat, das den Vorteilssatz für beendet erklärte, und eine Zusicherung
+auf „Reiter nicht vorhanden", die erfüllt war, bevor die Daten geladen waren —
+grün, ohne etwas zu prüfen.
