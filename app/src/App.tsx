@@ -19,6 +19,7 @@ import { FlowScreen } from './screens/FlowScreen'
 import { CreateScreen } from './screens/CreateScreen'
 import { PublicScreen } from './screens/PublicScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
+import { FeedScreen } from './screens/FeedScreen'
 
 const SCREENS: ScreenId[] = [
   'flow',
@@ -29,6 +30,7 @@ const SCREENS: ScreenId[] = [
   'create',
   'public',
   'profile',
+  'feed',
 ]
 
 export function App() {
@@ -300,5 +302,7 @@ function Screen({
       return <PublicScreen />
     case 'profile':
       return <ProfileScreen onOpenTournament={onOpenTournament} />
+    case 'feed':
+      return <FeedScreen />
   }
 }

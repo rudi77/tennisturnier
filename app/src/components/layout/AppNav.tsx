@@ -14,6 +14,7 @@ export type ScreenId =
   | 'create'
   | 'public'
   | 'profile'
+  | 'feed'
 
 interface Item {
   id: ScreenId
@@ -24,17 +25,22 @@ interface Item {
 }
 
 /**
- * Die vier, die am Turniertag zählen — und in dieser Reihenfolge, weil der Tag
- * sie in dieser Reihenfolge braucht: erst wissen, was zu tun ist, dann die
- * Meldungen, dann auslosen, dann spielen.
+ * Die fünf, die am Turniertag zählen — und in dieser Reihenfolge, weil der Tag
+ * sie in dieser Reihenfolge braucht: erst wissen, was zu tun ist, dann sehen,
+ * was los ist, dann die Meldungen, dann auslosen, dann spielen.
  *
- * Vier und nicht sieben: eine Fußleiste mit sieben Einträgen hat Ziele von
- * fünfzig Pixeln Breite, und daneben zu tippen ist dort die Regel, nicht die
- * Ausnahme. Der Rest steht hinter „Mehr" — er wird selten gebraucht und darf
- * einen zweiten Griff kosten.
+ * Fünf und nicht acht: eine Fußleiste mit acht Einträgen hat Ziele von vierzig
+ * Pixeln Breite, und daneben zu tippen ist dort die Regel, nicht die Ausnahme.
+ * Der Rest steht hinter „Mehr" — er wird selten gebraucht und darf einen
+ * zweiten Griff kosten.
  */
 const PRIMARY: Item[] = [
   { id: 'flow', label: 'Ablauf', short: 'Ablauf', icon: 'flow' },
+  // Der Feed steht vorn und nicht hinter „Mehr": er ist das, wofür jemand die
+  // Anwendung am Turniertag überhaupt öffnet, ohne etwas eintragen zu wollen
+  // (ADR-0014). Ein Ziel, das man selten braucht, darf einen zweiten Griff
+  // kosten — dieses nicht.
+  { id: 'feed', label: 'Feed', short: 'Feed', icon: 'feed' },
   { id: 'entries', label: 'Meldungen', short: 'Meldung', icon: 'entries' },
   { id: 'draw', label: 'Draw & Bracket', short: 'Draw', icon: 'draw' },
   { id: 'board', label: 'Spielplan', short: 'Plan', icon: 'board' },

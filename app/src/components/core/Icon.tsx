@@ -24,6 +24,7 @@ export type IconName =
   | 'check'
   | 'chevron'
   | 'profile'
+  | 'feed'
 
 const PATHS: Record<IconName, string> = {
   // Der Ablauf: Punkte an einer Linie, die von oben nach unten führt.
@@ -35,6 +36,9 @@ const PATHS: Record<IconName, string> = {
   // Der Spielplan: Plätze über der Zeit.
   board: 'M3 6h18M3 12h18M3 18h18M8 4v16M15 4v16',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
+  // Der Feed: eine Sprechblase mit einer zweiten dahinter — geredet wird
+  // hin und her.
+  feed: 'M4 5h12v8H9l-4 3.5V13H4zM9 8h9a2 2 0 0 1 2 2v7l-3-2.5h-4',
   // Das Profil: ein Kopf über einer Schulter — derselbe Mensch wie in
   // „entries", nur allein.
   profile: 'M12 11.5a3.6 3.6 0 1 0 0-7.2 3.6 3.6 0 0 0 0 7.2ZM5 20c0-3.4 3.1-5.4 7-5.4s7 2 7 5.4',

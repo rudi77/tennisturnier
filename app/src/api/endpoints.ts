@@ -16,6 +16,9 @@ import type {
   Discipline,
   DrawTeamsResult,
   EntryOverview,
+  FeedCommentView,
+  FeedPage,
+  FeedPostView,
   FormatDefinition,
   FormatTemplateDetail,
   FormatTemplateSummary,
@@ -70,6 +73,34 @@ export const profiles = {
   /** Legt beim ersten Mal den eigenen Spieler an und antwortet mit dem fertigen Profil. */
   save: (body: UpdateMyProfileRequest) =>
     http.put<PlayerProfileView>('/api/me/profile', body),
+}
+
+// --- Feed -------------------------------------------------------------------
+
+/**
+ * Der Feed eines Turniers (ADR-0014).
+ *
+ * Lesen und Schreiben hängen am Turnier, Kommentieren und Löschen am Eintrag:
+ * dessen Id nennt sein Turnier bereits, und ein zweiter Bezeichner im Pfad wäre
+ * einer, den der Server gegen den ersten prüfen müsste.
+ */
+export const feed = {
+  list: (tournamentId: string, before: string | null = null, limit = 50) =>
+    http.get<FeedPage>(
+      `/api/tournaments/${tournamentId}/feed?limit=${limit}` +
+        (before ? `&before=${encodeURIComponent(before)}` : ''),
+    ),
+
+  post: (tournamentId: string, text: string) =>
+    http.post<FeedPostView>(`/api/tournaments/${tournamentId}/feed`, { text }),
+
+  comment: (postId: string, text: string) =>
+    http.post<FeedCommentView>(`/api/feed/${postId}/comments`, { text }),
+
+  remove: (postId: string) => http.del<void>(`/api/feed/${postId}`),
+
+  removeComment: (postId: string, commentId: string) =>
+    http.del<void>(`/api/feed/${postId}/comments/${commentId}`),
 }
 
 // --- Turniere ---------------------------------------------------------------

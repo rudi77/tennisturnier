@@ -19,6 +19,7 @@ import {
   FinalSetMode,
   MatchOutcome,
   MatchStatus,
+  PostKind,
   PhaseFormatKind,
   PhaseStatus,
   ProposalChange,
@@ -41,6 +42,8 @@ import {
   type MatchFormat,
   type MeResponse,
   type PhaseDetail,
+  type FeedPage,
+  type FeedPostView,
   type PlayerProfileView,
   type PublicCourtView,
   type PublicMatchView,
@@ -88,6 +91,9 @@ export const IDS = {
   template: '99999999-9999-9999-9999-999999999999',
   user: 'u0000000-0000-0000-0000-000000000001',
   role: 'r0000000-0000-0000-0000-000000000001',
+  post1: '01900000-0000-7000-8000-000000000001',
+  post2: '01900000-0000-7000-8000-000000000002',
+  comment1: '01900000-0000-7000-8000-000000000011',
 } as const
 
 export const DEFAULT_FORMAT: MatchFormat = {
@@ -683,6 +689,45 @@ export function playerProfile(over: Partial<PlayerProfileView> = {}): PlayerProf
         playedAt: '2026-05-17T09:00:00+00:00',
       },
     ],
+    ...over,
+  }
+}
+
+/** Ein geschriebener Beitrag im Feed (ADR-0014). */
+export function feedMessage(over: Partial<FeedPostView> = {}): FeedPostView {
+  return {
+    id: IDS.post1,
+    kind: PostKind.Message,
+    author: { userId: IDS.user, displayName: 'Rudi Turnierleitung', playerId: IDS.player1 },
+    text: 'Platz 3 ist nass, wir spielen auf 4 weiter.',
+    matchId: null,
+    createdAt: '2026-05-16T09:30:00+00:00',
+    canDelete: true,
+    comments: [],
+    ...over,
+  }
+}
+
+/** Ein Ereignis — ohne Verfasser, denn es gehört dem Turnier. */
+export function feedEvent(over: Partial<FeedPostView> = {}): FeedPostView {
+  return {
+    id: IDS.post2,
+    kind: PostKind.ResultRecorded,
+    author: null,
+    text: 'Halbfinale: Moser, Sabine schlägt Berger, Lena 6:4 6:2',
+    matchId: IDS.match1,
+    createdAt: '2026-05-16T09:00:00+00:00',
+    canDelete: false,
+    comments: [],
+    ...over,
+  }
+}
+
+export function feedPage(over: Partial<FeedPage> = {}): FeedPage {
+  return {
+    posts: [feedMessage(), feedEvent()],
+    before: null,
+    canWrite: true,
     ...over,
   }
 }

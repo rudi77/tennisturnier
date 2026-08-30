@@ -23,6 +23,7 @@ import type {
   DrawTeamsResult,
   ImportEntriesResult,
   MeResponse,
+  FeedPage,
   PhaseDetail,
   PlayerProfileView,
   PlayerSummary,
@@ -58,6 +59,7 @@ export interface FakeDb {
   profiles: Record<string, PlayerProfileView>
   /** Das eigene Profil. `null` heißt: zum Konto gehört noch kein Spieler. */
   myProfile: PlayerProfileView | null
+  feed: FeedPage
   importResult: ImportEntriesResult
   drawTeamsResult: DrawTeamsResult
   /** Der ETag, den die öffentliche Ansicht ausliefert. */
@@ -127,6 +129,7 @@ function initial(): FakeDb {
       }),
     },
     myProfile: fx.playerProfile({ isSelf: true }),
+    feed: fx.feedPage(),
     importResult: { imported: 2, skipped: 1, problems: [] },
     drawTeamsResult: { formed: 2, leftOver: 0 },
     publicEtag: '"etag-1"',
@@ -330,6 +333,57 @@ export const handlers: HttpHandler[] = [
       { status: 201 },
     ),
   ),
+
+  // --- Feed ---
+  on('get', '/api/tournaments/:id/feed', ({ params }) =>
+    params.id === db.tournament.id
+      ? HttpResponse.json(db.feed)
+      : problem(404, 'Nicht gefunden.', 'Nicht gefunden'),
+  ),
+
+  on('post', '/api/tournaments/:id/feed', async ({ request }) => {
+    const body = (await request.json()) as { text: string }
+    const post = fx.feedMessage({ id: `post-${db.feed.posts.length + 1}`, text: body.text })
+    db.feed = { ...db.feed, posts: [post, ...db.feed.posts] }
+    return HttpResponse.json(post, { status: 201 })
+  }),
+
+  on('post', '/api/feed/:postId/comments', async ({ params, request }) => {
+    const body = (await request.json()) as { text: string }
+    const comment = {
+      id: IDS.comment1,
+      author: { userId: IDS.user, displayName: 'Rudi Turnierleitung', playerId: IDS.player1 },
+      text: body.text,
+      createdAt: '2026-05-16T09:35:00+00:00',
+      canDelete: true,
+    }
+
+    db.feed = {
+      ...db.feed,
+      posts: db.feed.posts.map((post) =>
+        post.id === params.postId ? { ...post, comments: [...post.comments, comment] } : post,
+      ),
+    }
+
+    return HttpResponse.json(comment)
+  }),
+
+  on('delete', '/api/feed/:postId', ({ params }) => {
+    db.feed = { ...db.feed, posts: db.feed.posts.filter((post) => post.id !== params.postId) }
+    return noContent()
+  }),
+
+  on('delete', '/api/feed/:postId/comments/:commentId', ({ params }) => {
+    db.feed = {
+      ...db.feed,
+      posts: db.feed.posts.map((post) =>
+        post.id === params.postId
+          ? { ...post, comments: post.comments.filter((c) => c.id !== params.commentId) }
+          : post,
+      ),
+    }
+    return noContent()
+  }),
 
   // --- Bracket ---
   on('get', '/api/tournaments/:id/phases', () => HttpResponse.json(db.phases)),

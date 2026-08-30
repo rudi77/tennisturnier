@@ -917,3 +917,55 @@ export interface UpdateMyProfileRequest {
   bio: string | null
   homeClub: string | null
 }
+
+/**
+ * Was für ein Feed-Eintrag das ist (ADR-0014).
+ *
+ * Die Unterscheidung liegt nicht am Text — der steht bei allen fertig da —,
+ * sondern an dem, was die Oberfläche damit tut: ein Beitrag bekommt einen
+ * Verfasser und einen Knopf zum Zurücknehmen, ein Ereignis ein Symbol und einen
+ * Verweis auf das, worüber es berichtet.
+ */
+export const PostKind = {
+  Message: 0,
+  Joined: 1,
+  DrawGenerated: 2,
+  ResultRecorded: 3,
+  ScheduleConfirmed: 4,
+  StateChanged: 5,
+} as const
+export type PostKind = (typeof PostKind)[keyof typeof PostKind]
+
+export interface FeedAuthorView {
+  userId: string
+  displayName: string
+  /** Der Weg vom Beitrag ins Profil. Leer, wenn zum Konto kein Spieler gehört. */
+  playerId: string | null
+}
+
+export interface FeedCommentView {
+  id: string
+  author: FeedAuthorView
+  text: string
+  createdAt: string
+  canDelete: boolean
+}
+
+export interface FeedPostView {
+  id: string
+  kind: PostKind
+  /** Leer bei einem Ereignis — es gehört dem Turnier und keinem Benutzer. */
+  author: FeedAuthorView | null
+  text: string
+  matchId: string | null
+  createdAt: string
+  canDelete: boolean
+  comments: FeedCommentView[]
+}
+
+export interface FeedPage {
+  posts: FeedPostView[]
+  /** Der Zeitstempel für die nächste Seite. Leer heißt: es gibt keine mehr. */
+  before: string | null
+  canWrite: boolean
+}
