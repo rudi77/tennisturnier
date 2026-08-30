@@ -7,10 +7,11 @@
  */
 
 import { screen, waitFor } from '@testing-library/react'
+import { HttpResponse, http } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as fx from '../test/fixtures'
 import { IDS } from '../test/fixtures'
-import { callsTo, db, lastBody } from '../test/server'
+import { callsTo, db, lastBody, server } from '../test/server'
 import { renderWithProviders, user, workspace } from '../test/render'
 import { Toast } from '../components/layout/Toast'
 // Der Push-Kanal ist hier eine Attrappe: er hat einen eigenen Test
@@ -154,6 +155,102 @@ describe('FeedScreen — schreiben', () => {
         screen.queryByText('Platz 3 ist nass, wir spielen auf 4 weiter.'),
       ).not.toBeInTheDocument(),
     )
+  })
+})
+
+describe('FeedScreen — wann das war', () => {
+  /**
+   * Relativ, solange es lohnt: „vor 3 Minuten" ist in einer laufenden Gruppe
+   * die Auskunft, auf die es ankommt. Ab einem Tag steht das Datum — „vor 37
+   * Stunden" rechnet niemand zurück.
+   */
+  it('nennt frische Beiträge relativ und alte mit Datum', async () => {
+    const jetzt = new Date('2026-05-16T12:00:00Z')
+    vi.setSystemTime(jetzt)
+
+    db.feed = fx.feedPage({
+      posts: [
+        fx.feedMessage({ id: 'p-1', text: 'Eben.', createdAt: jetzt.toISOString() }),
+        fx.feedMessage({
+          id: 'p-2',
+          text: 'Vorhin.',
+          createdAt: new Date(jetzt.getTime() - 20 * 60_000).toISOString(),
+        }),
+        fx.feedMessage({
+          id: 'p-3',
+          text: 'Heute früh.',
+          createdAt: new Date(jetzt.getTime() - 3 * 3_600_000).toISOString(),
+        }),
+        fx.feedMessage({
+          id: 'p-4',
+          text: 'Letzte Woche.',
+          createdAt: new Date(jetzt.getTime() - 8 * 86_400_000).toISOString(),
+        }),
+      ],
+    })
+
+    aufbau()
+    await screen.findByText('Eben.')
+
+    expect(screen.getByText('gerade eben')).toBeInTheDocument()
+    expect(screen.getByText('vor 20 min')).toBeInTheDocument()
+    expect(screen.getByText('vor 3 h')).toBeInTheDocument()
+    expect(screen.getByText('08.05.26')).toBeInTheDocument()
+
+    vi.useRealTimers()
+  })
+})
+
+describe('FeedScreen — wenn es schiefgeht', () => {
+  it('meldet einen Fehler und lässt ihn erneut versuchen', async () => {
+    server.use(
+      http.get(`/api/tournaments/${T}/feed`, () =>
+        HttpResponse.json(
+          { detail: 'Nicht gefunden.', status: 404 },
+          { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    aufbau()
+
+    expect(
+      await screen.findByText('Nicht gefunden oder außerhalb der eigenen Turniere'),
+    ).toBeInTheDocument()
+
+    await user().click(screen.getByRole('button', { name: 'Erneut versuchen' }))
+
+    expect(await screen.findByText('Nicht gefunden oder außerhalb der eigenen Turniere'))
+      .toBeInTheDocument()
+  })
+
+  it('nimmt einen eigenen Kommentar zurück', async () => {
+    db.feed = fx.feedPage({
+      posts: [
+        fx.feedMessage({
+          comments: [
+            {
+              id: IDS.comment1,
+              author: {
+                userId: IDS.user,
+                displayName: 'Rudi Turnierleitung',
+                playerId: IDS.player1,
+              },
+              text: 'Weg damit.',
+              createdAt: '2026-05-16T09:35:00+00:00',
+              canDelete: true,
+            },
+          ],
+        }),
+      ],
+    })
+    aufbau()
+    await screen.findByText('Weg damit.')
+
+    // Der zweite „Zurücknehmen"-Knopf gehört dem Kommentar; der erste dem
+    // Beitrag darüber.
+    await user().click(screen.getAllByRole('button', { name: 'Zurücknehmen' })[1]!)
+
+    await waitFor(() => expect(screen.queryByText('Weg damit.')).not.toBeInTheDocument())
   })
 })
 

@@ -7,10 +7,11 @@
  */
 
 import { screen } from '@testing-library/react'
+import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 import * as fx from '../test/fixtures'
 import { IDS } from '../test/fixtures'
-import { db } from '../test/server'
+import { db, server } from '../test/server'
 import { renderWithProviders, user } from '../test/render'
 import { ConnectionsScreen } from './ConnectionsScreen'
 
@@ -45,6 +46,34 @@ describe('ConnectionsScreen', () => {
 
     expect(window.location.search).toContain('screen=profile')
     expect(window.location.search).toContain(`p=${IDS.player2}`)
+  })
+
+  it('zählt die Mitspieler im Kopf', async () => {
+    db.connections = [
+      fx.connection(),
+      fx.connection({ playerId: IDS.player3, displayName: 'Huber, Anna' }),
+    ]
+    aufbau()
+
+    expect(await screen.findByText(/2 Mitspieler aus deinen Turnieren/)).toBeInTheDocument()
+  })
+
+  it('meldet einen Fehler und lässt ihn erneut versuchen', async () => {
+    server.use(
+      http.get('/api/me/connections', () =>
+        HttpResponse.json(
+          { detail: 'Kaputt.', status: 500 },
+          { status: 500, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    aufbau()
+
+    expect(await screen.findByText('Konnte nicht geladen werden')).toBeInTheDocument()
+
+    await user().click(screen.getByRole('button', { name: 'Erneut versuchen' }))
+
+    expect(await screen.findByText('Konnte nicht geladen werden')).toBeInTheDocument()
   })
 
   it('sagt bei leerer Liste, dass niemand sie füllen muss', async () => {

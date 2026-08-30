@@ -69,6 +69,29 @@ public sealed class ScopeUndRolleTests
         Assert.Contains("Unbekannte Rolle", fehler.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Wie ein Konto genannt wird, wo ein Name gebraucht wird.
+    ///
+    /// Der Aussteller garantiert keines von beiden: Entra ID legt keine E-Mail
+    /// ins Token, manche Realms keinen Namen (ADR-0007). Die Reihenfolge steht
+    /// deshalb am Konto und nicht an den drei Aufrufstellen, die sie sonst
+    /// jede für sich träfen.
+    /// </summary>
+    [Theory]
+    [InlineData("Anna Vogel", "anna@example.invalid", "Anna Vogel")]
+    [InlineData(null, "anna@example.invalid", "anna@example.invalid")]
+    [InlineData(null, null, "Unbekannt")]
+    public void Ein_Konto_nennt_sich_mit_dem_Besten_was_es_hat(
+        string? anzeigename,
+        string? adresse,
+        string erwartet)
+    {
+        var konto = new UserAccount(
+            Guid.NewGuid(), "https://idp.local", "sub-1", adresse, anzeigename);
+
+        Assert.Equal(erwartet, konto.PreferredName);
+    }
+
     [Fact]
     public void Eine_Zuweisung_nennt_Rolle_und_Scope()
     {

@@ -189,7 +189,22 @@ public sealed class TurnierfeedApiTests : IClassFixture<TennisTurnierApiFactory>
 
         var feed = await FeedAsync(mitglied, tournamentId);
         Assert.True(feed.CanWrite);
-        Assert.Single(feed.Posts.Single(p => p.Id == post.Id).Comments);
+
+        var eigener = feed.Posts.Single(p => p.Id == post.Id);
+        Assert.Single(eigener.Comments);
+
+        // Das Mitglied darf seinen eigenen Beitrag zurücknehmen, den Kommentar
+        // der Leitung darunter nicht.
+        Assert.True(eigener.CanDelete);
+        Assert.False(eigener.Comments[0].CanDelete);
+
+        // Für die Turnierleitung ist es umgekehrt: sie darf beides — das ist
+        // Moderation und in einer Vereinsgruppe gelegentlich nötig.
+        var ausSichtDerLeitung = (await FeedAsync(leitung, tournamentId))
+            .Posts.Single(p => p.Id == post.Id);
+
+        Assert.True(ausSichtDerLeitung.CanDelete);
+        Assert.True(ausSichtDerLeitung.Comments[0].CanDelete);
     }
 
     [Fact]
@@ -229,6 +244,129 @@ public sealed class TurnierfeedApiTests : IClassFixture<TennisTurnierApiFactory>
         // 404 und nicht 403: die Antwort soll nicht verraten, was es zu sehen
         // gäbe (ADR-0004).
         Assert.Equal(HttpStatusCode.NotFound, antwort.StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_Kommentar_laesst_sich_zuruecknehmen()
+    {
+        var (leitung, tournamentId, mitglied) = await MitMitgliedAsync();
+        var post = await SchreibenAsync(mitglied, tournamentId, "Frage.");
+        var kommentar = await KommentierenAsync(mitglied, post.Id, "Antwort, die weg soll.");
+
+        var antwort = await mitglied.DeleteAsync($"/api/feed/{post.Id}/comments/{kommentar.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, antwort.StatusCode);
+
+        var feed = await FeedAsync(leitung, tournamentId);
+        Assert.Empty(feed.Posts.Single(p => p.Id == post.Id).Comments);
+    }
+
+    [Fact]
+    public async Task Ein_unbekannter_Kommentar_laesst_sich_nicht_zuruecknehmen()
+    {
+        var (_, tournamentId, mitglied) = await MitMitgliedAsync();
+        var post = await SchreibenAsync(mitglied, tournamentId, "Frage.");
+
+        var antwort = await mitglied.DeleteAsync(
+            $"/api/feed/{post.Id}/comments/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, antwort.StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_Mitglied_nimmt_fremde_Kommentare_nicht_zurueck()
+    {
+        var (leitung, tournamentId, mitglied) = await MitMitgliedAsync();
+        var post = await SchreibenAsync(mitglied, tournamentId, "Frage.");
+        var kommentar = await KommentierenAsync(leitung, post.Id, "Wort der Leitung.");
+
+        var antwort = await mitglied.DeleteAsync($"/api/feed/{post.Id}/comments/{kommentar.Id}");
+
+        Assert.Equal(HttpStatusCode.NotFound, antwort.StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_unbekannter_Eintrag_ist_nicht_zu_finden()
+    {
+        var (leitung, _, _) = await MitMitgliedAsync();
+
+        var antwort = await leitung.PostAsJsonAsync(
+            $"/api/feed/{Guid.NewGuid()}/comments", new WritePostRequest("Wohin?"), Json);
+
+        Assert.Equal(HttpStatusCode.NotFound, antwort.StatusCode);
+    }
+
+    /// <summary>
+    /// Eine volle Seite heißt: es könnte mehr geben. Der Zeitstempel darin ist
+    /// der Schlüssel für die nächste — eine Seitennummer verschöbe sich, sobald
+    /// jemand dazwischen schreibt.
+    /// </summary>
+    [Fact]
+    public async Task Eine_volle_Seite_nennt_den_Weg_zur_naechsten()
+    {
+        var (leitung, tournamentId, _) = await MitMitgliedAsync();
+        await SchreibenAsync(leitung, tournamentId, "Erster.");
+
+        // Die Uhr der Fabrik steht; in Wirklichkeit tut sie das nicht. Zwei
+        // Beiträge mit demselben Zeitstempel wären ein Sonderfall, den der
+        // Cursor nicht auflösen kann — hier soll das Blättern selbst geprüft
+        // werden und nicht er.
+        _factory.Clock.Advance(TimeSpan.FromMinutes(1));
+
+        await SchreibenAsync(leitung, tournamentId, "Zweiter.");
+
+        var erste = (await leitung.GetFromJsonAsync<FeedPage>(
+            $"/api/tournaments/{tournamentId}/feed?limit=1", Json))!;
+
+        Assert.Single(erste.Posts);
+        Assert.NotNull(erste.Before);
+
+        var zweite = (await leitung.GetFromJsonAsync<FeedPage>(
+            $"/api/tournaments/{tournamentId}/feed?limit=1&before={Uri.EscapeDataString(erste.Before!.Value.ToString("O"))}",
+            Json))!;
+
+        Assert.Single(zweite.Posts);
+        Assert.NotEqual(erste.Posts[0].Id, zweite.Posts[0].Id);
+    }
+
+    /// <summary>
+    /// Ein Zustandswechsel ohne Nachricht meldet nichts. „Abgebrochen" ist ein
+    /// Verwaltungsvorgang; ein Feed, der jede Attributänderung mitschreibt,
+    /// wird nicht gelesen.
+    /// </summary>
+    [Fact]
+    public async Task Die_Wiedereroeffnung_meldet_sich_der_Abbruch_nicht()
+    {
+        var aufbau = await TurnierAsync();
+
+        await aufbau.Admin.PostAsync(
+            $"/api/tournaments/{aufbau.TournamentId}/registration/reopen", null);
+
+        var nachOeffnung = await FeedAsync(aufbau.Admin, aufbau.TournamentId);
+        Assert.Contains(nachOeffnung.Posts, p => p.Text.Contains("wieder offen", StringComparison.Ordinal));
+
+        await aufbau.Admin.PostAsync($"/api/tournaments/{aufbau.TournamentId}/abandon", null);
+
+        var nachAbbruch = await FeedAsync(aufbau.Admin, aufbau.TournamentId);
+        Assert.Equal(nachOeffnung.Posts.Count, nachAbbruch.Posts.Count);
+    }
+
+    [Fact]
+    public async Task Eine_Disqualifikation_steht_als_solche_im_Feed()
+    {
+        var aufbau = await TurnierAsync();
+        var phase = Assert.Single(await PhasenAsync(aufbau.Admin, aufbau.TournamentId));
+        var match = phase.Matches.Where(m => m.Round == 1).OrderBy(m => m.Position).First();
+
+        var antwort = await aufbau.Admin.PutAsJsonAsync(
+            $"/api/matches/{match.Id}/result",
+            new RecordResultRequest(MatchOutcome.Disqualification, AffectedSide: 2),
+            Json);
+        Assert.Equal(HttpStatusCode.NoContent, antwort.StatusCode);
+
+        var feed = await FeedAsync(aufbau.Admin, aufbau.TournamentId);
+        var ergebnis = feed.Posts.First(p => p.Kind == PostKind.ResultRecorded);
+
+        Assert.EndsWith("nach Disqualifikation", ergebnis.Text);
     }
 
     // --- Die Grenze -------------------------------------------------------

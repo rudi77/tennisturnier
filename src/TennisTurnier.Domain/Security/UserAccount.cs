@@ -41,6 +41,17 @@ public sealed class UserAccount : Entity
     public string? DisplayName { get; private set; }
 
     /// <summary>
+    /// Wie dieses Konto genannt wird, wo ein Name gebraucht wird — im Feed,
+    /// unter einer Verabredung, in der Chronik.
+    ///
+    /// Der Aussteller garantiert keines von beiden: Entra ID legt keine E-Mail
+    /// ins Token, manche Realms keinen Namen. Die Reihenfolge steht deshalb
+    /// hier und nicht an drei Aufrufstellen, die auseinanderlaufen — und der
+    /// letzte Ausweg ist ein Wort und keine leere Zeile.
+    /// </summary>
+    public string PreferredName => DisplayName ?? Email ?? "Unbekannt";
+
+    /// <summary>
     /// Übernimmt geänderte Angaben aus dem Token. Meldet, ob sich etwas geändert
     /// hat, damit der Aufrufer nicht bei jedem Request schreibt.
     /// </summary>

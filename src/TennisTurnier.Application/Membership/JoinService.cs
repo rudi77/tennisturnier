@@ -129,8 +129,8 @@ public sealed class JoinService : IJoinService
                 tournament.Id,
                 PostKind.Joined,
                 entry is null
-                    ? $"{Nennung(account)} gehört jetzt dazu."
-                    : $"{Nennung(account)} ist dabei — und spielt mit.");
+                    ? $"{account.PreferredName} gehört jetzt dazu."
+                    : $"{account.PreferredName} ist dabei — und spielt mit.");
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -264,15 +264,6 @@ public sealed class JoinService : IJoinService
         return true;
     }
 
-    /// <summary>
-    /// Wie jemand im Feed genannt wird.
-    ///
-    /// Der Anzeigename aus dem Konto, sonst die Adresse, sonst gar nichts —
-    /// „(unbekannt) gehört jetzt dazu" wäre die schlechtere Zeile als eine
-    /// nüchterne.
-    /// </summary>
-    private static string Nennung(UserAccount account) =>
-        account.DisplayName ?? account.Email ?? "Ein neues Mitglied";
 
     /// <summary>
     /// Das Konto des Aufrufers.

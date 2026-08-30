@@ -106,12 +106,12 @@ public sealed class FeedRecorder
             _ => SetsFrom(score, score.WinnerSide),
         };
 
-        var prefix = string.IsNullOrWhiteSpace(matchName) ? string.Empty : $"{matchName}: ";
-
+        // Der Name eines Matches steht immer — die Aufrufstelle setzt ihn aus
+        // Phase und Runde zusammen, wo die Vorlage keinen vergeben hat.
         Record(
             tournamentId,
             PostKind.ResultRecorded,
-            $"{prefix}{winner} schlägt {loser} {stand}",
+            $"{matchName}: {winner} schlägt {loser} {stand}",
             matchId);
     }
 

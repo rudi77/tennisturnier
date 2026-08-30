@@ -168,28 +168,32 @@ public sealed class PlayerHistoryStore : IPlayerHistoryStore
 
         foreach (var match in matches)
         {
-            // Ein Freilos wurde nie gespielt und gehört in keine Bilanz.
-            if (match.Score is not { } score || score.Outcome == MatchOutcome.Bye)
+            // Die Abfrage oben liefert nur entschiedene Matches — hier steht
+            // immer ein Ergebnis.
+            var score = match.Score!;
+
+            // Ein Freilos wurde nie gespielt und gehört in keine Bilanz. Es ist
+            // zugleich der einzige Fall, in dem einer Seite eines
+            // entschiedenen Matches die Meldung fehlt; deshalb genügt diese
+            // eine Prüfung, und alles darunter darf auspacken.
+            if (score.Outcome == MatchOutcome.Bye)
             {
                 continue;
             }
 
-            var ownSide = ownEntryIds.Contains(match.Side1.EntryId ?? Guid.Empty) ? 1 : 2;
+            // Über die nullbare Menge geprüft, wie in der Abfrage darüber: eine
+            // Seite ohne Meldung gibt es hier nicht, und ein Ausweichwert für
+            // sie wäre einer, der nie greift.
+            var ownSide = ownEntryKeys.Contains(match.Side1.EntryId) ? 1 : 2;
             var ownEntryId = match.Side(ownSide).EntryId!.Value;
-            var opponentEntryId = match.Side(ownSide == 1 ? 2 : 1).EntryId;
+            var opponentEntryId = match.Side(ownSide == 1 ? 2 : 1).EntryId!.Value;
 
-            // Die Gegenseite kann ein Freilos sein — dann steht dort keine
-            // Meldung, und gespielt wurde nicht.
-            if (opponentEntryId is not { } opponent)
-            {
-                continue;
-            }
-
-            if (!context.Entries.TryGetValue(ownEntryId, out var own)
-                || !context.Entries.TryGetValue(opponent, out var against))
-            {
-                continue;
-            }
+            // Beide Meldungen gehören zu einem Turnier, das der Aufrufer sieht
+            // — sonst wäre das Match nicht durch den Filter gekommen. Ein
+            // fehlender Schlüssel wäre ein widersprüchlicher Datenbestand und
+            // soll laut scheitern, statt still eine Zeile zu verschlucken.
+            var own = context.Entries[ownEntryId];
+            var against = context.Entries[opponentEntryId];
 
             var ownParticipant = context.Participants[own.ParticipantId];
             var opponentParticipant = context.Participants[against.ParticipantId];
@@ -207,12 +211,12 @@ public sealed class PlayerHistoryStore : IPlayerHistoryStore
                 tournament.Name,
                 tournament.Discipline,
                 tournament.StartsOn,
-                phaseNames.GetValueOrDefault(match.PhaseId, string.Empty),
-                match.Label ?? $"Runde {match.Round}",
+                phaseNames[match.PhaseId],
+                match.Name,
                 ownEntryId,
                 ownParticipant.DisplayName,
                 partner,
-                opponent,
+                opponentEntryId,
                 opponentParticipant.DisplayName,
                 opponentParticipant.PlayerIds,
                 score.WinnerSide == ownSide,

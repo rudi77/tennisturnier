@@ -107,7 +107,7 @@ public sealed class PlayerProfileService : IPlayerProfileService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var account = await RequireAccountAsync(cancellationToken);
+        var account = await AccountAsync(cancellationToken);
         var profile = PlayerProfile.From(request.Bio, request.HomeClub);
 
         var player = await FindMineAsync(cancellationToken);
@@ -185,7 +185,9 @@ public sealed class PlayerProfileService : IPlayerProfileService
             player.LastName,
             player.Profile.Bio,
             player.Profile.HomeClub,
-            IsSelf: mine.IsAuthenticated && player.UserAccountId == mine.UserId,
+            // Ohne Prüfung auf „angemeldet": ein verbundenes Konto ist nie die
+            // leere Guid, ein nicht angemeldeter Aufrufer ist immer sie.
+            IsSelf: player.UserAccountId == mine.UserId,
             HasAccount: player.UserAccountId is not null,
             Record(matches, tournaments.Count),
             tournaments,
@@ -240,29 +242,19 @@ public sealed class PlayerProfileService : IPlayerProfileService
 
     private static string Sets(PlayedMatch match) => string.Join(' ', match.Sets);
 
-    private async Task<Player?> FindMineAsync(CancellationToken cancellationToken)
-    {
-        var user = _userContext.Current;
-
-        return user.IsAuthenticated
-            ? await _players.FindByUserAccountAsync(user.UserId, cancellationToken)
-            : null;
-    }
+    /// <summary>
+    /// Der eigene Spieler, sofern es einen gibt. Beide Endpunkte verlangen die
+    /// Anmeldung; ein Zweig für den nicht angemeldeten Aufrufer wäre einer,
+    /// der nie läuft.
+    /// </summary>
+    private Task<Player?> FindMineAsync(CancellationToken cancellationToken) =>
+        _players.FindByUserAccountAsync(_userContext.Current.UserId, cancellationToken);
 
     /// <summary>
     /// Das Konto des Aufrufers. Der Endpunkt verlangt die Anmeldung, und wer
     /// angemeldet ist, hat ein Konto (ADR-0007) — ein Ausweichzweig dafür wäre
     /// einer, der nie läuft.
     /// </summary>
-    private async Task<UserAccount> RequireAccountAsync(CancellationToken cancellationToken)
-    {
-        var user = _userContext.Current;
-
-        if (!user.IsAuthenticated)
-        {
-            throw new AccessDeniedException(Permission.ViewMembers, [ResourceScope.Global]);
-        }
-
-        return (await _directory.FindAsync(user.UserId, cancellationToken))!;
-    }
+    private async Task<UserAccount> AccountAsync(CancellationToken cancellationToken) =>
+        (await _directory.FindAsync(_userContext.Current.UserId, cancellationToken))!;
 }

@@ -134,6 +134,16 @@ public sealed class SpielerprofilApiTests : IClassFixture<TennisTurnierApiFactor
     }
 
     [Fact]
+    public async Task Einen_Spieler_den_es_nicht_gibt_findet_niemand()
+    {
+        var leitung = _factory.CreateClientAs($"profil-{Guid.NewGuid():N}");
+
+        var antwort = await leitung.GetAsync($"/api/players/{Guid.NewGuid()}/profile");
+
+        Assert.Equal(HttpStatusCode.NotFound, antwort.StatusCode);
+    }
+
+    [Fact]
     public async Task Ohne_Anmeldung_gibt_es_kein_Profil()
     {
         var (_, _, siegerId, _) = await AusgespieltAsync($"profil-{Guid.NewGuid():N}");
@@ -238,6 +248,195 @@ public sealed class SpielerprofilApiTests : IClassFixture<TennisTurnierApiFactor
         phase.Matches.Where(m => m.Round == phase.Matches.Max(x => x.Round))
             .OrderBy(m => m.Position)
             .First();
+
+    /// <summary>
+    /// Das zweite Speichern ändert den Namen mit — es ist der eigene, und wer
+    /// heiratet, heißt danach anders. Die Tabelle eines abgeschlossenen
+    /// Turniers bleibt davon unberührt: der Anzeigename eines Teilnehmers wird
+    /// beim Melden festgeschrieben.
+    /// </summary>
+    [Fact]
+    public async Task Das_zweite_Speichern_berichtigt_den_Namen()
+    {
+        var neu = _factory.CreateClientAs($"profil-neu-{Guid.NewGuid():N}");
+
+        await neu.PutAsJsonAsync(
+            "/api/me/profile",
+            new UpdateMyProfileRequest("Anna", "Vogel", null, null),
+            Json);
+
+        var zweites = await neu.PutAsJsonAsync(
+            "/api/me/profile",
+            new UpdateMyProfileRequest("Anna", "Vogel-Berger", "Jetzt mit Doppelnamen.", null),
+            Json);
+
+        var profil = (await zweites.Content.ReadFromJsonAsync<PlayerProfileView>(Json))!;
+
+        Assert.Equal("Vogel-Berger, Anna", profil.DisplayName);
+        Assert.Equal("Jetzt mit Doppelnamen.", profil.Bio);
+    }
+
+    [Fact]
+    public async Task Das_eigene_Profil_steht_auch_unter_der_Spieler_Adresse()
+    {
+        var neu = _factory.CreateClientAs($"profil-neu-{Guid.NewGuid():N}");
+
+        var angelegt = (await (await neu.PutAsJsonAsync(
+            "/api/me/profile",
+            new UpdateMyProfileRequest("Anna", "Vogel", null, null),
+            Json)).Content.ReadFromJsonAsync<PlayerProfileView>(Json))!;
+
+        // Man teilt mit sich selbst jedes eigene Turnier — auch wenn man noch
+        // keines gespielt hat. Ein 404 stünde hier falsch.
+        var profil = await ProfilAsync(neu, angelegt.PlayerId);
+
+        Assert.True(profil.IsSelf);
+        Assert.Empty(profil.Tournaments);
+    }
+
+    /// <summary>
+    /// Ein Nichtantreten hat keinen Spielstand. Dort steht das Wort und nicht
+    /// ein leerer Platz, der wie ein fehlendes Ergebnis aussähe.
+    /// </summary>
+    [Fact]
+    public async Task Kampflos_Aufgabe_und_Disqualifikation_stehen_als_Wort()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync(
+            $"profil-{Guid.NewGuid():N}", new TurnierWunsch { Teilnehmer = 8, Kontaktdaten = true });
+
+        var phase = Assert.Single(await PhasenAsync(aufbau.Admin, aufbau.TournamentId));
+        var erste = phase.Matches.Where(m => m.Round == 1).OrderBy(m => m.Position).ToList();
+
+        await Ergebnis(aufbau.Admin, erste[0].Id,
+            new RecordResultRequest(MatchOutcome.Walkover, AffectedSide: 2));
+        await Ergebnis(aufbau.Admin, erste[1].Id,
+            new RecordResultRequest(MatchOutcome.Disqualification, AffectedSide: 2));
+        await Ergebnis(aufbau.Admin, erste[2].Id, new RecordResultRequest(
+            MatchOutcome.Retirement,
+            Sets: [new SetScore(6, 4)],
+            AbandonedSet: new SetScore(2, 1),
+            AffectedSide: 2));
+
+        var meldungen = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
+            $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
+
+        var staende = new List<string>();
+
+        foreach (var match in erste.Take(3))
+        {
+            var spieler = PlayerOf(meldungen!, match.Side1.EntryId!.Value);
+            staende.AddRange((await ProfilAsync(aufbau.Admin, spieler)).Matches.Select(m => m.Score));
+        }
+
+        Assert.Contains("kampflos", staende);
+        Assert.Contains("Disqualifikation", staende);
+        Assert.Contains(staende, stand => stand.EndsWith("(Aufgabe)", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Lief das Match über einen Platz, kommt die Uhrzeit von dort — und mit
+    /// ihr das Datum in der Bilanz.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Match_am_Platz_traegt_seine_Uhrzeit_ins_Profil()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync(
+            $"profil-{Guid.NewGuid():N}",
+            new TurnierWunsch
+            {
+                Teilnehmer = 4,
+                Kontaktdaten = true,
+                Plaetze = 2,
+                Platzzeiten = true,
+                Spielplan = true,
+                Turniertag = true,
+                Uhr = new DateTimeOffset(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2)),
+            });
+
+        var board = await aufbau.Admin.GetFromJsonAsync<List<CourtBoard>>(
+            $"/api/tournaments/{aufbau.TournamentId}/courts", Json);
+
+        var slot = board!.SelectMany(court => court.Queue).First();
+
+        await aufbau.Admin.PostAsync($"/api/assignments/{slot.AssignmentId}/call", null);
+        await aufbau.Admin.PostAsync($"/api/assignments/{slot.AssignmentId}/start", null);
+        await aufbau.Admin.PostAsync($"/api/assignments/{slot.AssignmentId}/finish", null);
+
+        await Ergebnis(aufbau.Admin, slot.MatchId,
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 2)]));
+
+        var meldungen = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
+            $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
+
+        var phase = Assert.Single(await PhasenAsync(aufbau.Admin, aufbau.TournamentId));
+        var match = phase.Matches.Single(m => m.Id == slot.MatchId);
+
+        var profil = await ProfilAsync(aufbau.Admin, PlayerOf(meldungen!, match.Side1.EntryId!.Value));
+
+        Assert.NotNull(profil.Matches[0].PlayedAt);
+        Assert.NotNull(profil.Record.LastPlayedOn);
+    }
+
+    /// <summary>
+    /// Im Doppel steht neben dem Gegner der Partner — die einzige Stelle, an
+    /// der ein Profil den Unterschied zum Einzel überhaupt bemerkt.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Doppel_nennt_den_Partner()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync(
+            $"profil-{Guid.NewGuid():N}",
+            new TurnierWunsch { Teams = ["Die Netzroller", "Die Grundlinie"], Kontaktdaten = true });
+
+        var phase = Assert.Single(await PhasenAsync(aufbau.Admin, aufbau.TournamentId));
+        var match = phase.Matches.Single(m => m.Status == MatchStatus.Ready);
+
+        await Ergebnis(aufbau.Admin, match.Id,
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 2)]));
+
+        var meldungen = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
+            $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
+
+        var meldung = meldungen!.Single(e => e.Id == match.Side1.EntryId);
+        var profil = await ProfilAsync(aufbau.Admin, meldung.Contacts[0].PlayerId);
+
+        var eintrag = Assert.Single(profil.Matches);
+
+        Assert.NotNull(eintrag.Partner);
+        Assert.Equal(meldung.Contacts[1].PlayerId, eintrag.Partner!.PlayerId);
+        Assert.Equal(2, eintrag.Opponents.Count);
+    }
+
+    /// <summary>
+    /// Wer sofort aufgibt, hinterlässt keinen Satz. Dann steht dort das Wort
+    /// allein und keine leere Klammer.
+    /// </summary>
+    [Fact]
+    public async Task Eine_Aufgabe_ohne_gespielten_Satz_steht_als_Wort()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync(
+            $"profil-{Guid.NewGuid():N}", new TurnierWunsch { Teilnehmer = 4, Kontaktdaten = true });
+
+        var phase = Assert.Single(await PhasenAsync(aufbau.Admin, aufbau.TournamentId));
+        var match = phase.Matches.Where(m => m.Round == 1).OrderBy(m => m.Position).First();
+
+        await Ergebnis(aufbau.Admin, match.Id,
+            new RecordResultRequest(MatchOutcome.Retirement, AffectedSide: 2));
+
+        var meldungen = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
+            $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
+
+        var profil = await ProfilAsync(aufbau.Admin, PlayerOf(meldungen!, match.Side1.EntryId!.Value));
+
+        Assert.Equal("Aufgabe", Assert.Single(profil.Matches).Score);
+    }
+
+    private static async Task Ergebnis(HttpClient client, Guid matchId, RecordResultRequest request)
+    {
+        var antwort = await client.PutAsJsonAsync($"/api/matches/{matchId}/result", request, Json);
+
+        Assert.True(antwort.IsSuccessStatusCode, await antwort.Content.ReadAsStringAsync());
+    }
 
     private static Guid PlayerOf(IReadOnlyList<EntryOverview> entries, Guid entryId) =>
         entries.Single(e => e.Id == entryId).Contacts[0].PlayerId;

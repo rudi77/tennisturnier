@@ -79,8 +79,6 @@ public sealed class PlayDateService : IPlayDateService
         bool includePast = false,
         CancellationToken cancellationToken = default)
     {
-        RequireAuthenticated();
-
         var dates = await _playDates.ListForCallerAsync(
             includePast ? null : _clock.Now.Add(-PastTolerance), cancellationToken);
 
@@ -93,7 +91,7 @@ public sealed class PlayDateService : IPlayDateService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var me = RequireAuthenticated();
+        var me = Me;
 
         if (request.StartsAt < _clock.Now.Add(-PastTolerance))
         {
@@ -152,7 +150,7 @@ public sealed class PlayDateService : IPlayDateService
 
         var playDate = await LoadAsync(playDateId, cancellationToken);
 
-        playDate.Respond(RequireAuthenticated(), request.Accepted);
+        playDate.Respond(Me, request.Accepted);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await DescribeAsync(playDate, cancellationToken);
@@ -239,7 +237,7 @@ public sealed class PlayDateService : IPlayDateService
 
         var players = await _players.PlayerIdsOfAccountsAsync(userIds, cancellationToken);
 
-        var me = _userContext.Current.UserId;
+        var me = Me;
         var now = _clock.Now;
 
         return [.. dates.Select(date =>
@@ -276,10 +274,13 @@ public sealed class PlayDateService : IPlayDateService
         })];
     }
 
+    /// <summary>
+    /// Gastgeber und Gäste sind vollzählig nachgeschlagen worden, bevor
+    /// abgebildet wird — ein fehlender Schlüssel wäre ein Konto, das zwischen
+    /// zwei Abfragen verschwunden ist, und Konten werden nirgends gelöscht.
+    /// </summary>
     private static string NameOf(Guid userId, IReadOnlyDictionary<Guid, UserAccount> accounts) =>
-        accounts.TryGetValue(userId, out var account)
-            ? account.DisplayName ?? account.Email ?? "Unbekannt"
-            : "Unbekannt";
+        accounts[userId].PreferredName;
 
     private async Task<PlayDate> LoadAsync(Guid playDateId, CancellationToken cancellationToken) =>
         await _playDates.FindAsync(playDateId, cancellationToken)
@@ -291,18 +292,16 @@ public sealed class PlayDateService : IPlayDateService
     /// </summary>
     private void RequireHost(PlayDate playDate)
     {
-        if (playDate.HostUserId != _userContext.Current.UserId)
+        if (playDate.HostUserId != Me)
         {
             throw new NotFoundException("Verabredung", playDate.Id);
         }
     }
 
-    private Guid RequireAuthenticated()
-    {
-        var user = _userContext.Current;
-
-        return user.IsAuthenticated
-            ? user.UserId
-            : throw new AccessDeniedException(Permission.WriteInFeed, [ResourceScope.Global]);
-    }
+    /// <summary>
+    /// Der Aufrufer. Jeder Endpunkt hier verlangt die Anmeldung, und wer
+    /// angemeldet ist, hat ein Konto (ADR-0007) — ein Ausweichzweig dafür wäre
+    /// einer, der nie läuft.
+    /// </summary>
+    private Guid Me => _userContext.Current.UserId;
 }

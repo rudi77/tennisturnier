@@ -34,14 +34,12 @@ public sealed class ConnectionService : IConnectionService
     public async Task<IReadOnlyList<ConnectionView>> ListMineAsync(
         CancellationToken cancellationToken = default)
     {
-        var user = _userContext.Current;
+        // Ohne Prüfung auf „angemeldet": der Endpunkt verlangt sie, und ohne
+        // Konto gibt es ohnehin keinen Spieler — die Abfrage darunter fiele
+        // leer aus.
+        var caller = _userContext.Current.UserId;
 
-        if (!user.IsAuthenticated)
-        {
-            return [];
-        }
-
-        if (await _history.FindPlayerIdOfAccountAsync(user.UserId, cancellationToken) is not { } me)
+        if (await _history.FindPlayerIdOfAccountAsync(caller, cancellationToken) is not { } me)
         {
             return [];
         }

@@ -335,9 +335,16 @@ function ProfileForm({
           />
         </label>
 
-        <label className="md-field">
-          <span className="md-field__label">Über mich</span>
+        {/* Beschriftung über `for` und nicht als Umschlag: der Hinweis
+            darunter gehört ins Feld, aber nicht zum Namen — in einem
+            umschließenden Label zählte er als Teil der Beschriftung und
+            hieße für ein Vorlesegerät „Über mich, 463 Zeichen frei". */}
+        <div className="md-field">
+          <label className="md-field__label" htmlFor="profil-bio">
+            Über mich
+          </label>
           <textarea
+            id="profil-bio"
             className="md-input"
             rows={4}
             maxLength={500}
@@ -345,7 +352,7 @@ function ProfileForm({
             onChange={(event) => setBio(event.target.value)}
           />
           <span className="md-field__hint">{500 - bio.length} Zeichen frei</span>
-        </label>
+        </div>
 
         <div className="md-entry__actions">
           {onCancel && (

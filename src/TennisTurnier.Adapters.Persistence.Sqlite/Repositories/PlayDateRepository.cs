@@ -27,6 +27,4 @@ public sealed class PlayDateRepository : IPlayDateRepository
         _db.PlayDates.FirstOrDefaultAsync(date => date.Id == playDateId, cancellationToken);
 
     public void Add(PlayDate playDate) => _db.PlayDates.Add(playDate);
-
-    public void Remove(PlayDate playDate) => _db.PlayDates.Remove(playDate);
 }

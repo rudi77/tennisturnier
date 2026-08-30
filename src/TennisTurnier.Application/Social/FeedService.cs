@@ -164,7 +164,9 @@ public sealed class FeedService : IFeedService
                 "Ein Ereignis gehört zur Chronik des Turniers und lässt sich nicht zurücknehmen.");
         }
 
-        RequireMayDelete(post.TournamentId, post.AuthorUserId);
+        // Ein Beitrag hat einen Verfasser — das prüft das Aggregat beim
+        // Anlegen, und ein Ereignis ist oben schon abgewiesen.
+        RequireMayDelete(post.TournamentId, post.AuthorUserId!.Value);
 
         _feed.Remove(post);
         Announce(post.TournamentId);
@@ -193,11 +195,14 @@ public sealed class FeedService : IFeedService
     /// Beides endet in einem 404 und nicht in einem 403 — auch hier soll die
     /// Antwort nicht verraten, was es zu sehen gäbe (ADR-0004).
     /// </summary>
-    private void RequireMayDelete(Guid tournamentId, Guid? authorUserId)
+    private void RequireMayDelete(Guid tournamentId, Guid authorUserId)
     {
         var user = _userContext.Current;
 
-        if (authorUserId is { } author && author == user.UserId && user.IsAuthenticated)
+        // Ohne Prüfung auf „angemeldet": ein Verfasser ist nie die leere Guid
+        // (das Aggregat weist sie ab), ein nicht angemeldeter Aufrufer ist
+        // immer sie — der Vergleich allein trägt.
+        if (authorUserId == user.UserId)
         {
             return;
         }
@@ -252,7 +257,7 @@ public sealed class FeedService : IFeedService
             account => account.Id,
             account => new FeedAuthorView(
                 account.Id,
-                account.DisplayName ?? account.Email ?? "Unbekannt",
+                account.PreferredName,
                 players.GetValueOrDefault(account.Id)));
     }
 
@@ -267,7 +272,10 @@ public sealed class FeedService : IFeedService
             post.Text,
             post.MatchId,
             post.CreatedAt,
-            post.IsMessage && CanDelete(tournamentId, post.AuthorUserId),
+            // Ein Beitrag hat einen Verfasser, ein Ereignis nicht — und ein
+            // Ereignis lässt sich ohnehin nicht zurücknehmen. Die Reihenfolge
+            // der beiden Bedingungen ist deshalb keine Bequemlichkeit.
+            post.IsMessage && CanDelete(tournamentId, post.AuthorUserId!.Value),
             [.. post.Comments
                 .OrderBy(comment => comment.CreatedAt)
                 .Select(comment => ToComment(comment, authors, tournamentId))]);
@@ -284,17 +292,18 @@ public sealed class FeedService : IFeedService
             CanDelete(tournamentId, comment.AuthorUserId));
 
     /// <summary>
-    /// Ein Verfasser, dessen Konto es nicht mehr gibt, hinterlässt seinen
-    /// Beitrag — er ist Teil des Verlaufs. Nur sein Name fehlt dann.
+    /// Die Verfasser sind vollzählig nachgeschlagen worden, bevor abgebildet
+    /// wird — ein fehlender Schlüssel wäre ein Konto, das zwischen zwei
+    /// Abfragen verschwunden ist, und Konten werden nirgends gelöscht.
     /// </summary>
     private static FeedAuthorView Author(Guid userId, IReadOnlyDictionary<Guid, FeedAuthorView> authors) =>
-        authors.GetValueOrDefault(userId, new FeedAuthorView(userId, "Unbekannt", null));
+        authors[userId];
 
-    private bool CanDelete(Guid tournamentId, Guid? authorUserId)
+    private bool CanDelete(Guid tournamentId, Guid authorUserId)
     {
         var user = _userContext.Current;
 
-        return (user.IsAuthenticated && authorUserId == user.UserId)
+        return authorUserId == user.UserId
             || user.Can(Permission.ManageTournament, ResourceScope.Tournament(tournamentId));
     }
 

@@ -22,7 +22,10 @@ public interface IPlayDateRepository
 
     Task<PlayDate?> FindAsync(Guid playDateId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Legt eine Verabredung an. Ein Gegenstück zum Entfernen gibt es nicht:
+    /// abgesagt wird, nicht gelöscht — die Zeile bleibt stehen, damit niemand
+    /// vergeblich am Platz steht (ADR-0015).
+    /// </summary>
     void Add(PlayDate playDate);
-
-    void Remove(PlayDate playDate);
 }

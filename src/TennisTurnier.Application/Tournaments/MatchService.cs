@@ -152,7 +152,7 @@ public sealed class MatchService : IMatchService
         var matchFormat = MatchFormatOf(tournament, phase);
         phase.RecordResult(matchId, BuildScore(request, match, matchFormat));
 
-        await AnnounceResultAsync(tournament, phase, match, cancellationToken);
+        await AnnounceResultAsync(tournament, match, cancellationToken);
 
         // Das erste Ergebnis macht aus einem ausgelosten ein laufendes Turnier.
         if (tournament.State == TournamentState.DrawGenerated)
@@ -178,36 +178,25 @@ public sealed class MatchService : IMatchService
     /// Schreibt das Ergebnis in den Feed (ADR-0014).
     ///
     /// Nach dem Eintragen und nicht davor: erst dann steht fest, wer gewonnen
-    /// hat. Ein Freilos bleibt außen vor — es wurde nie gespielt, und eine
-    /// Zeile darüber wäre eine Meldung über etwas, das nicht stattgefunden hat.
+    /// hat.
     /// </summary>
     private async Task AnnounceResultAsync(
         Tournament tournament,
-        Phase phase,
         Match match,
         CancellationToken cancellationToken)
     {
-        if (match.Score is not { } score || score.Outcome == MatchOutcome.Bye)
-        {
-            return;
-        }
-
+        // Aufgerufen unmittelbar nach dem Eintragen: das Ergebnis steht, und
+        // beide Seiten tragen eine Meldung. Ein Freilos kommt hier nie an — es
+        // wird beim Aufbau des Baums entschieden und nicht eingetragen.
+        var score = match.Score!;
         var names = await NamesByEntryAsync(tournament, cancellationToken);
-
-        var winner = match.Side(score.WinnerSide).EntryId;
-        var loser = match.Side(score.LoserSide).EntryId;
-
-        if (winner is null || loser is null)
-        {
-            return;
-        }
 
         _feed.RecordResult(
             tournament.Id,
             match.Id,
-            match.Label ?? $"{phase.Name}, Runde {match.Round}",
-            names.GetValueOrDefault(winner.Value, "(unbekannt)"),
-            names.GetValueOrDefault(loser.Value, "(unbekannt)"),
+            match.Name,
+            names[match.Side(score.WinnerSide).EntryId!.Value],
+            names[match.Side(score.LoserSide).EntryId!.Value],
             score);
     }
 

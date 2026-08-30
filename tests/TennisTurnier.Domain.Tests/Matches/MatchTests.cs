@@ -35,6 +35,18 @@ public sealed class MatchTests
             label,
             gruppe);
 
+    /// <summary>
+    /// Wo ein Name gebraucht wird, steht die Bezeichnung der Vorlage — und wo
+    /// sie keine vergeben hat, die Runde. Die mitgelieferten Formate vergeben
+    /// alle eine; eine eigene Formatdefinition muss das nicht.
+    /// </summary>
+    [Fact]
+    public void Ein_Match_traegt_seinen_Namen()
+    {
+        Assert.Equal("Finale", Bauen(label: "Finale").Name);
+        Assert.Equal("Runde 3", Bauen(runde: 3).Name);
+    }
+
     private static Score Ergebnis() =>
         Score.Played([new SetScore(6, 4), new SetScore(6, 3)], new MatchFormat());
 

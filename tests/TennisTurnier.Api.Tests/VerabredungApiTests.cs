@@ -219,6 +219,133 @@ public sealed class VerabredungApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.All(kontakte!, kontakt => Assert.True(kontakt.CanBeInvited));
     }
 
+    /// <summary>
+    /// Ohne Eingeladene ist eine Verabredung ein Merkzettel — zulässig, und der
+    /// Gastgeber lädt später ein. Genau dieser Weg braucht keinen Spieler zum
+    /// Konto: wer noch nie gemeldet war, hat keinen.
+    /// </summary>
+    [Fact]
+    public async Task Eine_Verabredung_ohne_Eingeladene_ist_zulaessig()
+    {
+        var allein = _factory.CreateClientAs($"verabredung-allein-{Guid.NewGuid():N}");
+
+        var erstellt = await AnlegenAsync(allein, Discipline.Singles, []);
+
+        Assert.Empty(erstellt.Guests);
+        Assert.Equal(1, erstellt.Missing);
+        Assert.True(erstellt.IsHost);
+
+        // Ein Gastgeber ohne Spieler bleibt ein Name — es gibt kein Profil,
+        // auf das ein Verweis zeigen könnte.
+        Assert.Null(erstellt.Host.PlayerId);
+    }
+
+    [Fact]
+    public async Task Der_Gastgeber_laedt_auch_spaeter_noch_ein()
+    {
+        var (gastgeber, gast, gastPlayerId) = await ZweiSpielerAsync();
+        var erstellt = await AnlegenAsync(gastgeber, Discipline.Singles, []);
+
+        var antwort = await gastgeber.PostAsJsonAsync(
+            $"/api/play-dates/{erstellt.Id}/invitations",
+            new InviteToPlayDateRequest([gastPlayerId]),
+            Json);
+
+        Assert.True(antwort.IsSuccessStatusCode, await antwort.Content.ReadAsStringAsync());
+
+        var danach = (await antwort.Content.ReadFromJsonAsync<PlayDateView>(Json))!;
+        Assert.Single(danach.Guests);
+
+        // Und der Eingeladene sieht sie jetzt.
+        Assert.Contains(await ListeAsync(gast), date => date.Id == erstellt.Id);
+    }
+
+    [Fact]
+    public async Task Nur_der_Gastgeber_laedt_ein()
+    {
+        var (gastgeber, gast, gastPlayerId) = await ZweiSpielerAsync();
+        var erstellt = await AnlegenAsync(gastgeber, Discipline.Singles, [gastPlayerId]);
+
+        var antwort = await gast.PostAsJsonAsync(
+            $"/api/play-dates/{erstellt.Id}/invitations",
+            new InviteToPlayDateRequest([gastPlayerId]),
+            Json);
+
+        Assert.Equal(HttpStatusCode.NotFound, antwort.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(600)]
+    public async Task Eine_unsinnige_Dauer_wird_abgewiesen(int minuten)
+    {
+        var (gastgeber, _, gastPlayerId) = await ZweiSpielerAsync();
+
+        var antwort = await gastgeber.PostAsJsonAsync(
+            "/api/play-dates",
+            new CreatePlayDateRequest(
+                "Kurz?", Discipline.Singles, "TC Test", Termin, minuten, null, [gastPlayerId]),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
+    }
+
+    /// <summary>
+    /// Zwei ohne Konto lesen sich anders als einer — die Meldung nennt beide
+    /// und sagt „haben keines".
+    /// </summary>
+    [Fact]
+    public async Task Zwei_ohne_Konto_werden_beide_genannt()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync(
+            $"verabredung-{Guid.NewGuid():N}", new TurnierWunsch { Teilnehmer = 2, Auslosen = false });
+
+        var meldungen = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
+            $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
+
+        var ohneKonto = meldungen!.Select(m => m.Contacts[0].PlayerId).ToList();
+
+        var antwort = await aufbau.Admin.PostAsJsonAsync(
+            "/api/play-dates",
+            new CreatePlayDateRequest(
+                "Samstag?", Discipline.Doubles, "TC Test", Termin, 90, null, ohneKonto),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
+        Assert.Contains("haben keines", await antwort.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// Eine vergangene Verabredung fällt aus der Liste — sie ist keine mehr.
+    /// Wer zurückschauen will, sagt es ausdrücklich.
+    /// </summary>
+    [Fact]
+    public async Task Vergangenes_steht_nur_auf_Nachfrage_in_der_Liste()
+    {
+        var (gastgeber, _, gastPlayerId) = await ZweiSpielerAsync();
+        var erstellt = await AnlegenAsync(gastgeber, Discipline.Singles, [gastPlayerId]);
+
+        // Die Uhr der Fabrik hinter den Termin stellen: die Verabredung ist
+        // damit vorbei, ohne dass jemand etwas geändert hätte.
+        var vorher = _factory.Clock.Now;
+        _factory.Clock.Now = Termin.AddDays(1);
+
+        try
+        {
+            Assert.DoesNotContain(await ListeAsync(gastgeber), date => date.Id == erstellt.Id);
+
+            var mitVergangenem = (await gastgeber.GetFromJsonAsync<List<PlayDateView>>(
+                "/api/play-dates?includePast=true", Json))!;
+
+            var vergangen = Assert.Single(mitVergangenem, date => date.Id == erstellt.Id);
+            Assert.True(vergangen.IsPast);
+        }
+        finally
+        {
+            _factory.Clock.Now = vorher;
+        }
+    }
+
     // --- Aufbau -----------------------------------------------------------
 
     /// <summary>

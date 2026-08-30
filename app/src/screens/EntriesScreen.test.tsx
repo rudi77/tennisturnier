@@ -115,6 +115,33 @@ describe('EntriesScreen — als Mitglied', () => {
 })
 
 describe('EntriesScreen — der Weg zum Menschen', () => {
+  it('trennt bei einem Doppel die beiden Namen', async () => {
+    db.entries = [
+      fx.entryOverview({
+        participantName: 'S. Moser / L. Berger',
+        contacts: [
+          {
+            playerId: fx.IDS.player1,
+            displayName: 'S. Moser',
+            email: null,
+            phone: null,
+          },
+          {
+            playerId: fx.IDS.player2,
+            displayName: 'L. Berger',
+            email: null,
+            phone: null,
+          },
+        ],
+      }),
+    ]
+    aufbau()
+    await screen.findAllByText('S. Moser / L. Berger')
+
+    expect(screen.getByText('|')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'L. Berger' })).toBeInTheDocument()
+  })
+
   it('führt vom Namen einer Meldung ins Profil', async () => {
     window.history.replaceState({}, '', '/?screen=entries')
     aufbau()

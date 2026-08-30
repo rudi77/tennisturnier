@@ -97,6 +97,88 @@ public sealed class KontakteApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.Equal(2, kontakte.Count(k => k.Against == 1 && k.Together == 0));
     }
 
+    /// <summary>
+    /// Ein zweites Match gegen denselben Menschen zählt hoch — und nennt
+    /// weiterhin das jüngste Turnier, nicht das erste.
+    /// </summary>
+    [Fact]
+    public async Task Ein_zweites_Match_zaehlt_beim_selben_Kontakt_hoch()
+    {
+        var (leitung, tournamentId, einer, anderer) = await GespieltAsync();
+
+        // Dieselben beiden noch einmal, in einem zweiten Turnier: die Meldung
+        // findet ihren Spieler über das Konto wieder (ADR-0012).
+        await NochEinmalAsync(einer, anderer);
+
+        var kontakt = Assert.Single(await KontakteAsync(einer));
+
+        Assert.Equal(2, kontakt.Against);
+        Assert.Equal(2, kontakt.SharedTournaments);
+
+        await leitung.GetAsync($"/api/tournaments/{tournamentId}");
+    }
+
+    /// <summary>
+    /// Ohne Termin und ohne Platzzuweisung gibt es kein Datum. Der Kontakt
+    /// steht trotzdem in der Liste — sie ordnet ihn ans Ende und lässt ihn
+    /// nicht weg.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Kontakt_ohne_Datum_faellt_nicht_aus_der_Liste()
+    {
+        var (leitung, tournamentId, token) = await OffenAsync(Discipline.Singles, ohneTermin: true);
+
+        var einer = await BeitretenAsync(token, "Anna");
+        await BeitretenAsync(token, "Berta");
+
+        await AuslosenUndSpielenAsync(leitung, tournamentId);
+
+        var kontakt = Assert.Single(await KontakteAsync(einer));
+
+        Assert.Null(kontakt.LastPlayedOn);
+        Assert.Equal(1, kontakt.Against);
+    }
+
+    /// <summary>
+    /// Lief das Match über einen Platz, kommt das Datum von dort — und nicht
+    /// vom Beginn des Turniers.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Match_am_Platz_datiert_den_Kontakt_auf_den_Tag()
+    {
+        var (leitung, tournamentId, token) = await OffenAsync(
+            Discipline.Singles, mitPlaetzen: true);
+
+        var einer = await BeitretenAsync(token, "Anna");
+        await BeitretenAsync(token, "Berta");
+
+        await AnnehmenAsync(leitung, tournamentId);
+        await leitung.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
+        await leitung.PostAsync($"/api/tournaments/{tournamentId}/draw", null);
+
+        await SpielplanAsync(leitung, tournamentId);
+        await leitung.PostAsync($"/api/tournaments/{tournamentId}/scheduling/match-day", null);
+
+        var board = await leitung.GetFromJsonAsync<List<CourtBoard>>(
+            $"/api/tournaments/{tournamentId}/courts", Json);
+
+        var slot = board!.SelectMany(court => court.Queue).First();
+
+        await leitung.PostAsync($"/api/assignments/{slot.AssignmentId}/call", null);
+        await leitung.PostAsync($"/api/assignments/{slot.AssignmentId}/start", null);
+        await leitung.PostAsync($"/api/assignments/{slot.AssignmentId}/finish", null);
+
+        var ergebnis = await leitung.PutAsJsonAsync(
+            $"/api/matches/{slot.MatchId}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 2)]),
+            Json);
+        Assert.Equal(HttpStatusCode.NoContent, ergebnis.StatusCode);
+
+        var kontakt = Assert.Single(await KontakteAsync(einer));
+
+        Assert.NotNull(kontakt.LastPlayedOn);
+    }
+
     // --- Aufbau -----------------------------------------------------------
 
     /// <summary>
@@ -130,12 +212,47 @@ public sealed class KontakteApiTests : IClassFixture<TennisTurnierApiFactory>
         return (einer, tournamentId);
     }
 
+    /// <summary>
+    /// Ein zweites Turnier mit denselben beiden Konten. Sie melden sich über
+    /// den Link, und die Auflösung findet ihre Spieler über das Konto wieder.
+    /// </summary>
+    private async Task NochEinmalAsync(HttpClient einer, HttpClient anderer)
+    {
+        var (leitung, tournamentId, token) = await OffenAsync(Discipline.Singles);
+
+        foreach (var client in new[] { einer, anderer })
+        {
+            var antwort = await client.PostAsJsonAsync(
+                $"/api/join/{token}",
+                new JoinRequest(Play: true, null, null, null, null, null, null, null),
+                Json);
+
+            Assert.True(antwort.IsSuccessStatusCode, await antwort.Content.ReadAsStringAsync());
+        }
+
+        await AuslosenUndSpielenAsync(leitung, tournamentId);
+    }
+
     private async Task<(HttpClient Leitung, Guid TournamentId, string Token)> OffenAsync(
-        Discipline disziplin)
+        Discipline disziplin,
+        bool ohneTermin = false,
+        bool mitPlaetzen = false)
     {
         var aufbau = await _factory.NeuesTurnierAsync(
             $"kontakt-leitung-{Guid.NewGuid():N}",
-            new TurnierWunsch { Name = "Kontaktturnier", Disziplin = disziplin, Auslosen = false });
+            new TurnierWunsch
+            {
+                Name = "Kontaktturnier",
+                Disziplin = disziplin,
+                Auslosen = false,
+                Beginn = ohneTermin ? null : new DateOnly(2026, 5, 16),
+                Ende = ohneTermin ? null : new DateOnly(2026, 5, 17),
+                Plaetze = mitPlaetzen ? 1 : 0,
+                Platzzeiten = mitPlaetzen,
+                Uhr = mitPlaetzen
+                    ? new DateTimeOffset(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2))
+                    : null,
+            });
 
         await aufbau.Admin.PostAsync($"/api/tournaments/{aufbau.TournamentId}/registration/open", null);
 
@@ -170,10 +287,12 @@ public sealed class KontakteApiTests : IClassFixture<TennisTurnierApiFactory>
         return client;
     }
 
-    private static async Task AuslosenUndSpielenAsync(HttpClient leitung, Guid tournamentId)
+    /// <summary>
+    /// Wer selbst beitritt, ist gemeldet und noch nicht im Feld: die
+    /// Turnierleitung entscheidet, wer nachrückt (ADR-0012).
+    /// </summary>
+    private static async Task AnnehmenAsync(HttpClient leitung, Guid tournamentId)
     {
-        // Wer selbst beitritt, ist gemeldet und noch nicht im Feld: die
-        // Turnierleitung entscheidet, wer nachrückt (ADR-0012).
         var meldungen = await leitung.GetFromJsonAsync<List<EntryOverview>>(
             $"/api/tournaments/{tournamentId}/entries", Json);
 
@@ -182,6 +301,28 @@ public sealed class KontakteApiTests : IClassFixture<TennisTurnierApiFactory>
             await leitung.PostAsync(
                 $"/api/tournaments/{tournamentId}/entries/{meldung.Id}/accept", null);
         }
+    }
+
+    /// <summary>Rechnen und Bestätigen bleiben zwei Schritte (ADR-0002).</summary>
+    private static async Task SpielplanAsync(HttpClient leitung, Guid tournamentId)
+    {
+        var antwort = await leitung.PostAsync(
+            $"/api/tournaments/{tournamentId}/schedule/proposal", null);
+
+        Assert.True(antwort.IsSuccessStatusCode, await antwort.Content.ReadAsStringAsync());
+
+        var vorschlag = (await antwort.Content.ReadFromJsonAsync<SchedulePlanResult>(Json))!;
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/schedule/confirm",
+            new ConfirmScheduleRequest([.. vorschlag.Assignments.Select(a => new ConfirmedAssignment(
+                a.MatchId, a.CourtId, a.SequenceOnCourt, a.PlannedStart, a.EstimatedDuration))]),
+            Json);
+    }
+
+    private static async Task AuslosenUndSpielenAsync(HttpClient leitung, Guid tournamentId)
+    {
+        await AnnehmenAsync(leitung, tournamentId);
 
         await leitung.PostAsync($"/api/tournaments/{tournamentId}/registration/close", null);
 

@@ -477,7 +477,10 @@ public sealed class TournamentService : ITournamentService
     {
         var tournament = await LoadForManagement(tournamentId, cancellationToken);
 
+        var vorher = tournament.State;
         tournament.ReopenRegistration();
+        _feed.RecordStateChange(tournament, vorher);
+
         await _drawBuilder.DiscardAsync(tournamentId, cancellationToken);
 
         await _unitOfWork.FlushAsync(cancellationToken);
