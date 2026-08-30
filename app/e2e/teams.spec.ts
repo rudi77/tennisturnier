@@ -60,8 +60,14 @@ test('stellt ein Team von Hand und löst es wieder auf', async ({ page, api }) =
   const meldungen = await api.get<Meldung[]>(`/api/tournaments/${turnier.id}/entries`)
   const namen = meldungen.map((m) => m.participantName)
 
-  await page.getByRole('button', { name: namen[0]!, exact: true }).click()
-  await page.getByRole('button', { name: namen[1]!, exact: true }).click()
+  // Über die Pille und nicht über den Namen allein: seit ADR-0013 führt jeder
+  // Name auch zu einem Spielerprofil, und derselbe Mensch steht auf demselben
+  // Schirm zweimal als Schaltfläche. Über die Rolle sind beide nicht zu
+  // trennen — auch `pressed: false` trifft einen Knopf ohne Schaltzustand.
+  const pille = (name: string) => page.locator('.md-pill').filter({ hasText: name })
+
+  await pille(namen[0]!).click()
+  await pille(namen[1]!).click()
   await page.getByLabel('Teamname').fill('Die Unbeugsamen')
   await page.getByRole('button', { name: 'Team stellen' }).click()
 

@@ -33,7 +33,7 @@ export default defineConfig({
   // aufgerufen wird er von Hand: `npx playwright test ansicht --grep .`
   testIgnore: [
     ...(process.env.MATCHDAY_ANSICHT ? [] : ['**/ansicht.spec.ts']),
-    ...(process.env.MATCHDAY_DURCHLAUF ? [] : ['**/durchlauf.spec.ts']),
+    ...(process.env.MATCHDAY_DURCHLAUF ? [] : ['**/durchlauf.spec.ts', '**/soziales.spec.ts']),
   ],
 
   fullyParallel: false,
