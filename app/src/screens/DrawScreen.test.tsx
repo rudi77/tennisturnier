@@ -125,6 +125,38 @@ describe('DrawScreen — Rahmen', () => {
 })
 
 describe('DrawScreen — Darstellungen', () => {
+  /** Ein Turnier, dessen eingefrorenes Format keinen Baum zeichnet. */
+  function liga(): Parameters<typeof fx.tournamentDetail>[0] {
+    return {
+      state: TournamentState.InProgress,
+      format: {
+        templateId: fx.IDS.template,
+        templateVersion: 1,
+        definition: fx.formatDefinition({
+          phases: [{ ordinal: 1, format: PhaseFormatKind.RoundRobin, name: 'Jeder gegen jeden' }],
+        }),
+      },
+    }
+  }
+
+  it('bietet bei „Jeder gegen jeden" keinen Baum an', async () => {
+    // Eine Runde ist dort kein Schritt nach vorn, sondern ein Spieltag: es
+    // rückt niemand vor, und die Verbindungslinien behaupteten einen
+    // Zusammenhang, den es nicht gibt.
+    aufbau(liga())
+    await screen.findByText(/Hauptfeld ·/)
+
+    expect(
+      screen.queryByRole('button', { name: 'Baum mit Verbindungen' }),
+    ).not.toBeInTheDocument()
+
+    expect(screen.getByRole('button', { name: 'Kompakte Rundenspalten' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByText(/Dichter: gleiche Information/)).toBeInTheDocument()
+  })
+
   it('startet auf dem breiten Schirm mit dem Baum', async () => {
     aufbau()
     await screen.findByText(/Hauptfeld ·/)

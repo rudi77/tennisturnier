@@ -209,7 +209,10 @@ export function tournamentDetail(over: Partial<TournamentDetail> = {}): Tourname
     state: TournamentState.Draft,
     schedulingMode: SchedulingMode.Planning,
     formatTemplateId: IDS.template,
-    format: null,
+    // Mit eingefrorenem Format, denn so kommt ein Turnier mit Draw vom Server:
+    // die Vorlage wird beim Auslosen kopiert. Daran hängt unter anderem, ob der
+    // Draw als Baum gezeichnet werden darf — ein K.-o.-Feld ja, eine Liga nein.
+    format: { templateId: IDS.template, templateVersion: 1, definition: formatDefinition() },
     matchFormat: null,
     effectiveMatchFormat: DEFAULT_FORMAT,
     courts: [court(), court({ id: IDS.court2, name: 'Platz 2', isCenterCourt: false, windows: [] })],

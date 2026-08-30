@@ -1965,9 +1965,14 @@ body {
   align-items: start;
 }
 
+/* `auto-fit` und nicht `auto-fill`: bei einer einzigen Gruppe — und „Jeder
+   gegen jeden" hat genau eine — legte `auto-fill` trotzdem drei Spuren an und
+   presste die Tabelle in die erste. Auf einem breiten Schirm stand sie dann
+   320 Pixel schmal da und musste seitlich gescrollt werden, obwohl daneben
+   alles frei war. Leere Spuren fallen mit `auto-fit` weg. */
 @media (min-width: 620px) {
   .md-tables {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   }
 }
 

@@ -127,23 +127,30 @@ test('vier Menschen spielen jeder gegen jeden — von der Registrierung bis zum 
   }
 
   // --- 5. Die Anlegerin meldet sich selbst -----------------------------------
-  // Über den Beitrittslink geht das nicht: sie gehört schon dazu. Also über die
-  // Meldung im Draw, wie bei jedem anderen Namen auch.
-  await anna.getByRole('button', { name: 'Draw & Bracket' }).click()
+  // Über denselben Link wie alle anderen. Sie gehört schon dazu — der Schirm
+  // sagt das auch —, aber melden ist etwas anderes als dazugehören, und genau
+  // dafür steht das Formular auch einem Mitglied offen.
+  await anna.goto(link)
 
-  await anna.getByPlaceholder('Vorname').fill('Anna')
-  await anna.getByPlaceholder('Nachname').fill('Berger')
-  await anna.getByRole('button', { name: 'Neu', exact: true }).click()
+  await expect(anna.getByText(/Du gehörst schon dazu/)).toBeVisible()
+  await anna.screenshot({ path: `${BILDER}/07a-eigener-link.png`, fullPage: true })
+
+  // „Melden" und nicht „Melden und beitreten": beigetreten ist sie längst.
   await anna.getByRole('button', { name: 'Melden', exact: true }).click()
+  await expect(anna.getByText('Du bist dabei')).toBeVisible()
+  await anna.getByRole('button', { name: 'Turnier öffnen' }).click()
 
-  await expect(anna.getByText('Berger, Anna')).toBeVisible()
+  await expect(anna.getByRole('heading', { name: 'Ablauf' })).toBeVisible()
   await anna.screenshot({ path: `${BILDER}/07-selbst-gemeldet.png`, fullPage: true })
 
   // --- 6. Die drei Meldungen annehmen ----------------------------------------
   await anna.getByRole('button', { name: 'Meldungen', exact: true }).click()
   await expect(anna.getByRole('heading', { name: 'Meldungen' })).toBeVisible()
 
-  for (const wer of ['Christl, Bea', 'Dorn, Carla', 'Egger, Dora']) {
+  // Alle vier, ihre eigene eingeschlossen: über den Link gemeldet zu haben
+  // heißt „gemeldet", nicht „im Feld" — das entscheidet die Turnierleitung,
+  // auch wenn sie selbst die Meldende war.
+  for (const wer of ['Berger, Anna', 'Christl, Bea', 'Dorn, Carla', 'Egger, Dora']) {
     const zeile = anna.locator('.md-entry').filter({ hasText: wer })
     await zeile.getByRole('button', { name: 'Annehmen' }).click()
     await expect(zeile.getByRole('button', { name: 'Annehmen' })).toBeDisabled()
@@ -214,9 +221,15 @@ test('vier Menschen spielen jeder gegen jeden — von der Registrierung bis zum 
   await anna.getByRole('button', { name: 'Endstand ansehen' }).click()
   await anna.screenshot({ path: `${BILDER}/12-endstand.png`, fullPage: true })
 
-  // Bei „Jeder gegen jeden" ist die Tabelle das Ergebnis, nicht der Baum.
-  await anna.getByRole('button', { name: 'Kompakte Rundenspalten' }).click()
-  await anna.screenshot({ path: `${BILDER}/12b-rundenspalten.png`, fullPage: true })
+  // Kein Baum: eine Runde ist hier ein Spieltag und kein Schritt nach vorn,
+  // und Verbindungslinien behaupteten einen Zusammenhang, den es nicht gibt.
+  await expect(anna.getByRole('button', { name: 'Baum mit Verbindungen' })).toHaveCount(0)
+  await expect(anna.getByRole('button', { name: 'Kompakte Rundenspalten' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+
+  // Und die Tabelle ist bei diesem Modus das Ergebnis, nicht das Bracket.
 
   await anna.getByRole('button', { name: 'Live-Ansicht' }).click()
   await expect(anna.getByRole('heading', { name: 'Live-Ansicht' })).toBeVisible()

@@ -7,7 +7,14 @@ import { ResultEditor } from '../components/tournament/ResultEditor'
 import { useResource } from '../hooks/useResource'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { bracket as bracketApi } from '../api/endpoints'
-import { MatchStatus, TournamentState, type MatchDetail, type PhaseDetail } from '../api/types'
+import {
+  MatchStatus,
+  PhaseFormatKind,
+  TournamentState,
+  type FormatDefinition,
+  type MatchDetail,
+  type PhaseDetail,
+} from '../api/types'
 import { timeSpanToMinutes } from '../lib/time'
 import { matchFormatOf } from '../lib/matchFormat'
 import { isNarrow } from '../lib/breakpoints'
@@ -24,6 +31,25 @@ const HINTS: Record<BracketStyle, string> = {
   tree: 'Klassisch — gut am Aushang, braucht Breite. Klick auf ein Match öffnet die Ergebniseingabe; der Sieger propagiert automatisch.',
   cols: 'Dichter: gleiche Information ohne Verbindungslinien, passt bei 64 und 128 auf einen Bildschirm.',
   list: 'Rundenweise Liste mit Fortschritt — die einzige Variante, die auf dem Handy ohne Zoom funktioniert.',
+}
+
+/**
+ * Zeichnet dieses Format einen Baum?
+ *
+ * Nur das K.-o.-System tut es. Bei „Jeder gegen jeden" und im Schweizer System
+ * ist eine Runde kein Schritt nach vorn, sondern ein Spieltag: es rückt niemand
+ * vor, und die Verbindungslinien behaupteten einen Zusammenhang, den es nicht
+ * gibt. Der Baum wird dort deshalb gar nicht erst angeboten — eine Ansicht, die
+ * ein falsches Bild zeichnet, ist keine Wahlmöglichkeit.
+ */
+function zeichnetEinenBaum(
+  definition: FormatDefinition | null | undefined,
+  phaseOrdinal: number | null,
+): boolean {
+  if (phaseOrdinal == null) return false
+
+  const phase = definition?.phases?.find((entry) => entry.ordinal === phaseOrdinal)
+  return phase?.format === PhaseFormatKind.Knockout
 }
 
 interface Round {
@@ -114,6 +140,13 @@ export function DrawScreen() {
 
   const rounds = useMemo(() => toRounds(phase), [phase])
 
+  // Die Wahl bleibt, wo sie gilt: wer den Baum eingestellt hat und ein Turnier
+  // öffnet, das keinen hat, bekommt die Rundenspalten — dieselbe Information,
+  // nur ohne die Linien, die hier nichts verbinden.
+  const baum = zeichnetEinenBaum(tournament?.format?.definition, phase?.ordinal ?? null)
+  const stile = baum ? STYLES : STYLES.filter((entry) => entry.id !== 'tree')
+  const ansicht: BracketStyle = !baum && style === 'tree' ? 'cols' : style
+
   const kpis = useMemo(() => {
     const all = phase?.matches ?? []
     const finished = all.filter((match) => match.status === MatchStatus.Finished).length
@@ -189,12 +222,12 @@ export function DrawScreen() {
               }}
             >
               <div className="md-pillbar">
-                {STYLES.map((entry) => (
+                {stile.map((entry) => (
                   <button
                     key={entry.id}
                     type="button"
                     className="md-seg"
-                    aria-pressed={style === entry.id}
+                    aria-pressed={ansicht === entry.id}
                     onClick={() => setStyle(entry.id)}
                   >
                     {entry.label}
@@ -218,13 +251,13 @@ export function DrawScreen() {
               )}
 
               <div className="md-hint" style={{ maxWidth: 560 }}>
-                {HINTS[style]}
+                {HINTS[ansicht]}
               </div>
             </div>
 
-            {style === 'tree' && <TreeView rounds={rounds} onOpen={eintragen} />}
-            {style === 'cols' && <ColumnsView rounds={rounds} onOpen={eintragen} />}
-            {style === 'list' && <ListView rounds={rounds} onOpen={eintragen} />}
+            {ansicht === 'tree' && <TreeView rounds={rounds} onOpen={eintragen} />}
+            {ansicht === 'cols' && <ColumnsView rounds={rounds} onOpen={eintragen} />}
+            {ansicht === 'list' && <ListView rounds={rounds} onOpen={eintragen} />}
           </>
         )}
       </section>
