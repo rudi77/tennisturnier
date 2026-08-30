@@ -3,6 +3,7 @@ import { FinalSetMode, PhaseFormatKind, type FormatDefinition, type MatchFormat 
 import {
   DEFAULT_MATCH_FORMAT,
   isMatchTiebreakSet,
+  isSetFinished,
   matchFormatOf,
   matchFormatSummary,
   maxGamesOf,
@@ -190,5 +191,39 @@ describe('matchFormatSummary', () => {
 
   it('nennt den alleinigen Champions-Tiebreak als das, was er ist', () => {
     expect(matchFormatSummary(nurTiebreak)).toBe('nur ein Champions-Tiebreak bis 10')
+  })
+})
+
+describe('isSetFinished', () => {
+  // Gebraucht für die Aufgabe: wer beim Stand von 2:1 aufhört, hat den Satz
+  // nicht gespielt, sondern abgebrochen — und der wird getrennt geführt.
+  it('kennt keinen unentschiedenen Satz', () => {
+    expect(isSetFinished(bestOf3, 0, [5, 5])).toBe(false)
+    expect(isSetFinished(bestOf3, 0, [0, 0])).toBe(false)
+  })
+
+  it('braucht zwei Spiele Vorsprung — oder den Tiebreak', () => {
+    expect(isSetFinished(bestOf3, 0, [6, 4])).toBe(true)
+    expect(isSetFinished(bestOf3, 0, [6, 5])).toBe(false)
+    expect(isSetFinished(bestOf3, 0, [7, 6])).toBe(true)
+    expect(isSetFinished(bestOf3, 0, [7, 5])).toBe(true)
+  })
+
+  it('sieht einen angefangenen Satz als das, was er ist', () => {
+    expect(isSetFinished(bestOf3, 1, [2, 1])).toBe(false)
+    expect(isSetFinished(bestOf3, 1, [4, 0])).toBe(false)
+  })
+
+  it('misst den Match-Tiebreak an seiner eigenen Regel', () => {
+    expect(isSetFinished(bestOf3, 2, [10, 8])).toBe(true)
+    expect(isSetFinished(bestOf3, 2, [10, 9])).toBe(false)
+    expect(isSetFinished(bestOf3, 2, [12, 10])).toBe(true)
+    expect(isSetFinished(bestOf3, 2, [6, 4])).toBe(false)
+  })
+
+  it('lässt den Vorteilssatz laufen, bis zwei Spiele Abstand sind', () => {
+    expect(isSetFinished(bestOf3Advantage, 2, [8, 6])).toBe(true)
+    expect(isSetFinished(bestOf3Advantage, 2, [7, 6])).toBe(false)
+    expect(isSetFinished(bestOf3Advantage, 2, [9, 8])).toBe(false)
   })
 })

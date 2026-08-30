@@ -101,8 +101,20 @@ export function CsvImportPanel({
 
       <div className="md-hint" style={{ fontSize: 'var(--fs-xs)', marginBottom: 'var(--sp-6)' }}>
         Spalten: <span className="md-num">{layout.columns}</span> — ab {layout.optionalFrom}{' '}
-        freiwillig. Trennzeichen Semikolon, Komma oder Tabulator; eine Kopfzeile wird erkannt. Wer
-        schon im Feld steht, wird übersprungen statt verdoppelt.
+        freiwillig. Trennzeichen Semikolon, Komma oder Tabulator; eine Kopfzeile wird erkannt.
+      </div>
+
+      {/*
+        Die Einschränkung gehört dazu, nicht weggelassen. „Wer schon im Feld
+        steht, wird übersprungen" stand hier ohne sie — und stimmte nur für
+        Zeilen mit Adresse. Ohne Adresse führt gleicher Name zwei Menschen nicht
+        zusammen: zwei Hans Müller in einer Vereinsliste bleiben zwei, und der
+        zweite wortlos zu verschlucken wäre der teurere Fehler. Wer dieselbe
+        Liste zweimal einliest, bekommt die Namen ohne Adresse deshalb zweimal.
+      */}
+      <div className="md-hint" style={{ fontSize: 'var(--fs-xs)', marginBottom: 'var(--sp-6)' }}>
+        Wer mit derselben Adresse schon im Feld steht, wird übersprungen. Ohne Adresse entsteht ein
+        zweiter Eintrag — gleicher Name allein ist kein Beweis für denselben Menschen.
       </div>
 
       <input

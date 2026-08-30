@@ -23,6 +23,10 @@ import { defineConfig, devices } from '@playwright/test'
  * eine Datenbank, und ein Turnier, das ein anderer Test gerade auslost, ist
  * kein stabiler Ausgangspunkt.
  */
+/** Meint dieser Aufruf die Abnahme? */
+const abnahmeGemeint =
+  !!process.env.MATCHDAY_ABNAHME || process.argv.slice(2).some((arg) => arg.includes('abnahme'))
+
 export default defineConfig({
   testDir: './e2e',
   outputDir: './test-results',
@@ -34,6 +38,12 @@ export default defineConfig({
   testIgnore: [
     ...(process.env.MATCHDAY_ANSICHT ? [] : ['**/ansicht.spec.ts']),
     ...(process.env.MATCHDAY_DURCHLAUF ? [] : ['**/durchlauf.spec.ts', '**/soziales.spec.ts']),
+    // Die Abnahme ist der lange Lauf über alles; sie gehört nicht in den
+    // schnellen Durchgang. Ausgeblendet wird sie deshalb, außer der Aufruf
+    // meint sie ausdrücklich — `npm run abnahme` oder die Umgebungsvariable.
+    // Über das Argument und nicht über eine zusätzliche Abhängigkeit: eine
+    // Variable plattformübergreifend zu setzen kostete sonst ein Paket.
+    ...(abnahmeGemeint ? [] : ['**/abnahme/**']),
   ],
 
   fullyParallel: false,

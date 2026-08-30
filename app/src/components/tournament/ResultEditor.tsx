@@ -4,6 +4,7 @@ import { MatchOutcome, type MatchDetail, type MatchFormat, type SetScore } from 
 import { outcomeLabel, sideName } from '../../lib/labels'
 import {
   isMatchTiebreakSet,
+  isSetFinished,
   maxGamesOf,
   openSetCount,
   setLabel,
@@ -70,6 +71,16 @@ export function ResultEditor({
 
   const needsAffectedSide = outcome !== MatchOutcome.Normal && outcome !== MatchOutcome.Bye
 
+  /**
+   * Kennt dieser Ausgang einen abgebrochenen Satz?
+   *
+   * Aufgabe und Disqualifikation ja — bei beiden wird bis zu einem Stand
+   * gespielt und dann nicht weiter. Ein Nichtantreten hat gar keinen Stand,
+   * und ein normales Ergebnis keinen Abbruch.
+   */
+  const kennteinenAbbruch = (was: MatchOutcome) =>
+    was === MatchOutcome.Retirement || was === MatchOutcome.Disqualification
+
   // Nur die Sätze, die es geben kann: der nächste erscheint, wenn der vorige
   // gespielt und das Match noch offen ist. Danach ist Schluss — ein Satz nach
   // dem entscheidenden ist kein Zug, den die Maske anbieten darf.
@@ -97,18 +108,33 @@ export function ResultEditor({
   const save = async () => {
     setSaving(true)
     try {
-      const sets: SetScore[] = playedSets.map(([games1, games2]) => ({
+      const alsSatz = ([games1, games2]: readonly [number, number]): SetScore => ({
         games1,
         games2,
         tiebreakPoints: null,
-      }))
+      })
+
+      // Wer aufgibt, tut es meistens mitten im Satz. Der letzte Satz ist dann
+      // kein gespielter, sondern ein abgebrochener — die Domäne führt ihn
+      // getrennt. Hier stand einmal fest `abandonedSet: null`, und der halbe
+      // Satz ging als ganzer mit: der Server wies das Ergebnis ab, und eine
+      // Aufgabe beim Stand von 2:1 ließ sich überhaupt nicht eintragen.
+      const letzter = playedSets.length - 1
+      const abgebrochen =
+        kennteinenAbbruch(outcome) &&
+        letzter >= 0 &&
+        !isSetFinished(format, letzter, playedSets[letzter]!)
+          ? playedSets[letzter]!
+          : null
+
+      const vollstaendig = abgebrochen ? playedSets.slice(0, letzter) : playedSets
 
       await matchApi.recordResult(match.id, {
         outcome,
         // Ein Walkover hat keinen Spielstand — dann bleibt das Feld leer,
         // statt Nullen zu schicken, die die Domäne als gespielte Sätze läse.
-        sets: outcome === MatchOutcome.Walkover ? null : sets,
-        abandonedSet: null,
+        sets: outcome === MatchOutcome.Walkover ? null : vollstaendig.map(alsSatz),
+        abandonedSet: abgebrochen ? alsSatz(abgebrochen) : null,
         affectedSide: needsAffectedSide ? affectedSide : null,
       })
 
