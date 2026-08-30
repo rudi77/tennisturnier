@@ -117,6 +117,17 @@ public sealed class Match : Entity
     /// <summary>Sprechende Bezeichnung wie „Finale" oder „Spiel um Platz 3".</summary>
     public string? Label { get; private set; }
 
+    /// <summary>
+    /// Wie das Match genannt wird, wo ein Name gebraucht wird — im Feed, in
+    /// einer Historie.
+    ///
+    /// Die mitgelieferten Formate vergeben alle eine Bezeichnung; eine eigene
+    /// Formatdefinition muss das nicht. Der Ausweg steht deshalb hier und
+    /// nicht an jeder Aufrufstelle, die ihn sonst für sich fände — und die
+    /// Runde ist das, was ohne Bezeichnung übrig bleibt.
+    /// </summary>
+    public string Name => Label ?? $"Runde {Round}";
+
     /// <summary>Gruppe in einer Round-Robin-Phase.</summary>
     public string? Group { get; private set; }
 

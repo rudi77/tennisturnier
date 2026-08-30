@@ -4,7 +4,7 @@ import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
 import { TeamPanel } from '../components/tournament/TeamPanel'
 import { VisibilityPanel } from '../components/tournament/VisibilityPanel'
 import { ShareLink } from '../components/tournament/ShareLink'
-import { joinUrl } from '../hooks/useRoute'
+import { joinUrl, useRoute } from '../hooks/useRoute'
 import { Empty, ErrorBlock, Loading } from '../components/layout/StateBlock'
 import { useResource } from '../hooks/useResource'
 import { useToast } from '../hooks/useToast'
@@ -53,6 +53,11 @@ const formsTeamsItself = (tournament: TournamentDetail) =>
 export function EntriesScreen() {
   const { tournament, reloadTournament } = useWorkspace()
   const { show, showError } = useToast()
+  const { navigate } = useRoute()
+
+  // Vom Namen zum Menschen. Das Profil gehört keinem Turnier — die Auswahl
+  // bleibt deshalb stehen, damit der Weg zurück derselbe Klick ist.
+  const openPlayer = (playerId: string) => navigate({ screen: 'profile', playerId })
 
   const tournamentId = tournament?.id ?? null
 
@@ -195,6 +200,7 @@ export function EntriesScreen() {
                   tournamentApi.withdraw(tournament.id, entry.id),
                 )
               }
+              onOpenPlayer={openPlayer}
               onSeed={(seed) =>
                 void act(entry.id, 'Setzposition gespeichert', () =>
                   tournamentApi.setSeed(tournament.id, entry.id, seed),
@@ -518,6 +524,7 @@ function Row({
   onWaitingList,
   onWithdraw,
   onSeed,
+  onOpenPlayer,
 }: {
   entry: EntryOverview
   busy: boolean
@@ -525,6 +532,8 @@ function Row({
   onWaitingList: () => void
   onWithdraw: () => void
   onSeed: (seed: number | null) => void
+  /** Der Weg vom Namen zum Menschen dahinter. */
+  onOpenPlayer: (playerId: string) => void
 }) {
   const [seed, setSeed] = useState(entry.seed?.toString() ?? '')
 
@@ -541,13 +550,24 @@ function Row({
         {new Date(entry.registeredAt).toLocaleString('de-AT')}
       </div>
 
+      {/* Der Name führt ins Profil, die Adresse daneben nicht: sie ist eine
+          Angabe über den Menschen, das Profil ist der Mensch (ADR-0013). */}
       {entry.contacts.length > 0 && (
         <div className="md-entry__contacts">
-          {entry.contacts
-            .map((contact) =>
-              [contact.displayName, contact.email, contact.phone].filter(Boolean).join(' · '),
-            )
-            .join(' | ')}
+          {entry.contacts.map((contact, index) => (
+            <span key={contact.playerId}>
+              {index > 0 && ' | '}
+              <button
+                type="button"
+                className="md-linkbtn"
+                onClick={() => onOpenPlayer(contact.playerId)}
+              >
+                {contact.displayName}
+              </button>
+              {[contact.email, contact.phone].filter(Boolean).length > 0 &&
+                ` · ${[contact.email, contact.phone].filter(Boolean).join(' · ')}`}
+            </span>
+          ))}
         </div>
       )}
 

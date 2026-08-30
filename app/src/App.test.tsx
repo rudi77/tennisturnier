@@ -62,7 +62,9 @@ vi.mock('./auth/oidc', () => ({
 
 vi.mock('./api/realtime', () => ({
   PROJECTION_CHANGED: 'projectionChanged',
+  FEED_CHANGED: 'feedChanged',
   subscribeToTournament: () => () => {},
+  subscribeToFeed: () => () => {},
 }))
 
 const { App } = await import('./App')
@@ -264,10 +266,32 @@ describe('App — Arbeitsbereich', () => {
       ['Spielplan', 'Spielplan'],
       ['Neues Turnier', 'Turnier anlegen'],
       ['Live-Ansicht', 'Live-Ansicht'],
+      // Die vier, die nicht zum Turnierablauf gehören (ADR-0013 bis 0015).
+      ['Feed', 'Feed'],
+      ['Mein Profil', 'Moser, Sabine'],
+      ['Mitspieler', 'Mitspieler'],
+      ['Verabredungen', 'Verabredungen'],
     ] as const) {
       await u.click(navPunkt(punkt))
       expect(await screen.findByRole('heading', { name: ueberschrift })).toBeInTheDocument()
     }
+  })
+
+  /**
+   * Aus dem Profil zurück in ein Turnier: die Auswahl wechselt, der Ablauf ist
+   * das Ziel, und das Profil wird dabei abgewählt — sonst stünde es beim
+   * nächsten Wechsel zurück auf „Profil" noch da.
+   */
+  it('führt aus dem Profil in das Turnier, das dort steht', async () => {
+    bei(`/?screen=profile&t=${T}`)
+    render(<App />)
+
+    await userEvent().click(
+      await screen.findByRole('button', { name: 'Clubmeisterschaft 2026' }),
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Ablauf' })).toBeInTheDocument()
+    expect(window.location.search).not.toContain('p=')
   })
 
   it('fällt bei einem unbekannten Bildschirm auf den Ablauf zurück', async () => {

@@ -17,8 +17,10 @@ import {
   EntryOrigin,
   EntryStatus,
   FinalSetMode,
+  InvitationResponse,
   MatchOutcome,
   MatchStatus,
+  PostKind,
   PhaseFormatKind,
   PhaseStatus,
   ProposalChange,
@@ -41,6 +43,11 @@ import {
   type MatchFormat,
   type MeResponse,
   type PhaseDetail,
+  type ConnectionView,
+  type PlayDateView,
+  type FeedPage,
+  type FeedPostView,
+  type PlayerProfileView,
   type PublicCourtView,
   type PublicMatchView,
   type PublicPhaseView,
@@ -77,6 +84,7 @@ export const IDS = {
   participant4: 'p0000000-0000-0000-0000-000000000004',
   player1: 'a0000000-0000-0000-0000-000000000001',
   player2: 'a0000000-0000-0000-0000-000000000002',
+  player3: 'a0000000-0000-0000-0000-000000000003',
   phase: 'f0000000-0000-0000-0000-000000000001',
   match1: 'd0000000-0000-0000-0000-000000000001',
   match2: 'd0000000-0000-0000-0000-000000000002',
@@ -86,6 +94,11 @@ export const IDS = {
   template: '99999999-9999-9999-9999-999999999999',
   user: 'u0000000-0000-0000-0000-000000000001',
   role: 'r0000000-0000-0000-0000-000000000001',
+  post1: '01900000-0000-7000-8000-000000000001',
+  post2: '01900000-0000-7000-8000-000000000002',
+  comment1: '01900000-0000-7000-8000-000000000011',
+  playDate: '01900000-0000-7000-8000-000000000021',
+  otherUser: 'u0000000-0000-0000-0000-000000000002',
 } as const
 
 export const DEFAULT_FORMAT: MatchFormat = {
@@ -611,3 +624,166 @@ export function publicView(over: Partial<PublicTournamentView> = {}): PublicTour
 }
 
 export const OUTCOMES = MatchOutcome
+
+/**
+ * Ein Spielerprofil, wie ADR-0013 es liefert: zwei Matches, eines gewonnen,
+ * eines verloren, in einem Turnier.
+ */
+export function playerProfile(over: Partial<PlayerProfileView> = {}): PlayerProfileView {
+  return {
+    playerId: IDS.player1,
+    displayName: 'Moser, Sabine',
+    firstName: 'Sabine',
+    lastName: 'Moser',
+    bio: 'Spielt seit 2009, am liebsten Doppel.',
+    homeClub: 'TC Musterstadt',
+    isSelf: false,
+    hasAccount: true,
+    record: {
+      played: 2,
+      won: 1,
+      lost: 1,
+      tournaments: 1,
+      setsWon: 3,
+      setsLost: 2,
+      lastPlayedOn: '2026-05-16',
+    },
+    tournaments: [
+      {
+        tournamentId: IDS.tournament,
+        name: 'Clubmeisterschaft 2026',
+        discipline: Discipline.Singles,
+        startsOn: '2026-05-16',
+        endsOn: '2026-05-17',
+        state: TournamentState.InProgress,
+        status: EntryStatus.Accepted,
+        participantName: 'Moser, Sabine',
+        played: 2,
+        won: 1,
+      },
+    ],
+    matches: [
+      {
+        matchId: IDS.match1,
+        tournamentId: IDS.tournament,
+        tournamentName: 'Clubmeisterschaft 2026',
+        phaseName: 'Hauptrunde',
+        matchName: 'Halbfinale',
+        ownName: 'Moser, Sabine',
+        opponentName: 'Berger, Lena',
+        opponents: [{ playerId: IDS.player2, displayName: 'Berger, Lena' }],
+        partner: null,
+        won: true,
+        outcome: MatchOutcome.Normal,
+        score: '6:4 6:2',
+        playedAt: '2026-05-16T10:30:00+00:00',
+      },
+      {
+        matchId: IDS.match2,
+        tournamentId: IDS.tournament,
+        tournamentName: 'Clubmeisterschaft 2026',
+        phaseName: 'Hauptrunde',
+        matchName: 'Finale',
+        ownName: 'Moser, Sabine',
+        opponentName: 'Huber, Anna',
+        opponents: [{ playerId: IDS.player3, displayName: 'Huber, Anna' }],
+        partner: null,
+        won: false,
+        outcome: MatchOutcome.Normal,
+        score: '4:6 6:3 7:10',
+        playedAt: '2026-05-17T09:00:00+00:00',
+      },
+    ],
+    ...over,
+  }
+}
+
+/** Ein geschriebener Beitrag im Feed (ADR-0014). */
+export function feedMessage(over: Partial<FeedPostView> = {}): FeedPostView {
+  return {
+    id: IDS.post1,
+    kind: PostKind.Message,
+    author: { userId: IDS.user, displayName: 'Rudi Turnierleitung', playerId: IDS.player1 },
+    text: 'Platz 3 ist nass, wir spielen auf 4 weiter.',
+    matchId: null,
+    createdAt: '2026-05-16T09:30:00+00:00',
+    canDelete: true,
+    comments: [],
+    ...over,
+  }
+}
+
+/** Ein Ereignis — ohne Verfasser, denn es gehört dem Turnier. */
+export function feedEvent(over: Partial<FeedPostView> = {}): FeedPostView {
+  return {
+    id: IDS.post2,
+    kind: PostKind.ResultRecorded,
+    author: null,
+    text: 'Halbfinale: Moser, Sabine schlägt Berger, Lena 6:4 6:2',
+    matchId: IDS.match1,
+    createdAt: '2026-05-16T09:00:00+00:00',
+    canDelete: false,
+    comments: [],
+    ...over,
+  }
+}
+
+export function feedPage(over: Partial<FeedPage> = {}): FeedPage {
+  return {
+    posts: [feedMessage(), feedEvent()],
+    before: null,
+    canWrite: true,
+    ...over,
+  }
+}
+
+/** Ein Mitspieler, wie der Kontaktgraph ihn liefert (ADR-0013). */
+export function connection(over: Partial<ConnectionView> = {}): ConnectionView {
+  return {
+    playerId: IDS.player2,
+    displayName: 'Berger, Lena',
+    together: 0,
+    against: 3,
+    won: 2,
+    lost: 1,
+    lastPlayedOn: '2026-05-16',
+    lastTournamentName: 'Clubmeisterschaft 2026',
+    sharedTournaments: 2,
+    canBeInvited: true,
+    ...over,
+  }
+}
+
+/**
+ * Eine Verabredung, die der Angemeldete ausrichtet und für die noch einer
+ * fehlt (ADR-0015).
+ */
+export function playDate(over: Partial<PlayDateView> = {}): PlayDateView {
+  return {
+    id: IDS.playDate,
+    title: 'Samstag früh eine Runde?',
+    discipline: Discipline.Singles,
+    venueName: 'TC Musterstadt, Platz 2',
+    startsAt: '2026-06-20T07:00:00+00:00',
+    endsAt: '2026-06-20T08:00:00+00:00',
+    note: 'Bringt Bälle mit.',
+    host: { userId: IDS.user, displayName: 'Rudi Turnierleitung', playerId: IDS.player1 },
+    guests: [
+      {
+        userId: IDS.otherUser,
+        playerId: IDS.player2,
+        displayName: 'Berger, Lena',
+        response: InvitationResponse.Pending,
+      },
+    ],
+    requiredPlayers: 2,
+    committed: 1,
+    missing: 1,
+    isConfirmed: false,
+    isCancelled: false,
+    isPast: false,
+    isHost: true,
+    myResponse: null,
+    ...over,
+  }
+}

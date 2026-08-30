@@ -23,7 +23,11 @@ import type {
   DrawTeamsResult,
   ImportEntriesResult,
   MeResponse,
+  ConnectionView,
+  FeedPage,
+  PlayDateView,
   PhaseDetail,
+  PlayerProfileView,
   PlayerSummary,
   JoinView,
   PublicTournamentView,
@@ -53,6 +57,13 @@ export interface FakeDb {
   templates: FormatTemplateSummary[]
   templateDetails: FormatTemplateDetail[]
   players: PlayerSummary[]
+  /** Profile nach Spieler-Id. Was nicht darin steht, antwortet mit 404 — wie die API. */
+  profiles: Record<string, PlayerProfileView>
+  /** Das eigene Profil. `null` heißt: zum Konto gehört noch kein Spieler. */
+  myProfile: PlayerProfileView | null
+  feed: FeedPage
+  connections: ConnectionView[]
+  playDates: PlayDateView[]
   importResult: ImportEntriesResult
   drawTeamsResult: DrawTeamsResult
   /** Der ETag, den die öffentliche Ansicht ausliefert. */
@@ -109,6 +120,22 @@ function initial(): FakeDb {
       { id: IDS.player1, displayName: 'S. Moser' },
       { id: IDS.player2, displayName: 'L. Berger' },
     ],
+    profiles: {
+      [IDS.player1]: fx.playerProfile(),
+      [IDS.player2]: fx.playerProfile({
+        playerId: IDS.player2,
+        displayName: 'Berger, Lena',
+        firstName: 'Lena',
+        lastName: 'Berger',
+        bio: null,
+        homeClub: null,
+        hasAccount: false,
+      }),
+    },
+    myProfile: fx.playerProfile({ isSelf: true }),
+    feed: fx.feedPage(),
+    connections: [fx.connection()],
+    playDates: [fx.playDate()],
     importResult: { imported: 2, skipped: 1, problems: [] },
     drawTeamsResult: { formed: 2, leftOver: 0 },
     publicEtag: '"etag-1"',
@@ -274,12 +301,137 @@ export const handlers: HttpHandler[] = [
     return HttpResponse.json(db.players.filter((p) => p.displayName.toLowerCase().includes(q)))
   }),
   on('post', '/api/players', () => HttpResponse.json({ id: IDS.player1 }, { status: 201 })),
+
+  // --- Profil ---
+  on('get', '/api/players/:playerId/profile', ({ params }) => {
+    const found = db.profiles[params.playerId!]
+    return found ? HttpResponse.json(found) : problem(404, 'Spieler nicht gefunden.', 'Nicht gefunden')
+  }),
+
+  on('get', '/api/me/profile', () =>
+    db.myProfile ? HttpResponse.json(db.myProfile) : new HttpResponse(null, { status: 204 }),
+  ),
+
+  on('put', '/api/me/profile', async ({ request }) => {
+    const body = (await request.json()) as {
+      firstName: string
+      lastName: string
+      bio: string | null
+      homeClub: string | null
+    }
+
+    db.myProfile = fx.playerProfile({
+      ...(db.myProfile ?? {}),
+      isSelf: true,
+      hasAccount: true,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      displayName: `${body.lastName}, ${body.firstName}`,
+      bio: body.bio,
+      homeClub: body.homeClub,
+    })
+
+    return HttpResponse.json(db.myProfile)
+  }),
   on('post', '/api/participants', () =>
     HttpResponse.json(
       { id: IDS.participant3, displayName: 'A. Huber', playerIds: [IDS.player1] },
       { status: 201 },
     ),
   ),
+
+  // --- Verabredungen ---
+  on('get', '/api/play-dates', () => HttpResponse.json(db.playDates)),
+
+  on('post', '/api/play-dates', async ({ request }) => {
+    const body = (await request.json()) as { title: string; invitees: string[] }
+    const created = fx.playDate({ id: 'neue-runde', title: body.title })
+    db.playDates = [...db.playDates, created]
+    return HttpResponse.json(created, { status: 201 })
+  }),
+
+  on('post', '/api/play-dates/:id/invitations', ({ params }) =>
+    HttpResponse.json(db.playDates.find((date) => date.id === params.id)),
+  ),
+
+  on('post', '/api/play-dates/:id/response', async ({ params, request }) => {
+    const body = (await request.json()) as { accepted: boolean }
+
+    db.playDates = db.playDates.map((date) =>
+      date.id === params.id
+        ? {
+            ...date,
+            myResponse: body.accepted ? 1 : 2,
+            committed: body.accepted ? date.committed + 1 : date.committed,
+            missing: body.accepted ? Math.max(0, date.missing - 1) : date.missing,
+            isConfirmed: body.accepted && date.missing <= 1,
+          }
+        : date,
+    )
+
+    return HttpResponse.json(db.playDates.find((date) => date.id === params.id))
+  }),
+
+  on('delete', '/api/play-dates/:id', ({ params }) => {
+    db.playDates = db.playDates.map((date) =>
+      date.id === params.id ? { ...date, isCancelled: true } : date,
+    )
+    return HttpResponse.json(db.playDates.find((date) => date.id === params.id))
+  }),
+
+  // --- Kontakte ---
+  on('get', '/api/me/connections', () => HttpResponse.json(db.connections)),
+
+  // --- Feed ---
+  on('get', '/api/tournaments/:id/feed', ({ params }) =>
+    params.id === db.tournament.id
+      ? HttpResponse.json(db.feed)
+      : problem(404, 'Nicht gefunden.', 'Nicht gefunden'),
+  ),
+
+  on('post', '/api/tournaments/:id/feed', async ({ request }) => {
+    const body = (await request.json()) as { text: string }
+    const post = fx.feedMessage({ id: `post-${db.feed.posts.length + 1}`, text: body.text })
+    db.feed = { ...db.feed, posts: [post, ...db.feed.posts] }
+    return HttpResponse.json(post, { status: 201 })
+  }),
+
+  on('post', '/api/feed/:postId/comments', async ({ params, request }) => {
+    const body = (await request.json()) as { text: string }
+    const comment = {
+      id: IDS.comment1,
+      author: { userId: IDS.user, displayName: 'Rudi Turnierleitung', playerId: IDS.player1 },
+      text: body.text,
+      createdAt: '2026-05-16T09:35:00+00:00',
+      canDelete: true,
+    }
+
+    db.feed = {
+      ...db.feed,
+      posts: db.feed.posts.map((post) =>
+        post.id === params.postId ? { ...post, comments: [...post.comments, comment] } : post,
+      ),
+    }
+
+    return HttpResponse.json(comment)
+  }),
+
+  on('delete', '/api/feed/:postId', ({ params }) => {
+    db.feed = { ...db.feed, posts: db.feed.posts.filter((post) => post.id !== params.postId) }
+    return noContent()
+  }),
+
+  on('delete', '/api/feed/:postId/comments/:commentId', ({ params }) => {
+    db.feed = {
+      ...db.feed,
+      posts: db.feed.posts.map((post) =>
+        post.id === params.postId
+          ? { ...post, comments: post.comments.filter((c) => c.id !== params.commentId) }
+          : post,
+      ),
+    }
+    return noContent()
+  }),
 
   // --- Bracket ---
   on('get', '/api/tournaments/:id/phases', () => HttpResponse.json(db.phases)),

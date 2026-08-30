@@ -1,9 +1,11 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.Social;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.Security;
+using TennisTurnier.Domain.Social;
 using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Application.Membership;
@@ -55,6 +57,7 @@ public sealed class JoinService : IJoinService
     private readonly IRoleAssignmentRepository _roles;
     private readonly IUserDirectory _directory;
     private readonly IUserContext _userContext;
+    private readonly FeedRecorder _feed;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IClock _clock;
 
@@ -65,6 +68,7 @@ public sealed class JoinService : IJoinService
         IRoleAssignmentRepository roles,
         IUserDirectory directory,
         IUserContext userContext,
+        FeedRecorder feed,
         IUnitOfWork unitOfWork,
         IClock clock)
     {
@@ -74,6 +78,7 @@ public sealed class JoinService : IJoinService
         _roles = roles;
         _directory = directory;
         _userContext = userContext;
+        _feed = feed;
         _unitOfWork = unitOfWork;
         _clock = clock;
     }
@@ -114,7 +119,20 @@ public sealed class JoinService : IJoinService
             ? await EnterAsync(tournament, request, account, cancellationToken)
             : null;
 
-        await GrantMembershipAsync(tournament.Id, account.Id, cancellationToken);
+        var neu = await GrantMembershipAsync(tournament.Id, account.Id, cancellationToken);
+
+        // Nur beim ersten Mal: derselbe Link ein zweites Mal ist kein zweiter
+        // Beitritt und keine zweite Meldung im Feed (ADR-0014).
+        if (neu)
+        {
+            _feed.Record(
+                tournament.Id,
+                PostKind.Joined,
+                entry is null
+                    ? $"{account.PreferredName} gehört jetzt dazu."
+                    : $"{account.PreferredName} ist dabei — und spielt mit.");
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new JoinResult(tournament.Id, entry?.Id, entry?.Status);
@@ -228,7 +246,7 @@ public sealed class JoinService : IJoinService
     /// kein zweiter Beitritt. Wer schon eine andere Rolle am Turnier hat,
     /// braucht keine: die Turnierleitung ist kein Mitglied zweiter Klasse.
     /// </summary>
-    private async Task GrantMembershipAsync(
+    private async Task<bool> GrantMembershipAsync(
         Guid tournamentId,
         Guid userId,
         CancellationToken cancellationToken)
@@ -237,12 +255,15 @@ public sealed class JoinService : IJoinService
 
         if (existing.Any(a => a.UserId == userId))
         {
-            return;
+            return false;
         }
 
         _roles.Add(new RoleAssignment(
             Guid.NewGuid(), userId, Role.Member, ResourceScope.Tournament(tournamentId)));
+
+        return true;
     }
+
 
     /// <summary>
     /// Das Konto des Aufrufers.

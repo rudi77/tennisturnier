@@ -1,6 +1,7 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
+using TennisTurnier.Application.Social;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
@@ -54,6 +55,7 @@ public sealed class MatchService : IMatchService
     private readonly ICourtAssignmentRepository _assignments;
     private readonly IPlayerRepository _players;
     private readonly IPublicViewService _publicView;
+    private readonly FeedRecorder _feed;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
     private readonly IClock _clock;
@@ -64,6 +66,7 @@ public sealed class MatchService : IMatchService
         ICourtAssignmentRepository assignments,
         IPlayerRepository players,
         IPublicViewService publicView,
+        FeedRecorder feed,
         IUnitOfWork unitOfWork,
         IUserContext userContext,
         IClock clock)
@@ -73,6 +76,7 @@ public sealed class MatchService : IMatchService
         _assignments = assignments;
         _players = players;
         _publicView = publicView;
+        _feed = feed;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
         _clock = clock;
@@ -148,10 +152,14 @@ public sealed class MatchService : IMatchService
         var matchFormat = MatchFormatOf(tournament, phase);
         phase.RecordResult(matchId, BuildScore(request, match, matchFormat));
 
+        await AnnounceResultAsync(tournament, match, cancellationToken);
+
         // Das erste Ergebnis macht aus einem ausgelosten ein laufendes Turnier.
         if (tournament.State == TournamentState.DrawGenerated)
         {
+            var vorher = tournament.State;
             tournament.Start();
+            _feed.RecordStateChange(tournament, vorher);
         }
 
         await ReleaseQueueAsync(tournament.Id, [matchId], cancellationToken);
@@ -164,6 +172,32 @@ public sealed class MatchService : IMatchService
         await _publicView.RebuildAsync(tournament.Id, cancellationToken);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Schreibt das Ergebnis in den Feed (ADR-0014).
+    ///
+    /// Nach dem Eintragen und nicht davor: erst dann steht fest, wer gewonnen
+    /// hat.
+    /// </summary>
+    private async Task AnnounceResultAsync(
+        Tournament tournament,
+        Match match,
+        CancellationToken cancellationToken)
+    {
+        // Aufgerufen unmittelbar nach dem Eintragen: das Ergebnis steht, und
+        // beide Seiten tragen eine Meldung. Ein Freilos kommt hier nie an — es
+        // wird beim Aufbau des Baums entschieden und nicht eingetragen.
+        var score = match.Score!;
+        var names = await NamesByEntryAsync(tournament, cancellationToken);
+
+        _feed.RecordResult(
+            tournament.Id,
+            match.Id,
+            match.Name,
+            names[match.Side(score.WinnerSide).EntryId!.Value],
+            names[match.Side(score.LoserSide).EntryId!.Value],
+            score);
     }
 
     /// <summary>

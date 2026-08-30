@@ -1,10 +1,12 @@
 ﻿using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.Social;
 using TennisTurnier.Application.PublicView;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.Security;
+using TennisTurnier.Domain.Social;
 using TennisTurnier.Domain.Tournaments;
 
 namespace TennisTurnier.Application.Tournaments;
@@ -20,6 +22,7 @@ public sealed class TournamentService : ITournamentService
     private readonly ITournamentProjectionStore _projections;
     private readonly DrawBuilder _drawBuilder;
     private readonly IPublicViewService _publicView;
+    private readonly FeedRecorder _feed;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
 
@@ -33,6 +36,7 @@ public sealed class TournamentService : ITournamentService
         ITournamentProjectionStore projections,
         DrawBuilder drawBuilder,
         IPublicViewService publicView,
+        FeedRecorder feed,
         IUnitOfWork unitOfWork,
         IUserContext userContext)
     {
@@ -45,6 +49,7 @@ public sealed class TournamentService : ITournamentService
         _projections = projections;
         _drawBuilder = drawBuilder;
         _publicView = publicView;
+        _feed = feed;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
     }
@@ -448,6 +453,11 @@ public sealed class TournamentService : ITournamentService
         tournament.GenerateDraw(template.Definition, template.Version);
         await _drawBuilder.BuildAsync(tournament, cancellationToken);
 
+        _feed.Record(
+            tournamentId,
+            PostKind.DrawGenerated,
+            $"Der Draw steht — {tournament.AcceptedEntries.Count} im Feld.");
+
         // Zwischenspeichern, damit die eben angelegten Phasen für den Aufbau der
         // öffentlichen Ansicht abfragbar sind. Endgültig wird beides erst mit
         // dem Abschluss der Einheit — und zwar gemeinsam.
@@ -467,7 +477,10 @@ public sealed class TournamentService : ITournamentService
     {
         var tournament = await LoadForManagement(tournamentId, cancellationToken);
 
+        var vorher = tournament.State;
         tournament.ReopenRegistration();
+        _feed.RecordStateChange(tournament, vorher);
+
         await _drawBuilder.DiscardAsync(tournamentId, cancellationToken);
 
         await _unitOfWork.FlushAsync(cancellationToken);
@@ -711,7 +724,14 @@ public sealed class TournamentService : ITournamentService
         CancellationToken cancellationToken)
     {
         var tournament = await LoadForManagement(tournamentId, cancellationToken);
+
+        // Vor der Änderung gemerkt: der Feed meldet den Wechsel und nicht die
+        // Handlung (ADR-0014). Ein Aufruf, der nichts ändert — „Meldung öffnen"
+        // auf ein bereits offenes Turnier —, meldet deshalb auch nichts.
+        var vorher = tournament.State;
+
         change(tournament);
+        _feed.RecordStateChange(tournament, vorher);
         // Jede Änderung am Turnier kann die öffentliche Ansicht betreffen — der
         // Name, die Termine, der Zustand, eine Setzposition. Statt zu erraten,
         // welche es tut, wird immer neu gebaut; ob dabei etwas herauskommt,

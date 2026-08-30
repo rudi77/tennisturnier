@@ -8,7 +8,27 @@ Doppel und Mixed, einstellbares Satzformat bis hinunter zu Kurzsätzen mit
 Champions-Tiebreak, automatischer und manuell korrigierbarer Spielplan sowie eine
 öffentliche Live-Ansicht.
 
+Und dazwischen das, was ein Verein sonst per WhatsApp regelt: **jedes Turnier ist
+eine Gruppe** mit Feed, Beiträgen und Kommentaren, **jeder Spieler hat ein Profil**
+mit seiner Historie, und **verabredet wird auch außerhalb der Turniere** — mit
+denen, mit denen man schon gespielt hat.
+
 **Status:** im Aufbau. Der Fahrplan steht in [docs/roadmap.md](docs/roadmap.md).
+
+## Was außer dem Turnier noch drin ist
+
+Vier Bausteine machen aus der Verwaltung ein Netzwerk. Sie stehen in dieser
+Reihenfolge, weil jeder auf dem vorigen steht.
+
+| | Wo | Was |
+| --- | --- | --- |
+| **Profil** | `?screen=profile` | Bilanz, Turniere und die letzten Matches eines Spielers — **gerechnet über die Turniere, die der Betrachter sehen darf** ([ADR-0013](docs/adr/0013-spielerprofil-und-verbindungen.md)). Zwei Personen sehen zu demselben Spieler verschiedene Zahlen, und die Seite sagt das. |
+| **Feed** | `?screen=feed` | Die Chronik eines Turniers — Meldung offen, Draw, jedes Ergebnis, jeder Beitritt — und darunter, was die Gruppe dazu schreibt ([ADR-0014](docs/adr/0014-turnierfeed.md)). Ein Eintrag trägt seinen Text fertig: wird ein Ergebnis korrigiert, bleibt die alte Zeile stehen. |
+| **Mitspieler** | `?screen=connections` | Wer mit wem gespielt hat, aus den Ergebnissen gerechnet. Keine Freundschaftsanfrage — die Liste ist an dem Tag gefüllt, an dem das erste Ergebnis eingetragen wird. |
+| **Verabredungen** | `?screen=play-dates` | „Wer spielt Samstag?" — ein eigenes Aggregat neben dem Turnier, ohne Draw und ohne Ergebnis ([ADR-0015](docs/adr/0015-verabredungen.md)). Eingeladen wird aus den eigenen Mitspielern. |
+
+Ein turnierübergreifendes Rating gibt es bewusst nicht: es bräuchte eine Bilanz
+über alle Turniere, und die gibt es nach ADR-0013 nicht.
 
 ## Schnellstart
 

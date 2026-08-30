@@ -5,7 +5,18 @@ import { MatchdayMark } from '../core/MatchdayMark'
 import { Sheet } from './Sheet'
 import { displayName } from '../../auth/oidc'
 
-export type ScreenId = 'flow' | 'tournaments' | 'entries' | 'board' | 'draw' | 'create' | 'public'
+export type ScreenId =
+  | 'flow'
+  | 'tournaments'
+  | 'entries'
+  | 'board'
+  | 'draw'
+  | 'create'
+  | 'public'
+  | 'profile'
+  | 'feed'
+  | 'connections'
+  | 'play-dates'
 
 interface Item {
   id: ScreenId
@@ -16,17 +27,22 @@ interface Item {
 }
 
 /**
- * Die vier, die am Turniertag zählen — und in dieser Reihenfolge, weil der Tag
- * sie in dieser Reihenfolge braucht: erst wissen, was zu tun ist, dann die
- * Meldungen, dann auslosen, dann spielen.
+ * Die fünf, die am Turniertag zählen — und in dieser Reihenfolge, weil der Tag
+ * sie in dieser Reihenfolge braucht: erst wissen, was zu tun ist, dann sehen,
+ * was los ist, dann die Meldungen, dann auslosen, dann spielen.
  *
- * Vier und nicht sieben: eine Fußleiste mit sieben Einträgen hat Ziele von
- * fünfzig Pixeln Breite, und daneben zu tippen ist dort die Regel, nicht die
- * Ausnahme. Der Rest steht hinter „Mehr" — er wird selten gebraucht und darf
- * einen zweiten Griff kosten.
+ * Fünf und nicht acht: eine Fußleiste mit acht Einträgen hat Ziele von vierzig
+ * Pixeln Breite, und daneben zu tippen ist dort die Regel, nicht die Ausnahme.
+ * Der Rest steht hinter „Mehr" — er wird selten gebraucht und darf einen
+ * zweiten Griff kosten.
  */
 const PRIMARY: Item[] = [
   { id: 'flow', label: 'Ablauf', short: 'Ablauf', icon: 'flow' },
+  // Der Feed steht vorn und nicht hinter „Mehr": er ist das, wofür jemand die
+  // Anwendung am Turniertag überhaupt öffnet, ohne etwas eintragen zu wollen
+  // (ADR-0014). Ein Ziel, das man selten braucht, darf einen zweiten Griff
+  // kosten — dieses nicht.
+  { id: 'feed', label: 'Feed', short: 'Feed', icon: 'feed' },
   { id: 'entries', label: 'Meldungen', short: 'Meldung', icon: 'entries' },
   { id: 'draw', label: 'Draw & Bracket', short: 'Draw', icon: 'draw' },
   { id: 'board', label: 'Spielplan', short: 'Plan', icon: 'board' },
@@ -39,6 +55,13 @@ const SECONDARY: Item[] = [
   // verschiedener Wirkung sind einer zu viel.
   { id: 'create', label: 'Neues Turnier', short: 'Neu', icon: 'create' },
   { id: 'public', label: 'Live-Ansicht', short: 'Live', icon: 'live' },
+  // Das Profil steht bei den selteneren Zielen und nicht in der Fußleiste: es
+  // wird geöffnet, wenn man jemanden anschaut, nicht während man ein Turnier
+  // führt. Der Weg dorthin führt meistens über einen Namen und nicht über
+  // diesen Eintrag.
+  { id: 'profile', label: 'Mein Profil', short: 'Profil', icon: 'profile' },
+  { id: 'connections', label: 'Mitspieler', short: 'Leute', icon: 'entries' },
+  { id: 'play-dates', label: 'Verabredungen', short: 'Termin', icon: 'board' },
 ]
 
 /**

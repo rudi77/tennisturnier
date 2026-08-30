@@ -10,12 +10,17 @@ import { ApiError, http, apiUrl, authToken } from './client'
 import type {
   AssignCourtResult,
   ConfirmedAssignment,
+  ConnectionView,
+  CreatePlayDateRequest,
   CourtBoard,
   CourtLocation,
   CourtSurface,
   Discipline,
   DrawTeamsResult,
   EntryOverview,
+  FeedCommentView,
+  FeedPage,
+  FeedPostView,
   FormatDefinition,
   FormatTemplateDetail,
   FormatTemplateSummary,
@@ -29,6 +34,8 @@ import type {
   MeResponse,
   ParticipantSummary,
   PhaseDetail,
+  PlayDateView,
+  PlayerProfileView,
   PlayerSummary,
   PublicTournamentView,
   RegistrationDetail,
@@ -41,6 +48,7 @@ import type {
   TournamentDetail,
   TournamentRoleSummary,
   TournamentSummary,
+  UpdateMyProfileRequest,
 } from './types'
 
 // --- Wer fragt --------------------------------------------------------------
@@ -48,6 +56,82 @@ import type {
 export const me = {
   /** Benutzer samt Rollen — damit die Oberfläche weiß, was sie anbieten darf. */
   get: () => http.get<MeResponse>('/api/me'),
+}
+
+// --- Profil -----------------------------------------------------------------
+
+/**
+ * Das Spielerprofil (ADR-0013).
+ *
+ * Was darin steht, hängt am Fragenden: gerechnet wird über die Turniere, die er
+ * ohnehin sehen darf. Ein Spieler, mit dem er keines teilt, antwortet mit 404 —
+ * wie alles, was außerhalb des Query-Filters liegt.
+ */
+export const connections = {
+  /** Mit wem der Aufrufer gespielt hat. Nur die eigenen — siehe ADR-0013. */
+  listMine: () => http.get<ConnectionView[]>('/api/me/connections'),
+}
+
+/**
+ * Verabredungen außerhalb jedes Turniers (ADR-0015).
+ *
+ * Nicht unter `/api/tournaments`, weil sie zu keinem gehören — und das ist die
+ * ganze Entscheidung dahinter.
+ */
+export const playDates = {
+  listMine: (includePast = false) =>
+    http.get<PlayDateView[]>(`/api/play-dates?includePast=${includePast}`),
+
+  create: (body: CreatePlayDateRequest) => http.post<PlayDateView>('/api/play-dates', body),
+
+  invite: (playDateId: string, invitees: string[]) =>
+    http.post<PlayDateView>(`/api/play-dates/${playDateId}/invitations`, { invitees }),
+
+  /** Zu- oder absagen. Danach steht die Runde — oder eben nicht. */
+  respond: (playDateId: string, accepted: boolean) =>
+    http.post<PlayDateView>(`/api/play-dates/${playDateId}/response`, { accepted }),
+
+  /** Absagen. Endgültig — die Zeile bleibt stehen, damit niemand vergeblich am Platz steht. */
+  cancel: (playDateId: string) => http.del<PlayDateView>(`/api/play-dates/${playDateId}`),
+}
+
+export const profiles = {
+  get: (playerId: string) => http.get<PlayerProfileView>(`/api/players/${playerId}/profile`),
+
+  /** `null` heißt: zum Konto gehört noch kein Spieler. Kein Fehler. */
+  mine: () => http.get<PlayerProfileView | null>('/api/me/profile'),
+
+  /** Legt beim ersten Mal den eigenen Spieler an und antwortet mit dem fertigen Profil. */
+  save: (body: UpdateMyProfileRequest) =>
+    http.put<PlayerProfileView>('/api/me/profile', body),
+}
+
+// --- Feed -------------------------------------------------------------------
+
+/**
+ * Der Feed eines Turniers (ADR-0014).
+ *
+ * Lesen und Schreiben hängen am Turnier, Kommentieren und Löschen am Eintrag:
+ * dessen Id nennt sein Turnier bereits, und ein zweiter Bezeichner im Pfad wäre
+ * einer, den der Server gegen den ersten prüfen müsste.
+ */
+export const feed = {
+  list: (tournamentId: string, before: string | null = null, limit = 50) =>
+    http.get<FeedPage>(
+      `/api/tournaments/${tournamentId}/feed?limit=${limit}` +
+        (before ? `&before=${encodeURIComponent(before)}` : ''),
+    ),
+
+  post: (tournamentId: string, text: string) =>
+    http.post<FeedPostView>(`/api/tournaments/${tournamentId}/feed`, { text }),
+
+  comment: (postId: string, text: string) =>
+    http.post<FeedCommentView>(`/api/feed/${postId}/comments`, { text }),
+
+  remove: (postId: string) => http.del<void>(`/api/feed/${postId}`),
+
+  removeComment: (postId: string, commentId: string) =>
+    http.del<void>(`/api/feed/${postId}/comments/${commentId}`),
 }
 
 // --- Turniere ---------------------------------------------------------------

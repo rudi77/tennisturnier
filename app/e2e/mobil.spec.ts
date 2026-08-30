@@ -35,6 +35,13 @@ test('kein Bildschirm ragt über den rechten Rand', async ({ page, api }) => {
     ['tournaments', 'Meine Turniere'],
     ['create', 'Turnier anlegen'],
     ['public', 'Live-Ansicht'],
+    // Die vier, die nicht zum Turnierablauf gehören (ADR-0013 bis 0015). Sie
+    // tragen Fließtext über Menschen, und der ist genau das, was am Telefon
+    // über den Rand ragt, wenn ihn niemand umbrechen lässt.
+    ['feed', 'Feed'],
+    ['profile', 'Mein Profil'],
+    ['connections', 'Mitspieler'],
+    ['play-dates', 'Verabredungen'],
   ] as const) {
     await alsTurnierleitung(page, `/?screen=${screen}&t=${turnier.id}`)
     await expect(page.getByRole('heading', { name: marke })).toBeVisible()

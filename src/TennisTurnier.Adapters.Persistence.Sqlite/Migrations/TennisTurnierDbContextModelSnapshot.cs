@@ -180,6 +180,21 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                                 .HasColumnName("Phone");
                         });
 
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Profile", "TennisTurnier.Domain.Players.Player.Profile#PlayerProfile", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<string>("Bio")
+                                .HasMaxLength(500)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Bio");
+
+                            b1.Property<string>("HomeClub")
+                                .HasMaxLength(120)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("HomeClub");
+                        });
+
                     b.HasKey("Id");
 
                     b.HasIndex("UserAccountId")
@@ -371,6 +386,147 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                         .IsUnique();
 
                     b.ToTable("UserAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("TennisTurnier.Domain.Social.PlayDate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Discipline")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<TimeSpan>("Duration")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HostUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StartsAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VenueName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HostUserId");
+
+                    b.HasIndex("StartsAt");
+
+                    b.ToTable("PlayDates", (string)null);
+                });
+
+            modelBuilder.Entity("TennisTurnier.Domain.Social.PlayDateInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PlayDateId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Response")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("PlayDateId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("PlayDateInvitations", (string)null);
+                });
+
+            modelBuilder.Entity("TennisTurnier.Domain.Social.PostComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AuthorUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PostId", "CreatedAt");
+
+                    b.ToTable("PostComments", (string)null);
+                });
+
+            modelBuilder.Entity("TennisTurnier.Domain.Social.TournamentPost", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AuthorUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("MatchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TournamentId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TournamentId", "CreatedAt");
+
+                    b.ToTable("TournamentPosts", (string)null);
                 });
 
             modelBuilder.Entity("TennisTurnier.Domain.Tournaments.CourtWindow", b =>
@@ -637,6 +793,33 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TennisTurnier.Domain.Social.PlayDateInvitation", b =>
+                {
+                    b.HasOne("TennisTurnier.Domain.Social.PlayDate", null)
+                        .WithMany("Invitations")
+                        .HasForeignKey("PlayDateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TennisTurnier.Domain.Social.PostComment", b =>
+                {
+                    b.HasOne("TennisTurnier.Domain.Social.TournamentPost", null)
+                        .WithMany("Comments")
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TennisTurnier.Domain.Social.TournamentPost", b =>
+                {
+                    b.HasOne("TennisTurnier.Domain.Tournaments.Tournament", null)
+                        .WithMany()
+                        .HasForeignKey("TournamentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TennisTurnier.Domain.Tournaments.CourtWindow", b =>
                 {
                     b.HasOne("TennisTurnier.Domain.Tournaments.TournamentCourt", null)
@@ -709,6 +892,16 @@ namespace TennisTurnier.Adapters.Persistence.Sqlite.Migrations
             modelBuilder.Entity("TennisTurnier.Domain.Phases.Phase", b =>
                 {
                     b.Navigation("Matches");
+                });
+
+            modelBuilder.Entity("TennisTurnier.Domain.Social.PlayDate", b =>
+                {
+                    b.Navigation("Invitations");
+                });
+
+            modelBuilder.Entity("TennisTurnier.Domain.Social.TournamentPost", b =>
+                {
+                    b.Navigation("Comments");
                 });
 
             modelBuilder.Entity("TennisTurnier.Domain.Tournaments.Tournament", b =>

@@ -20,6 +20,7 @@ import {
   matches,
   me,
   join,
+  playDates,
   players,
   schedule,
   tournaments,
@@ -558,5 +559,21 @@ describe('fetchPublicView', () => {
     const controller = new AbortController()
     controller.abort()
     await expect(fetchPublicView(T, null, controller.signal)).rejects.toThrow()
+  })
+})
+
+/**
+ * Verabredungen (ADR-0015).
+ *
+ * Nicht unter `/api/tournaments`, weil sie zu keinem gehören — und das ist die
+ * ganze Entscheidung dahinter. Der Pfad ist hier deshalb die Aussage.
+ */
+describe('playDates', () => {
+  it('lädt jemanden nachträglich ein', async () => {
+    expect(await ruftAuf(() => playDates.invite(IDS.playDate, [IDS.player2]))).toMatchObject({
+      method: 'POST',
+      path: `/api/play-dates/${IDS.playDate}/invitations`,
+      body: { invitees: [IDS.player2] },
+    })
   })
 })

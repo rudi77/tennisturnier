@@ -19,6 +19,9 @@ noch einmal von vorn beginnt.
 | [0010](0010-oeffentliche-selbstmeldung.md) | Öffentliche Selbstmeldung über einen Token-Link | Superseded by 0012 |
 | [0011](0011-satzformat-am-turnier.md) | Das Satzformat gehört dem Turnier, nicht der Vorlage | Accepted |
 | [0012](0012-mitgliedschaft-statt-selbstmeldung.md) | Das Turnier ist eine Gruppe: Mitgliedschaft statt anonymer Selbstmeldung | Accepted |
+| [0013](0013-spielerprofil-und-verbindungen.md) | Das Spielerprofil zeigt, was der Fragende ohnehin sehen darf | Accepted |
+| [0014](0014-turnierfeed.md) | Das Turnier redet: ein Feed statt einer stillen Chronik | Accepted |
+| [0015](0015-verabredungen.md) | Eine Verabredung ist kein Turnier mit einem Match | Accepted |
 
 ## Status
 

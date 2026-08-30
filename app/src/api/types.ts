@@ -833,3 +833,215 @@ export interface DrawTeamsResult {
   formed: number
   leftOver: number
 }
+
+// ---------------------------------------------------------------------------
+// Profil, Verbindungen, Verabredungen — was aus der Turnierverwaltung ein
+// Netzwerk macht
+// ---------------------------------------------------------------------------
+
+/**
+ * Ein Spieler als Verweis. Gerade so viel, dass ein Name dasteht und sein
+ * Profil sich öffnen lässt.
+ */
+export interface PlayerLink {
+  playerId: string
+  displayName: string
+}
+
+/**
+ * Die Bilanz eines Spielers — relativ zum Fragenden.
+ *
+ * Gerechnet wird über die Turniere, die der Aufrufer ohnehin sehen darf
+ * (ADR-0013). Zwei Personen bekommen zu demselben Spieler verschiedene Zahlen,
+ * und die Oberfläche sagt das, statt es zu verschweigen.
+ */
+export interface PlayerRecordView {
+  played: number
+  won: number
+  lost: number
+  tournaments: number
+  setsWon: number
+  setsLost: number
+  lastPlayedOn: string | null
+}
+
+export interface PlayerTournamentView {
+  tournamentId: string
+  name: string
+  discipline: Discipline
+  startsOn: string | null
+  endsOn: string | null
+  state: TournamentState
+  status: EntryStatus
+  participantName: string
+  played: number
+  won: number
+}
+
+export interface PlayerMatchView {
+  matchId: string
+  tournamentId: string
+  tournamentName: string
+  phaseName: string
+  matchName: string
+  ownName: string
+  opponentName: string
+  opponents: PlayerLink[]
+  partner: PlayerLink | null
+  won: boolean
+  outcome: MatchOutcome
+  /** Fertig formatiert — die Sätze einzeln zu übertragen hieße, sie hier noch einmal zu setzen. */
+  score: string
+  playedAt: string | null
+}
+
+export interface PlayerProfileView {
+  playerId: string
+  displayName: string
+  firstName: string
+  lastName: string
+  bio: string | null
+  homeClub: string | null
+  /** Nur dann darf die Oberfläche die Felder zum Bearbeiten anbieten. */
+  isSelf: boolean
+  /** Wer aus einer hochgeladenen Liste kommt, hat kein Konto — und niemanden, der über ihn schreibt. */
+  hasAccount: boolean
+  record: PlayerRecordView
+  tournaments: PlayerTournamentView[]
+  matches: PlayerMatchView[]
+}
+
+export interface UpdateMyProfileRequest {
+  firstName: string
+  lastName: string
+  bio: string | null
+  homeClub: string | null
+}
+
+/**
+ * Was für ein Feed-Eintrag das ist (ADR-0014).
+ *
+ * Die Unterscheidung liegt nicht am Text — der steht bei allen fertig da —,
+ * sondern an dem, was die Oberfläche damit tut: ein Beitrag bekommt einen
+ * Verfasser und einen Knopf zum Zurücknehmen, ein Ereignis ein Symbol und einen
+ * Verweis auf das, worüber es berichtet.
+ */
+export const PostKind = {
+  Message: 0,
+  Joined: 1,
+  DrawGenerated: 2,
+  ResultRecorded: 3,
+  ScheduleConfirmed: 4,
+  StateChanged: 5,
+} as const
+export type PostKind = (typeof PostKind)[keyof typeof PostKind]
+
+export interface FeedAuthorView {
+  userId: string
+  displayName: string
+  /** Der Weg vom Beitrag ins Profil. Leer, wenn zum Konto kein Spieler gehört. */
+  playerId: string | null
+}
+
+export interface FeedCommentView {
+  id: string
+  author: FeedAuthorView
+  text: string
+  createdAt: string
+  canDelete: boolean
+}
+
+export interface FeedPostView {
+  id: string
+  kind: PostKind
+  /** Leer bei einem Ereignis — es gehört dem Turnier und keinem Benutzer. */
+  author: FeedAuthorView | null
+  text: string
+  matchId: string | null
+  createdAt: string
+  canDelete: boolean
+  comments: FeedCommentView[]
+}
+
+export interface FeedPage {
+  posts: FeedPostView[]
+  /** Der Zeitstempel für die nächste Seite. Leer heißt: es gibt keine mehr. */
+  before: string | null
+  canWrite: boolean
+}
+
+/**
+ * Jemand, mit dem der Aufrufer gespielt hat (ADR-0013).
+ *
+ * Es gibt keine Freundschaftsanfrage: der Graph entsteht aus gespielten
+ * Matches und ist am ersten Tag gefüllt.
+ */
+export interface ConnectionView {
+  playerId: string
+  displayName: string
+  /** Matches auf derselben Seite — im Doppel. Im Einzel immer 0. */
+  together: number
+  against: number
+  won: number
+  lost: number
+  lastPlayedOn: string | null
+  lastTournamentName: string
+  sharedTournaments: number
+  /** Gehört zu diesem Spieler ein Konto? Nur dann lässt er sich einladen. */
+  canBeInvited: boolean
+}
+
+/** Wie jemand auf eine Einladung geantwortet hat (ADR-0015). */
+export const InvitationResponse = { Pending: 0, Accepted: 1, Declined: 2 } as const
+export type InvitationResponse = (typeof InvitationResponse)[keyof typeof InvitationResponse]
+
+export interface PlayDateAuthorView {
+  userId: string
+  displayName: string
+  playerId: string | null
+}
+
+export interface PlayDateGuestView {
+  userId: string
+  playerId: string
+  displayName: string
+  response: InvitationResponse
+}
+
+/**
+ * Eine Spielverabredung außerhalb jedes Turniers (ADR-0015).
+ *
+ * Kein Draw, kein Ergebnis, kein Zustandsautomat: gespeichert wird nur, ob
+ * abgesagt wurde. Ob genug zugesagt haben, ergibt sich aus den Antworten; ob sie
+ * vorbei ist, aus der Uhr.
+ */
+export interface PlayDateView {
+  id: string
+  title: string
+  discipline: Discipline
+  venueName: string
+  startsAt: string
+  endsAt: string
+  note: string | null
+  host: PlayDateAuthorView
+  guests: PlayDateGuestView[]
+  requiredPlayers: number
+  committed: number
+  /** Wie viele noch fehlen. Die Zahl, wegen der jemand die Liste ansieht. */
+  missing: number
+  isConfirmed: boolean
+  isCancelled: boolean
+  isPast: boolean
+  isHost: boolean
+  myResponse: InvitationResponse | null
+}
+
+export interface CreatePlayDateRequest {
+  title: string
+  discipline: Discipline
+  venueName: string
+  startsAt: string
+  durationMinutes: number
+  note: string | null
+  invitees: string[]
+}

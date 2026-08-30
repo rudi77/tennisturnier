@@ -239,3 +239,116 @@ describe('subscribeToTournament', () => {
     expect(hub.invoked).toHaveLength(0)
   })
 })
+
+/**
+ * Derselbe Kanal, dieselbe Gruppe — und trotzdem ein eigener Empfänger.
+ *
+ * Die Nachricht trägt kein Wort (ADR-0014): sie nennt nur das Turnier, und der
+ * Aufrufer holt danach über den angemeldeten Endpunkt ab. Geprüft wird deshalb
+ * genau das — dass der Hinweis ankommt und dass er nur den eigenen betrifft.
+ */
+describe('subscribeToFeed', () => {
+  it('abonniert das Turnier und reicht den Hinweis durch', async () => {
+    const { FEED_CHANGED, subscribeToFeed } = await frisch()
+    const geändert = vi.fn()
+
+    subscribeToFeed(TURNIER, geändert)
+    await vi.waitFor(() => expect(hub.invoked).toEqual([['Subscribe', TURNIER]]))
+
+    hub.emit(FEED_CHANGED, TURNIER.toUpperCase())
+    expect(geändert).toHaveBeenCalledTimes(1)
+  })
+
+  it('reicht nichts durch, was ein anderes Turnier betrifft', async () => {
+    const { FEED_CHANGED, subscribeToFeed } = await frisch()
+    const geändert = vi.fn()
+
+    subscribeToFeed(TURNIER, geändert)
+    await vi.waitFor(() => expect(hub.startCalls).toBe(1))
+
+    hub.emit(FEED_CHANGED, '22222222-2222-2222-2222-222222222222')
+    expect(geändert).not.toHaveBeenCalled()
+  })
+
+  it('startet nicht neu, wenn die Verbindung schon steht', async () => {
+    const { subscribeToFeed } = await frisch()
+    hub.state = HubConnectionState.Connected
+
+    subscribeToFeed(TURNIER, vi.fn())
+    await vi.waitFor(() => expect(hub.invoked).toHaveLength(1))
+
+    expect(hub.startCalls).toBe(0)
+  })
+
+  it('abonniert nach einem Wiederverbinden erneut', async () => {
+    const { subscribeToFeed } = await frisch()
+
+    subscribeToFeed(TURNIER, vi.fn())
+    await vi.waitFor(() => expect(hub.invoked).toHaveLength(1))
+
+    hub.invokeResult = Promise.reject(new Error('weg'))
+    hub.reconnected.forEach((handler) => handler())
+
+    await vi.waitFor(() => expect(hub.invoked).toHaveLength(2))
+  })
+
+  it('meldet einen fehlgeschlagenen Aufbau, statt zu werfen', async () => {
+    const { subscribeToFeed } = await frisch()
+    hub.startResult = Promise.reject(new Error('kein Hub'))
+
+    subscribeToFeed(TURNIER, vi.fn())
+
+    await vi.waitFor(() => expect(hub.startCalls).toBe(1))
+    expect(hub.invoked).toHaveLength(0)
+  })
+
+  it('abonniert nicht mehr, wenn schon abgemeldet wurde', async () => {
+    const { subscribeToFeed } = await frisch()
+
+    let freigeben: () => void = () => {}
+    hub.startResult = new Promise<void>((resolve) => {
+      freigeben = resolve
+    })
+
+    const abmelden = subscribeToFeed(TURNIER, vi.fn())
+    abmelden()
+    freigeben()
+
+    await vi.waitFor(() => expect(hub.startCalls).toBe(1))
+    expect(hub.invoked).toHaveLength(0)
+  })
+
+  it('meldet sich ab und hängt den Empfänger aus', async () => {
+    const { FEED_CHANGED, subscribeToFeed } = await frisch()
+    const geändert = vi.fn()
+
+    const abmelden = subscribeToFeed(TURNIER, geändert)
+    await vi.waitFor(() => expect(hub.invoked).toHaveLength(1))
+
+    abmelden()
+
+    expect(hub.invoked).toContainEqual(['Unsubscribe', TURNIER])
+    hub.emit(FEED_CHANGED, TURNIER)
+    expect(geändert).not.toHaveBeenCalled()
+  })
+
+  it('meldet sich nicht ab, wenn die Verbindung gar nicht steht', async () => {
+    const { subscribeToFeed } = await frisch()
+    hub.startResult = Promise.reject(new Error('kein Hub'))
+
+    const abmelden = subscribeToFeed(TURNIER, vi.fn())
+    await vi.waitFor(() => expect(hub.startCalls).toBe(1))
+
+    abmelden()
+    expect(hub.invoked).toHaveLength(0)
+  })
+
+  it('schluckt eine fehlgeschlagene Abmeldung', async () => {
+    const { subscribeToFeed } = await frisch()
+    const abmelden = subscribeToFeed(TURNIER, vi.fn())
+    await vi.waitFor(() => expect(hub.invoked).toHaveLength(1))
+
+    hub.invokeResult = Promise.reject(new Error('weg'))
+    expect(() => abmelden()).not.toThrow()
+  })
+})

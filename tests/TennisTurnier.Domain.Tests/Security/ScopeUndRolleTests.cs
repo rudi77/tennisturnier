@@ -69,6 +69,29 @@ public sealed class ScopeUndRolleTests
         Assert.Contains("Unbekannte Rolle", fehler.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Wie ein Konto genannt wird, wo ein Name gebraucht wird.
+    ///
+    /// Der Aussteller garantiert keines von beiden: Entra ID legt keine E-Mail
+    /// ins Token, manche Realms keinen Namen (ADR-0007). Die Reihenfolge steht
+    /// deshalb am Konto und nicht an den drei Aufrufstellen, die sie sonst
+    /// jede für sich träfen.
+    /// </summary>
+    [Theory]
+    [InlineData("Anna Vogel", "anna@example.invalid", "Anna Vogel")]
+    [InlineData(null, "anna@example.invalid", "anna@example.invalid")]
+    [InlineData(null, null, "Unbekannt")]
+    public void Ein_Konto_nennt_sich_mit_dem_Besten_was_es_hat(
+        string? anzeigename,
+        string? adresse,
+        string erwartet)
+    {
+        var konto = new UserAccount(
+            Guid.NewGuid(), "https://idp.local", "sub-1", adresse, anzeigename);
+
+        Assert.Equal(erwartet, konto.PreferredName);
+    }
+
     [Fact]
     public void Eine_Zuweisung_nennt_Rolle_und_Scope()
     {
@@ -80,14 +103,30 @@ public sealed class ScopeUndRolleTests
     }
 
     [Fact]
-    public void Ein_Mitglied_sieht_wer_dazugehoert_und_sonst_nichts()
+    public void Ein_Mitglied_sieht_wer_dazugehoert_und_darf_mitreden()
     {
-        // Die Rolle, die ein Turnier zur Gruppe macht. Ein einziges Recht, und
-        // es ist ein Leserecht: eine Gruppe, in der niemand sieht, wer sonst
-        // dabei ist, waere keine. Alles andere — Spielplan, Draw, Ergebnisse —
-        // kommt nicht aus der Rechtematrix, sondern aus dem Query-Filter, der
-        // an der Zuweisung haengt.
-        Assert.Equal([Permission.ViewMembers], Permissions.Of(Role.Member));
+        // Die Rolle, die ein Turnier zur Gruppe macht. Zwei Rechte, und beide
+        // betreffen die Gruppe: es sieht, wer sonst dabei ist, und es darf im
+        // Feed schreiben. Eine Gruppe, in der niemand sieht, wer dazugehoert,
+        // waere keine — und eine, in der nur einer reden darf, ebenso wenig
+        // (ADR-0012, ADR-0014).
+        //
+        // Alles andere — Spielplan, Draw, Ergebnisse — kommt nicht aus der
+        // Rechtematrix, sondern aus dem Query-Filter, der an der Zuweisung
+        // haengt. Die Aufzaehlung ist deshalb weiterhin vollstaendig und nicht
+        // nur eine Teilmenge: was hier dazukommt, ist eine Entscheidung und
+        // kein Versehen.
+        // Als Menge verglichen und nicht als Liste: die Reihenfolge ist die des
+        // Enums, und die ist kein Teil der Aussage.
+        Assert.Equal(
+            new HashSet<Permission> { Permission.ViewMembers, Permission.WriteInFeed },
+            Permissions.Of(Role.Member).ToHashSet());
+
+        // Und ausdruecklich nicht: das Mitglied fuehrt kein Turnier und traegt
+        // keine Ergebnisse ein.
+        Assert.DoesNotContain(Permission.ManageTournament, Permissions.Of(Role.Member));
+        Assert.DoesNotContain(Permission.EnterResults, Permissions.Of(Role.Member));
+        Assert.DoesNotContain(Permission.ViewInternals, Permissions.Of(Role.Member));
 
         var turnier = Guid.NewGuid();
         var zuweisung = new RoleAssignment(

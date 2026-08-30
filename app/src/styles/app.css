@@ -2202,3 +2202,193 @@ body {
   .md-live-dot { animation: none; }
   * { transition-duration: 1ms !important; }
 }
+
+/* --- Profil, Verbindungen, Verabredungen -------------------------------------
+   Die sozialen Ansichten. Sie borgen sich Karte, Zeile und Formular von den
+   Turnierschirmen; eigen ist ihnen nur, was es dort nicht gibt — ein
+   Fließtext über einen Menschen, ein Sieg-Niederlage-Zeichen und ein Verweis,
+   der wie ein Link aussieht, ohne einer zu sein. */
+
+.md-profile__block {
+  padding: var(--sp-10);
+  margin-top: var(--sp-8);
+}
+
+.md-panel__title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  margin: 0 0 var(--sp-6);
+}
+
+.md-profile__bio {
+  margin: var(--sp-6) 0 0;
+  max-width: 62ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Ein Buchstabe statt eines Wortes: die Zeile trägt schon Gegner, Turnier und
+   Satzstand, und „Sieg" davor drängt das Wesentliche aus dem Bild. Der Name
+   für Vorlesegeräte steht daneben in aria-label. */
+.md-profile__won,
+.md-profile__lost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+
+.md-profile__won {
+  background: var(--success);
+  color: var(--fg-on-dark);
+}
+
+.md-profile__lost {
+  background: var(--line-soft);
+  color: var(--fg-2);
+}
+
+/* Ein Verweis, der kein Link ist: er wechselt den Bildschirm, ohne die Seite
+   neu zu laden. Als <a href> geschrieben wäre er ein Versprechen, das die
+   Anwendung nicht hält — Mittelklick öffnete eine leere Seite. */
+.md-linkbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--court-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.md-linkbtn:hover {
+  color: var(--court-900);
+}
+
+/* --- Feed --------------------------------------------------------------------
+   Ein Strom aus zweierlei: Geschriebenem und Protokolliertem. Sie müssen
+   auseinanderzuhalten sein, ohne dass eines davon wie eine Fehlermeldung
+   aussieht — das Ereignis bekommt deshalb einen ruhigeren Grund und keine
+   Signalfarbe. */
+
+.md-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-top: var(--sp-8);
+}
+
+.md-feed__post {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: var(--sp-6);
+}
+
+.md-feed__post--event {
+  background: var(--surface-muted);
+}
+
+.md-feed__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.md-feed__author {
+  font-weight: var(--fw-semibold);
+}
+
+.md-feed__time {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--fg-3);
+}
+
+.md-feed__text {
+  margin: 3px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.md-feed__actions {
+  display: flex;
+  gap: var(--sp-5);
+  margin-top: var(--sp-4);
+  font-size: var(--fs-xs);
+}
+
+/* Eingerückt und mit einer Kante: eine Antwort gehört sichtbar zu dem, worauf
+   sie antwortet — sonst liest sich der Strom als eine Folge gleichrangiger
+   Zurufe. */
+.md-feed__comments {
+  margin-top: var(--sp-5);
+  padding-left: var(--sp-6);
+  border-left: 2px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.md-feed__comment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4);
+  font-size: var(--fs-sm);
+}
+
+.md-feed__composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  align-items: flex-start;
+  margin-top: var(--sp-6);
+}
+
+.md-feed__composer .md-field {
+  width: 100%;
+}
+
+/* --- Verabredungen ----------------------------------------------------------- */
+
+.md-playdate--off {
+  opacity: 0.6;
+}
+
+.md-playdate__person + .md-playdate__person::before {
+  content: ' · ';
+  color: var(--fg-3);
+}
+
+.md-playdate__role {
+  color: var(--fg-3);
+}
+
+/* Zwei Spalten, sobald Platz ist: eine Liste von zwanzig Namen untereinander
+   schiebt den Absenden-Knopf aus dem Bild. */
+.md-playdate__picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0;
+}
+
+/* Der Verfasser im Feed und der Gastgeber einer Verabredung tragen Namen, die
+   niemand begrenzt. Ohne diese Zeilen schiebt ein langer Name die Uhrzeit
+   daneben aus dem Bild — auf 390 Pixeln der Normalfall, nicht die Ausnahme. */
+.md-feed__author {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.md-playdate__person {
+  overflow-wrap: anywhere;
+}

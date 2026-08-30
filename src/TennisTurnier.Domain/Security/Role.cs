@@ -75,6 +75,16 @@ public enum Permission
     ViewInternals,
 
     /// <summary>
+    /// Im Feed des Turniers schreiben und kommentieren (ADR-0014).
+    ///
+    /// Ein eigenes Recht und nicht Teil von <see cref="ViewMembers"/>: Sehen und
+    /// Schreiben sind verschiedene Handlungen, und ein Zuschauer, der die Namen
+    /// sieht, ohne hineinzureden, ist eine denkbare Rolle. Dass es sie heute
+    /// nicht gibt, macht die Zusammenlegung nicht richtig.
+    /// </summary>
+    WriteInFeed,
+
+    /// <summary>
     /// Sehen, wer zu diesem Turnier gehört — die Namen, nicht die Adressen.
     ///
     /// Bewusst getrennt von <see cref="ViewInternals"/>: eine Gruppe, in der

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
  *
  * ```
  * ?screen=<id>&t=<tournamentId>   angemeldeter Bereich
+ * ?screen=profile&p=<playerId>    ein fremdes Profil; ohne p das eigene
  * ?t=<guid>                       öffentliche Live-Ansicht
  * ?r=<token>                      öffentliche Anmeldung
  * ```
@@ -30,6 +31,15 @@ export interface Route {
 
   /** Der Anmeldetoken. Gesetzt heißt: der öffentliche Meldeweg. */
   registrationToken: string | null
+
+  /**
+   * Der Spieler, dessen Profil gemeint ist. Leer heißt: das eigene.
+   *
+   * Ein eigener Parameter neben `t`, weil ein Profil zu keinem Turnier gehört:
+   * es rechnet über alle, die der Aufrufer sieht (ADR-0013). Ihn in `t`
+   * mitzuführen hieße, ein Turnier zu behaupten, das es hier nicht gibt.
+   */
+  playerId: string | null
 }
 
 function read(): Route {
@@ -39,6 +49,7 @@ function read(): Route {
     screen: params.get('screen'),
     tournamentId: params.get('t'),
     registrationToken: params.get('r'),
+    playerId: params.get('p'),
   }
 }
 
@@ -95,6 +106,7 @@ export function useRoute(): Route & { navigate: (next: Partial<Route>) => void }
     set('screen', next.screen)
     set('t', next.tournamentId)
     set('r', next.registrationToken)
+    set('p', next.playerId)
 
     const query = params.toString()
     window.history.pushState({}, '', query ? `?${query}` : window.location.pathname)

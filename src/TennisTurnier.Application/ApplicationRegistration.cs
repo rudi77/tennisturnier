@@ -4,6 +4,7 @@ using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
 using TennisTurnier.Application.Membership;
 using TennisTurnier.Application.Security;
+using TennisTurnier.Application.Social;
 using TennisTurnier.Application.Tournaments;
 
 namespace TennisTurnier.Application;
@@ -50,6 +51,11 @@ public static class ApplicationRegistration
         services.AddScoped<IJoinService, JoinService>();
         services.AddScoped<IEntryImportService, EntryImportService>();
         services.AddScoped<ITeamFormationService, TeamFormationService>();
+        services.AddScoped<IPlayerProfileService, PlayerProfileService>();
+        services.AddScoped<IFeedService, FeedService>();
+        services.AddScoped<IConnectionService, ConnectionService>();
+        services.AddScoped<IPlayDateService, PlayDateService>();
+        services.AddScoped<FeedRecorder>();
 
         return services;
     }

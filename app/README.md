@@ -94,6 +94,7 @@ src/
   components/   core/ · layout/ (AppNav, AppBar, Sheet, ScreenHeader) · tournament/
   screens/      FlowScreen · TournamentsScreen · EntriesScreen · DrawScreen
                 BoardScreen · CreateScreen · JoinScreen · PublicScreen
+                FeedScreen · ProfileScreen · ConnectionsScreen · PlayDatesScreen
   hooks/        useResource · useToast · usePublicView · useRoute
   lib/          time.ts (Zeitzone, TimeSpan) · labels.ts (deutsche Beschriftungen)
   styles/       tokens/ (unverändert aus dem Design System) · app.css
@@ -102,11 +103,16 @@ src/
 ### Die Hülle
 
 `AppNav` und `AppBar` stehen einmal in `App.tsx` und nicht in den Bildschirmen.
-Die Navigation ist am Telefon eine Fußleiste mit vier Zielen — Ablauf,
+Die Navigation ist am Telefon eine Fußleiste mit fünf Zielen — Ablauf, Feed,
 Meldungen, Draw, Spielplan — und am Schreibtisch dieselbe Liste als Spalte; das
 Markup ist beide Male dasselbe, den Unterschied macht `app.css` an der Schwelle
 von 900 Pixeln. Der seltenere Rest steht am Telefon hinter „Mehr" in einer
 `Sheet`, der Lade, die von unten hereinkommt.
+
+Fünf und nicht acht: der Feed steht vorn, weil er das ist, wofür jemand die
+Anwendung am Turniertag öffnet, ohne etwas eintragen zu wollen. Profil,
+Mitspieler und Verabredungen stehen hinter „Mehr" — man kommt zu ihnen
+üblicherweise über einen Namen und nicht über die Leiste.
 
 Die Beschriftung eines Navigationspunkts steht als `aria-label` am Knopf und
 nicht nur im Text: sichtbar ist je nach Breite die lange oder die kurze, und
@@ -114,6 +120,24 @@ eine vom Stylesheet ausgeblendete zählt für den zugänglichen Namen nicht.
 
 Welches Turnier gemeint ist, sagt die `AppBar`. Ein Bildschirm sagt über
 `ScreenHeader` nur noch, welcher er ist.
+
+### Die sozialen Schirme
+
+Vier Bildschirme gehören nicht zum Turnierablauf: `ProfileScreen`,
+`ConnectionsScreen`, `PlayDatesScreen` und — als einziger davon am Turnier —
+`FeedScreen`.
+
+Sie hängen an einem weiteren Parameter in der Adresszeile: `?p=<playerId>` nennt
+den Spieler, dessen Profil gemeint ist. Er steht neben `t` und nicht darin, weil
+ein Profil zu keinem Turnier gehört — es rechnet über alle, die der Aufrufer
+sieht (ADR-0013).
+
+Der Weg zwischen ihnen führt über Namen: aus der Meldungsliste, aus einer
+Feed-Zeile, aus einem Gegner im Profil, aus einem Gast einer Verabredung. Jeder
+dieser Namen ist ein `md-linkbtn` — ein Knopf, der wie ein Link aussieht. Als
+`<a href>` wäre er ein Versprechen, das die Anwendung nicht hält: sie führt ihre
+Navigation über `history.pushState`, und ein Mittelklick öffnete eine leere
+Seite.
 
 ### Mobil zuerst — und zwar wörtlich
 

@@ -32,12 +32,15 @@ public static class PersistenceRegistration
         services.AddScoped<ITournamentRepository, TournamentRepository>();
         services.AddScoped<IFormatTemplateRepository, FormatTemplateRepository>();
         services.AddScoped<IPlayerRepository, PlayerRepository>();
+        services.AddScoped<IPlayerHistoryStore, PlayerHistoryStore>();
         services.AddScoped<IPhaseRepository, PhaseRepository>();
         services.AddScoped<ICourtAssignmentRepository, CourtAssignmentRepository>();
         services.AddScoped<ITournamentProjectionStore, TournamentProjectionStore>();
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IRoleAssignmentRepository, RoleAssignmentRepository>();
         services.AddScoped<IInvitationRepository, InvitationRepository>();
+        services.AddScoped<IFeedRepository, FeedRepository>();
+        services.AddScoped<IPlayDateRepository, PlayDateRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;

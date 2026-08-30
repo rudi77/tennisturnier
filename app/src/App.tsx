@@ -18,8 +18,24 @@ import { TournamentsScreen } from './screens/TournamentsScreen'
 import { FlowScreen } from './screens/FlowScreen'
 import { CreateScreen } from './screens/CreateScreen'
 import { PublicScreen } from './screens/PublicScreen'
+import { ProfileScreen } from './screens/ProfileScreen'
+import { FeedScreen } from './screens/FeedScreen'
+import { ConnectionsScreen } from './screens/ConnectionsScreen'
+import { PlayDatesScreen } from './screens/PlayDatesScreen'
 
-const SCREENS: ScreenId[] = ['flow', 'tournaments', 'draw', 'entries', 'board', 'create', 'public']
+const SCREENS: ScreenId[] = [
+  'flow',
+  'tournaments',
+  'draw',
+  'entries',
+  'board',
+  'create',
+  'public',
+  'profile',
+  'feed',
+  'connections',
+  'play-dates',
+]
 
 export function App() {
   return (
@@ -206,6 +222,13 @@ function AppShell() {
 
   const goTo = (next: ScreenId) => navigate({ screen: next })
 
+  // Aus dem Profil in ein Turnier: die Auswahl wechselt, und der Ablauf ist das
+  // Ziel — er beantwortet die Frage, mit der man dort ankommt. Das Profil, das
+  // gerade offen war, wird dabei abgewählt; sonst stünde es beim nächsten
+  // Wechsel zurück auf „Profil" noch da.
+  const openTournament = (next: string) =>
+    navigate({ tournamentId: next, screen: 'flow', playerId: null })
+
   // Das fremde Turnier steht für sich, ohne Arbeitsbereich: an ihm gibt es für
   // diesen Benutzer nichts zu tun — die API gäbe ihm zu jedem seiner Schirme
   // ein 404 (ADR-0009). Der Weg zurück steht in der Leiste.
@@ -248,7 +271,7 @@ function AppShell() {
           {tournamentList.error ? (
             <ErrorBlock error={tournamentList.error} onRetry={() => void tournamentList.reload()} />
           ) : (
-            <Screen screen={screen} onNavigate={goTo} />
+            <Screen screen={screen} onNavigate={goTo} onOpenTournament={openTournament} />
           )}
         </main>
       </div>
@@ -259,9 +282,12 @@ function AppShell() {
 function Screen({
   screen,
   onNavigate,
+  onOpenTournament,
 }: {
   screen: ScreenId
   onNavigate: (id: ScreenId) => void
+  /** Vom Profil aus in ein Turnier springen — sofern es eines der eigenen ist. */
+  onOpenTournament: (tournamentId: string) => void
 }) {
   switch (screen) {
     case 'flow':
@@ -278,5 +304,13 @@ function Screen({
       return <CreateScreen onCreated={() => onNavigate('flow')} />
     case 'public':
       return <PublicScreen />
+    case 'profile':
+      return <ProfileScreen onOpenTournament={onOpenTournament} />
+    case 'feed':
+      return <FeedScreen />
+    case 'connections':
+      return <ConnectionsScreen />
+    case 'play-dates':
+      return <PlayDatesScreen />
   }
 }
