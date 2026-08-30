@@ -218,6 +218,19 @@ public sealed class PlayerConfiguration : IEntityTypeConfiguration<Player>
             contact.Property(c => c.DateOfBirth).HasColumnName("DateOfBirth");
         });
 
+        // Zwei Spalten in derselben Zeile und keine eigene Tabelle: das Profil
+        // wird immer zusammen mit dem Spieler geladen und nie ohne ihn.
+        builder.ComplexProperty(p => p.Profile, profile =>
+        {
+            profile.Property(x => x.Bio)
+                .HasColumnName("Bio")
+                .HasMaxLength(TennisTurnier.Domain.Players.PlayerProfile.MaxBioLength);
+
+            profile.Property(x => x.HomeClub)
+                .HasColumnName("HomeClub")
+                .HasMaxLength(TennisTurnier.Domain.Players.PlayerProfile.MaxHomeClubLength);
+        });
+
         builder.HasIndex(p => new { p.LastName, p.FirstName });
 
         // Genau ein Spieler je Konto — und beliebig viele ohne. Der eindeutige

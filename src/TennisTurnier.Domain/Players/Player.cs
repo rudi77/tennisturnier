@@ -24,6 +24,7 @@ public sealed class Player : Entity
         FirstName = Required(firstName, "Vorname");
         LastName = Required(lastName, "Nachname");
         Contact = contact ?? PlayerContact.Empty;
+        Profile = PlayerProfile.Empty;
     }
 
     /// <summary>Konstruktor für den Persistenzadapter.</summary>
@@ -32,6 +33,7 @@ public sealed class Player : Entity
         FirstName = string.Empty;
         LastName = string.Empty;
         Contact = PlayerContact.Empty;
+        Profile = PlayerProfile.Empty;
     }
 
     public string FirstName { get; private set; }
@@ -39,6 +41,15 @@ public sealed class Player : Entity
     public string LastName { get; private set; }
 
     public PlayerContact Contact { get; private set; }
+
+    /// <summary>
+    /// Was der Spieler über sich selbst geschrieben hat (ADR-0013).
+    ///
+    /// Der einzige Teil eines Spielers, den niemand berechnen kann — alles
+    /// andere an einem Profil kommt aus gespielten Matches. Er gehört dem
+    /// Konto hinter dem Spieler und sonst niemandem.
+    /// </summary>
+    public PlayerProfile Profile { get; private set; }
 
     /// <summary>
     /// Das Konto, dem dieser Spieler gehört — oder <c>null</c>.
@@ -81,6 +92,42 @@ public sealed class Player : Entity
         UserAccountId = userAccountId;
     }
 
+    /// <summary>
+    /// Berichtigt den Namen.
+    ///
+    /// Ohne Wirkung auf die Vergangenheit: der Anzeigename eines Teilnehmers
+    /// wird beim Melden festgeschrieben, damit eine spätere Umbenennung die
+    /// Ergebnisliste eines abgeschlossenen Turniers nicht rückwirkend ändert.
+    /// Wer heiratet, heißt in der Tabelle vom Frühjahr weiterhin, wie er dort
+    /// angetreten ist.
+    /// </summary>
+    public void Rename(string firstName, string lastName)
+    {
+        FirstName = Required(firstName, "Vorname");
+        LastName = Required(lastName, "Nachname");
+    }
+
+    /// <summary>
+    /// Übernimmt, was der Spieler über sich geschrieben hat.
+    ///
+    /// Wer das darf, entscheidet der Anwendungsfall — hier steht nur, dass ein
+    /// Spieler ohne Konto niemandem gehört und deshalb auch von niemandem
+    /// beschrieben wird. Ohne diese Prüfung könnte die Turnierleitung, die eine
+    /// Liste eingelesen hat, den Eingelesenen Sätze in den Mund legen.
+    /// </summary>
+    public void Describe(PlayerProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        if (UserAccountId is null)
+        {
+            throw new DomainException(
+                $"Der Spieler {DisplayName} gehört keinem Konto und hat deshalb kein Profil zu pflegen.");
+        }
+
+        Profile = profile;
+    }
+
     private static string Required(string value, string what) =>
         string.IsNullOrWhiteSpace(value)
             ? throw new DomainException($"Ein Spieler braucht einen {what}.")
@@ -97,4 +144,52 @@ public sealed class Player : Entity
 public sealed record PlayerContact(string? Email, string? Phone, DateOnly? DateOfBirth)
 {
     public static PlayerContact Empty { get; } = new(null, null, null);
+}
+
+/// <summary>
+/// Was ein Spieler über sich selbst sagt — und ausdrücklich das Gegenteil von
+/// <see cref="PlayerContact"/>.
+///
+/// Kontaktdaten sind das, was nie in eine Ausgabe für andere gehört; das hier
+/// ist eigens dafür geschrieben. Beides in einem Typ, und die eine Regel wäre
+/// beim Abbilden auf ein DTO nicht mehr von der anderen zu unterscheiden
+/// (ADR-0013).
+/// </summary>
+/// <param name="Bio">Ein paar Sätze über sich. Leer ist der Normalfall.</param>
+/// <param name="HomeClub">
+/// Der Heimatverein als freier Text und nicht als Verweis: den Verein als
+/// Aggregat gibt es seit ADR-0009 nicht mehr, und ihn für diese eine Zeile
+/// wiederzubeleben hieße, die Entscheidung zurückzunehmen.
+/// </param>
+public sealed record PlayerProfile(string? Bio, string? HomeClub)
+{
+    /// <summary>So lang, dass zwei, drei Sätze hineinpassen — und nicht länger.</summary>
+    public const int MaxBioLength = 500;
+
+    public const int MaxHomeClubLength = 120;
+
+    public static PlayerProfile Empty { get; } = new(null, null);
+
+    /// <summary>
+    /// Prüft und beschneidet, was von außen hereinkommt. Der Konstruktor bleibt
+    /// unangetastet, damit der Persistenzadapter Altdaten laden kann, die
+    /// länger sind als eine später verschärfte Grenze.
+    /// </summary>
+    public static PlayerProfile From(string? bio, string? homeClub) =>
+        new(Limit(bio, MaxBioLength, "Der Text über sich"),
+            Limit(homeClub, MaxHomeClubLength, "Der Heimatverein"));
+
+    private static string? Limit(string? value, int max, string what)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+
+        return trimmed.Length <= max
+            ? trimmed
+            : throw new DomainException($"{what} darf höchstens {max} Zeichen haben, war {trimmed.Length}.");
+    }
 }

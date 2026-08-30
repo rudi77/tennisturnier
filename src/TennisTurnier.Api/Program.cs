@@ -156,6 +156,7 @@ app.MapGet("/api/me", async (IMeService service, CancellationToken ct) =>
 app.MapTournamentEndpoints();
 app.MapMatchEndpoints();
 app.MapMembershipEndpoints();
+app.MapSocialEndpoints();
 app.MapRoleEndpoints();
 app.MapPublicEndpoints();
 app.MapHub<TournamentHub>("/hubs/tournament");
