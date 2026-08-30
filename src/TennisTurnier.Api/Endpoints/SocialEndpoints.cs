@@ -17,8 +17,67 @@ internal static class SocialEndpoints
     public static IEndpointRouteBuilder MapSocialEndpoints(this IEndpointRouteBuilder app)
     {
         MapProfiles(app);
+        MapFeed(app);
 
         return app;
+    }
+
+    /// <summary>
+    /// Der Feed eines Turniers (ADR-0014).
+    ///
+    /// Unter dem Turnier, weil er ihm gehört — und weil damit derselbe
+    /// Query-Filter greift wie für Draw, Spielplan und Ergebnisse. Ein Fremder
+    /// bekommt hier 404 und nicht eine leere Liste: die leere Liste wäre die
+    /// Aussage „dieses Turnier hat noch nichts geschrieben", und die steht ihm
+    /// nicht zu.
+    ///
+    /// Kommentar und Löschen hängen dagegen am Eintrag und nicht am Turnier:
+    /// die Id des Eintrags nennt sein Turnier bereits, und ein zweiter
+    /// Bezeichner im Pfad wäre einer, den der Server gegen den ersten prüfen
+    /// müsste.
+    /// </summary>
+    private static void MapFeed(IEndpointRouteBuilder app)
+    {
+        var feed = app.MapGroup("/api").WithTags("Feed").RequireAuthorization();
+
+        feed.MapGet("/tournaments/{tournamentId:guid}/feed", async (
+            Guid tournamentId,
+            IFeedService service,
+            CancellationToken ct,
+            int limit = 50,
+            DateTimeOffset? before = null) =>
+            Results.Ok(await service.ListAsync(tournamentId, limit, before, ct)));
+
+        feed.MapPost("/tournaments/{tournamentId:guid}/feed", async (
+            Guid tournamentId,
+            WritePostRequest request,
+            IFeedService service,
+            CancellationToken ct) =>
+        {
+            var post = await service.PostAsync(tournamentId, request, ct);
+            return Results.Created($"/api/feed/{post.Id}", post);
+        });
+
+        feed.MapPost("/feed/{postId:guid}/comments", async (
+            Guid postId,
+            WritePostRequest request,
+            IFeedService service,
+            CancellationToken ct) =>
+            Results.Ok(await service.CommentAsync(postId, request, ct)));
+
+        feed.MapDelete("/feed/{postId:guid}", async (
+            Guid postId, IFeedService service, CancellationToken ct) =>
+        {
+            await service.DeletePostAsync(postId, ct);
+            return Results.NoContent();
+        });
+
+        feed.MapDelete("/feed/{postId:guid}/comments/{commentId:guid}", async (
+            Guid postId, Guid commentId, IFeedService service, CancellationToken ct) =>
+        {
+            await service.DeleteCommentAsync(postId, commentId, ct);
+            return Results.NoContent();
+        });
     }
 
     private static void MapProfiles(IEndpointRouteBuilder app)

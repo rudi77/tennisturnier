@@ -20,6 +20,7 @@ noch einmal von vorn beginnt.
 | [0011](0011-satzformat-am-turnier.md) | Das Satzformat gehört dem Turnier, nicht der Vorlage | Accepted |
 | [0012](0012-mitgliedschaft-statt-selbstmeldung.md) | Das Turnier ist eine Gruppe: Mitgliedschaft statt anonymer Selbstmeldung | Accepted |
 | [0013](0013-spielerprofil-und-verbindungen.md) | Das Spielerprofil zeigt, was der Fragende ohnehin sehen darf | Accepted |
+| [0014](0014-turnierfeed.md) | Das Turnier redet: ein Feed statt einer stillen Chronik | Accepted |
 
 ## Status
 

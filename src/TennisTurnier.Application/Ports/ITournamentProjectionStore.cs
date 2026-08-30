@@ -32,4 +32,15 @@ public interface ITournamentNotifier
         Guid tournamentId,
         string etag,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// „An diesem Turnier hat sich im Feed etwas getan" — und kein Wort mehr
+    /// (ADR-0014).
+    ///
+    /// Der Kanal ist ohne Anmeldung erreichbar; der Feed ist die Innenansicht
+    /// der Gruppe. Über den Hinweis holt der Client ab, und dort entscheidet
+    /// der Query-Filter, was er bekommt. Stünde der Text in der Nachricht,
+    /// bekäme ihn jeder, der die Turnier-Id kennt.
+    /// </summary>
+    Task FeedChangedAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 }

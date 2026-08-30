@@ -1,11 +1,13 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.Social;
 using TennisTurnier.Application.PublicView;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Scheduling;
+using TennisTurnier.Domain.Social;
 using TennisTurnier.Domain.Security;
 using TennisTurnier.Domain.Tournaments;
 
@@ -80,6 +82,7 @@ public sealed class SchedulingService : ISchedulingService
     private readonly IPlayerRepository _players;
     private readonly IScheduleSolver _solver;
     private readonly IPublicViewService _publicView;
+    private readonly FeedRecorder _feed;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserContext _userContext;
 
@@ -90,6 +93,7 @@ public sealed class SchedulingService : ISchedulingService
         IPlayerRepository players,
         IScheduleSolver solver,
         IPublicViewService publicView,
+        FeedRecorder feed,
         IUnitOfWork unitOfWork,
         IUserContext userContext)
     {
@@ -99,6 +103,7 @@ public sealed class SchedulingService : ISchedulingService
         _players = players;
         _solver = solver;
         _publicView = publicView;
+        _feed = feed;
         _unitOfWork = unitOfWork;
         _userContext = userContext;
     }
@@ -128,6 +133,18 @@ public sealed class SchedulingService : ISchedulingService
         // Match zweimal an — auf einer noch nicht existierenden Zeile wirkt kein
         // Zähler.
         plan.Tournament.MarkScheduleChanged();
+
+        // Nur wenn tatsächlich etwas übernommen wurde: eine Bestätigung mit
+        // leerer Liste ist zulässig und meldet nichts (ADR-0014).
+        if (applied.Count > 0)
+        {
+            _feed.Record(
+                plan.Tournament.Id,
+                PostKind.ScheduleConfirmed,
+                applied.Count == 1
+                    ? "Der Spielplan wurde geändert — eine Ansetzung."
+                    : $"Der Spielplan steht — {applied.Count} Ansetzungen.");
+        }
 
         await _unitOfWork.FlushAsync(cancellationToken);
         await _publicView.RebuildAsync(plan.Tournament.Id, cancellationToken);

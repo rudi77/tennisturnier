@@ -46,6 +46,14 @@ public interface IPlayerHistoryStore
         Guid userAccountId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Die Spieler zu mehreren Konten — der Weg vom Verfasser eines Beitrags in
+    /// sein Profil (ADR-0014). Konten ohne Spieler fehlen im Ergebnis.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> PlayerIdsOfAccountsAsync(
+        IReadOnlyCollection<Guid> userAccountIds,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Anzeigenamen zu Spieler-Ids — für Partner, Gegner und Kontakte.</summary>
     Task<IReadOnlyDictionary<Guid, string>> DisplayNamesAsync(
         IReadOnlyCollection<Guid> playerIds,

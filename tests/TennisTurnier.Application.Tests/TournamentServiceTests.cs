@@ -1,6 +1,7 @@
 using TennisTurnier.Application.Common;
 using TennisTurnier.Domain.Common;
 using TennisTurnier.Application.Tests.Fakes;
+using TennisTurnier.Application.Social;
 using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Security;
@@ -22,6 +23,8 @@ public sealed class TournamentServiceTests
     private readonly InMemoryRoleAssignmentRepository _roles = new();
     private readonly CountingUnitOfWork _unitOfWork = new();
     private readonly RecordingPublicViewService _publicView = new();
+    private readonly InMemoryFeedRepository _feed = new();
+    private readonly RecordingTournamentNotifier _notifier = new();
     private readonly TournamentService _service;
     private readonly FormatTemplate _template;
 
@@ -40,12 +43,21 @@ public sealed class TournamentServiceTests
             _projections,
             new DrawBuilder(_phaseRepository, _players),
             _publicView,
+            Chronist(),
             _unitOfWork,
             _userContext);
         _template = _templates.Seed(new FormatTemplate(Guid.NewGuid(), UserId, BuiltInFormats.Knockout));
 
         ActAsOrganizer();
     }
+
+    /// <summary>
+    /// Der echte Chronist auf einem Feed im Speicher (ADR-0014). Was er
+    /// schreibt, gehört zu dem, was der Dienst tut — eine Attrappe an seiner
+    /// Stelle prüfte nur, dass eine Attrappe aufgerufen wird.
+    /// </summary>
+    private FeedRecorder Chronist() =>
+        new(_feed, new PostCommitQueue(), _notifier, new FixedClock());
 
     private void ActAs(params RoleAssignment[] assignments) =>
         _userContext.Current = new UserPrincipal(UserId, assignments);
@@ -291,6 +303,7 @@ public sealed class TournamentServiceTests
             _projections,
             new DrawBuilder(_phaseRepository, _players),
             _publicView,
+            Chronist(),
             _unitOfWork,
             _userContext);
 

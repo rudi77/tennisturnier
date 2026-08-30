@@ -7,6 +7,7 @@ using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.PublicView;
 using TennisTurnier.Domain.Scheduling;
+using TennisTurnier.Domain.Social;
 using TennisTurnier.Domain.Tournaments;
 using TennisTurnier.Domain.Security;
 
@@ -43,6 +44,9 @@ public sealed class TennisTurnierDbContext : DbContext
     public DbSet<RoleAssignment> RoleAssignments => Set<RoleAssignment>();
 
     public DbSet<Invitation> Invitations => Set<Invitation>();
+
+    /// <summary>Der Feed eines Turniers (ADR-0014). Erbt dessen Sichtbarkeit.</summary>
+    public DbSet<TournamentPost> TournamentPosts => Set<TournamentPost>();
 
     /// <summary>
     /// Die öffentliche Projektion (ADR-0003). Bewusst ohne Query-Filter — sie
@@ -130,6 +134,13 @@ public sealed class TennisTurnierDbContext : DbContext
 
         modelBuilder.Entity<CourtAssignment>()
             .HasQueryFilter(a => SeesEverything || Tournaments.Any(t => t.Id == a.TournamentId));
+
+        // Der Feed ist die Innenansicht der Gruppe und trägt deshalb denselben
+        // Filter wie alles andere am Turnier (ADR-0014). Die Kommentare hängen
+        // am Eintrag und werden nur mit ihm geladen — ein eigener Filter wäre
+        // dort eine zweite Wahrheit über dieselbe Grenze.
+        modelBuilder.Entity<TournamentPost>()
+            .HasQueryFilter(post => SeesEverything || Tournaments.Any(t => t.Id == post.TournamentId));
 
         // Die öffentliche Projektion bekommt bewusst keinen Filter: sie enthält
         // nur, was jeder sehen darf, und wird ohne Anmeldung gelesen (ADR-0003).

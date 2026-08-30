@@ -52,6 +52,8 @@ public static class ApplicationRegistration
         services.AddScoped<IEntryImportService, EntryImportService>();
         services.AddScoped<ITeamFormationService, TeamFormationService>();
         services.AddScoped<IPlayerProfileService, PlayerProfileService>();
+        services.AddScoped<IFeedService, FeedService>();
+        services.AddScoped<FeedRecorder>();
 
         return services;
     }

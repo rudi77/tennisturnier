@@ -31,21 +31,30 @@ public static class Permissions
                 Permission.EnterResults,
                 Permission.ViewInternals,
                 Permission.ViewMembers,
+                Permission.WriteInFeed,
             },
 
             [Role.Referee] = new HashSet<Permission>
             {
                 Permission.EnterResults,
                 Permission.ViewMembers,
+                Permission.WriteInFeed,
             },
 
-            // Ein einziges Recht, und es ist ein Leserecht: das Mitglied sieht,
-            // wer sonst dazugehört. Was es darüber hinaus sieht — Spielplan,
-            // Draw, Ergebnisse — kommt nicht aus dieser Matrix, sondern aus dem
-            // Query-Filter, der an der Rollenzuweisung hängt.
+            // Zwei Rechte, und beide betreffen die Gruppe: das Mitglied sieht,
+            // wer sonst dazugehört, und darf im Feed schreiben. Was es darüber
+            // hinaus sieht — Spielplan, Draw, Ergebnisse — kommt nicht aus
+            // dieser Matrix, sondern aus dem Query-Filter, der an der
+            // Rollenzuweisung hängt.
+            //
+            // ADR-0012 stand hier einmal „genau ein Recht". ADR-0014 nimmt das
+            // zurück, und zwar an der Stelle, an der die Begründung von damals
+            // hinführt: eine Gruppe, in der nur einer reden darf, ist so wenig
+            // eine Gruppe wie eine, in der niemand sieht, wer dabei ist.
             [Role.Member] = new HashSet<Permission>
             {
                 Permission.ViewMembers,
+                Permission.WriteInFeed,
             },
         };
 

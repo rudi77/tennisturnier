@@ -80,14 +80,30 @@ public sealed class ScopeUndRolleTests
     }
 
     [Fact]
-    public void Ein_Mitglied_sieht_wer_dazugehoert_und_sonst_nichts()
+    public void Ein_Mitglied_sieht_wer_dazugehoert_und_darf_mitreden()
     {
-        // Die Rolle, die ein Turnier zur Gruppe macht. Ein einziges Recht, und
-        // es ist ein Leserecht: eine Gruppe, in der niemand sieht, wer sonst
-        // dabei ist, waere keine. Alles andere — Spielplan, Draw, Ergebnisse —
-        // kommt nicht aus der Rechtematrix, sondern aus dem Query-Filter, der
-        // an der Zuweisung haengt.
-        Assert.Equal([Permission.ViewMembers], Permissions.Of(Role.Member));
+        // Die Rolle, die ein Turnier zur Gruppe macht. Zwei Rechte, und beide
+        // betreffen die Gruppe: es sieht, wer sonst dabei ist, und es darf im
+        // Feed schreiben. Eine Gruppe, in der niemand sieht, wer dazugehoert,
+        // waere keine — und eine, in der nur einer reden darf, ebenso wenig
+        // (ADR-0012, ADR-0014).
+        //
+        // Alles andere — Spielplan, Draw, Ergebnisse — kommt nicht aus der
+        // Rechtematrix, sondern aus dem Query-Filter, der an der Zuweisung
+        // haengt. Die Aufzaehlung ist deshalb weiterhin vollstaendig und nicht
+        // nur eine Teilmenge: was hier dazukommt, ist eine Entscheidung und
+        // kein Versehen.
+        // Als Menge verglichen und nicht als Liste: die Reihenfolge ist die des
+        // Enums, und die ist kein Teil der Aussage.
+        Assert.Equal(
+            new HashSet<Permission> { Permission.ViewMembers, Permission.WriteInFeed },
+            Permissions.Of(Role.Member).ToHashSet());
+
+        // Und ausdruecklich nicht: das Mitglied fuehrt kein Turnier und traegt
+        // keine Ergebnisse ein.
+        Assert.DoesNotContain(Permission.ManageTournament, Permissions.Of(Role.Member));
+        Assert.DoesNotContain(Permission.EnterResults, Permissions.Of(Role.Member));
+        Assert.DoesNotContain(Permission.ViewInternals, Permissions.Of(Role.Member));
 
         var turnier = Guid.NewGuid();
         var zuweisung = new RoleAssignment(

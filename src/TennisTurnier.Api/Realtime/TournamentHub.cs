@@ -20,6 +20,15 @@ public sealed class TournamentHub : Hub
     public const string ProjectionChanged = "projectionChanged";
 
     /// <summary>
+    /// „Im Feed dieses Turniers hat sich etwas getan" — und kein Wort mehr.
+    ///
+    /// Der Kanal ist ohne Anmeldung erreichbar, der Feed ist die Innenansicht
+    /// der Gruppe (ADR-0014). Über diesen Hinweis holt der Client ab, und dort
+    /// entscheidet der Query-Filter, was er bekommt.
+    /// </summary>
+    public const string FeedChanged = "feedChanged";
+
+    /// <summary>
     /// Obergrenze der Abonnements je Verbindung.
     ///
     /// Der Endpunkt ist ohne Anmeldung erreichbar; ohne Grenze könnte eine
@@ -78,4 +87,9 @@ public sealed class SignalRTournamentNotifier : ITournamentNotifier
         _hub.Clients
             .Group(TournamentHub.GroupOf(tournamentId))
             .SendAsync(TournamentHub.ProjectionChanged, tournamentId, etag, cancellationToken);
+
+    public Task FeedChangedAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
+        _hub.Clients
+            .Group(TournamentHub.GroupOf(tournamentId))
+            .SendAsync(TournamentHub.FeedChanged, tournamentId, cancellationToken);
 }

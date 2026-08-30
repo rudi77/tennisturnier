@@ -37,6 +37,26 @@ public sealed class PlayerHistoryStore : IPlayerHistoryStore
             .Select(p => (Guid?)p.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, Guid>> PlayerIdsOfAccountsAsync(
+        IReadOnlyCollection<Guid> userAccountIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(userAccountIds);
+
+        if (userAccountIds.Count == 0)
+        {
+            return new Dictionary<Guid, Guid>();
+        }
+
+        var rows = await _db.Players
+            .AsNoTracking()
+            .Where(p => p.UserAccountId != null && userAccountIds.Contains(p.UserAccountId.Value))
+            .Select(p => new { AccountId = p.UserAccountId!.Value, PlayerId = p.Id })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(row => row.AccountId, row => row.PlayerId);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, string>> DisplayNamesAsync(
         IReadOnlyCollection<Guid> playerIds,
         CancellationToken cancellationToken = default)
