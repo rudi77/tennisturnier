@@ -113,6 +113,47 @@ export function setLabel(format: MatchFormat, setIndex: number): string {
 }
 
 /**
+ * Ist dieser Satz zu Ende gespielt?
+ *
+ * Gebraucht für die Aufgabe: wer beim Stand von 2:1 aufhört, hat den zweiten
+ * Satz nicht gespielt, sondern abgebrochen — und die Domäne führt ihn getrennt
+ * (`abandonedSet`). Ohne diese Unterscheidung landete der halbe Satz zwischen
+ * den ganzen, und der Server wies das ganze Ergebnis zu Recht ab.
+ *
+ * Drei Regeln, dieselben wie in `whyNotSaveable`, nur für einen Satz statt für
+ * das Match: unentschieden ist keiner zu Ende; ein Match-Tiebreak geht bis
+ * zehn mit zwei Punkten Vorsprung; ein regulärer Satz bis `tiebreakAt` mit
+ * zwei Spielen Vorsprung — oder einen darüber, dann war es der Tiebreak.
+ *
+ * Der Vorteilssatz hat keinen: dort gilt der Vorsprung und sonst nichts, und
+ * 7:6 ist mittendrin. Hier stand einmal die Abkürzung „ein Spiel über
+ * `tiebreakAt` heißt Tiebreak" ohne diese Ausnahme — sie hätte einen laufenden
+ * Vorteilssatz für beendet erklärt.
+ */
+export function isSetFinished(
+  format: MatchFormat,
+  setIndex: number,
+  [games1, games2]: readonly [number, number],
+): boolean {
+  if (games1 === games2) return false
+
+  const sieger = Math.max(games1, games2)
+  const abstand = sieger - Math.min(games1, games2)
+
+  if (isMatchTiebreakSet(format, setIndex)) {
+    return sieger >= 10 && abstand >= 2
+  }
+
+  const mitTiebreak = !(
+    setIndex === format.bestOf - 1 && format.finalSetMode === FinalSetMode.Advantage
+  )
+
+  if (mitTiebreak && sieger === format.tiebreakAt + 1) return true
+
+  return sieger >= format.tiebreakAt && abstand >= 2
+}
+
+/**
  * Warum sich das Ergebnis so noch nicht speichern lässt — oder `null`, wenn es
  * geht.
  *

@@ -215,6 +215,32 @@ describe('ResultEditor', () => {
     )
   })
 
+  it('führt den abgebrochenen Satz getrennt — wer aufgibt, tut es mitten im Satz', async () => {
+    // Der häufige Fall, und er ging vorher gar nicht: „beim Stand von 2:1 im
+    // zweiten Satz aufgegeben". Der halbe Satz ging als ganzer mit, und der
+    // Server wies das Ergebnis ab — eine Aufgabe ließ sich nur eintragen, wenn
+    // zufällig jeder begonnene Satz auch zu Ende gespielt war.
+    aufbau()
+    const u = user()
+
+    await zaehle('S. Moser, Satz 1', 6)
+    await zaehle('L. Berger, Satz 1', 4)
+    await zaehle('S. Moser, Satz 2', 2)
+    await zaehle('L. Berger, Satz 2', 1)
+
+    await u.click(screen.getByRole('button', { name: 'Retirement' }))
+    await u.click(screen.getByRole('button', { name: 'Speichern & propagieren' }))
+
+    await waitFor(() =>
+      expect(lastBody('PUT', `/api/matches/${fx.IDS.match1}/result`)).toEqual({
+        outcome: MatchOutcome.Retirement,
+        sets: [{ games1: 6, games2: 4, tiebreakPoints: null }],
+        abandonedSet: { games1: 2, games2: 1, tiebreakPoints: null },
+        affectedSide: 1,
+      }),
+    )
+  })
+
   it('lässt einen anderen Ausgang ohne vollständigen Satzstand speichern', async () => {
     aufbau()
     const u = user()

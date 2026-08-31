@@ -33,10 +33,21 @@ interface TokenAntwort {
   scope: string
 }
 
-const cache = new Map<Benutzer, TokenAntwort>()
+const cache = new Map<string, TokenAntwort>()
 
-export async function tokenFuer(benutzer: Benutzer): Promise<TokenAntwort> {
-  const vorhanden = cache.get(benutzer)
+export function tokenFuer(benutzer: Benutzer): Promise<TokenAntwort> {
+  // Die eingebauten Testbenutzer tragen ihren Namen als Passwort.
+  return tokenMit(benutzer, benutzer)
+}
+
+/**
+ * Das volle Tokenpaar zu Benutzername und Passwort.
+ *
+ * Auch für Konten, die ein Lauf selbst angelegt hat (`support/konten.ts`) —
+ * der Weg ist derselbe Direktzugang, nur die Zugangsdaten kommen von woanders.
+ */
+export async function tokenMit(benutzername: string, passwort: string): Promise<TokenAntwort> {
+  const vorhanden = cache.get(benutzername)
   if (vorhanden) return vorhanden
 
   const response = await fetch(`${AUTHORITY}/protocol/openid-connect/token`, {
@@ -45,21 +56,21 @@ export async function tokenFuer(benutzer: Benutzer): Promise<TokenAntwort> {
     body: new URLSearchParams({
       grant_type: 'password',
       client_id: CLIENT_ID,
-      username: benutzer,
-      password: benutzer,
+      username: benutzername,
+      password: passwort,
       scope: 'openid profile email',
     }),
   })
 
   if (!response.ok) {
     throw new Error(
-      `Kein Token für „${benutzer}" (${response.status}). Läuft Keycloak? ` +
+      `Kein Token für „${benutzername}" (${response.status}). Läuft Keycloak? ` +
         '`docker compose up -d keycloak` in der Repo-Wurzel.',
     )
   }
 
   const token = (await response.json()) as TokenAntwort
-  cache.set(benutzer, token)
+  cache.set(benutzername, token)
   return token
 }
 
@@ -82,8 +93,17 @@ function claims(jwt: string): Record<string, unknown> {
  * ein. Der Weg zum Aussteller wäre dann nicht zu prüfen — die Anwendung wäre
  * beim Rücksprung wortlos wieder angemeldet.
  */
-export async function anmelden(page: Page, benutzer: Benutzer = 'clubadmin'): Promise<void> {
-  const token = await tokenFuer(benutzer)
+export function anmelden(page: Page, benutzer: Benutzer = 'clubadmin'): Promise<void> {
+  return sitzungEinpflanzen(page, benutzer, benutzer)
+}
+
+/** Dasselbe für ein Konto, dessen Zugangsdaten der Lauf selbst kennt. */
+export async function sitzungEinpflanzen(
+  page: Page,
+  benutzername: string,
+  passwort: string,
+): Promise<void> {
+  const token = await tokenMit(benutzername, passwort)
   const profile = claims(token.id_token)
 
   const user = {
