@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Membership;
@@ -79,8 +79,8 @@ public sealed class WeitereRandfaelleApiTests
                 Turniertag = true,
             });
 
-        var board = await turnier.Admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{turnier.TournamentId}/courts", Json);
+        var board = (await turnier.Admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{turnier.TournamentId}/courts", Json))!.Courts;
 
         var spielbar = board!.SelectMany(c => c.Queue).First(q => q.MatchStatus == MatchStatus.Ready);
 

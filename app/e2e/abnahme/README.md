@@ -61,17 +61,18 @@ Beim Bau, nicht im Nachhinein — das ist ihr Zweck:
 2. **Der Kasten für die Teilnehmerliste versprach zu viel.** „Wer schon im Feld
    steht, wird übersprungen" gilt nur für Zeilen mit Adresse; ohne Adresse
    entsteht bewusst ein zweiter Eintrag. Der Text sagt das jetzt.
-3. **Eine unterbrochene Partie verschwindet vom Platzbrett.** „Pause" gibt den
-   Platz frei — ausdrücklich so gewollt —, aber die unterbrochene Zuweisung
-   steht danach in keiner Schlange, und der Knopf „Fortsetzen", den
-   `QueueBoard` kennt, kann nie erscheinen. Über die API geht es weiter. Nicht
-   behoben: die Fortsetzung gehörte außerhalb der Plätze, etwa als eigener
-   Abschnitt „unterbrochen" — das ist ein Entwurf und keine Reparatur.
-4. **Ein öffentliches Turnier vor der Auslosung sagt „nicht öffentlich".** Die
-   Projektion entsteht erst mit dem Draw, und der Zuschauer bekommt dieselbe
-   404 wie bei einem privaten Turnier. Bei einem offenen Turnier verriete
-   „noch nicht ausgelost" nichts — unterscheiden kann die Oberfläche die
-   beiden Fälle heute nur nicht.
+3. **Eine unterbrochene Partie verschwand vom Platzbrett.** „Pause" gibt den
+   Platz frei — ausdrücklich so gewollt —, aber die Zuweisung stand danach in
+   keiner Schlange, und der Knopf „Fortsetzen", den `QueueBoard` kennt, konnte
+   nie erscheinen. Behoben: das Tagesbrett führt die unterbrochenen Partien
+   jetzt **neben** den Plätzen. Sie belegen keinen, sind aber auffindbar — und
+   umhängen lassen sie sich nicht, denn wohin sie kommen, entscheidet sich
+   beim Fortsetzen.
+4. **Ein öffentliches Turnier vor der Auslosung sagte „nicht öffentlich".** Die
+   Projektion entsteht erst mit dem Draw; unsichtbar und „noch nichts da"
+   liefen beide als 404 zusammen. Behoben: der Endpunkt antwortet jetzt 204,
+   wenn der Aufrufer das Turnier sehen darf und es nur noch keine Ansicht gibt.
+   Unsichtbar bleibt 404 — die Existenz ist selbst eine Auskunft (ADR-0004).
 5. **`matches.clearResult` ruft niemand.** Der Client bringt den Aufruf samt
    Test mit, keine Maske benutzt ihn — korrigiert wird durch Überschreiben.
 

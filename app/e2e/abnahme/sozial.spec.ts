@@ -77,8 +77,13 @@ test('eine Korrektur schreibt eine zweite Zeile, statt die erste zu ändern', as
   await anmelden(seite)
   await seite.goto(`/?screen=feed&t=${turnier.id}`)
 
+  // Auf den Stand warten und nicht auf eine Zahl: unter Last kommt der Feed
+  // später, und eine Zusicherung auf „genau eine Zeile" prüft dann nur, wie
+  // schnell die Antwort war.
+  await expect(seite.getByText(/6:4 6:3/)).toBeVisible()
+
   const ergebniszeilen = seite.locator('article').filter({ hasText: 'ERGEBNIS' })
-  await expect(ergebniszeilen).toHaveCount(1)
+  const vorher = await ergebniszeilen.count()
 
   // Dasselbe Match, anderer Stand.
   await api.put(`/api/matches/${match}/result`, {
@@ -91,9 +96,12 @@ test('eine Korrektur schreibt eine zweite Zeile, statt die erste zu ändern', as
 
   await seite.reload()
 
-  // Die alte Zeile bleibt stehen, die neue kommt darunter — der Verlauf ist
-  // eine Chronik und kein Zustand (ADR-0014).
-  await expect(ergebniszeilen).toHaveCount(2)
+  // Die alte Zeile bleibt stehen, die neue kommt dazu — der Verlauf ist eine
+  // Chronik und kein Zustand (ADR-0014).
+  // Aus Sicht des Siegers, deshalb 6:4 6:2 und nicht 4:6 2:6 (ADR-0014).
+  await expect(seite.getByText(/6:4 6:2/)).toBeVisible()
+  await expect(seite.getByText(/6:4 6:3/)).toBeVisible()
+  await expect(ergebniszeilen).toHaveCount(vorher + 1)
 
   await kontext.close()
 })

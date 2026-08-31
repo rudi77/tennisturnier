@@ -1,4 +1,4 @@
-using TennisTurnier.Application.PublicView;
+﻿using TennisTurnier.Application.PublicView;
 
 namespace TennisTurnier.Application.Tests.Fakes;
 
@@ -27,10 +27,10 @@ public sealed class RecordingPublicViewService : IPublicViewService
     /// <summary>Wird von der Attrappe der Einheit der Arbeit gesetzt.</summary>
     public Func<int>? SaveCount { get; set; }
 
-    public Task<PublicTournamentSnapshot?> GetAsync(
+    public Task<PublicViewLookup> GetAsync(
         Guid tournamentId,
         CancellationToken cancellationToken = default) =>
-        Task.FromResult<PublicTournamentSnapshot?>(null);
+        Task.FromResult(new PublicViewLookup(Visible: false, Snapshot: null));
 
     public Task<bool> RebuildAsync(Guid tournamentId, CancellationToken cancellationToken = default)
     {

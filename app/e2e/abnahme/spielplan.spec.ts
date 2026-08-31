@@ -143,19 +143,15 @@ test('am Turniertag: aufrufen, starten, Platz frei', async ({
   await seite.context().close()
 })
 
-test('eine Unterbrechung räumt den Platz — und ist danach nur über die API erreichbar', async ({
+test('eine Unterbrechung räumt den Platz und bleibt trotzdem auffindbar', async ({
   browser,
   api,
 }) => {
-  // Festgehalten, wie es ist, samt der Lücke: „Pause" gibt den Platz frei,
-  // damit die Unterbrechung nicht den ganzen Tag blockiert (so steht es in
-  // `MatchDayApiTests` ausdrücklich). Die unterbrochene Zuweisung erscheint
-  // danach aber auf keinem Platzbrett mehr — weder als laufende noch in einer
-  // Schlange —, und damit gibt es über die Oberfläche keinen Weg zum
-  // Fortsetzen. Den Knopf dafür kennt `QueueBoard`, zeigen kann er ihn nie.
-  //
-  // Das ist ein Entwurfsfund, keine Regelverletzung: die Fortsetzung müsste
-  // außerhalb der Plätze stehen, etwa als eigener Abschnitt „unterbrochen".
+  // Beides gehört zusammen: „Pause" gibt den Platz frei, damit die
+  // Unterbrechung nicht den ganzen Tag blockiert — und die Partie steht
+  // danach neben den Plätzen, damit es einen Weg zurück gibt. Eine Zeit lang
+  // stand sie nirgends: nicht laufend, also kein „current", nicht geplant,
+  // also in keiner Schlange. Der Knopf „Fortsetzen" konnte nie erscheinen.
   const { turnier, seite } = await amSpielplan(browser, api)
 
   await seite.getByRole('button', { name: 'Auto-Plan berechnen' }).click()
@@ -175,18 +171,18 @@ test('eine Unterbrechung räumt den Platz — und ist danach nur über die API e
   expect(laufend, 'kein laufendes Match gefunden').toBeTruthy()
 
   await knopf('Pause').click()
-  await expect(seite.locator('.md-toast')).toBeVisible()
 
-  // Unterbrochen — und vom Brett verschwunden.
+  // Der Platz ist frei — und die Partie steht im eigenen Abschnitt daneben.
+  const abschnitt = seite.locator('.md-queue__suspended')
+  await expect(abschnitt).toBeVisible()
+
   const danach = await zuweisungen(api, turnier.id)
   expect(danach.find((z) => z.id === laufend!.id)?.status).toBe(4)
-  await expect(knopf('Fortsetzen')).toHaveCount(0)
 
-  // Über die API geht es weiter; die Fortsetzung ist eine eigene Zuweisung
-  // oder dieselbe, je nach Platz (ADR-0002).
-  await api.post(`/api/assignments/${laufend!.id}/resume`, {})
+  // Und von dort geht es weiter, ohne Umweg über die API.
+  await abschnitt.getByRole('button', { name: 'Fortsetzen' }).click()
 
-  await seite.reload()
+  await expect(seite.locator('.md-queue__suspended')).toHaveCount(0)
   await expect(knopf('Platz frei')).toBeVisible()
 
   await seite.context().close()

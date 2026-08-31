@@ -136,26 +136,30 @@ test.describe('Die anderen Wege ins Feld', () => {
     const turnier = await turnierMitFeld(api, 0)
     const leitung = await alsLeitung(browser, turnier.id)
 
-    await leitung
-      .getByLabel('Teilnehmerliste einfügen')
-      .fill('Vorname;Nachname;E-Mail\nCarla;Csv;carla@example.invalid\nDoris;Datei;')
+    // Eine eigene Adresse je Lauf: die Abnahmen teilen sich eine Datenbank,
+    // und ein Spieler von gestern soll das Ergebnis von heute nicht färben.
+    const adresse = `carla.${Date.now().toString(36)}@example.invalid`
+    const liste = ['Vorname;Nachname;E-Mail', `Carla;Csv;${adresse}`, 'Doris;Datei;'].join(
+      '\n',
+    )
 
+    await leitung.getByLabel('Teilnehmerliste einfügen').fill(liste)
     await leitung.getByRole('button', { name: 'Übernehmen' }).click()
-    await expect(meldung(leitung)).toBeVisible()
 
-    await expect(zeile(leitung, 'Csv, Carla')).toBeVisible()
-    await expect(zeile(leitung, 'Datei, Doris')).toBeVisible()
+    // Auf die Zeilen warten und nicht auf den Zettel: der steht im langen
+    // Lauf noch vom vorigen Schritt da, und der Test läse die API zu früh.
+    await expect(zeile(leitung, 'Csv, Carla')).toHaveCount(1)
+    await expect(zeile(leitung, 'Datei, Doris')).toHaveCount(1)
 
     // Dieselbe Liste ein zweites Mal. Wer eine Adresse trägt, wird
     // übersprungen; wer keine hat, kommt ein zweites Mal ins Feld — gleicher
     // Name allein ist kein Beweis für denselben Menschen, und zwei Hans Müller
     // in einer Vereinsliste stillschweigend zu einem zu machen wäre der
     // teurere Fehler. Der Kasten sagt das jetzt auch.
-    await leitung
-      .getByLabel('Teilnehmerliste einfügen')
-      .fill('Vorname;Nachname;E-Mail\nCarla;Csv;carla@example.invalid\nDoris;Datei;')
+    await leitung.getByLabel('Teilnehmerliste einfügen').fill(liste)
     await leitung.getByRole('button', { name: 'Übernehmen' }).click()
-    await expect(meldung(leitung)).toBeVisible()
+
+    await expect(zeile(leitung, 'Datei, Doris')).toHaveCount(2)
 
     const stand = await api.get<Meldung[]>(`/api/tournaments/${turnier.id}/entries`)
     expect(stand.filter((m) => m.participantName === 'Csv, Carla')).toHaveLength(1)

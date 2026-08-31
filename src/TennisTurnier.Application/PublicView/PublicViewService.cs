@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
@@ -13,6 +13,21 @@ namespace TennisTurnier.Application.PublicView;
 /// <summary>Ein ausgelieferter Stand der öffentlichen Ansicht.</summary>
 public sealed record PublicTournamentSnapshot(string Json, string ETag, DateTimeOffset UpdatedAt, int Version);
 
+/// <summary>
+/// Was der Aufrufer bekommt — und warum er nichts bekommt.
+///
+/// Die beiden Fälle liefen einmal zusammen als „nichts": ein Turnier, das er
+/// nicht sehen darf, und eines, das er sehen darf, das aber noch keine Ansicht
+/// hat, weil nicht ausgelost ist. Beide endeten als 404, und der Zuschauer las
+/// „nicht öffentlich" über ein Turnier, das offen war.
+///
+/// Getrennt kostet es nichts und sagt die Wahrheit: unsichtbar bleibt
+/// unsichtbar (404, nicht 403 — die Existenz ist selbst eine Auskunft,
+/// ADR-0004), und „noch nichts zu sehen" verrät bei einem sichtbaren Turnier
+/// nichts, was der Link nicht ohnehin preisgäbe.
+/// </summary>
+public sealed record PublicViewLookup(bool Visible, PublicTournamentSnapshot? Snapshot);
+
 /// <summary>Die öffentliche Ansicht: lesen und neu aufbauen (ADR-0003).</summary>
 public interface IPublicViewService
 {
@@ -20,7 +35,7 @@ public interface IPublicViewService
     /// Der aktuelle Stand, oder <c>null</c>, solange es nichts zu zeigen gibt.
     /// Ohne Rechteprüfung — das ist der Sinn der Sache.
     /// </summary>
-    Task<PublicTournamentSnapshot?> GetAsync(Guid tournamentId, CancellationToken cancellationToken = default);
+    Task<PublicViewLookup> GetAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Baut die Ansicht neu und gibt zurück, ob sich inhaltlich etwas geändert
@@ -111,21 +126,23 @@ public sealed class PublicViewService : IPublicViewService
     /// einem Turnier, das es nicht gibt: ein 404. Ein 403 verriete, dass es
     /// existiert — dieselbe Regel wie beim Query-Filter (ADR-0004).
     /// </summary>
-    public async Task<PublicTournamentSnapshot?> GetAsync(
+    public async Task<PublicViewLookup> GetAsync(
         Guid tournamentId,
         CancellationToken cancellationToken = default)
     {
         if (!await MayViewAsync(tournamentId, cancellationToken))
         {
-            return null;
+            return new PublicViewLookup(Visible: false, Snapshot: null);
         }
 
         var projection = await _projections.FindAsync(tournamentId, cancellationToken);
 
-        return projection is null
-            ? null
-            : new PublicTournamentSnapshot(
-                projection.Json, projection.ETag, projection.UpdatedAt, projection.Version);
+        return new PublicViewLookup(
+            Visible: true,
+            Snapshot: projection is null
+                ? null
+                : new PublicTournamentSnapshot(
+                    projection.Json, projection.ETag, projection.UpdatedAt, projection.Version));
     }
 
     /// <summary>

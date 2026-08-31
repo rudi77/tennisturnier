@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Membership;
@@ -159,8 +159,8 @@ public sealed class KontakteApiTests : IClassFixture<TennisTurnierApiFactory>
         await SpielplanAsync(leitung, tournamentId);
         await leitung.PostAsync($"/api/tournaments/{tournamentId}/scheduling/match-day", null);
 
-        var board = await leitung.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{tournamentId}/courts", Json);
+        var board = (await leitung.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{tournamentId}/courts", Json))!.Courts;
 
         var slot = board!.SelectMany(court => court.Queue).First();
 

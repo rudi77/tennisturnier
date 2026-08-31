@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Security;
@@ -136,8 +136,8 @@ public sealed class SichtenUndPlaetzeApiTests : IClassFixture<TennisTurnierApiFa
                 Turniertag = true,
             });
 
-        var belegt = (await turnier.Admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{turnier.TournamentId}/courts", Json))!
+        var belegt = (await turnier.Admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{turnier.TournamentId}/courts", Json))!.Courts
             .First(c => c.Queue.Count > 0);
 
         Assert.Equal(
@@ -147,8 +147,8 @@ public sealed class SichtenUndPlaetzeApiTests : IClassFixture<TennisTurnierApiFa
                 new UpdateCourtRequest(belegt.CourtName, IsCenterCourt: false, IsActive: false),
                 Json)).StatusCode);
 
-        var danach = await turnier.Admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{turnier.TournamentId}/courts", Json);
+        var danach = (await turnier.Admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{turnier.TournamentId}/courts", Json))!.Courts;
 
         Assert.Contains(danach!, c => c.CourtId == belegt.CourtId);
     }

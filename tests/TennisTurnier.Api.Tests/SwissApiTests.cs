@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Tournaments;
@@ -385,8 +385,8 @@ public sealed class SwissApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
 
         // Die laufende Partie steht unverändert am Platz.
-        var board = (await client.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{tournamentId}/courts", Json))!;
+        var board = (await client.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{tournamentId}/courts", Json))!.Courts;
 
         Assert.Equal(running.Id, Assert.Single(board).Current!.MatchId);
     }

@@ -172,13 +172,22 @@ test('privat heißt privat, auch mit der richtigen Adresse', async ({ browser, a
   const leitungsseite = await leitung.newPage()
   await anmelden(leitungsseite)
   await leitungsseite.goto(`/?screen=entries&t=${turnier.id}`)
-  await leitungsseite.getByRole('button', { name: 'Öffentlich' }).click()
+
+  // Auf den Schaltzustand warten und nicht auf den Zettel: erst wenn die Pille
+  // gedrückt ist, hat der Server die Sichtbarkeit übernommen. Sonst lädt der
+  // Zuschauer neu, bevor sich etwas geändert hat.
+  const pille = (name: string) => leitungsseite.getByRole('button', { name, exact: true })
+
+  await pille('Öffentlich').click()
+  await expect(pille('Öffentlich')).toHaveAttribute('aria-pressed', 'true')
 
   await zuschauer.reload()
   await expect(zuschauer.getByText(turnier.name)).toBeVisible()
 
   // Und zurück: was zu ist, ist zu — ohne Wartezeit auf einen Zwischenspeicher.
-  await leitungsseite.getByRole('button', { name: 'Privat' }).click()
+  await pille('Privat').click()
+  await expect(pille('Privat')).toHaveAttribute('aria-pressed', 'true')
+
   await zuschauer.reload()
   await expect(zuschauer.getByText('Dieses Turnier ist nicht öffentlich')).toBeVisible()
 

@@ -253,8 +253,11 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
 
         await admin.PostAsync($"/api/tournaments/{tournamentId}/registration/reopen", null);
 
+        // 204 und nicht 404: das Turnier ist weiterhin offen, es gibt nur
+        // gerade nichts zu zeigen. Ein 404 hieße „gibt es nicht oder ist
+        // privat" — beides wäre gelogen.
         Assert.Equal(
-            HttpStatusCode.NotFound,
+            HttpStatusCode.NoContent,
             (await spectator.GetAsync($"/public/tournaments/{tournamentId}")).StatusCode);
     }
 

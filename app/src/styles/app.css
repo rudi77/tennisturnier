@@ -843,6 +843,16 @@ body {
   padding-bottom: var(--sp-4);
 }
 
+/* Was zwischen den Plätzen hängt. Abgesetzt und darüber, weil es die Frage
+   ist, die nach einem Regenguss zuerst kommt: was ist noch offen. */
+.md-queue__suspended {
+  border: var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-6);
+  margin-bottom: var(--sp-7);
+  background: var(--surface);
+}
+
 .md-queue__row {
   display: flex;
   flex-direction: column;

@@ -451,7 +451,8 @@ export function BoardScreen() {
                 <ErrorBlock error={boards.error} onRetry={() => void boards.reload()} />
               ) : boards.data ? (
                 <QueueBoard
-                  boards={boards.data}
+                  boards={boards.data.courts}
+                  suspended={boards.data.suspended}
                   timeZone={timeZone}
                   busyAssignmentId={busy}
                   onAction={(action, entry) => void queueAction(action, entry)}

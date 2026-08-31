@@ -631,6 +631,19 @@ export interface StandingsDetail {
 // Turniertag
 // ---------------------------------------------------------------------------
 
+/**
+ * Der Turniertag auf einen Blick.
+ *
+ * `suspended` steht neben den Plätzen und nicht in einem: eine unterbrochene
+ * Partie belegt keinen, und wo sie weitergeht, entscheidet sich erst bei der
+ * Fortsetzung. Ohne diesen eigenen Ort verschwände sie ganz — der Platz wäre
+ * frei und der Weg zurück zugleich weg.
+ */
+export interface MatchDayBoard {
+  courts: CourtBoard[]
+  suspended: QueuedMatch[]
+}
+
 export interface CourtBoard {
   courtId: string
   courtName: string

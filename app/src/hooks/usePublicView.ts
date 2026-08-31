@@ -13,6 +13,13 @@ export interface PublicViewState {
   live: boolean
   /** Anzahl der 304-Antworten — der sichtbare Beleg, dass der ETag wirkt. */
   notModifiedCount: number
+  /**
+   * Sichtbar, aber noch nichts zu zeigen — das Turnier ist nicht ausgelost.
+   *
+   * Getrennt von `error`, weil es keiner ist: die Projektion entsteht mit der
+   * Auslosung, und bis dahin ist „noch nichts" die richtige Auskunft.
+   */
+  pending: boolean
   reload: () => Promise<void>
 }
 
@@ -32,6 +39,7 @@ export function usePublicView(tournamentId: string | null): PublicViewState {
   const [error, setError] = useState<Error | null>(null)
   const [live, setLive] = useState(false)
   const [notModifiedCount, setNotModified] = useState(0)
+  const [pending, setPending] = useState(false)
 
   const etagRef = useRef<string | null>(null)
   const [etag, setEtag] = useState<string | null>(null)
@@ -48,6 +56,8 @@ export function usePublicView(tournamentId: string | null): PublicViewState {
           etagRef.current = result.etag
           setEtag(result.etag)
         }
+
+        setPending(result.pending)
         setError(null)
       } catch (cause) {
         if (isAbortError(cause)) return
@@ -98,6 +108,7 @@ export function usePublicView(tournamentId: string | null): PublicViewState {
     error,
     live,
     notModifiedCount,
+    pending,
     reload: () => load(),
   }
 }

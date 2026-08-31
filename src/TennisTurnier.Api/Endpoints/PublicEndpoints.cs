@@ -24,10 +24,20 @@ internal static class PublicEndpoints
             IPublicViewService service,
             CancellationToken ct) =>
         {
-            var snapshot = await service.GetAsync(tournamentId, ct);
-            if (snapshot is null)
+            var lookup = await service.GetAsync(tournamentId, ct);
+
+            if (!lookup.Visible)
             {
                 return Results.NotFound();
+            }
+
+            // Sichtbar, aber noch nichts zu zeigen: die Projektion entsteht mit
+            // der Auslosung. Ein 404 wäre hier gelogen — der Zuschauer läse
+            // „gibt es nicht oder ist privat" über ein Turnier, das offen ist
+            // und nur noch nicht ausgelost.
+            if (lookup.Snapshot is not { } snapshot)
+            {
+                return Results.NoContent();
             }
 
             var headers = http.Response.GetTypedHeaders();

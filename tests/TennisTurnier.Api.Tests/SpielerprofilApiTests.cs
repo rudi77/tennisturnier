@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Social;
@@ -353,8 +353,8 @@ public sealed class SpielerprofilApiTests : IClassFixture<TennisTurnierApiFactor
                 Uhr = new DateTimeOffset(2026, 5, 16, 8, 0, 0, TimeSpan.FromHours(2)),
             });
 
-        var board = await aufbau.Admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{aufbau.TournamentId}/courts", Json);
+        var board = (await aufbau.Admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{aufbau.TournamentId}/courts", Json))!.Courts;
 
         var slot = board!.SelectMany(court => court.Queue).First();
 
