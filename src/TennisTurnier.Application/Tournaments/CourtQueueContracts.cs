@@ -1,7 +1,23 @@
-using TennisTurnier.Domain.Matches;
+﻿using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Scheduling;
 
 namespace TennisTurnier.Application.Tournaments;
+
+/// <summary>
+/// Der Turniertag auf einen Blick: die Plätze — und was zwischen ihnen hängt.
+///
+/// <see cref="Suspended"/> steht neben den Plätzen und nicht in einem von
+/// ihnen. Eine unterbrochene Partie belegt keinen: der Platz ist frei, sobald
+/// unterbrochen wurde, und wo weitergespielt wird, entscheidet die
+/// Turnierleitung erst bei der Fortsetzung (ADR-0002).
+///
+/// Sie stand deshalb eine Zeit lang nirgends. Der Platz war frei — richtig —,
+/// aber die Partie tauchte auf keinem Brett mehr auf, und damit gab es über
+/// die Oberfläche keinen Weg zurück. Ein eigener Ort löst beides.
+/// </summary>
+public sealed record MatchDayBoard(
+    IReadOnlyList<CourtBoard> Courts,
+    IReadOnlyList<QueuedMatch> Suspended);
 
 /// <summary>
 /// Ein Platz am Turniertag: was gerade darauf läuft und wer wartet.

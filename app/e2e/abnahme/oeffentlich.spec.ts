@@ -89,26 +89,26 @@ test('die Reiter kommen mit den Daten, und die Tabelle trägt Zeilen', async ({
   await seite.context().close()
 })
 
-test('vor der Auslosung sagt die Seite „nicht öffentlich" — auch wenn es offen ist', async ({
+test('vor der Auslosung sagt die Seite, dass es noch nichts zu sehen gibt', async ({
   browser,
   api,
 }) => {
-  // Festgehalten, wie es ist, samt der Ungenauigkeit: die Projektion entsteht
-  // mit der Auslosung, vorher gibt es keine. Der Zuschauer bekommt dieselbe
-  // 404 wie bei einem privaten Turnier und liest deshalb „entweder gibt es das
-  // Turnier nicht, oder es ist privat" — beides trifft hier nicht zu.
-  //
-  // Ein Entwurfsfund: bei einem offenen Turnier verrät „noch nicht ausgelost"
-  // nichts, was der Link nicht ohnehin preisgäbe. Nur unterscheiden kann die
-  // Oberfläche die beiden Fälle heute nicht.
-  const turnier = await turnierMitFeld(api, 4)
-  await api.put(`/api/tournaments/${turnier.id}/visibility`, { isPublic: true })
+  // Der Unterschied, um den es geht: ein offenes Turnier ohne Ansicht ist
+  // nicht dasselbe wie ein privates. Beides endete einmal als 404, und der
+  // Zuschauer las über ein offenes Turnier, es sei nicht öffentlich.
+  const offen = await turnierMitFeld(api, 4)
+  await api.put(`/api/tournaments/${offen.id}/visibility`, { isPublic: true })
 
-  const seite = await alsZuschauer(browser, `/?t=${turnier.id}`)
+  const zuschauer = await alsZuschauer(browser, `/?t=${offen.id}`)
+  await expect(zuschauer.getByText('Noch keine öffentliche Ansicht')).toBeVisible()
 
-  await expect(seite.getByText('Dieses Turnier ist nicht öffentlich')).toBeVisible()
+  // Und das private Turnier sagt weiterhin, was es sagen soll — die Existenz
+  // ist selbst eine Auskunft (ADR-0004).
+  const privat = await turnierMitFeld(api, 4)
+  const fremder = await alsZuschauer(browser, `/?t=${privat.id}`)
+  await expect(fremder.getByText('Dieses Turnier ist nicht öffentlich')).toBeVisible()
 
-  await seite.context().close()
+  for (const s of [zuschauer, fremder]) await s.context().close()
 })
 
 test('der Aushangmodus zeigt dieselbe Seite ohne Bedienung', async ({ browser, api }) => {

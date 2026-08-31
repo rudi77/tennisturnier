@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { AssignmentStatus, MatchStatus, type CourtBoard } from '../../api/types'
+import { AssignmentStatus, MatchStatus, type CourtBoard, type QueuedMatch } from '../../api/types'
 import * as fx from '../../test/fixtures'
 import { user } from '../../test/render'
 import { QueueBoard } from './QueueBoard'
@@ -11,12 +11,14 @@ function aufbau(
   boards: CourtBoard[],
   busyAssignmentId: string | null = null,
   readOnly = false,
+  suspended: QueuedMatch[] = [],
 ) {
   const onAction = vi.fn()
   const onDropMatch = vi.fn()
   const result = render(
     <QueueBoard
       boards={boards}
+      suspended={suspended}
       timeZone={WIEN}
       busyAssignmentId={busyAssignmentId}
       onAction={onAction}
@@ -329,5 +331,54 @@ describe('QueueBoard — nur zusehen', () => {
 
     expect(onDropMatch).not.toHaveBeenCalled()
     expect(karteMit('S. Moser')).toHaveAttribute('draggable', 'false')
+  })
+})
+
+describe('QueueBoard — unterbrochen', () => {
+  // Der Platz ist frei, die Partie trotzdem auffindbar. Ohne diesen Abschnitt
+  // stand sie nirgends: nicht laufend, also kein „current", nicht geplant,
+  // also in keiner Schlange — und der Weg zurück war mit ihr weg.
+  it('zeigt die unterbrochene Partie neben den Plätzen', () => {
+    aufbau(
+      [fx.courtBoard({ current: null, queue: [] })],
+      null,
+      false,
+      [fx.queuedMatch({ status: AssignmentStatus.Suspended, side1: 'S. Moser' })],
+    )
+
+    const abschnitt = document.querySelector('.md-queue__suspended')
+    expect(abschnitt).not.toBeNull()
+    expect(within(abschnitt as HTMLElement).getByText('S. Moser')).toBeInTheDocument()
+  })
+
+  it('bietet dort das Fortsetzen an', async () => {
+    const { onAction } = aufbau(
+      [fx.courtBoard({ current: null, queue: [] })],
+      null,
+      false,
+      [fx.queuedMatch({ status: AssignmentStatus.Suspended, side1: 'S. Moser' })],
+    )
+
+    await user().click(screen.getByRole('button', { name: 'Fortsetzen' }))
+
+    expect(onAction).toHaveBeenCalledWith('resume', expect.objectContaining({ side1: 'S. Moser' }))
+  })
+
+  it('lässt die unterbrochene Karte nicht umhängen', () => {
+    // Sie liegt auf keinem Platz; wohin sie käme, entscheidet sich beim
+    // Fortsetzen. Ein Ziehen, das nichts tut, wäre ein Versprechen zu viel.
+    aufbau(
+      [fx.courtBoard({ current: null, queue: [] })],
+      null,
+      false,
+      [fx.queuedMatch({ status: AssignmentStatus.Suspended, side1: 'S. Moser' })],
+    )
+
+    expect(karteMit('S. Moser')).toHaveAttribute('draggable', 'false')
+  })
+
+  it('lässt den Abschnitt weg, solange nichts unterbrochen ist', () => {
+    aufbau([fx.courtBoard()])
+    expect(document.querySelector('.md-queue__suspended')).toBeNull()
   })
 })

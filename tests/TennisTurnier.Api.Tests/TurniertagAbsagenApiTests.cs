@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Tournaments;
@@ -35,9 +35,9 @@ public sealed class TurniertagAbsagenApiTests : IClassFixture<TennisTurnierApiFa
                 Turniertag = true,
             });
 
-    private static async Task<List<CourtBoard>> BoardAsync(AufgebautesTurnier turnier) =>
-        (await turnier.Admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{turnier.TournamentId}/courts", Json))!;
+    private static async Task<IReadOnlyList<CourtBoard>> BoardAsync(AufgebautesTurnier turnier) =>
+        (await turnier.Admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{turnier.TournamentId}/courts", Json))!.Courts;
 
     private static async Task<string> DetailAsync(HttpResponseMessage response)
     {

@@ -16,6 +16,7 @@ export type QueueAction = 'call' | 'start' | 'finish' | 'suspend' | 'resume' | '
  */
 export function QueueBoard({
   boards,
+  suspended,
   timeZone,
   busyAssignmentId,
   onAction,
@@ -23,6 +24,14 @@ export function QueueBoard({
   readOnly = false,
 }: {
   boards: CourtBoard[]
+  /**
+   * Die unterbrochenen Partien — sie hängen zwischen den Plätzen.
+   *
+   * Nicht in einer Spalte, weil sie keinen Platz belegen: unterbrochen heißt,
+   * der Platz ist frei. Sie stünden sonst nirgends, und der Weg zurück wäre
+   * mit ihnen weg (ADR-0002).
+   */
+  suspended: QueuedMatch[]
   timeZone: string
   busyAssignmentId: string | null
   onAction: (action: QueueAction, entry: QueuedMatch) => void
@@ -38,6 +47,29 @@ export function QueueBoard({
 
   return (
     <div className="md-queue">
+      {suspended.length > 0 && (
+        <div className="md-queue__suspended">
+          <div className="md-eyebrow">Unterbrochen</div>
+          <div className="md-hint" style={{ fontSize: 'var(--fs-xs)', marginBottom: 'var(--sp-5)' }}>
+            Der Platz ist frei. Fortgesetzt wird auf dem Platz, der dann frei ist.
+          </div>
+
+          <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+            {suspended.map((entry) => (
+              <QueueCard
+                key={entry.assignmentId}
+                entry={entry}
+                position={0}
+                timeZone={timeZone}
+                busy={busyAssignmentId === entry.assignmentId}
+                onAction={onAction}
+                readOnly={readOnly}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="md-queue__row">
         {boards.map((board) => {
           // Einmal festgehalten: in einer Rückrufaktion ist `board.current`
@@ -149,7 +181,14 @@ function QueueCard({
   timeZone: string
   busy: boolean
   onAction: (action: QueueAction, entry: QueuedMatch) => void
-  onDragStart: () => void
+  /**
+   * Fehlt, wo die Karte auf keinem Platz liegt.
+   *
+   * Eine unterbrochene Partie lässt sich nicht umhängen: sie steht auf keinem
+   * Platz, und wohin sie käme, entscheidet sich beim Fortsetzen. Ohne Handler
+   * ist sie nicht ziehbar — das ist ehrlicher als ein Ziehen, das nichts tut.
+   */
+  onDragStart?: () => void
   readOnly: boolean
 }) {
   const running = entry.status === AssignmentStatus.Running
@@ -169,7 +208,7 @@ function QueueCard({
   return (
     <div
       className={className}
-      draggable={!readOnly}
+      draggable={!readOnly && onDragStart !== undefined}
       onDragStart={onDragStart}
       style={{
         boxShadow: position === 0 ? 'var(--shadow-sm)' : 'none',

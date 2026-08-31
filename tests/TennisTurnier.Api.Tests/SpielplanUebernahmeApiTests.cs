@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Tournaments;
@@ -30,8 +30,8 @@ public sealed class SpielplanUebernahmeApiTests : IClassFixture<TennisTurnierApi
             $"leitung-{Guid.NewGuid():N}",
             new TurnierWunsch { Teilnehmer = 4, Plaetze = 2, Platzzeiten = true, Spielplan = true });
 
-        var vorher = await turnier.Admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{turnier.TournamentId}/courts", Json);
+        var vorher = (await turnier.Admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{turnier.TournamentId}/courts", Json))!.Courts;
 
         Assert.NotEmpty(vorher!.SelectMany(c => c.Queue));
 
@@ -59,8 +59,8 @@ public sealed class SpielplanUebernahmeApiTests : IClassFixture<TennisTurnierApi
 
         Assert.Equal(HttpStatusCode.OK, bestaetigt.StatusCode);
 
-        var nachher = await turnier.Admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{turnier.TournamentId}/courts", Json);
+        var nachher = (await turnier.Admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{turnier.TournamentId}/courts", Json))!.Courts;
 
         var alteMatches = vorher!.SelectMany(c => c.Queue).Select(q => q.MatchId).ToHashSet();
         var neueMatches = nachher!.SelectMany(c => c.Queue).Select(q => q.MatchId).ToHashSet();

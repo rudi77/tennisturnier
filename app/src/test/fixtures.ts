@@ -53,6 +53,7 @@ import {
   type PublicPhaseView,
   type JoinView,
   type PublicTournamentView,
+  type MatchDayBoard,
   type QueuedMatch,
   type RegistrationDetail,
   type SchedulePlanResult,
@@ -369,6 +370,18 @@ export function queuedMatch(over: Partial<QueuedMatch> = {}): QueuedMatch {
     version: 1,
     ...over,
   }
+}
+
+/**
+ * Das Tagesbrett: die Plätze und, was zwischen ihnen hängt.
+ *
+ * Die unterbrochenen Partien stehen neben den Plätzen — sie belegen keinen.
+ */
+export function matchDayBoard(
+  courts: CourtBoard[],
+  suspended: QueuedMatch[] = [],
+): MatchDayBoard {
+  return { courts, suspended }
 }
 
 export function courtBoard(over: Partial<CourtBoard> = {}): CourtBoard {

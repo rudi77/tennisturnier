@@ -460,10 +460,10 @@ describe('BoardScreen — Umhängen', () => {
 
   it('nimmt für ein Match ohne Schätzung eine Vorgabedauer', async () => {
     db.phases = [fx.phase({ matches: [fx.match({ assignment: null })] })]
-    db.board = [
+    db.board = fx.matchDayBoard([
       fx.courtBoard({ queue: [fx.queuedMatch()] }),
       fx.courtBoard({ courtId: fx.IDS.court2, courtName: 'Platz 2', queue: [] }),
-    ]
+    ])
     aufbau({ schedulingMode: SchedulingMode.MatchDay })
 
     await waitFor(() => expect(document.querySelector('.md-queue__card')).not.toBeNull())
@@ -483,7 +483,7 @@ describe('BoardScreen — Umhängen', () => {
 
   it('lässt einen Wurf auf ein unbekanntes Match auf sich beruhen', async () => {
     db.phases = [fx.phase({ matches: [] })]
-    db.board = [fx.courtBoard(), fx.courtBoard({ courtId: fx.IDS.court2, courtName: 'Platz 2', queue: [] })]
+    db.board = fx.matchDayBoard([fx.courtBoard(), fx.courtBoard({ courtId: fx.IDS.court2, courtName: 'Platz 2', queue: [] })])
     aufbau({ schedulingMode: SchedulingMode.MatchDay })
 
     await waitFor(() => expect(document.querySelector('.md-queue__card')).not.toBeNull())
@@ -540,7 +540,7 @@ describe('BoardScreen — Turniertag', () => {
     ]
 
     for (const [status, knopf, segment, meldung] of faelle) {
-      db.board = [fx.courtBoard({ queue: [fx.queuedMatch({ status })] })]
+      db.board = fx.matchDayBoard([fx.courtBoard({ queue: [fx.queuedMatch({ status })] })])
       const { unmount } = renderWithProviders(
         <>
           <BoardScreen />
@@ -569,9 +569,9 @@ describe('BoardScreen — Turniertag', () => {
   })
 
   it('öffnet die Ergebniseingabe zum Match der Zuweisung', async () => {
-    db.board = [
+    db.board = fx.matchDayBoard([
       fx.courtBoard({ current: fx.queuedMatch({ status: AssignmentStatus.Running }), queue: [] }),
-    ]
+    ])
     amPlatz()
 
     await user().click(await screen.findByRole('button', { name: 'Ergebnis' }))
@@ -581,9 +581,9 @@ describe('BoardScreen — Turniertag', () => {
 
   it('sagt es, wenn das Match nicht im geladenen Bracket steht', async () => {
     db.phases = [fx.phase({ matches: [] })]
-    db.board = [
+    db.board = fx.matchDayBoard([
       fx.courtBoard({ current: fx.queuedMatch({ status: AssignmentStatus.Running }), queue: [] }),
-    ]
+    ])
     amPlatz()
 
     await user().click(await screen.findByRole('button', { name: 'Ergebnis' }))
@@ -675,9 +675,9 @@ describe('BoardScreen — Ergebniseingabe', () => {
   })
 
   it('kennt die Folgerunde nicht, wo die Phase fehlt', async () => {
-    db.board = [
+    db.board = fx.matchDayBoard([
       fx.courtBoard({ current: fx.queuedMatch({ status: AssignmentStatus.Running }), queue: [] }),
-    ]
+    ])
     db.phases = [fx.phase({ id: 'f0000000-0000-0000-0000-000000000099', matches: [fx.match()] })]
     aufbau({ schedulingMode: SchedulingMode.MatchDay })
 

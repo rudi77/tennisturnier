@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
@@ -201,8 +201,10 @@ public sealed class WeitereAbsagenApiTests : IClassFixture<TennisTurnierApiFacto
             await db.SaveChangesAsync();
         }
 
+        // 204: sichtbar, aber ohne Ansicht — der Unterschied zu „nicht
+        // vorhanden oder privat" (404) ist für den Zuschauer der ganze Punkt.
         var weg = await _factory.CreateClient().GetAsync($"/public/tournaments/{turnier.TournamentId}");
-        Assert.Equal(HttpStatusCode.NotFound, weg.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, weg.StatusCode);
 
         var neu = await turnier.Admin.PostAsync(
             $"/api/tournaments/{turnier.TournamentId}/public-view/rebuild",
@@ -223,8 +225,8 @@ public sealed class WeitereAbsagenApiTests : IClassFixture<TennisTurnierApiFacto
             $"leitung-{Guid.NewGuid():N}",
             new TurnierWunsch { Teilnehmer = 4, Plaetze = 2, Platzzeiten = true, Spielplan = true });
 
-        var board = await turnier.Admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{turnier.TournamentId}/courts", Json);
+        var board = (await turnier.Admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{turnier.TournamentId}/courts", Json))!.Courts;
 
         Assert.NotEmpty(board!.SelectMany(c => c.Queue));
 

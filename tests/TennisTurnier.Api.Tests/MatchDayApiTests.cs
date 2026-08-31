@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Tournaments;
@@ -53,9 +53,15 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         return (aufbau.Admin, aufbau.TournamentId);
     }
 
-    private static async Task<List<CourtBoard>> BoardAsync(HttpClient client, Guid tournamentId) =>
-        (await client.GetFromJsonAsync<List<CourtBoard>>(
+    private static async Task<MatchDayBoard> TagesbrettAsync(HttpClient client, Guid tournamentId) =>
+        (await client.GetFromJsonAsync<MatchDayBoard>(
             $"/api/tournaments/{tournamentId}/courts", Json))!;
+
+    /// <summary>Nur die Plätze — was die meisten Tests hier meinen.</summary>
+    private static async Task<IReadOnlyList<CourtBoard>> BoardAsync(
+        HttpClient client,
+        Guid tournamentId) =>
+        (await TagesbrettAsync(client, tournamentId)).Courts;
 
     [Fact]
     public async Task Die_Platzuebersicht_zeigt_Warteschlangen()
@@ -308,6 +314,47 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
 
         Assert.Equal(running.AssignmentId, current.AssignmentId);
         Assert.Equal(AssignmentStatus.Running, current.Status);
+    }
+
+    [Fact]
+    public async Task Eine_unterbrochene_Partie_steht_neben_den_Plaetzen()
+    {
+        // Der Platz ist frei — und die Partie trotzdem auffindbar. Sie stand
+        // eine Zeit lang nirgends: nicht laufend, also kein „Current", nicht
+        // geplant, also in keiner Schlange. Über die Oberfläche gab es damit
+        // keinen Weg zurück, obwohl es den Anwendungsfall gibt.
+        var (admin, tournamentId) = await MatchDayAsync();
+        var running = (await BoardAsync(admin, tournamentId))[0].Queue[0];
+
+        await admin.PostAsync($"/api/assignments/{running.AssignmentId}/start", null);
+        await admin.PostAsync($"/api/assignments/{running.AssignmentId}/suspend", null);
+
+        var brett = await TagesbrettAsync(admin, tournamentId);
+
+        Assert.Null(brett.Courts[0].Current);
+        Assert.DoesNotContain(brett.Courts[0].Queue, q => q.AssignmentId == running.AssignmentId);
+
+        var unterbrochen = Assert.Single(brett.Suspended);
+
+        Assert.Equal(running.AssignmentId, unterbrochen.AssignmentId);
+        Assert.Equal(AssignmentStatus.Suspended, unterbrochen.Status);
+    }
+
+    [Fact]
+    public async Task Nach_der_Fortsetzung_haengt_dort_nichts_mehr()
+    {
+        var (admin, tournamentId) = await MatchDayAsync();
+        var running = (await BoardAsync(admin, tournamentId))[0].Queue[0];
+
+        await admin.PostAsync($"/api/assignments/{running.AssignmentId}/start", null);
+        await admin.PostAsync($"/api/assignments/{running.AssignmentId}/suspend", null);
+        await admin.PostAsJsonAsync(
+            $"/api/assignments/{running.AssignmentId}/resume", new ResumeMatchRequest(), Json);
+
+        var brett = await TagesbrettAsync(admin, tournamentId);
+
+        Assert.Empty(brett.Suspended);
+        Assert.Equal(running.AssignmentId, brett.Courts[0].Current!.AssignmentId);
     }
 
     [Fact]

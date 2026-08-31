@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using TennisTurnier.Application.Membership;
@@ -280,8 +280,8 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
         // Auch die Karten am Platz nennen die Herkunft in Worten. Sie kommen aus
         // einem eigenen Dienst und hatten deshalb ihre eigene Fassung derselben
         // Frage — mit ihrer eigenen Kennung darin.
-        var board = await admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{tournamentId}/courts", Json);
+        var board = (await admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{tournamentId}/courts", Json))!.Courts;
 
         var wartend = board!
             .SelectMany(court => court.Queue.Concat(court.Current is null ? [] : [court.Current]))
@@ -325,8 +325,8 @@ public sealed class KompletterAblaufApiTests : IClassFixture<TennisTurnierApiFac
         // Und damit ist der Platz frei. Vorher blieb die Zuweisung auf „läuft"
         // stehen: die Platzübersicht zeigte eine Partie, die längst entschieden
         // war, und der Platz ließ sich für das nächste Match nicht aufrufen.
-        var nachDemErgebnis = await admin.GetFromJsonAsync<List<CourtBoard>>(
-            $"/api/tournaments/{tournamentId}/courts", Json);
+        var nachDemErgebnis = (await admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{tournamentId}/courts", Json))!.Courts;
 
         Assert.All(
             nachDemErgebnis!,

@@ -1,4 +1,4 @@
-using TennisTurnier.Application.Common;
+﻿using TennisTurnier.Application.Common;
 using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.PublicView;
 using TennisTurnier.Domain.Common;
@@ -16,7 +16,7 @@ namespace TennisTurnier.Application.Tournaments;
 public interface ICourtQueueService
 {
     /// <summary>Die aktuelle Belegung aller Plätze samt Warteschlange.</summary>
-    Task<IReadOnlyList<CourtBoard>> GetBoardAsync(
+    Task<MatchDayBoard> GetBoardAsync(
         Guid tournamentId,
         CancellationToken cancellationToken = default);
 
@@ -80,7 +80,7 @@ public sealed class CourtQueueService : ICourtQueueService
         _clock = clock;
     }
 
-    public async Task<IReadOnlyList<CourtBoard>> GetBoardAsync(
+    public async Task<MatchDayBoard> GetBoardAsync(
         Guid tournamentId,
         CancellationToken cancellationToken = default)
     {
@@ -91,20 +91,31 @@ public sealed class CourtQueueService : ICourtQueueService
         var names = await NamesByEntryAsync(tournament, cancellationToken);
 
         var range = tournament.Period();
+        var labels = MatchOrigins.LabelsOf(matches);
 
-        return
-        [
-            .. tournament.Courts
-                .Where(court => court.IsActive || assignments.Any(a => a.CourtId == court.Id && !a.IsOver))
-                .OrderBy(court => court.Name, StringComparer.CurrentCulture)
-                .Select(court => Board(
-                    court,
-                    assignments,
-                    matches,
-                    names,
-                    MatchOrigins.LabelsOf(matches),
-                    court.FreeWindows(range))),
-        ];
+        var courts = tournament.Courts
+            .Where(court => court.IsActive || assignments.Any(a => a.CourtId == court.Id && !a.IsOver))
+            .OrderBy(court => court.Name, StringComparer.CurrentCulture)
+            .Select(court => Board(
+                court,
+                assignments,
+                matches,
+                names,
+                labels,
+                court.FreeWindows(range)))
+            .ToList();
+
+        // Neben den Plätzen und nicht auf einem: eine unterbrochene Partie
+        // belegt keinen, und wo sie weitergeht, ist noch offen. Ohne diesen
+        // eigenen Ort verschwände sie ganz — der Platz wäre frei und der Weg
+        // zurück zugleich weg.
+        var suspended = assignments
+            .Where(a => a.Status == AssignmentStatus.Suspended)
+            .OrderBy(a => a.SequenceOnCourt)
+            .Select(a => Describe(a, matches, names, labels, []))
+            .ToList();
+
+        return new MatchDayBoard(courts, suspended);
     }
 
     // --- Tagesbetrieb ------------------------------------------------------

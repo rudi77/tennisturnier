@@ -16,7 +16,7 @@
 import { HttpResponse, http, type HttpHandler } from 'msw'
 import { setupServer } from 'msw/node'
 import type {
-  CourtBoard,
+  MatchDayBoard,
   EntryOverview,
   FormatTemplateDetail,
   FormatTemplateSummary,
@@ -48,7 +48,7 @@ export interface FakeDb {
   entries: EntryOverview[]
   phases: PhaseDetail[]
   standings: StandingsDetail
-  board: CourtBoard[]
+  board: MatchDayBoard
   plan: SchedulePlanResult
   registration: RegistrationDetail
   join: JoinView
@@ -88,7 +88,18 @@ function initial(): FakeDb {
     ],
     phases: [fx.phase()],
     standings: fx.standings(),
-    board: [fx.courtBoard(), fx.courtBoard({ courtId: IDS.court2, courtName: 'Platz 2', isCenterCourt: false, queue: [] })],
+    board: {
+      courts: [
+        fx.courtBoard(),
+        fx.courtBoard({
+          courtId: IDS.court2,
+          courtName: 'Platz 2',
+          isCenterCourt: false,
+          queue: [],
+        }),
+      ],
+      suspended: [],
+    },
     plan: fx.schedulePlan(),
     registration: fx.registrationDetail(),
     join: fx.joinView(),

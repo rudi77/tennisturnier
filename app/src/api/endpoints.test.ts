@@ -457,7 +457,10 @@ describe('schedule', () => {
 
 describe('courtBoard', () => {
   it('holt die Plätze und stellt eine Warteschlange um', async () => {
-    expect(await courtBoard.get(T)).toHaveLength(2)
+    const brett = await courtBoard.get(T)
+
+    expect(brett.courts).toHaveLength(2)
+    expect(brett.suspended).toEqual([])
 
     await courtBoard.reorder(T, IDS.court1, [IDS.assignment2, IDS.assignment1])
     expect(lastBody('POST', `/api/tournaments/${T}/courts/${IDS.court1}/queue`)).toEqual({
@@ -509,7 +512,12 @@ describe('fetchPublicView', () => {
 
   it('spart den Rumpf, wenn sich nichts geändert hat', async () => {
     const ergebnis = await fetchPublicView(T, '"etag-1"')
-    expect(ergebnis).toEqual({ view: null, etag: '"etag-1"', notModified: true })
+    expect(ergebnis).toEqual({
+      view: null,
+      etag: '"etag-1"',
+      notModified: true,
+      pending: false,
+    })
   })
 
   /** Was der Server an Authorization zu sehen bekommt. */
@@ -543,6 +551,17 @@ describe('fetchPublicView', () => {
 
     await fetchPublicView(T, null)
     expect(gesehen()).toBeNull()
+  })
+
+  it('erkennt „sichtbar, aber noch nichts zu zeigen" als das, was es ist', async () => {
+    // 204 und nicht 404: das Turnier ist offen, es ist nur noch nicht
+    // ausgelost. Vorher lief beides als Fehler zusammen, und der Zuschauer las
+    // über ein offenes Turnier, es sei nicht öffentlich.
+    server.use(http.get('/public/tournaments/:id', () => new HttpResponse(null, { status: 204 })))
+
+    const ergebnis = await fetchPublicView(T, null)
+
+    expect(ergebnis).toEqual({ view: null, etag: null, notModified: false, pending: true })
   })
 
   it('meldet einen Fehlschlag als ApiError', async () => {

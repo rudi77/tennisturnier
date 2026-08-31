@@ -12,7 +12,7 @@ import type {
   ConfirmedAssignment,
   ConnectionView,
   CreatePlayDateRequest,
-  CourtBoard,
+  MatchDayBoard,
   CourtLocation,
   CourtSurface,
   Discipline,
@@ -448,7 +448,8 @@ export const schedule = {
 // --- Turniertag -------------------------------------------------------------
 
 export const courtBoard = {
-  get: (tournamentId: string) => http.get<CourtBoard[]>(`/api/tournaments/${tournamentId}/courts`),
+  get: (tournamentId: string) =>
+    http.get<MatchDayBoard>(`/api/tournaments/${tournamentId}/courts`),
 
   /** Verschiebt alles dahinter — deshalb Turnierleitung, nicht Ergebniseingabe. */
   reorder: (tournamentId: string, courtId: string, assignmentIds: string[]) =>
@@ -476,6 +477,14 @@ export interface PublicViewResult {
   view: PublicTournamentView | null
   etag: string | null
   notModified: boolean
+  /**
+   * Sichtbar, aber noch nichts zu zeigen: das Turnier ist nicht ausgelost.
+   *
+   * Der Server unterscheidet das seit Kurzem von „nicht vorhanden oder
+   * privat" — 204 statt 404. Vorher las ein Zuschauer über ein offenes
+   * Turnier, es sei nicht öffentlich.
+   */
+  pending: boolean
 }
 
 /**
@@ -508,7 +517,11 @@ export async function fetchPublicView(
   const response = await fetch(apiUrl(`/public/tournaments/${tournamentId}`), { headers, signal })
 
   if (response.status === 304) {
-    return { view: null, etag, notModified: true }
+    return { view: null, etag, notModified: true, pending: false }
+  }
+
+  if (response.status === 204) {
+    return { view: null, etag: null, notModified: false, pending: true }
   }
 
   if (!response.ok) {
@@ -519,5 +532,6 @@ export async function fetchPublicView(
     view: (await response.json()) as PublicTournamentView,
     etag: response.headers.get('etag'),
     notModified: false,
+    pending: false,
   }
 }
