@@ -465,6 +465,51 @@ public sealed class HeuristicScheduleSolverTests
             a => Assert.True(a.PlannedStart >= At(16, 9, 20)));
     }
 
+    /// <summary>
+    /// Eine festgenagelte späte Ansetzung blockiert die früheren Matches ihrer
+    /// Spieler nicht.
+    ///
+    /// Der frühestmögliche Beginn wurde einmal als Maximum über alle belegten
+    /// Zeiten eines Spielers gerechnet. Das gilt nur, solange alles Belegte
+    /// vorher liegt — eine festgenagelte Ansetzung liegt das nicht. Wer ein
+    /// Match auf Samstag 18 Uhr nagelte, schob damit jedes andere Match
+    /// derselben Spieler hinter 18 Uhr, obwohl der Vormittag leer war.
+    ///
+    /// Und zwar genau in dem Fall, für den das Festnageln gedacht ist
+    /// (ADR-0002).
+    /// </summary>
+    [Fact]
+    public void Eine_festgenagelte_spaete_Ansetzung_blockiert_den_Vormittag_nicht()
+    {
+        var (phase, players) = Knockout(4);
+        var courts = Courts(1);
+
+        var runde = phase.Matches.Where(m => m.Round == 1).OrderBy(m => m.Position).ToList();
+        var frueh = runde[0];
+        var genagelt = runde[1];
+
+        // Dieselbe Spielerin in beiden Paarungen — Einzel und Doppel am selben
+        // Tag stecken in zwei Meldungen, aber in einem Menschen.
+        var geteilt = Guid.NewGuid();
+        var spieler = players.ToDictionary(p => p.Key, p => p.Value);
+        spieler[frueh.Side1.EntryId!.Value] = [geteilt];
+        spieler[genagelt.Side1.EntryId!.Value] = [geteilt];
+
+        var abends = Bestehend(
+            genagelt.Id, courts[0].Id, At(16, 18), AssignmentSource.Pinned, sequence: 9);
+
+        var problem = Problem(phase, spieler, courts, [abends]);
+        var proposal = _solver.Solve(problem);
+
+        Assert.Empty(Violations(proposal, problem));
+
+        Assert.Equal(At(16, 18), proposal.Assignments.Single(a => a.MatchId == genagelt.Id).PlannedStart);
+
+        // Der Vormittag ist frei, und dort gehört die frühe Paarung hin.
+        var davor = proposal.Assignments.Single(a => a.MatchId == frueh.Id);
+        Assert.Equal(At(16, 8), davor.PlannedStart);
+    }
+
     [Fact]
     public void Ein_Zyklus_in_den_Abhaengigkeiten_wird_benannt()
     {
