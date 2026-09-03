@@ -328,6 +328,24 @@ public sealed class TournamentService : ITournamentService
         CancellationToken cancellationToken = default)
     {
         var tournament = await LoadForManagement(tournamentId, cancellationToken);
+
+        // Das Aggregat sagt es selbst: entfernen geht nur, solange keine
+        // Ansetzung darauf zeigt, und wissen kann das nur der Anwendungsfall.
+        //
+        // Ungeprüft war das kein stiller Fehler, sondern ein lauter am falschen
+        // Ort: die Fremdschlüsselbeziehung ist Restrict, `SaveChanges` scheiterte
+        // mit einer DbUpdateException, und der Veranstalter sah eine 500 ohne
+        // einen Satz dazu, was er stattdessen tun soll.
+        var ansetzungen = await _assignments.ListByTournamentAsync(tournamentId, cancellationToken);
+
+        if (ansetzungen.Any(a => a.CourtId == courtId))
+        {
+            throw new DomainException(
+                $"Auf „{tournament.CourtOf(courtId).Name}“ stehen Ansetzungen; der Platz lässt sich "
+                + "deshalb nicht entfernen. Wer ihn nicht mehr bespielen will, legt ihn still — "
+                + "dann bleibt lesbar, was auf ihm gespielt wurde.");
+        }
+
         tournament.RemoveCourt(courtId);
 
         await SaveAndRebuildAsync(tournament, cancellationToken);

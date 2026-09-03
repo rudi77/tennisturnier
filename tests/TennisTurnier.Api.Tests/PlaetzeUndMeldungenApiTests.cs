@@ -51,6 +51,41 @@ public sealed class PlaetzeUndMeldungenApiTests : IClassFixture<TennisTurnierApi
         Assert.DoesNotContain(detail.Courts, c => c.Id == turnier.CourtIds[1]);
     }
 
+    /// <summary>
+    /// Ein bespielter Platz lässt sich nicht entfernen.
+    ///
+    /// Das Aggregat sagt es selbst — „entfernen geht nur, solange keine
+    /// Ansetzung darauf zeigt" —, und wissen kann das nur der Anwendungsfall.
+    /// Ungeprüft war es kein stiller Fehler, sondern ein lauter am falschen
+    /// Ort: die Beziehung ist Restrict, `SaveChanges` scheiterte, und der
+    /// Veranstalter bekam eine 500 ohne einen Satz dazu, was zu tun ist.
+    /// </summary>
+    [Fact]
+    public async Task Ein_Platz_mit_Ansetzungen_laesst_sich_nicht_entfernen()
+    {
+        var turnier = await _factory.NeuesTurnierAsync(
+            $"platzwart-{Guid.NewGuid():N}",
+            new TurnierWunsch { Teilnehmer = 4, Plaetze = 2, Platzzeiten = true, Spielplan = true });
+
+        var brett = await turnier.Admin.GetFromJsonAsync<MatchDayBoard>(
+            $"/api/tournaments/{turnier.TournamentId}/courts", Json);
+
+        var belegt = brett!.Courts.First(c => c.Queue.Count > 0).CourtId;
+
+        var response = await turnier.Admin.DeleteAsync(
+            $"/api/tournaments/{turnier.TournamentId}/courts/{belegt}");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        // Und der Weg, den die Meldung nennt, führt weiter: stilllegen geht.
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await turnier.Admin.PutAsJsonAsync(
+                $"/api/tournaments/{turnier.TournamentId}/courts/{belegt}",
+                new UpdateCourtRequest("Platz 1", IsCenterCourt: false, IsActive: false),
+                Json)).StatusCode);
+    }
+
     [Fact]
     public async Task Eine_einzelne_Platzzeit_laesst_sich_nachtragen_und_wieder_streichen()
     {
