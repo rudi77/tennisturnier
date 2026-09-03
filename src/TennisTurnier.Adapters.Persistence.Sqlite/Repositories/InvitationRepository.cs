@@ -27,6 +27,32 @@ public sealed class InvitationRepository : IInvitationRepository
             .ToListAsync(cancellationToken);
 
     /// <summary>
+    /// Löscht unmittelbar und ohne Erwartung an die Zeilenzahl.
+    ///
+    /// <c>ExecuteDelete</c> statt der Änderungsverfolgung: die prüft beim
+    /// Löschen, ob genau eine Zeile getroffen wurde, und meldet sonst einen
+    /// Nebenläufigkeitskonflikt. Beim ersten Login ist „schon gelöscht" aber
+    /// der Normalfall — die Oberfläche stellt mehrere Anfragen zugleich, und
+    /// jede läuft durch die Benutzerauflösung.
+    ///
+    /// Läuft in der offenen Transaktion der Arbeitseinheit mit, sofern eine
+    /// besteht: EF führt den Befehl auf derselben Verbindung aus.
+    /// </summary>
+    public async Task RemoveRedeemedAsync(
+        IReadOnlyCollection<Guid> invitationIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (invitationIds.Count == 0)
+        {
+            return;
+        }
+
+        await _db.Invitations
+            .Where(i => invitationIds.Contains(i.Id))
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// Verglichen wird gegen die kleingeschriebene Adresse, weil genau die
     /// gespeichert wird. Ohne <c>ToLower</c> auf der Spalte bleibt der Index
     /// brauchbar — die Domäne hat die Normalisierung schon erledigt, hier ist

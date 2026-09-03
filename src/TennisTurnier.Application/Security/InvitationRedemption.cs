@@ -70,13 +70,18 @@ public sealed class InvitationRedemption
             // über (Konto, Rolle, Scope). Eine zweite Prüfung hier wäre eine,
             // die nur bei einem Wettlauf falsch liegen könnte.
             await _directory.AssignAsync(invitation.Redeem(account.Id), cancellationToken);
-            _invitations.Remove(invitation);
         }
 
-        // Die Zuweisung speichert das Verzeichnis selbst; die eingelösten
-        // Einladungen warten bis hierher. Ein Speichervorgang je Einladung
-        // wäre bei SQLite, das Schreiber datenbankweit serialisiert, der
-        // teuerste Weg zum selben Ergebnis.
+        // Dieselbe Überlegung für das Löschen, und aus demselben Anlass: die
+        // Oberfläche stellt nach der Anmeldung mehrere Anfragen zugleich, jede
+        // läuft hier durch, und zwei davon finden dieselbe offene Einladung.
+        // Über die Änderungsverfolgung gelöscht, erwartete die zweite genau
+        // eine getroffene Zeile, fände keine — und ein 409 landete auf einer
+        // beliebigen anderen Anfrage, die mit Einladungen nichts zu tun hat.
+        await _invitations.RemoveRedeemedAsync(
+            [.. offen.Select(invitation => invitation.Id)], cancellationToken);
+
+        // Die Zuweisung speichert das Verzeichnis selbst.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return true;

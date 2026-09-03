@@ -35,4 +35,23 @@ public interface IInvitationRepository
     Task<IReadOnlyList<Invitation>> ListByEmailAsync(
         string email,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Löscht die eingelösten Einladungen, ohne sich daran zu stören, dass sie
+    /// vielleicht schon weg sind.
+    ///
+    /// Der Unterschied zu <see cref="Remove"/> ist der Wettlauf beim ersten
+    /// Login: die Oberfläche stellt mehrere Anfragen zugleich, und jede läuft
+    /// durch die Benutzerauflösung. Zwei davon finden dieselbe offene Einladung
+    /// und wollen beide dieselbe Zeile löschen — die zweite trifft keine mehr,
+    /// und daraus wurde ein Nebenläufigkeitskonflikt und ein 409 auf einer
+    /// beliebigen anderen Anfrage.
+    ///
+    /// Hier ist „schon gelöscht" aber genau das gewünschte Ergebnis und kein
+    /// Konflikt. Deshalb ein eigener Weg, der die Zeilen zählt statt sie zu
+    /// erwarten.
+    /// </summary>
+    Task RemoveRedeemedAsync(
+        IReadOnlyCollection<Guid> invitationIds,
+        CancellationToken cancellationToken = default);
 }
