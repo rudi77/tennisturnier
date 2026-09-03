@@ -248,6 +248,96 @@ public sealed class PhaseTests
         Assert.True(phase.HasAnyResult);
     }
 
+    /// <summary>
+    /// Ein Freilos ist kein eingetragenes Ergebnis.
+    ///
+    /// An dieser Frage hängt, ob eine Vorphase noch angetastet werden darf.
+    /// Zählte das Freilos mit, wäre eine Endrunde mit Freilosen ab dem Moment
+    /// gesperrt, in dem die Gruppen fertig sind — und kein Gruppenergebnis
+    /// mehr zu korrigieren, obwohl in der Endrunde kein Ball gespielt wurde.
+    /// </summary>
+    [Fact]
+    public void Ein_Freilos_zaehlt_nicht_als_eingetragenes_Ergebnis()
+    {
+        var phase = Bauen();
+
+        var matches = phase.AddPairings([
+            new Pairing(1, 1, Meldung(), ParticipantRef.ByeSlot, "VF1"),
+            new Pairing(1, 2, Meldung(), Meldung(), "VF2"),
+        ]);
+
+        // Das Freilos ist sofort entschieden — ohne dass jemand gespielt hätte.
+        Assert.NotNull(matches[0].Score);
+        Assert.False(phase.HasAnyResult);
+
+        phase.RecordResult(matches[1].Id, Ergebnis());
+
+        Assert.True(phase.HasAnyResult);
+    }
+
+    /// <summary>
+    /// Eine korrigierte Gruppentabelle besetzt auch ein Freilos-Match neu.
+    ///
+    /// Der Freilos-Spielstand steht dem im Weg — ein entschiedenes Match lässt
+    /// sich nicht umbesetzen, und das ist überall sonst richtig. Hier ist der
+    /// Spielstand aber selbst eine Folge davon, wer im Baum steht, und genau
+    /// das ändert sich gerade. Bliebe er stehen, behielte die Endrunde den
+    /// Qualifikanten aus der alten Tabelle.
+    /// </summary>
+    [Fact]
+    public void Eine_korrigierte_Gruppentabelle_besetzt_auch_ein_Freilos_neu()
+    {
+        var vorphase = Guid.NewGuid();
+        var phase = Bauen();
+
+        var matches = phase.AddPairings([
+            new Pairing(
+                1, 1, ParticipantRef.FromGroupPosition(vorphase, "A", 1), ParticipantRef.ByeSlot, "VF1"),
+        ]);
+
+        var erster = Guid.NewGuid();
+        Assert.True(phase.ResolveGroupPositions(vorphase, new Dictionary<(string, int), Guid>
+        {
+            [("A", 1)] = erster,
+        }));
+
+        Assert.Equal(erster, matches[0].Side1.EntryId);
+        Assert.Equal(erster, matches[0].WinnerEntryId);
+
+        // Die Gruppe wird korrigiert, ein anderer ist qualifiziert.
+        var zweiter = Guid.NewGuid();
+        Assert.True(phase.ResolveGroupPositions(vorphase, new Dictionary<(string, int), Guid>
+        {
+            [("A", 1)] = zweiter,
+        }));
+
+        Assert.Equal(zweiter, matches[0].Side1.EntryId);
+        Assert.Equal(zweiter, matches[0].WinnerEntryId);
+    }
+
+    [Fact]
+    public void Dieselbe_Gruppentabelle_ruehrt_das_Freilos_nicht_an()
+    {
+        // Die Gegenprobe: ohne Änderung darf der Spielstand nicht weichen und
+        // wieder entstehen. Er zählte sonst bei jedem Aufruf die Version des
+        // Matches hoch und erzeugte einen Schreibvorgang für nichts.
+        var vorphase = Guid.NewGuid();
+        var phase = Bauen();
+
+        var matches = phase.AddPairings([
+            new Pairing(
+                1, 1, ParticipantRef.FromGroupPosition(vorphase, "A", 1), ParticipantRef.ByeSlot, "VF1"),
+        ]);
+
+        var qualifiziert = new Dictionary<(string, int), Guid> { [("A", 1)] = Guid.NewGuid() };
+
+        Assert.True(phase.ResolveGroupPositions(vorphase, qualifiziert));
+        var version = matches[0].Version;
+
+        Assert.False(phase.ResolveGroupPositions(vorphase, qualifiziert));
+        Assert.Equal(version, matches[0].Version);
+    }
+
     [Fact]
     public void Eine_Referenz_auf_ein_fremdes_Match_bleibt_offen()
     {

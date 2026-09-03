@@ -552,6 +552,41 @@ public sealed class SwissFormatTests
     }
 
     /// <summary>
+    /// Bei ungerader Teilnehmerzahl enthält jede Runde ein Freilos, und das
+    /// Freilos trägt einen Spielstand. Zählte es als gespielt, wäre die
+    /// Folgerunde nicht mehr zurückzunehmen — und ihr Freilos-Ergebnis auch
+    /// nicht, denn ein Freilos hat keines, das sich zurücknehmen ließe.
+    ///
+    /// Das war eine Sackgasse ohne Ausgang: ab der zweiten Runde ließ sich kein
+    /// Ergebnis einer früheren mehr korrigieren. Mit acht Spielern, wie im Test
+    /// darüber, kommt sie nicht vor.
+    /// </summary>
+    [Fact]
+    public void Eine_Korrektur_gelingt_auch_wenn_die_Folgerunde_ein_Freilos_enthaelt()
+    {
+        var turnier = new Turnier(5, rounds: 3);
+        turnier.Advance();
+        turnier.PlayRound(1);
+        turnier.Advance();
+
+        // Fünf Spieler: zwei Paarungen und ein Freilos, in jeder Runde.
+        Assert.Equal(3, turnier.Round(2).Count);
+        Assert.Contains(turnier.Round(2), m => m.HasBye);
+
+        var corrected = turnier.Round(1).First(m => !m.HasBye);
+        turnier.Phase.ClearResult(corrected.Id);
+        turnier.Advance();
+
+        Assert.Empty(turnier.Round(2));
+
+        // Und mit dem anderen Ausgang entsteht eine andere zweite Runde.
+        turnier.Win(corrected, 2);
+        turnier.Advance();
+
+        Assert.Equal(3, turnier.Round(2).Count);
+    }
+
+    /// <summary>
     /// Ein Match, das schon am Platz steht, wird nicht zurückgenommen. Es
     /// verschwände samt seiner Platzzuweisung, während zwei Spielerinnen darauf
     /// spielen — und in der öffentlichen Ansicht wäre die Partie nie gewesen.
