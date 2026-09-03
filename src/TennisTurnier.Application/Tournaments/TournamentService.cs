@@ -140,13 +140,13 @@ public sealed class TournamentService : ITournamentService
             .Select(t => new TournamentSummary(
                 t.Id,
                 t.Name,
-                t.Venue.Name,
+                t.VenueName,
                 t.Discipline,
                 t.StartsOn,
                 t.EndsOn,
                 t.State,
                 t.SchedulingMode,
-                t.AcceptedEntries.Count,
+                t.AcceptedEntries,
                 t.IsPublic))];
 
     public async Task<TournamentDetail> GetAsync(Guid tournamentId, CancellationToken cancellationToken = default)

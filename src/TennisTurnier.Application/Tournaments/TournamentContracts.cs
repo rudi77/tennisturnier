@@ -273,3 +273,27 @@ public sealed record FormatTemplateDetail(
 public sealed record SaveFormatTemplateRequest(FormatDefinition Definition);
 
 public sealed record CopyFormatTemplateRequest(string Name);
+
+/// <summary>
+/// Was die Turnierliste zeigt — und nicht mehr.
+///
+/// Das ganze Aggregat zu laden hieß, für jede Zeile Plätze, deren Zeiten und
+/// alle Meldungen mitzubringen. Alle drei hängen als AutoInclude daran, und in
+/// einer Abfrage ergibt das ein kartesisches Produkt: acht Plätze mal vier
+/// Zeitfenster mal vierundsechzig Meldungen sind zweitausend Zeilen für eine
+/// Kachel, auf der ein Name, ein Datum und eine Zahl stehen.
+///
+/// Ein eigener Lesetyp im Sinne von ADR-0003, nur ohne eigene Tabelle:
+/// gerechnet wird beim Fragen, und zwar in der Datenbank.
+/// </summary>
+public sealed record TournamentHeader(
+    Guid Id,
+    string Name,
+    string VenueName,
+    Discipline Discipline,
+    DateOnly? StartsOn,
+    DateOnly? EndsOn,
+    TournamentState State,
+    SchedulingMode SchedulingMode,
+    int AcceptedEntries,
+    bool IsPublic);

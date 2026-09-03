@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.Tournaments;
@@ -22,14 +23,29 @@ public sealed class TournamentRepository : ITournamentRepository
     /// der Query-Filter. Eine zweite Bedingung hier wäre eine zweite Antwort
     /// auf dieselbe Frage — und die, die auseinanderläuft.
     /// </summary>
-    public async Task<IReadOnlyList<Tournament>> ListForCallerAsync(
+    public async Task<IReadOnlyList<TournamentHeader>> ListForCallerAsync(
         CancellationToken cancellationToken = default) =>
         await _db.Tournaments
+            .AsNoTracking()
             // Ohne Termin nach vorn: seit er optional ist, hat ein frisch angelegtes
             // Turnier keinen — und SQLite sortiert NULL unter jeden Wert. Es stand
             // damit hinter jedem vergangenen, und die Oberfläche wählt den ersten
             // Eintrag vor.
             .OrderByDescending(t => t.StartsOn ?? DateOnly.MaxValue)
+            // Auf das Nötige projiziert, und damit ohne die AutoIncludes: das
+            // ganze Aggregat brachte für jede Zeile Plätze, deren Zeiten und alle
+            // Meldungen mit, und in einer Abfrage ergibt das ihr Produkt.
+            .Select(t => new TournamentHeader(
+                t.Id,
+                t.Name,
+                t.Venue.Name,
+                t.Discipline,
+                t.StartsOn,
+                t.EndsOn,
+                t.State,
+                t.SchedulingMode,
+                t.Entries.Count(e => e.Status == EntryStatus.Accepted),
+                t.IsPublic))
             .ToListAsync(cancellationToken);
 
     /// <summary>

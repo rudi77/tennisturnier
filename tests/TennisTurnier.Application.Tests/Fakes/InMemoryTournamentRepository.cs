@@ -1,4 +1,5 @@
 using TennisTurnier.Application.Ports;
+using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Phases;
 using TennisTurnier.Domain.Players;
@@ -27,8 +28,25 @@ public sealed class InMemoryTournamentRepository : ITournamentRepository
     public Task<Tournament?> FindAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
         Task.FromResult(Visible().FirstOrDefault(t => t.Id == tournamentId));
 
-    public Task<IReadOnlyList<Tournament>> ListForCallerAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<Tournament>>([.. Visible()]);
+    /// <summary>
+    /// Dieselbe Kopfzeile wie der echte Adapter — dort in der Datenbank
+    /// gerechnet, hier im Speicher. Was gezählt wird, muss beides Mal dasselbe
+    /// sein: <c>AcceptedEntries</c> ist die Sicht des Aggregats darauf.
+    /// </summary>
+    public Task<IReadOnlyList<TournamentHeader>> ListForCallerAsync(
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<TournamentHeader>>(
+            [.. Visible().Select(t => new TournamentHeader(
+                t.Id,
+                t.Name,
+                t.Venue.Name,
+                t.Discipline,
+                t.StartsOn,
+                t.EndsOn,
+                t.State,
+                t.SchedulingMode,
+                t.AcceptedEntries.Count,
+                t.IsPublic))]);
 
     /// <summary>
     /// Der Tokenweg. Ausdrücklich ohne <see cref="Visible"/>: der Melder ist
