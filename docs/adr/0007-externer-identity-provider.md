@@ -2,6 +2,20 @@
 
 **Status:** Accepted
 
+> **Nachtrag zum Aussteller.** „Entra ID in Produktion" unten ist die Annahme,
+> unter der diese Entscheidung getroffen wurde, und nicht mehr das, was
+> ausgeliefert wird: `deploy/keycloak/` stellt Keycloak als zweiten Dienst
+> hin, mit Google als Anmeldeweg dahinter — der Weg, den die README unter
+> *Betrieb* beschreibt. An der Entscheidung ändert das nichts, im Gegenteil:
+> dass der Aussteller austauschbar ist, war ihr Kern. Auch die Rollen liegen
+> weiterhin in der Anwendung. Ausgetauscht wurde nur der Name im Beispiel.
+>
+> Zwei Dinge aus diesem Abschnitt sind seither enger gefasst: die E-Mail aus
+> dem Token zählt nur mit bestätigtem `email_verified`
+> (`Oidc__TrustUnverifiedEmail` ist der ausdrückliche Ausweg), und eine leere
+> Audience schaltet die Empfängerprüfung nicht mehr stillschweigend ab
+> (`Oidc__RequireAudience`).
+
 ## Kontext
 
 Die Anmeldung soll über einen externen Identity Provider laufen: Keycloak lokal,

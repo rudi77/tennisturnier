@@ -88,10 +88,61 @@ describe('ScoreStepper', () => {
     expect(onChange).toHaveBeenLastCalledWith(10)
   })
 
-  it('zeigt den Stand ohne Tastaturfeld an', () => {
-    render(<ScoreStepper value={6} onChange={vi.fn()} label="Satz 2" />)
-    expect(screen.getByLabelText('Satz 2')).toHaveTextContent('6')
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+  it('sagt, dass hier eine Zahl steht — und welche', () => {
+    // Hier stand die Zahl in einem Bereich mit `aria-label`, und ein Label
+    // allein macht daraus nichts Vorlesbares: der Stand war für einen
+    // Screenreader schlicht nicht da. Ein Zahlenfeld ist es trotzdem nicht —
+    // getippt wird am Platz nichts.
+    render(<ScoreStepper value={6} onChange={vi.fn()} label="Satz 2" max={9} />)
+
+    const stand = screen.getByRole('spinbutton', { name: 'Satz 2' })
+
+    expect(stand).toHaveTextContent('6')
+    expect(stand).toHaveAttribute('aria-valuenow', '6')
+    expect(stand).toHaveAttribute('aria-valuemin', '0')
+    expect(stand).toHaveAttribute('aria-valuemax', '9')
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('zählt auch mit den Pfeiltasten', async () => {
+    // Die Ergebnismaske hatte gar keine Tastaturbedienung: die Knöpfe ließen
+    // sich anspringen, aber die Zahl dazwischen war nichts, was man bedienen
+    // konnte.
+    const onChange = vi.fn()
+    const u = user()
+
+    render(<ScoreStepper value={3} onChange={onChange} label="Satz 1" max={9} />)
+
+    const stand = screen.getByRole('spinbutton', { name: 'Satz 1' })
+    stand.focus()
+
+    await u.keyboard('{ArrowUp}')
+    expect(onChange).toHaveBeenLastCalledWith(4)
+
+    await u.keyboard('{ArrowDown}')
+    expect(onChange).toHaveBeenLastCalledWith(2)
+
+    await u.keyboard('{ArrowRight}')
+    expect(onChange).toHaveBeenLastCalledWith(4)
+
+    await u.keyboard('{ArrowLeft}')
+    expect(onChange).toHaveBeenLastCalledWith(2)
+
+    await u.keyboard('{End}')
+    expect(onChange).toHaveBeenLastCalledWith(9)
+
+    await u.keyboard('{Home}')
+    expect(onChange).toHaveBeenLastCalledWith(0)
+  })
+
+  it('lässt andere Tasten in Ruhe', async () => {
+    const onChange = vi.fn()
+    render(<ScoreStepper value={3} onChange={onChange} label="Satz 1" />)
+
+    screen.getByRole('spinbutton', { name: 'Satz 1' }).focus()
+    await user().keyboard('x')
+
+    expect(onChange).not.toHaveBeenCalled()
   })
 })
 
@@ -173,6 +224,85 @@ describe('Sheet', () => {
     )
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('gibt den Fokus zurück, wo er herkam', () => {
+    // Ohne das landet er beim Schließen am Anfang des Dokuments, und wer mit
+    // der Tastatur arbeitet, sucht sich seine Stelle wieder.
+    const ausloeser = document.createElement('button')
+    document.body.appendChild(ausloeser)
+    ausloeser.focus()
+
+    const { rerender } = render(
+      <Sheet open title="Mehr" onClose={() => {}}>
+        <button type="button">Drinnen</button>
+      </Sheet>,
+    )
+
+    expect(document.activeElement).not.toBe(ausloeser)
+
+    rerender(
+      <Sheet open={false} title="Mehr" onClose={() => {}}>
+        <button type="button">Drinnen</button>
+      </Sheet>,
+    )
+
+    expect(document.activeElement).toBe(ausloeser)
+    ausloeser.remove()
+  })
+
+  it('lässt den Fokus nicht hinter sich wandern', async () => {
+    render(
+      <Sheet open title="Mehr" onClose={() => {}}>
+        <button type="button">Erster</button>
+        <button type="button">Letzter</button>
+      </Sheet>,
+    )
+
+    const u = user()
+    const erster = screen.getByRole('button', { name: 'Erster' })
+    const letzter = screen.getByRole('button', { name: 'Letzter' })
+
+    // Mittendrin geht die Tabulatortaste ihren gewohnten Weg — die Falle
+    // greift nur an den Rändern.
+    erster.focus()
+    await u.tab()
+    expect(document.activeElement).toBe(letzter)
+
+    letzter.focus()
+    await u.tab()
+
+    // Vom letzten wieder zum ersten, statt auf die Seite dahinter. Der Grund
+    // daneben liegt außerhalb der Lade und ist deshalb nicht Teil des Kreises
+    // — geschlossen wird sie mit Escape oder einem Klick.
+    expect(document.activeElement).toBe(erster)
+
+    erster.focus()
+    await u.tab({ shift: true })
+
+    expect(document.activeElement).toBe(letzter)
+
+    // Und vom Rahmen der Lade selbst — dort steht der Fokus direkt nach dem
+    // Öffnen — geht es ebenfalls ans Ende.
+    screen.getByRole('group', { name: 'Mehr' }).focus()
+    await u.tab({ shift: true })
+
+    expect(document.activeElement).toBe(letzter)
+  })
+
+  it('hält den Fokus auch fest, wenn nichts zu bedienen ist', async () => {
+    render(
+      <Sheet open title="Leer" onClose={() => {}}>
+        <span>Nur Text</span>
+      </Sheet>,
+    )
+
+    const lade = screen.getByRole('group', { name: 'Leer' })
+    lade.focus()
+
+    await user().tab()
+
+    expect(document.activeElement).toBe(lade)
   })
 })
 

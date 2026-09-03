@@ -400,6 +400,50 @@ public sealed class RollenApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.Contains(rollen!, r => r.Role == Role.Referee && r.Email == email.ToLowerInvariant());
     }
 
+    /// <summary>
+    /// Mehrere Anfragen zugleich lösen dieselbe Einladung ein — ohne Konflikt.
+    ///
+    /// Genau so kommt die Oberfläche an: nach der Anmeldung fragt sie Turniere,
+    /// Rollen und sich selbst zugleich, und jede dieser Anfragen läuft durch
+    /// die Benutzerauflösung. Zwei davon finden dieselbe offene Einladung und
+    /// wollen dieselbe Zeile löschen. Über die Änderungsverfolgung gelöscht,
+    /// erwartete die zweite genau eine getroffene Zeile und fand keine — der
+    /// Nebenläufigkeitskonflikt landete dann als 409 auf einer beliebigen
+    /// Anfrage, die mit Einladungen nichts zu tun hat.
+    /// </summary>
+    [Fact]
+    public async Task Gleichzeitige_erste_Anmeldungen_loesen_dieselbe_Einladung_ein()
+    {
+        var (leitung, tournamentId) = await TurnierAsync();
+        var email = $"gleich.{Guid.NewGuid():N}"[..24] + "@example.invalid";
+
+        await leitung.PostAsJsonAsync(
+            $"/api/tournaments/{tournamentId}/roles",
+            new GrantRoleRequest(email, Role.Referee),
+            Json);
+
+        var subject = $"eingeladen-{Guid.NewGuid():N}";
+
+        // Vier Anfragen desselben Kontos, alle zugleich — wie die Oberfläche
+        // sie nach der Anmeldung stellt.
+        var antworten = await Task.WhenAll(
+            Enumerable.Range(0, 4).Select(_ =>
+                _factory.CreateClientAs(subject, email).GetAsync("/api/me")));
+
+        Assert.All(antworten, antwort => Assert.Equal(HttpStatusCode.OK, antwort.StatusCode));
+
+        // Und eingelöst ist sie genau einmal.
+        var eingeladener = _factory.CreateClientAs(subject, email);
+        var me = await eingeladener.GetFromJsonAsync<MeResponse>("/api/me", Json);
+
+        Assert.Single(me!.Roles, r => r.Role == Role.Referee && r.ResourceId == tournamentId);
+
+        var rollen = await leitung.GetFromJsonAsync<List<TournamentRoleSummary>>(
+            $"/api/tournaments/{tournamentId}/roles", Json);
+
+        Assert.DoesNotContain(rollen!, r => r.Pending);
+    }
+
     [Fact]
     public async Task Die_Schreibweise_der_Adresse_entscheidet_nichts()
     {

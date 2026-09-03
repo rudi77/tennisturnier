@@ -157,6 +157,14 @@ public sealed class CourtQueueService : ICourtQueueService
 
         await RequireReadyAsync(assignment, cancellationToken);
 
+        // Auf welchem Platz weitergespielt wird, steht damit fest — und der
+        // muss frei sein. Ohne diese Prüfung setzte „Fortsetzen" ohne Platzwahl
+        // die Partie auf einen Platz zurück, auf dem inzwischen die nächste
+        // läuft: zwei Zuweisungen auf Running, von denen die Platzübersicht nur
+        // eine zeigt und die andere weder sichtbar noch zu beenden ist.
+        var zielplatz = request.CourtId ?? assignment.CourtId;
+        await RequireCourtFreeAsync(assignment, zielplatz, cancellationToken);
+
         var resumed = assignment;
 
         if (request.CourtId is { } courtId && courtId != assignment.CourtId)
@@ -270,7 +278,7 @@ public sealed class CourtQueueService : ICourtQueueService
         if (requireCourtFree)
         {
             await RequireReadyAsync(assignment, cancellationToken);
-            await RequireCourtFreeAsync(assignment, cancellationToken);
+            await RequireCourtFreeAsync(assignment, assignment.CourtId, cancellationToken);
             RequirePromiseKept(assignment);
         }
 
@@ -320,13 +328,21 @@ public sealed class CourtQueueService : ICourtQueueService
     /// weder sichtbar noch zu beenden — die Historie des Platzes behauptete
     /// dauerhaft zwei gleichzeitige Partien.
     /// </summary>
-    private async Task RequireCourtFreeAsync(CourtAssignment assignment, CancellationToken cancellationToken)
+    /// <param name="courtId">
+    /// Der Platz, auf den es geht. Nicht immer der der Zuweisung: beim
+    /// Fortsetzen entscheidet die Turnierleitung neu, und geprüft gehört der,
+    /// auf dem gleich gespielt wird.
+    /// </param>
+    private async Task RequireCourtFreeAsync(
+        CourtAssignment assignment,
+        Guid courtId,
+        CancellationToken cancellationToken)
     {
         var onCourt = await _assignments.ListByTournamentAsync(assignment.TournamentId, cancellationToken);
 
         var occupying = onCourt.FirstOrDefault(other =>
             other.Id != assignment.Id
-            && other.CourtId == assignment.CourtId
+            && other.CourtId == courtId
             && other.Status is AssignmentStatus.Called or AssignmentStatus.Running);
 
         if (occupying is not null)

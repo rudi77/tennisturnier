@@ -129,6 +129,7 @@ public sealed class MatchService : IMatchService
         var (tournament, phases, phase, match) = await LoadForResultAsync(matchId, cancellationToken);
 
         RequireResultPermission(tournament);
+        tournament.RequireResultsAccepted();
 
         // Ein bereits eingetragenes Ergebnis zu überschreiben ist eine Korrektur
         // und keine Eingabe. Sie wird deshalb auch als das ausgeführt, was sie
@@ -273,6 +274,7 @@ public sealed class MatchService : IMatchService
         var (tournament, phases, phase, _) = await LoadForResultAsync(matchId, cancellationToken);
 
         RequireResultPermission(tournament);
+        tournament.RequireResultsAccepted();
         RequireLaterPhasesUntouched(tournament, phases, phase);
 
         phase.ClearResult(matchId);
@@ -413,6 +415,20 @@ public sealed class MatchService : IMatchService
                 $"Der Platz „{court.Name}“ ist stillgelegt und lässt sich nicht belegen.");
         }
 
+        // Dieselbe Schranke wie beim Übernehmen eines Vorschlags und beim
+        // Zusagen: eine vertippte Jahreszahl gehört abgewiesen, wo sie
+        // eingetragen wird, und nicht drei Bildschirme später als Ansetzung im
+        // Jahr 2099. Hier stand sie als Einzige nicht.
+        if (request.PlannedStart is { } geplant)
+        {
+            tournament.RequireScheduledWithin(geplant);
+        }
+
+        if (request.EarliestStart is { } fruehestens)
+        {
+            tournament.RequireScheduledWithin(fruehestens);
+        }
+
         var existing = await _assignments.ListByTournamentAsync(tournament.Id, cancellationToken);
 
         var duration = request.EstimatedDuration ?? DefaultMatchDuration;
@@ -440,9 +456,13 @@ public sealed class MatchService : IMatchService
         // Erst prüfen, dann speichern: scheitert die Prüfung, sieht der Aufrufer
         // sonst einen Fehler zu einer Zuweisung, die längst geschrieben und an
         // die Zuschauer gemeldet ist.
+        // Beendete Ansetzungen bleiben außen vor — genau wie beim Übernehmen
+        // eines Vorschlags. Sie tragen ihre alte Planzeit weiter, und der Platz,
+        // auf dem gestern gespielt wurde, ist heute frei: verglichen ergäbe das
+        // eine Doppelbelegung gegen eine Partie, die längst vorbei ist.
         var violations = await ValidateAsync(
             tournament,
-            existing.Where(a => a.Id != assignment.Id).Append(assignment).ToList(),
+            existing.Where(a => a.Id != assignment.Id && !a.IsOver).Append(assignment).ToList(),
             cancellationToken);
 
         // Zwischenspeichern, damit die neue Zuweisung beim Aufbau der

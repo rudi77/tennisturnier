@@ -26,6 +26,7 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     public const string SubjectHeader = "X-Test-Subject";
     public const string IssuerHeader = "X-Test-Issuer";
     public const string EmailHeader = "X-Test-Email";
+    public const string EmailVerifiedHeader = "X-Test-Email-Verified";
 
     /// <summary>
     /// Komma-getrennte Claim-Namen, die das Testschema weglässt.
@@ -53,6 +54,8 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     private readonly int? _teamDrawSeed;
     private readonly bool _openAccess;
     private readonly bool _testSchema;
+    private readonly bool _trustUnverifiedEmail;
+    private readonly bool _kaputterPush;
 
     private readonly Lock _migrationGate = new();
     private bool _migrated;
@@ -75,13 +78,17 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         int publicRegistrationLimit = Unbegrenzt,
         int? teamDrawSeed = null,
         bool openAccess = false,
-        bool testSchema = true)
+        bool testSchema = true,
+        bool trustUnverifiedEmail = false,
+        bool kaputterPush = false)
     {
         _bootstrapSystemAdmins = bootstrapSystemAdmins;
         _publicRegistrationLimit = publicRegistrationLimit;
         _teamDrawSeed = teamDrawSeed;
         _openAccess = openAccess;
         _testSchema = testSchema;
+        _trustUnverifiedEmail = trustUnverifiedEmail;
+        _kaputterPush = kaputterPush;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -96,6 +103,11 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         // Ohne Authority registriert der Identity-Adapter kein JWT-Verfahren und
         // überlässt das Feld dem Testschema.
         builder.UseSetting("Oidc:Authority", string.Empty);
+
+        if (_trustUnverifiedEmail)
+        {
+            builder.UseSetting("Oidc:TrustUnverifiedEmail", "true");
+        }
 
         // WebApplicationFactory baut den Host zweimal. Liefe die Migration als
         // Nebeneffekt des Starts, rennten beide Läufe auf dieselbe Datei; hier
@@ -140,6 +152,14 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
             }
 
             services.AddSingleton<IClock>(Clock);
+
+            // Ein Push, der nicht hinausgeht: der Schreibvorgang ist längst
+            // festgeschrieben, und trotzdem lief die Ausnahme bis zum Aufrufer
+            // durch — als 500 auf einen Aufruf, der gelungen ist.
+            if (_kaputterPush)
+            {
+                services.AddScoped<ITournamentNotifier, WerfenderNotifier>();
+            }
         });
     }
 
@@ -154,7 +174,16 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     public MutableClock Clock { get; } = new();
 
     /// <summary>Ein Client, der als der angegebene Benutzer auftritt.</summary>
-    public HttpClient CreateClientAs(string subject, string? email = null, string? ohneClaims = null)
+    /// <param name="emailBestaetigt">
+    /// Ob der Aussteller die Adresse bestätigt hat. Vorgabe <c>true</c>, weil
+    /// das der Normalfall eines eingerichteten Realms ist; <c>false</c> baut den
+    /// Aufrufer nach, der sich mit einer fremden, unbestätigten Adresse anmeldet.
+    /// </param>
+    public HttpClient CreateClientAs(
+        string subject,
+        string? email = null,
+        string? ohneClaims = null,
+        bool emailBestaetigt = true)
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Add(SubjectHeader, subject);
@@ -163,6 +192,9 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         if (email is not null)
         {
             client.DefaultRequestHeaders.Add(EmailHeader, email);
+            client.DefaultRequestHeaders.Add(
+                EmailVerifiedHeader,
+                emailBestaetigt ? "true" : "false");
         }
 
         if (ohneClaims is not null)
@@ -241,6 +273,17 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         }
     }
 
+    /// <summary>Ein Push-Kanal, der nie ankommt.</summary>
+    private sealed class WerfenderNotifier : ITournamentNotifier
+    {
+        public Task ProjectionChangedAsync(
+            Guid tournamentId, string etag, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Der Hub ist nicht erreichbar.");
+
+        public Task FeedChangedAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Der Hub ist nicht erreichbar.");
+    }
+
     private sealed class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
         public const string SchemeName = "Test";
@@ -280,6 +323,15 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
             if (Request.Headers.TryGetValue(EmailHeader, out var email) && email.Count > 0)
             {
                 claims.Add(new Claim("email", email[0]!, ClaimValueTypes.String, issuer));
+
+                // Keycloak legt den Claim neben die Adresse. Ohne ihn zählt sie
+                // als unbestätigt — genau das prüft die Benutzerauflösung.
+                var bestaetigt =
+                    Request.Headers.TryGetValue(EmailVerifiedHeader, out var wert) && wert.Count > 0
+                        ? wert[0]!
+                        : "true";
+
+                claims.Add(new Claim("email_verified", bestaetigt, ClaimValueTypes.String, issuer));
             }
 
             if (Request.Headers.TryGetValue(OmitHeader, out var omit) && omit.Count > 0)

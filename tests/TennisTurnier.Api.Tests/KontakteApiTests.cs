@@ -36,6 +36,19 @@ public sealed class KontakteApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
+    public async Task Wer_gemeldet_aber_noch_nicht_gespielt_hat_hat_keine_Kontakte()
+    {
+        // Der Unterschied zum Test darüber: hier gibt es einen Spieler, nur
+        // noch kein Ergebnis. Der Kontaktgraph entsteht aus gespielten Matches
+        // und nicht aus Meldungen (ADR-0013) — wer nebeneinander im Feld steht,
+        // hat noch nicht miteinander gespielt.
+        var (_, _, token) = await OffenAsync(Discipline.Singles);
+        var gemeldet = await BeitretenAsync(token, "Clara");
+
+        Assert.Empty(await KontakteAsync(gemeldet));
+    }
+
+    [Fact]
     public async Task Ohne_Anmeldung_gibt_es_keine_Kontakte()
     {
         var anonym = _factory.CreateClient();

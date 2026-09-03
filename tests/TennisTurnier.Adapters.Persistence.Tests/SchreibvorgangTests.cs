@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TennisTurnier.Adapters.Persistence.Sqlite;
 using TennisTurnier.Application.Common;
+using TennisTurnier.Application.Ports;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Security;
 
@@ -28,7 +29,19 @@ public sealed class SchreibvorgangTests : IAsyncLifetime
 
     public async Task DisposeAsync() => await _database.DisposeAsync();
 
-    private static UnitOfWork EinheitFuer(TennisTurnierDbContext db) => new(db, new PostCommitQueue());
+    private static UnitOfWork EinheitFuer(TennisTurnierDbContext db) =>
+        new(db, new PostCommitQueue(new VerschluckteFehler()));
+
+    /// <summary>
+    /// Was nach dem Commit scheitert, gehört gemeldet — hier interessiert nur
+    /// der Schreibvorgang selbst, also genügt eine Fassung, die nichts tut.
+    /// </summary>
+    private sealed class VerschluckteFehler : IPostCommitFailures
+    {
+        public void Report(Exception cause)
+        {
+        }
+    }
 
     [Fact]
     public async Task Eine_belegte_Datenbank_ist_ein_Nebenlaeufigkeitskonflikt()

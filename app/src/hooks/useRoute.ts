@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 
 /**
  * Die Adresszeile als Zustand — ohne React Router.
@@ -80,38 +80,101 @@ export function publicUrl(tournamentId: string): string {
 }
 
 /**
- * Liest die Adresszeile und schreibt sie zurück.
+ * Die Adresszeile als ein Zustand für die ganze Anwendung.
+ *
+ * Sie steht als Modulzustand da und nicht in jedem Aufruf von `useRoute` für
+ * sich: die Adresszeile ist eine, und wer sie ändert, ändert sie für alle.
+ * Hielte jeder Aufruf seine eigene Kopie, käme eine Navigation aus einer
+ * Unterkomponente nie bei der Hülle an, die den Bildschirm auswählt —
+ * `history.pushState` löst kein `popstate` aus, und die Hülle erführe von der
+ * neuen Adresse nichts. Genau so hat ein Klick auf einen Namen im Feed die
+ * Adresszeile umgeschrieben und den Feed stehen lassen.
+ */
+const hoerer = new Set<() => void>()
+
+/**
+ * Die zuletzt gelesene Adresse, samt der Zeichenkette, aus der sie stammt.
+ *
+ * `useSyncExternalStore` ruft `snapshot` bei jedem Rendern auf und vergleicht
+ * das Ergebnis mit dem vorigen — ein bei jedem Aufruf frisch gebautes Objekt
+ * wäre nie dasselbe und ergäbe eine Endlosschleife. Neu gelesen wird deshalb
+ * nur, wenn sich die Suchzeichenkette wirklich geändert hat.
+ */
+let letzteSuche: string | null = null
+let letzteRoute: Route = {
+  screen: null,
+  tournamentId: null,
+  registrationToken: null,
+  playerId: null,
+}
+
+function snapshot(): Route {
+  const suche = window.location.search
+
+  if (suche !== letzteSuche) {
+    letzteSuche = suche
+    letzteRoute = read()
+  }
+
+  return letzteRoute
+}
+
+function melden(): void {
+  for (const hoer of hoerer) hoer()
+}
+
+/**
+ * Der eine Zuhörer auf die Zurück-Taste, für alle Aufrufe zusammen.
+ *
+ * Er wird beim ersten Abonnenten eingehängt und bleibt: ein Ausbau beim
+ * letzten Abbau nähme ihn den anderen weg, und die Anwendung hat ohnehin immer
+ * mindestens einen.
+ */
+let angemeldet = false
+
+function abonnieren(benachrichtigen: () => void): () => void {
+  hoerer.add(benachrichtigen)
+
+  if (!angemeldet) {
+    window.addEventListener('popstate', melden)
+    angemeldet = true
+  }
+
+  return () => {
+    hoerer.delete(benachrichtigen)
+  }
+}
+
+/**
+ * Schreibt die Adresszeile und sagt allen Bescheid.
  *
  * `navigate` ersetzt nur die genannten Parameter; was nicht genannt ist, bleibt
  * stehen. Ein `null` löscht — sonst ließe sich ein Turnier nie wieder abwählen.
  */
+export function navigate(next: Partial<Route>): void {
+  const params = new URLSearchParams(window.location.search)
+
+  const set = (key: string, value: string | null | undefined) => {
+    if (value === undefined) return
+    if (value === null) params.delete(key)
+    else params.set(key, value)
+  }
+
+  set('screen', next.screen)
+  set('t', next.tournamentId)
+  set('r', next.registrationToken)
+  set('p', next.playerId)
+
+  const query = params.toString()
+  window.history.pushState({}, '', query ? `?${query}` : window.location.pathname)
+  melden()
+}
+
+/**
+ * Liest die Adresszeile und schreibt sie zurück.
+ */
 export function useRoute(): Route & { navigate: (next: Partial<Route>) => void } {
-  const [route, setRoute] = useState<Route>(read)
+  const route = useSyncExternalStore(abonnieren, snapshot)
 
-  useEffect(() => {
-    const onPop = () => setRoute(read())
-    window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
-  }, [])
-
-  const navigate = useCallback((next: Partial<Route>) => {
-    const params = new URLSearchParams(window.location.search)
-
-    const set = (key: string, value: string | null | undefined) => {
-      if (value === undefined) return
-      if (value === null) params.delete(key)
-      else params.set(key, value)
-    }
-
-    set('screen', next.screen)
-    set('t', next.tournamentId)
-    set('r', next.registrationToken)
-    set('p', next.playerId)
-
-    const query = params.toString()
-    window.history.pushState({}, '', query ? `?${query}` : window.location.pathname)
-    setRoute(read())
-  }, [])
-
-  return { ...route, navigate }
+  return { ...route, navigate: useCallback(navigate, []) }
 }

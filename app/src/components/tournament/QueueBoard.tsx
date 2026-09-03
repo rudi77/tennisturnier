@@ -1,9 +1,9 @@
-import { useState } from 'react'
 import { AssignmentStatus, MatchStatus, type CourtBoard, type QueuedMatch } from '../../api/types'
 import { assignmentStatusLabel, assignmentTone } from '../../lib/labels'
 import { formatClock, timeSpanToMinutes } from '../../lib/time'
 import { StatusChip } from '../core/StatusChip'
 import { TimeLabel } from './TimeLabel'
+import { useCourtMove, type CourtMove } from './useCourtMove'
 
 export type QueueAction = 'call' | 'start' | 'finish' | 'suspend' | 'resume' | 'result'
 
@@ -43,7 +43,7 @@ export function QueueBoard({
    */
   readOnly?: boolean
 }) {
-  const [dragMatchId, setDragMatchId] = useState<string | null>(null)
+  const verschieben = useCourtMove(onDropMatch, readOnly)
 
   return (
     <div className="md-queue">
@@ -84,10 +84,7 @@ export function QueueBoard({
               key={board.courtId}
               className={`md-queue__col${live ? ' md-queue__col--live' : ''}`}
               onDragOver={(event) => !readOnly && event.preventDefault()}
-              onDrop={() => {
-                if (dragMatchId && !readOnly) onDropMatch(dragMatchId, board.courtId)
-                setDragMatchId(null)
-              }}
+              onDrop={() => verschieben.drop(board.courtId)}
             >
               <div
                 style={{
@@ -121,6 +118,17 @@ export function QueueBoard({
                 </StatusChip>
               </div>
 
+              {verschieben.picked !== null && (
+                <button
+                  type="button"
+                  className="md-btn md-btn--court md-btn--info"
+                  style={{ margin: 'var(--sp-4) var(--sp-5) 0', width: 'calc(100% - 2 * var(--sp-5))' }}
+                  onClick={() => verschieben.drop(board.courtId)}
+                >
+                  Auf {board.courtName}
+                </button>
+              )}
+
               <div
                 style={{
                   padding: 'var(--sp-5)',
@@ -137,7 +145,7 @@ export function QueueBoard({
                     timeZone={timeZone}
                     busy={busyAssignmentId === current.assignmentId}
                     onAction={onAction}
-                    onDragStart={() => setDragMatchId(current.matchId)}
+                    move={verschieben}
                     readOnly={readOnly}
                   />
                 )}
@@ -149,13 +157,14 @@ export function QueueBoard({
                     timeZone={timeZone}
                     busy={busyAssignmentId === entry.assignmentId}
                     onAction={onAction}
-                    onDragStart={() => setDragMatchId(entry.matchId)}
+                    move={verschieben}
                     readOnly={readOnly}
                   />
                 ))}
                 {!current && board.queue.length === 0 && (
                   <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--fg-3)', padding: 'var(--sp-4)' }}>
-                    Keine Zuweisung. Karten lassen sich hierher ziehen.
+                    Keine Zuweisung. Karten lassen sich hierher ziehen — oder auf der Karte
+                    „Verschieben" antippen und dann den Platz wählen.
                   </div>
                 )}
               </div>
@@ -173,7 +182,7 @@ function QueueCard({
   timeZone,
   busy,
   onAction,
-  onDragStart,
+  move,
   readOnly,
 }: {
   entry: QueuedMatch
@@ -185,10 +194,11 @@ function QueueCard({
    * Fehlt, wo die Karte auf keinem Platz liegt.
    *
    * Eine unterbrochene Partie lässt sich nicht umhängen: sie steht auf keinem
-   * Platz, und wohin sie käme, entscheidet sich beim Fortsetzen. Ohne Handler
-   * ist sie nicht ziehbar — das ist ehrlicher als ein Ziehen, das nichts tut.
+   * Platz, und wohin sie käme, entscheidet sich beim Fortsetzen. Ohne diese
+   * Angabe ist sie weder ziehbar noch zu verschieben — das ist ehrlicher als
+   * ein Zug, der nichts tut.
    */
-  onDragStart?: () => void
+  move?: CourtMove
   readOnly: boolean
 }) {
   const running = entry.status === AssignmentStatus.Running
@@ -208,11 +218,12 @@ function QueueCard({
   return (
     <div
       className={className}
-      draggable={!readOnly && onDragStart !== undefined}
-      onDragStart={onDragStart}
+      draggable={!readOnly && move !== undefined}
+      onDragStart={move?.dragStart(entry.matchId)}
       style={{
         boxShadow: position === 0 ? 'var(--shadow-sm)' : 'none',
         opacity: position > 2 ? 0.72 : 1,
+        outline: move?.picked === entry.matchId ? '2px solid var(--blue-400)' : undefined,
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
@@ -285,6 +296,13 @@ function QueueCard({
         )}
         {!readOnly && suspended && (
           <Action label="Fortsetzen" variant="md-btn--primary" busy={busy} onClick={() => onAction('resume', entry)} />
+        )}
+        {!readOnly && move !== undefined && (
+          <Action
+            label={move.picked === entry.matchId ? 'Abbrechen' : 'Verschieben'}
+            busy={false}
+            onClick={() => move.pick(entry.matchId)}
+          />
         )}
       </div>
     </div>

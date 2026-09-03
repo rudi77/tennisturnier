@@ -189,6 +189,28 @@ public sealed class PlayDateService : IPlayDateService
             return;
         }
 
+        // Zuerst: sind das überhaupt eigene Mitspieler?
+        //
+        // ADR-0015 sagt es als Entscheidung — „eingeladen wird aus dem
+        // Kontaktgraphen" —, und der Grund steht daneben: ohne ihn wäre das
+        // hier eine Suche über alle Benutzer, „und die will niemand haben, der
+        // sich einmal überlegt hat, was sie preisgibt". Geprüft wurde es
+        // trotzdem nie: jeder Angemeldete konnte jeden mit Konto einladen.
+        //
+        // Und die Prüfung steht vor der auf das Konto, weil deren Meldung
+        // Namen nennt. Zu beliebigen Spieler-Ids Anzeigenamen zu erfahren, ist
+        // genau die Auskunft, die der Kontaktgraph verhindern soll.
+        var kontakte = await KontakteAsync(cancellationToken);
+        var fremde = playerIds.Where(id => !kontakte.Contains(id)).ToList();
+
+        if (fremde.Count > 0)
+        {
+            throw new DomainException(
+                "Eingeladen wird aus den eigenen Mitspielern. "
+                + (fremde.Count == 1 ? "Einer der Genannten" : $"{fremde.Count} der Genannten")
+                + " steht nicht darunter — gespielt wird zusammen, bevor man sich verabredet.");
+        }
+
         var accounts = await _players.AccountIdsOfPlayersAsync(playerIds, cancellationToken);
         var ohneKonto = playerIds.Where(id => !accounts.ContainsKey(id)).ToList();
 
@@ -206,6 +228,39 @@ public sealed class PlayDateService : IPlayDateService
         {
             playDate.Invite(Guid.CreateVersion7(), accounts[playerId], playerId);
         }
+    }
+
+    /// <summary>
+    /// Die Spieler, mit denen der Aufrufer schon einmal auf dem Platz stand —
+    /// als Partner oder als Gegner.
+    ///
+    /// Dieselbe Rechnung wie in <c>ConnectionService</c>, nur ohne Zählung:
+    /// hier interessiert allein, wer dazugehört. Sie steht bewusst auf
+    /// derselben Grundlage — was die Kontaktliste zeigt, ist genau das, was
+    /// sich einladen lässt, und eine zweite Quelle liefe davon weg.
+    /// </summary>
+    private async Task<HashSet<Guid>> KontakteAsync(CancellationToken cancellationToken)
+    {
+        var caller = _userContext.Current.UserId;
+
+        if (await _players.FindPlayerIdOfAccountAsync(caller, cancellationToken) is not { } ich)
+        {
+            return [];
+        }
+
+        var kontakte = new HashSet<Guid>();
+
+        foreach (var match in await _players.ListForPlayerAsync(ich, cancellationToken))
+        {
+            if (match.Partner is { } partner)
+            {
+                kontakte.Add(partner);
+            }
+
+            kontakte.UnionWith(match.OpponentPlayerIds);
+        }
+
+        return kontakte;
     }
 
     private async Task<PlayDateView> DescribeAsync(

@@ -4,15 +4,21 @@ services:
     container_name: tennisturnier-keycloak
     command: ["start-dev", "--import-realm"]
     environment:
-      # Nur für die lokale Entwicklung. In Produktion tritt Entra ID an diese
-      # Stelle, und der Unterschied ist reine Konfiguration (ADR-0007).
+      # Nur für die lokale Entwicklung. In Produktion tritt ein eigener
+      # Aussteller an diese Stelle — deploy/keycloak/ stellt dafür Keycloak im
+      # Produktionsmodus hin —, und der Unterschied ist reine Konfiguration
+      # (ADR-0007).
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HEALTH_ENABLED: "true"
     ports:
       - "8080:8080"
     volumes:
-      - ./deploy/keycloak/import:/opt/keycloak/data/import:ro
+      # Die Entwicklungsfassung des Realms und nicht die aus `import/`: nur sie
+      # trägt die drei Testkonten und den Direktzugang, den die e2e-Tests für
+      # ihre Tokens brauchen. Das Bild in `deploy/keycloak/` nimmt `import/` —
+      # damit liegt kein Konto mit Trivialpasswort in einem Produktionsbild.
+      - ./deploy/keycloak/import-dev:/opt/keycloak/data/import:ro
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\nhost: localhost\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
       interval: 10s

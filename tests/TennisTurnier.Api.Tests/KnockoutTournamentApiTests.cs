@@ -268,6 +268,42 @@ public sealed class KnockoutTournamentApiTests : IClassFixture<TennisTurnierApiF
         Assert.Equal(1, assignment.SequenceOnCourt);
     }
 
+    /// <summary>
+    /// Eine vertippte Jahreszahl gehört dort abgewiesen, wo sie eingetragen
+    /// wird.
+    ///
+    /// `schedule/confirm` und die Zusage am Turniertag prüfen den
+    /// Turnierzeitraum seit jeher; die Zuweisung von Hand als einzige nicht.
+    /// Sie ist damit der Weg, auf dem „2099" in einen Spielplan kommt.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Eine_Zuweisung_weit_ausserhalb_des_Turniers_wird_abgewiesen(bool geplant)
+    {
+        var (client, courtId, tournamentId) = await DrawnTournamentAsync(4);
+        var phase = Assert.Single(await PhasesAsync(client, tournamentId));
+        var match = phase.Matches.First(m => m.Round == 1);
+
+        var vertippt = new DateTimeOffset(2099, 5, 16, 9, 0, 0, TimeSpan.FromHours(2));
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/matches/{match.Id}/court",
+            new AssignCourtRequest(
+                courtId,
+                SequenceOnCourt: 1,
+                PlannedStart: geplant ? vertippt : null,
+                EarliestStart: geplant ? null : vertippt,
+                EstimatedDuration: null),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        // Und nichts ist geschrieben worden.
+        var danach = Assert.Single(await PhasesAsync(client, tournamentId));
+        Assert.Null(danach.Matches.First(m => m.Id == match.Id).Assignment);
+    }
+
     [Fact]
     public async Task Eine_zweite_Zuweisung_ersetzt_die_erste()
     {

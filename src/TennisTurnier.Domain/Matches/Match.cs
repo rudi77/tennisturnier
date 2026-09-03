@@ -159,6 +159,21 @@ public sealed class Match : Entity
     /// </summary>
     public bool HasBye => Side1.IsBye || Side2.IsBye;
 
+    /// <summary>
+    /// Hat hier jemand ein Ergebnis eingetragen?
+    ///
+    /// Nicht dasselbe wie „hat einen Spielstand": ein Freilos trägt auch einen,
+    /// aber niemand hat dafür einen Ball geschlagen. Der Unterschied ist überall
+    /// dort entscheidend, wo etwas zurückgenommen werden soll — ein Freilos
+    /// steht keiner Korrektur im Weg, ein gespieltes Match sehr wohl.
+    ///
+    /// Es war dieselbe Frage, an der eine Korrektur im Schweizer System mit
+    /// ungerader Teilnehmerzahl unmöglich wurde: die Folgerunde enthielt ein
+    /// Freilos, das als gespielt zählte, und ließ sich deshalb nicht mehr
+    /// zurücknehmen — sein Ergebnis aber auch nicht.
+    /// </summary>
+    public bool IsPlayed => Score is not null && Score.Outcome != MatchOutcome.Bye;
+
     public MatchSide Side(int side) => side == 1 ? Side1 : Side2;
 
     /// <summary>

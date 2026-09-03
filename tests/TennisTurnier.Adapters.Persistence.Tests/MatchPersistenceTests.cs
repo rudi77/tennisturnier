@@ -61,6 +61,35 @@ public sealed class MatchPersistenceTests : IAsyncLifetime
 
     public async Task DisposeAsync() => await _database.DisposeAsync();
 
+    /// <summary>
+    /// „Welche Matches hat diese Meldung gespielt" ist die häufigste Frage im
+    /// System, und die Konfiguration verwies für ihren Index auf eine
+    /// Migration, die es nicht gab. Ein Verweis auf etwas Nichtvorhandenes
+    /// liest sich wie eine Zusage und ist keine — deshalb wird sie hier
+    /// nachgesehen und nicht geglaubt.
+    /// </summary>
+    [Theory]
+    [InlineData("IX_Matches_Side1_EntryId")]
+    [InlineData("IX_Matches_Side2_EntryId")]
+    public async Task Die_Meldung_einer_Match_Seite_ist_indiziert(string index)
+    {
+        await using var db = _database.NewContext();
+
+        var verbindung = db.Database.GetDbConnection();
+        await verbindung.OpenAsync();
+
+        await using var befehl = verbindung.CreateCommand();
+        befehl.CommandText =
+            "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = $name;";
+
+        var name = befehl.CreateParameter();
+        name.ParameterName = "$name";
+        name.Value = index;
+        befehl.Parameters.Add(name);
+
+        Assert.Equal(1L, await befehl.ExecuteScalarAsync());
+    }
+
     private Phase BuildPhase()
     {
         var phase = new Phase(Guid.NewGuid(), _tournamentId, 1, PhaseFormatKind.Knockout, "Hauptfeld");

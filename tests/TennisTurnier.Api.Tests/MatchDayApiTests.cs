@@ -296,6 +296,126 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
         Assert.NotEqual(running.AssignmentId, current.AssignmentId);
     }
 
+    /// <summary>
+    /// Eine beendete Partie blockiert den Platz nicht mehr, auf dem sie
+    /// gespielt wurde.
+    ///
+    /// Ihre Planzeit bleibt stehen — sie ist Teil der Historie des Tages
+    /// (ADR-0002). Wurde sie beim Zuweisen von Hand mitverglichen, meldete die
+    /// Prüfung eine Doppelbelegung gegen eine Partie, die längst vorbei ist.
+    /// Der Solverpfad ließ beendete Ansetzungen seit jeher außen vor.
+    ///
+    /// Vier Teilnehmer auf zwei Plätzen: so liegt auf jedem Platz genau eine
+    /// Erstrundenpartie, und nach dem Beenden rückt dort nichts nach, was den
+    /// Befund verfälschen könnte.
+    /// </summary>
+    [Fact]
+    public async Task Eine_beendete_Partie_belegt_ihren_Platz_nicht_weiter()
+    {
+        var (admin, tournamentId) = await MatchDayAsync(participants: 4);
+
+        var runde = (await admin.GetFromJsonAsync<List<PhaseDetail>>(
+                $"/api/tournaments/{tournamentId}/phases", Json))!
+            .SelectMany(p => p.Matches)
+            .Where(m => m.Round == 1 && m.Assignment is not null)
+            .ToList();
+
+        var gespielt = runde[0].Assignment!;
+        var anderes = runde.First(m => m.Assignment!.CourtId != gespielt.CourtId);
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await admin.PostAsync($"/api/assignments/{gespielt.Id}/start", null)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await admin.PostAsync($"/api/assignments/{gespielt.Id}/finish", null)).StatusCode);
+
+        // Der frei gewordene Platz zieht die nächste Partie nach — das ist der
+        // Turniertag und richtig so. Für diesen Befund muss der Platz aber leer
+        // sein außer der beendeten Partie, sonst prüfte der Test eine echte
+        // Doppelbelegung.
+        var brett = await BoardAsync(admin, tournamentId);
+        var platz = brett.Single(c => c.CourtId == gespielt.CourtId);
+
+        foreach (var nachgerueckt in platz.Queue.Concat(platz.Current is null ? [] : [platz.Current]))
+        {
+            Assert.Equal(
+                HttpStatusCode.NoContent,
+                (await admin.DeleteAsync(
+                    $"/api/court-assignments/{nachgerueckt.AssignmentId}")).StatusCode);
+        }
+
+        var antwort = await admin.PostAsJsonAsync(
+            $"/api/matches/{anderes.Id}/court",
+            new AssignCourtRequest(
+                gespielt.CourtId,
+                SequenceOnCourt: 9,
+                PlannedStart: gespielt.PlannedStart,
+                EarliestStart: null,
+                EstimatedDuration: gespielt.EstimatedDuration),
+            Json);
+
+        Assert.Equal(HttpStatusCode.OK, antwort.StatusCode);
+
+        var ergebnis = await antwort.Content.ReadFromJsonAsync<AssignCourtResult>(Json);
+
+        Assert.DoesNotContain(
+            ergebnis!.Violations,
+            v => v.Constraint == ScheduleConstraint.CourtDoubleBooked);
+    }
+
+    [Fact]
+    public async Task Eine_unterbrochene_Partie_geht_nicht_auf_einen_belegten_Platz_zurueck()
+    {
+        // Der Regenguss ist vorbei, und auf Platz 1 läuft längst die nächste
+        // Partie. „Fortsetzen" ohne Platzwahl nimmt den alten Platz — ohne
+        // Prüfung stünden dort zwei Zuweisungen auf Running. Die Platzübersicht
+        // zeigte nur eine davon, und die andere wäre weder sichtbar noch zu
+        // beenden: die Historie des Platzes behauptete dauerhaft zwei
+        // gleichzeitige Partien.
+        var (admin, tournamentId) = await MatchDayAsync();
+        var board = await BoardAsync(admin, tournamentId);
+        var unterbrochen = board[0].Queue[0];
+        var naechste = board[0].Queue[1];
+
+        await admin.PostAsync($"/api/assignments/{unterbrochen.AssignmentId}/start", null);
+        await admin.PostAsync($"/api/assignments/{unterbrochen.AssignmentId}/suspend", null);
+
+        // Der Platz ist frei geworden und wird gleich wieder belegt.
+        await admin.PostAsync($"/api/assignments/{naechste.AssignmentId}/start", null);
+
+        var antwort = await admin.PostAsJsonAsync(
+            $"/api/assignments/{unterbrochen.AssignmentId}/resume", new ResumeMatchRequest(), Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
+
+        var danach = await BoardAsync(admin, tournamentId);
+        Assert.Equal(naechste.AssignmentId, danach[0].Current!.AssignmentId);
+    }
+
+    [Fact]
+    public async Task Eine_unterbrochene_Partie_geht_nicht_auf_einen_belegten_anderen_Platz()
+    {
+        // Dasselbe mit ausdrücklicher Platzwahl: der Zielplatz zählt, nicht der
+        // Platz, auf dem die Partie unterbrochen wurde.
+        var (admin, tournamentId) = await MatchDayAsync();
+        var board = await BoardAsync(admin, tournamentId);
+        var unterbrochen = board[0].Queue[0];
+        var andererPlatz = board[1].CourtId;
+        var dortLaufend = board[1].Queue[0];
+
+        await admin.PostAsync($"/api/assignments/{unterbrochen.AssignmentId}/start", null);
+        await admin.PostAsync($"/api/assignments/{unterbrochen.AssignmentId}/suspend", null);
+        await admin.PostAsync($"/api/assignments/{dortLaufend.AssignmentId}/start", null);
+
+        var antwort = await admin.PostAsJsonAsync(
+            $"/api/assignments/{unterbrochen.AssignmentId}/resume",
+            new ResumeMatchRequest(andererPlatz),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
+    }
+
     [Fact]
     public async Task Eine_unterbrochene_Partie_geht_auch_auf_demselben_Platz_weiter()
     {

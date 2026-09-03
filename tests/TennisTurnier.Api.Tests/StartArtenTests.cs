@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using TennisTurnier.Adapters.Persistence.Sqlite;
+using TennisTurnier.Application.Ports;
 using TennisTurnier.Application.Tournaments;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -42,19 +45,54 @@ public sealed class StartArtenTests
         }
     }
 
+    /// <summary>
+    /// Die Vorlagen über die Dienste gezählt und nicht über den Endpunkt: der
+    /// verlangt seit der Fallback-Richtlinie einen angemeldeten Aufrufer, und
+    /// diese Fabrik hat kein Verfahren, mit dem sich jemand ausweisen könnte.
+    /// Gegenstand ist ohnehin die Saat und nicht der Endpunkt.
+    /// </summary>
+    private static async Task<int> VorlagenAsync(EntwicklungsFabrik fabrik)
+    {
+        using var bereich = fabrik.Services.CreateScope();
+        var vorlagen = bereich.ServiceProvider.GetRequiredService<IFormatTemplateRepository>();
+
+        return (await vorlagen.ListForCallerAsync()).Count;
+    }
+
     [Fact]
     public async Task Eine_frische_Instanz_wandert_ihre_Datenbank_selbst()
     {
         using var fabrik = new EntwicklungsFabrik();
         var client = fabrik.CreateClient();
 
-        // Die Vorlagen stehen nach dem Start bereit — ohne dass ein Test sie
-        // gesät hätte.
-        var vorlagen = await client.GetAsync("/api/format-templates");
-        Assert.Equal(HttpStatusCode.OK, vorlagen.StatusCode);
-
         var gesundheit = await client.GetAsync("/health");
         Assert.Equal(HttpStatusCode.OK, gesundheit.StatusCode);
+
+        // Die Vorlagen stehen nach dem Start bereit — ohne dass ein Test sie
+        // gesät hätte.
+        Assert.NotEqual(0, await VorlagenAsync(fabrik));
+    }
+
+    [Fact]
+    public async Task Eine_frische_Instanz_schreibt_ihr_Journal_voraus()
+    {
+        // Im voreingestellten Rollback-Journal sperren Leser den Commit und der
+        // Commit die Leser. Genau diese Kombination liegt hier vor: die
+        // öffentliche Ansicht wird von „einigen hundert Zuschauern" abgefragt
+        // (ADR-0003), während am Platz Ergebnisse eingetragen werden.
+        using var fabrik = new EntwicklungsFabrik();
+        fabrik.CreateClient();
+
+        using var bereich = fabrik.Services.CreateScope();
+        var db = bereich.ServiceProvider.GetRequiredService<TennisTurnierDbContext>();
+
+        var verbindung = db.Database.GetDbConnection();
+        await verbindung.OpenAsync();
+
+        await using var befehl = verbindung.CreateCommand();
+        befehl.CommandText = "PRAGMA journal_mode;";
+
+        Assert.Equal("wal", (string)(await befehl.ExecuteScalarAsync())!, ignoreCase: true);
     }
 
     [Fact]
@@ -75,16 +113,15 @@ public sealed class StartArtenTests
         // Jeder Neustart sät. Legte er dabei ein zweites Mal an, stünde nach
         // einem Monat jede Standardvorlage dreißigmal in der Auswahl.
         using var fabrik = new EntwicklungsFabrik();
-        var client = fabrik.CreateClient();
 
-        var vorher = await client.GetFromJsonAsync<List<FormatTemplateSummary>>("/api/format-templates");
+        var vorher = await VorlagenAsync(fabrik);
 
         await fabrik.Services.SeedBuiltInFormatsAsync();
 
-        var nachher = await client.GetFromJsonAsync<List<FormatTemplateSummary>>("/api/format-templates");
+        var nachher = await VorlagenAsync(fabrik);
 
-        Assert.NotEmpty(vorher!);
-        Assert.Equal(vorher!.Count, nachher!.Count);
+        Assert.NotEqual(0, vorher);
+        Assert.Equal(vorher, nachher);
     }
 
     [Fact]

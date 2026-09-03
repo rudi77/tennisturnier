@@ -5,6 +5,7 @@
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": true,
+  "verifyEmail": true,
   "accessTokenLifespan": 3600,
   "clients": [
     {
@@ -13,12 +14,16 @@
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "redirectUris": [
-        "http://localhost:5000/*",
-        "http://192.168.2.213:5000/*",
-        "http://localhost:5001/*",
-        "${MATCHDAY_ORIGIN:http://localhost:5000}/*"
+        "http://localhost:5000/",
+        "http://localhost:5000/?*",
+        "http://192.168.2.213:5000/",
+        "http://192.168.2.213:5000/?*",
+        "http://localhost:5001/",
+        "http://localhost:5001/?*",
+        "${MATCHDAY_ORIGIN:http://localhost:5000}/",
+        "${MATCHDAY_ORIGIN:http://localhost:5000}/?*"
       ],
       "webOrigins": [
         "http://localhost:5000",
@@ -38,55 +43,9 @@
         }
       ],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:5000/*##http://localhost:5001/*##http://192.168.2.213:5000/*##${MATCHDAY_ORIGIN:http://localhost:5000}/*"
+        "post.logout.redirect.uris": "http://localhost:5000/##http://localhost:5000/?*##http://localhost:5001/##http://localhost:5001/?*##http://192.168.2.213:5000/##http://192.168.2.213:5000/?*##${MATCHDAY_ORIGIN:http://localhost:5000}/##${MATCHDAY_ORIGIN:http://localhost:5000}/?*",
+        "pkce.code.challenge.method": "S256"
       }
-    }
-  ],
-  "users": [
-    {
-      "username": "systemadmin",
-      "enabled": true,
-      "emailVerified": true,
-      "email": "systemadmin@example.invalid",
-      "firstName": "System",
-      "lastName": "Administrator",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "systemadmin",
-          "temporary": false
-        }
-      ]
-    },
-    {
-      "username": "clubadmin",
-      "enabled": true,
-      "emailVerified": true,
-      "email": "clubadmin@example.invalid",
-      "firstName": "Vereins",
-      "lastName": "Administrator",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "clubadmin",
-          "temporary": false
-        }
-      ]
-    },
-    {
-      "username": "referee",
-      "enabled": true,
-      "emailVerified": true,
-      "email": "referee@example.invalid",
-      "firstName": "Schieds",
-      "lastName": "Richter",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "referee",
-          "temporary": false
-        }
-      ]
     }
   ],
   "identityProviders": [
@@ -110,7 +69,8 @@
   ],
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
-  "resetPasswordAllowed": true,
+  "resetPasswordAllowed": false,
   "rememberMe": true,
-  "duplicateEmailsAllowed": false
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true
 }

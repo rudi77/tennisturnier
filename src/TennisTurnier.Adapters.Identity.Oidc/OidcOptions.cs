@@ -20,6 +20,22 @@ public sealed class OidcOptions
     public string Audience { get; set; } = string.Empty;
 
     /// <summary>
+    /// Muss ein Token für diese Anwendung ausgestellt sein?
+    ///
+    /// Vorgabe ja. Ohne die Prüfung gilt jedes Token des Ausstellers, auch
+    /// eines, das für einen ganz anderen Client seines Verbunds ausgestellt
+    /// wurde — wer dort ein Token bekommt, bekommt damit auch hier Zugang.
+    /// Eine leere <see cref="Audience"/> schaltete das bisher stillschweigend
+    /// ab; jetzt verweigert die Anwendung den Start.
+    ///
+    /// Auf <c>false</c> gehört der Schalter nur bei einem Aussteller, der
+    /// keine feste Audience vergibt. Das ist eine Aussage über den Aussteller,
+    /// die nur der Betreiber treffen kann — deshalb steht sie hier und
+    /// entsteht nicht aus einem leeren Feld.
+    /// </summary>
+    public bool RequireAudience { get; set; } = true;
+
+    /// <summary>
     /// Nur für die lokale Entwicklung gegen Keycloak über HTTP abschaltbar.
     /// In Produktion niemals <c>false</c>.
     /// </summary>
@@ -38,6 +54,25 @@ public sealed class OidcOptions
 
     /// <summary>Die Scopes, die die Oberfläche anfragt.</summary>
     public string Scope { get; set; } = "openid profile email";
+
+    /// <summary>
+    /// Ob eine E-Mail-Adresse auch ohne bestätigten <c>email_verified</c>-Claim
+    /// übernommen wird.
+    ///
+    /// Vorgabe <c>false</c>, und das ist die Sicherheitsgrenze dieser Anwendung:
+    /// die Adresse ist der Schlüssel, an dem der erste Systemadministrator, jede
+    /// Einladung und die Übernahme eines importierten Spielers hängen. Ein
+    /// Aussteller mit offener Selbstregistrierung lässt jeden seine Adresse frei
+    /// wählen — wer sich vor dem echten Inhaber mit dessen Adresse anmeldet,
+    /// erbte sonst dessen Rollen und dessen Spielerhistorie.
+    ///
+    /// Auf <c>true</c> gehört der Schalter nur, wenn der Aussteller den Claim
+    /// gar nicht ausstellt <em>und</em> von sich aus keine unbestätigten
+    /// Adressen zulässt — ein Verbund ohne Selbstregistrierung etwa. Das ist
+    /// eine Aussage über den Aussteller, die nur der Betreiber treffen kann,
+    /// und deshalb steht sie als Schalter da und nicht als stille Annahme.
+    /// </summary>
+    public bool TrustUnverifiedEmail { get; set; }
 
     /// <summary>
     /// Ist die Anmeldung überhaupt konfiguriert? Ohne Authority läuft die

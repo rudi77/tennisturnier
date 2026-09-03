@@ -23,6 +23,7 @@ public sealed class FitnessFunctionSelfTests
     [InlineData(typeof(PersistenceAssembly))]
     [InlineData(typeof(IdentityAssembly))]
     [InlineData(typeof(SchedulingAssembly))]
+    [InlineData(typeof(Program))]
     public void Geprüfte_Assemblies_enthalten_ueberhaupt_Typen(Type marker)
     {
         // Auf den eigenen Namensraum eingegrenzt, und zwar auf der Ebene der

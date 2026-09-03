@@ -7,6 +7,7 @@ import {
 import { courtMeta, sideName } from '../../lib/labels'
 import { dateKey, formatClock, minutesOfDay, timeSpanToMinutes } from '../../lib/time'
 import { TimeLabel } from './TimeLabel'
+import { useCourtMove, type CourtMove } from './useCourtMove'
 
 /** Das Raster, solange nichts anderes bekannt ist: 09:00–21:00. */
 const DEFAULT_START_HOUR = 9
@@ -140,7 +141,7 @@ export function GanttBoard({
    */
   readOnly?: boolean
 }) {
-  const [dragId, setDragId] = useState<string | null>(null)
+  const verschieben = useCourtMove(onDropMatch, readOnly)
   const [overCourt, setOverCourt] = useState<string | null>(null)
 
   const range = useMemo(
@@ -216,8 +217,7 @@ export function GanttBoard({
                 // Auch hier und nicht nur an `onDragOver`: ohne `preventDefault`
                 // nimmt zwar kein Browser den Wurf an, aber eine Zusage, die an
                 // einer ausgelassenen Zeile hängt, ist keine.
-                if (dragId && !readOnly) onDropMatch(dragId, court.id)
-                setDragId(null)
+                verschieben.drop(court.id)
               }}
             >
               <div
@@ -256,6 +256,17 @@ export function GanttBoard({
                 </div>
               </div>
 
+              {verschieben.picked !== null && (
+                <button
+                  type="button"
+                  className="md-btn md-btn--court md-btn--info"
+                  style={{ width: '100%' }}
+                  onClick={() => verschieben.drop(court.id)}
+                >
+                  Auf {court.name}
+                </button>
+              )}
+
               <div className="md-gantt__lane" style={{ height: laneHeight(range) }}>
                 {closed.map((gap) => (
                   <Closed key={`${gap.from}-${gap.to}`} from={gap.from} to={gap.to} range={range} />
@@ -266,7 +277,7 @@ export function GanttBoard({
                     entry={entry}
                     timeZone={timeZone}
                     range={range}
-                    onDragStart={() => setDragId(entry.match.id)}
+                    move={verschieben}
                     onOpen={() => onOpenResult(entry.match)}
                     readOnly={readOnly}
                   />
@@ -341,14 +352,14 @@ function Card({
   entry,
   timeZone,
   range,
-  onDragStart,
+  move,
   onOpen,
   readOnly,
 }: {
   entry: ScheduledMatch
   timeZone: string
   range: DayRange
-  onDragStart: () => void
+  move: CourtMove
   onOpen: () => void
   readOnly: boolean
 }) {
@@ -380,7 +391,7 @@ function Card({
     <div
       className={className}
       draggable={!readOnly}
-      onDragStart={onDragStart}
+      onDragStart={move.dragStart(match.id)}
       onClick={() => !readOnly && onOpen()}
       role={readOnly ? undefined : 'button'}
       tabIndex={readOnly ? undefined : 0}
@@ -390,7 +401,11 @@ function Card({
           onOpen()
         }
       }}
-      style={{ top, height }}
+      style={{
+        top,
+        height,
+        outline: move.picked === match.id ? '2px solid var(--blue-400)' : undefined,
+      }}
       title={`${sideName(match.side1.participantName, match.side1.origin)} vs ${sideName(
         match.side2.participantName,
         match.side2.origin,
@@ -403,6 +418,26 @@ function Card({
         >
           {match.label ?? `#${match.position + 1}`}
         </span>
+        {!readOnly && (
+          <button
+            type="button"
+            className="md-gantt__move"
+            aria-label={
+              move.picked === match.id
+                ? 'Verschieben abbrechen'
+                : `${match.label ?? `#${match.position + 1}`} auf einen anderen Platz legen`
+            }
+            aria-pressed={move.picked === match.id}
+            onClick={(event) => {
+              // Sonst öffnete derselbe Klick die Ergebnismaske: die Karte
+              // selbst ist ein Knopf.
+              event.stopPropagation()
+              move.pick(match.id)
+            }}
+          >
+            {move.picked === match.id ? '×' : '⇄'}
+          </button>
+        )}
         {running ? (
           <span className="md-time md-time--on-ball">{formatClock(assignment.actualStart, timeZone)}</span>
         ) : (

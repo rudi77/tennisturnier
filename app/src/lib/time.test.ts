@@ -11,6 +11,7 @@ import {
   toDateOnly,
   todayIso,
   tournamentDays,
+  toLocalInput,
 } from './time'
 
 const WIEN = 'Europe/Vienna'
@@ -200,5 +201,30 @@ describe('tournamentDays', () => {
 
   it('bricht bei einem vertippten Zeitraum ab, statt sich aufzuhängen', () => {
     expect(tournamentDays('2026-01-01', '2036-01-01')).toHaveLength(61)
+  })
+})
+
+describe('toLocalInput', () => {
+  it('gibt den Zeitpunkt so zurück, wie ein datetime-local-Feld ihn braucht', () => {
+    // Die Gegenprobe zum Speichern: `new Date(wert)` liest den Wert in
+    // derselben Zeitzone wieder ein, in der er hier geschrieben wurde.
+    const iso = '2026-05-10T22:00:00+00:00'
+
+    const wert = toLocalInput(iso)
+
+    expect(wert).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
+    expect(new Date(wert).toISOString()).toBe(new Date(iso).toISOString())
+  })
+
+  it('ist leer, wo kein Zeitpunkt steht', () => {
+    expect(toLocalInput(null)).toBe('')
+    expect(toLocalInput(undefined)).toBe('')
+    expect(toLocalInput('')).toBe('')
+  })
+
+  it('ist leer statt „NaN-NaN-NaN", wenn nichts Lesbares dasteht', () => {
+    // Der Wert kommt vom Server. Ein Feld, in dem „NaN-NaN-NaNTNaN:NaN"
+    // steht, ließe sich nicht einmal mehr leeren.
+    expect(toLocalInput('übermorgen')).toBe('')
   })
 })

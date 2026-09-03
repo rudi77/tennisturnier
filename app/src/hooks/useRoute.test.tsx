@@ -73,6 +73,38 @@ describe('useRoute', () => {
     expect(result.current.screen).toBe('flow')
   })
 
+  it('erreicht auch die Hülle, wenn eine Unterkomponente navigiert', () => {
+    // Der Fund: `history.pushState` löst kein `popstate` aus. Hielte jeder
+    // Aufruf seinen eigenen Zustand, schriebe ein Klick auf einen Namen im Feed
+    // nur die Adresszeile um — die Hülle, die den Bildschirm auswählt, erführe
+    // davon nichts, und der Feed bliebe stehen.
+    window.history.replaceState({}, '', '/?screen=feed&t=abc')
+
+    const huelle = renderHook(() => useRoute())
+    const unterkomponente = renderHook(() => useRoute())
+
+    act(() => unterkomponente.result.current.navigate({ screen: 'profile', playerId: 'p-1' }))
+
+    expect(huelle.result.current.screen).toBe('profile')
+    expect(huelle.result.current.playerId).toBe('p-1')
+    expect(huelle.result.current.tournamentId).toBe('abc')
+  })
+
+  it('gibt allen Aufrufen dieselbe Adresse', () => {
+    window.history.replaceState({}, '', '/?screen=board')
+
+    const eine = renderHook(() => useRoute())
+    const andere = renderHook(() => useRoute())
+
+    act(() => {
+      window.history.replaceState({}, '', '/?screen=draw')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    expect(eine.result.current.screen).toBe('draw')
+    expect(andere.result.current.screen).toBe('draw')
+  })
+
   it('hängt sich beim Abbau wieder aus', () => {
     const { result, unmount } = renderHook(() => useRoute())
     const vorher = result.current.screen

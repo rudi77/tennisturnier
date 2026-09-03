@@ -38,6 +38,19 @@ im Controller — sonst leckt die erste vergessene Endpoint-Prüfung fremde Date
 Der Query-Filter ist die eigentliche Sicherheitsgrenze; die Endpunkt-Prüfung ist die
 zweite Verteidigungslinie.
 
+> **Nachtrag.** Die zweite Linie war lange nur gemeint und nirgends gebaut: nur
+> die Beitritts- und Social-Endpunkte trugen ein `RequireAuthorization`, alle
+> übrigen ließen einen anonymen Aufruf bis in den Dienst und die Datenbank
+> laufen. Es hielt, weil jede einzelne Rechteprüfung hielt — aber genau das ist
+> der Zustand, gegen den dieser Absatz geschrieben wurde.
+>
+> Die Anwendung setzt deshalb eine `FallbackPolicy`: ohne ausdrückliches
+> `AllowAnonymous` verlangt jeder Endpunkt einen angemeldeten Aufrufer. Offen
+> bleiben `/health`, `/config.js`, `/api/me`, `/public/*` und der Push-Kanal.
+> Sie entscheidet nichts, was die Rechtematrix entscheidet, und antwortet
+> deshalb 401 und nicht 404: die Auskunft „nicht angemeldet" ist für jede
+> Adresse dieselbe und verrät nichts über eine Ressource.
+
 ## Konsequenzen
 
 Zugriff auf eine Ressource außerhalb des eigenen Scopes wird als **404** beantwortet,

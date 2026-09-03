@@ -39,3 +39,13 @@ angebliche Vorteil der Austauschbarkeit nur behauptet.
 SQLite schreibt datenbankweit seriell. Für ein Vereinsturnier mit einer Handvoll
 gleichzeitiger Schreiber ist das unkritisch; ab mehreren parallelen Turnieren mit
 Live-Ergebniseingabe ist es der erste Grund, auf PostgreSQL zu wechseln.
+
+> **Nachtrag: Write-Ahead-Log.** Für das Lesen gilt die Serialisierung nicht
+> mehr. Im voreingestellten Rollback-Journal sperren Leser den Commit und der
+> Commit die Leser — und genau diese Kombination liegt hier vor: die
+> öffentliche Ansicht wird von einigen hundert Zuschauern abgefragt
+> ([ADR-0003](0003-getrenntes-read-modell.md)), während am Platz Ergebnisse
+> eingetragen werden. `DatabaseMigrator` schaltet die Datei deshalb einmalig
+> auf `journal_mode=WAL`; die Einstellung steht in der Datei und überlebt den
+> Neustart. Geschrieben wird weiterhin von einem zur Zeit, und der Satz darüber
+> gilt für diesen Teil unverändert.

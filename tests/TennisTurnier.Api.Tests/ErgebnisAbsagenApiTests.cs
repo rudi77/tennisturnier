@@ -44,6 +44,92 @@ public sealed class ErgebnisAbsagenApiTests : IClassFixture<TennisTurnierApiFact
         return problem.GetProperty("detail").GetString() ?? string.Empty;
     }
 
+    /// <summary>
+    /// Ein abgebrochenes Turnier nimmt keine Ergebnisse mehr an.
+    ///
+    /// Die Phasen bleiben beim Abbruch stehen, und die Ergebniseingabe fragte
+    /// nur nach der Berechtigung. Ein Schiedsrichter konnte damit weiter
+    /// eintragen, der Feed meldete es und die öffentliche Ansicht wurde neu
+    /// gebaut — während das Turnier stillschweigend abgebrochen blieb.
+    /// </summary>
+    [Fact]
+    public async Task Ein_abgebrochenes_Turnier_nimmt_kein_Ergebnis_mehr()
+    {
+        var (turnier, matchId) = await AusgelostesTurnierAsync();
+
+        await turnier.Admin.PostAsync($"/api/tournaments/{turnier.TournamentId}/abandon", null);
+
+        var response = await turnier.Admin.PutAsJsonAsync(
+            $"/api/matches/{matchId}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 3)]),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Contains(
+            "nimmt keine Ergebnisse an",
+            await DetailAsync(response),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Ein_abgebrochenes_Turnier_laesst_auch_keine_Ruecknahme_zu()
+    {
+        // Die andere Richtung: erst eintragen, dann abbrechen. Auch das
+        // Zurücknehmen läuft über Feed und öffentliche Ansicht und hätte den
+        // Abbruch stillschweigend übergangen.
+        var (turnier, matchId) = await AusgelostesTurnierAsync();
+
+        await turnier.Admin.PutAsJsonAsync(
+            $"/api/matches/{matchId}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 3)]),
+            Json);
+
+        await turnier.Admin.PostAsync($"/api/tournaments/{turnier.TournamentId}/abandon", null);
+
+        var response = await turnier.Admin.DeleteAsync($"/api/matches/{matchId}/result");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Ein Push, der nicht hinausgeht, kippt das Ergebnis nicht.
+    ///
+    /// Was nach dem Commit läuft, ist nicht mehr Teil des Schreibvorgangs: das
+    /// Ergebnis steht in der Datenbank, und der Hinweis an die Zuschauer ändert
+    /// daran nichts. Durchgereicht wurde die Ausnahme trotzdem — als 500 auf
+    /// einen Aufruf, der gelungen ist. Der Schiedsrichter versuchte es erneut
+    /// und bekam beim zweiten Mal einen Konflikt.
+    /// </summary>
+    [Fact]
+    public async Task Ein_gescheiterter_Push_kippt_das_Ergebnis_nicht()
+    {
+        using var fabrik = new TennisTurnierApiFactory([], kaputterPush: true);
+
+        var turnier = await fabrik.NeuesTurnierAsync(
+            $"leitung-{Guid.NewGuid():N}",
+            new TurnierWunsch { Teilnehmer = 4, Plaetze = 2, Platzzeiten = true });
+
+        var phasen = await turnier.Admin.GetFromJsonAsync<List<PhaseDetail>>(
+            $"/api/tournaments/{turnier.TournamentId}/phases", Json);
+
+        var match = phasen!.SelectMany(p => p.Matches).First(m => m.Status == MatchStatus.Ready);
+
+        var response = await turnier.Admin.PutAsJsonAsync(
+            $"/api/matches/{match.Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 3)]),
+            Json);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        // Und das Ergebnis steht wirklich.
+        var danach = await turnier.Admin.GetFromJsonAsync<List<PhaseDetail>>(
+            $"/api/tournaments/{turnier.TournamentId}/phases", Json);
+
+        Assert.Equal(
+            MatchStatus.Finished,
+            danach!.SelectMany(p => p.Matches).Single(m => m.Id == match.Id).Status);
+    }
+
     [Fact]
     public async Task Ein_Freilos_wird_nicht_eingetragen()
     {

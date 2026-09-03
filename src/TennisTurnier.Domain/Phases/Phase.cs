@@ -124,7 +124,11 @@ public sealed class Phase : Entity
 
         var affected = _matches.Where(match => matchIds.Contains(match.Id)).ToList();
 
-        if (affected.FirstOrDefault(match => match.Score is not null) is { } played)
+        // Nach dem eingetragenen Ergebnis gefragt und nicht nach dem
+        // Spielstand: ein Freilos trägt auch einen, ist aber eine Folge des
+        // Baums. Es mit zurückzunehmen ist genau richtig — es entsteht beim
+        // nächsten Aufbau von selbst wieder.
+        if (affected.FirstOrDefault(match => match.IsPlayed) is { } played)
         {
             throw new DomainException(
                 $"Die Paarung „{played}“ ist bereits gespielt und lässt sich nicht zurücknehmen. " +
@@ -215,10 +219,32 @@ public sealed class Phase : Entity
 
         var changed = false;
 
-        foreach (var match in _matches.Where(m => m.Score is null))
+        foreach (var match in _matches.Where(m => !m.IsPlayed))
         {
-            changed |= SetGroupPosition(match, 1, sourcePhaseId, qualified);
-            changed |= SetGroupPosition(match, 2, sourcePhaseId, qualified);
+            var erste = Intended(match, 1, sourcePhaseId, qualified);
+            var zweite = Intended(match, 2, sourcePhaseId, qualified);
+
+            if (!erste.Changes && !zweite.Changes)
+            {
+                continue;
+            }
+
+            // Ein Freilos-Ergebnis steht dem Umbesetzen im Weg, und zwar zu
+            // Recht: Resolve weigert sich gegen ein entschiedenes Match. Hier
+            // ist es aber keine Eintragung, sondern eine Folge dessen, wer im
+            // Baum steht — und wer dort steht, ändert sich gerade. Es weicht
+            // deshalb und wird von ResolveDecided unten neu entschieden.
+            //
+            // Nur bei tatsächlicher Änderung: sonst zählte jeder Aufruf die
+            // Version des Matches hoch und erzeugte einen Schreibvorgang für
+            // nichts.
+            if (match.Score is not null)
+            {
+                match.ClearResult();
+            }
+
+            changed |= Apply(match, 1, erste);
+            changed |= Apply(match, 2, zweite);
         }
 
         if (changed)
@@ -232,7 +258,12 @@ public sealed class Phase : Entity
     }
 
     /// <summary>
-    /// Setzt oder ersetzt die Besetzung eines Gruppenplatzes.
+    /// Was auf dieser Seite stehen müsste — und ob das etwas anderes ist als
+    /// das, was jetzt dort steht.
+    ///
+    /// Getrennt vom Setzen, weil der Aufrufer die Antwort braucht, bevor er
+    /// handelt: ein Freilos-Ergebnis muss weichen, damit umbesetzt werden kann,
+    /// und weichen soll es nur, wenn wirklich umbesetzt wird.
     ///
     /// Ersetzt ausdrücklich auch: wird ein Gruppenergebnis korrigiert, ändert
     /// sich die Tabelle, und ein anderer ist qualifiziert. Bliebe hier der alte
@@ -241,7 +272,7 @@ public sealed class Phase : Entity
     /// weil die Vorphase nicht mehr abgeschlossen ist, wird der Platz wieder
     /// geleert.
     /// </summary>
-    private static bool SetGroupPosition(
+    private static (bool Changes, Guid? Target) Intended(
         Match match,
         int side,
         Guid sourcePhaseId,
@@ -250,17 +281,28 @@ public sealed class Phase : Entity
         if (match.Side(side).Origin is not ParticipantRef.GroupPosition position
             || position.PhaseId != sourcePhaseId)
         {
-            return false;
+            return (false, null);
         }
 
         var current = match.Side(side).EntryId;
 
         if (!qualified.TryGetValue((position.Group, position.Rank), out var entryId))
         {
-            return current is not null && match.Unresolve(side);
+            return (current is not null, null);
         }
 
-        return current != entryId && match.Resolve(side, entryId);
+        return (current != entryId, entryId);
+    }
+
+    /// <summary>Setzt um, was <see cref="Intended"/> ermittelt hat.</summary>
+    private static bool Apply(Match match, int side, (bool Changes, Guid? Target) intent)
+    {
+        if (!intent.Changes)
+        {
+            return false;
+        }
+
+        return intent.Target is { } entryId ? match.Resolve(side, entryId) : match.Unresolve(side);
     }
 
     /// <summary>
@@ -271,7 +313,7 @@ public sealed class Phase : Entity
     /// hinten aufgerollt werden — sonst stünde dort jemand, der laut korrigierter
     /// Tabelle nie hätte antreten dürfen.
     /// </summary>
-    public bool HasAnyResult => _matches.Any(match => match.Score is not null);
+    public bool HasAnyResult => _matches.Any(match => match.IsPlayed);
 
     /// <summary>
     /// Löst alle Referenzen auf, deren Vorgänger entschieden ist.

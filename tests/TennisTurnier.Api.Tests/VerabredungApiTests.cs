@@ -4,6 +4,7 @@ using System.Text.Json;
 using TennisTurnier.Application.Membership;
 using TennisTurnier.Application.Social;
 using TennisTurnier.Application.Tournaments;
+using TennisTurnier.Domain.Matches;
 using TennisTurnier.Domain.Social;
 using TennisTurnier.Domain.Tournaments;
 
@@ -170,22 +171,146 @@ public sealed class VerabredungApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Wer_kein_Konto_hat_laesst_sich_nicht_einladen()
     {
-        var aufbau = await _factory.NeuesTurnierAsync(
-            $"verabredung-{Guid.NewGuid():N}", new TurnierWunsch { Teilnehmer = 2, Auslosen = false });
+        // Ein Mitspieler aus einem gespielten Match — er steht in den Kontakten
+        // und lässt sich trotzdem nicht einladen, weil er nicht antworten kann.
+        var (gastgeber, ohneKonto) = await KontakteOhneKontoAsync(1);
 
-        var meldungen = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
-            $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
-
-        var ohneKonto = meldungen![0].Contacts[0].PlayerId;
-
-        var antwort = await aufbau.Admin.PostAsJsonAsync(
+        var antwort = await gastgeber.PostAsJsonAsync(
             "/api/play-dates",
             new CreatePlayDateRequest(
-                "Samstag?", Discipline.Singles, "TC Test", Termin, 60, null, [ohneKonto]),
+                "Samstag?", Discipline.Singles, "TC Test", Termin, 60, null, [.. ohneKonto]),
             Json);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
         Assert.Contains("Ohne Konto", await antwort.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// Eingeladen wird aus den eigenen Mitspielern (ADR-0015).
+    ///
+    /// Der Grund steht in der Entscheidung daneben: ohne Kontaktgraph „gäbe es
+    /// hier eine Suche über alle Benutzer, und die will niemand haben, der sich
+    /// einmal überlegt hat, was sie preisgibt". Geprüft wurde es trotzdem nie —
+    /// jeder Angemeldete konnte jeden mit Konto einladen und über die
+    /// Fehlermeldung zu beliebigen Spieler-Ids Anzeigenamen erfahren.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Wer_kein_Mitspieler_ist_laesst_sich_nicht_einladen(int fremde)
+    {
+        var ids = new List<Guid>();
+
+        for (var i = 0; i < fremde; i++)
+        {
+            var (_, _, playerId) = await ZweiSpielerAsync();
+            ids.Add(playerId);
+        }
+
+        // Ein Angemeldeter, der mit niemandem gespielt hat.
+        var fremder = _factory.CreateClientAs($"fremder-{Guid.NewGuid():N}");
+
+        var antwort = await fremder.PostAsJsonAsync(
+            "/api/play-dates",
+            new CreatePlayDateRequest(
+                "Samstag?", Discipline.Doubles, "TC Test", Termin, 60, null, ids),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
+
+        var auskunft = await antwort.Content.ReadAsStringAsync();
+
+        Assert.Contains("eigenen Mitspielern", auskunft, StringComparison.Ordinal);
+
+        // Und kein Name: zu einer beliebigen Spieler-Id den Anzeigenamen zu
+        // erfahren, ist genau die Auskunft, die der Kontaktgraph verhindert.
+        Assert.DoesNotContain("Berta", auskunft, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Der Partner aus einem Doppel ist ein Mitspieler wie jeder Gegner.
+    ///
+    /// Er steht auf derselben Seite und wird trotzdem gezählt — ein Doppel
+    /// bringt drei Verbindungen mit einem Match (ADR-0013), und aus allen
+    /// dreien lässt sich einladen.
+    /// </summary>
+    [Fact]
+    public async Task Auch_der_Partner_aus_einem_Doppel_laesst_sich_einladen()
+    {
+        var aufbau = await _factory.NeuesTurnierAsync(
+            $"verabredung-leitung-{Guid.NewGuid():N}",
+            new TurnierWunsch
+            {
+                Name = "Doppelturnier",
+                Disziplin = Discipline.Doubles,
+                Auslosen = false,
+            });
+
+        await aufbau.Admin.PostAsync($"/api/tournaments/{aufbau.TournamentId}/registration/open", null);
+
+        var link = await aufbau.Admin.GetFromJsonAsync<RegistrationDetail>(
+            $"/api/tournaments/{aufbau.TournamentId}/registration", Json);
+
+        var gastgeber = await BeitretenAsync(link!.Token, "Anna", partner: "Paul");
+        await BeitretenAsync(link.Token, "Berta", partner: "Bernd");
+
+        var meldungen = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
+            $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
+
+        foreach (var meldung in meldungen!)
+        {
+            await aufbau.Admin.PostAsync(
+                $"/api/tournaments/{aufbau.TournamentId}/entries/{meldung.Id}/accept", null);
+        }
+
+        await aufbau.Admin.PostAsync($"/api/tournaments/{aufbau.TournamentId}/registration/close", null);
+        await aufbau.Admin.PostAsync($"/api/tournaments/{aufbau.TournamentId}/draw", null);
+
+        var phasen = await aufbau.Admin.GetFromJsonAsync<List<PhaseDetail>>(
+            $"/api/tournaments/{aufbau.TournamentId}/phases", Json);
+
+        await aufbau.Admin.PutAsJsonAsync(
+            $"/api/matches/{phasen!.SelectMany(p => p.Matches).Single().Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 3)]),
+            Json);
+
+        var kontakte = await gastgeber.GetFromJsonAsync<List<ConnectionView>>(
+            "/api/me/connections", Json);
+
+        // Drei Verbindungen aus einem Doppel: der Partner und die zwei Gegner.
+        Assert.Equal(3, kontakte!.Count);
+
+        // Und der Partner — die einzige Verbindung ohne ein Spiel gegeneinander.
+        var partner = kontakte.Single(k => k.Against == 0);
+
+        var antwort = await gastgeber.PostAsJsonAsync(
+            "/api/play-dates",
+            new CreatePlayDateRequest(
+                "Samstag?", Discipline.Singles, "TC Test", Termin, 60, null, [partner.PlayerId]),
+            Json);
+
+        // Ohne Konto lässt er sich nicht einladen — aber abgewiesen wird er
+        // dafür und nicht dafür, kein Mitspieler zu sein.
+        var auskunft = await antwort.Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain("eigenen Mitspielern", auskunft, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Auch_nachtraeglich_wird_nur_aus_den_eigenen_Mitspielern_eingeladen()
+    {
+        var (gastgeber, _, gastPlayerId) = await ZweiSpielerAsync();
+        var erstellt = await AnlegenAsync(gastgeber, Discipline.Doubles, [gastPlayerId]);
+
+        // Jemand, mit dem der Gastgeber nie gespielt hat.
+        var (_, _, fremderPlayerId) = await ZweiSpielerAsync();
+
+        var antwort = await gastgeber.PostAsJsonAsync(
+            $"/api/play-dates/{erstellt.Id}/invitations",
+            new InviteToPlayDateRequest([fremderPlayerId]),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
     }
 
     [Fact]
@@ -297,18 +422,12 @@ public sealed class VerabredungApiTests : IClassFixture<TennisTurnierApiFactory>
     [Fact]
     public async Task Zwei_ohne_Konto_werden_beide_genannt()
     {
-        var aufbau = await _factory.NeuesTurnierAsync(
-            $"verabredung-{Guid.NewGuid():N}", new TurnierWunsch { Teilnehmer = 2, Auslosen = false });
+        var (gastgeber, ohneKonto) = await KontakteOhneKontoAsync(2);
 
-        var meldungen = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
-            $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
-
-        var ohneKonto = meldungen!.Select(m => m.Contacts[0].PlayerId).ToList();
-
-        var antwort = await aufbau.Admin.PostAsJsonAsync(
+        var antwort = await gastgeber.PostAsJsonAsync(
             "/api/play-dates",
             new CreatePlayDateRequest(
-                "Samstag?", Discipline.Doubles, "TC Test", Termin, 90, null, ohneKonto),
+                "Samstag?", Discipline.Doubles, "TC Test", Termin, 90, null, [.. ohneKonto]),
             Json);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
@@ -381,19 +500,109 @@ public sealed class VerabredungApiTests : IClassFixture<TennisTurnierApiFactory>
         await aufbau.Admin.PostAsync($"/api/tournaments/{aufbau.TournamentId}/registration/close", null);
         await aufbau.Admin.PostAsync($"/api/tournaments/{aufbau.TournamentId}/draw", null);
 
+        // Und einmal gegeneinander gespielt: eingeladen wird aus dem
+        // Kontaktgraphen (ADR-0015), und der entsteht aus Ergebnissen. Ohne
+        // dieses Match wären die beiden füreinander Fremde.
+        var phasen = await aufbau.Admin.GetFromJsonAsync<List<PhaseDetail>>(
+            $"/api/tournaments/{aufbau.TournamentId}/phases", Json);
+
+        var match = phasen!.SelectMany(p => p.Matches).Single();
+
+        await aufbau.Admin.PutAsJsonAsync(
+            $"/api/matches/{match.Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 3)]),
+            Json);
+
         var kontakte = await gastgeber.GetFromJsonAsync<List<ConnectionView>>(
             "/api/me/connections", Json);
 
-        // Ohne gespieltes Match gibt es noch keine Kontakte — die Spieler-Id
-        // kommt deshalb aus den Meldungen der Turnierleitung.
-        Assert.Empty(kontakte!);
-
         var gastProfil = await gast.GetFromJsonAsync<PlayerProfileView>("/api/me/profile", Json);
+
+        // Der Gast steht jetzt in der Liste, aus der eingeladen wird.
+        Assert.Contains(kontakte!, k => k.PlayerId == gastProfil!.PlayerId && k.CanBeInvited);
 
         return (gastgeber, gast, gastProfil!.PlayerId);
     }
 
-    private async Task<HttpClient> BeitretenAsync(string token, string vorname)
+    /// <summary>
+    /// Ein Gastgeber und so viele Mitspieler ohne Konto, wie verlangt.
+    ///
+    /// Je Mitspieler ein eigenes Turnier: der Gastgeber tritt bei, spielt gegen
+    /// einen von der Turnierleitung angelegten Spieler und hat ihn danach in
+    /// seinen Kontakten — mit <c>CanBeInvited = false</c>, weil hinter ihm kein
+    /// Konto steht.
+    ///
+    /// Genau diese Sorte Kontakt meint ADR-0015 mit „die Kontaktliste sagt es
+    /// vorher": jemand, mit dem man gespielt hat und den man trotzdem nicht
+    /// einladen kann.
+    /// </summary>
+    private async Task<(HttpClient Gastgeber, IReadOnlyList<Guid> OhneKonto)> KontakteOhneKontoAsync(
+        int anzahl)
+    {
+        HttpClient? gastgeber = null;
+        var ohneKonto = new List<Guid>();
+
+        for (var i = 0; i < anzahl; i++)
+        {
+            var aufbau = await _factory.NeuesTurnierAsync(
+                $"verabredung-leitung-{Guid.NewGuid():N}",
+                new TurnierWunsch { Name = "Verabredungsturnier", Teilnehmer = 1, Auslosen = false });
+
+            // Vor dem Beitritt gelesen: die eine Meldung ist die des Spielers,
+            // den die Turnierleitung angelegt hat.
+            var vorher = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
+                $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
+
+            ohneKonto.Add(Assert.Single(vorher!).Contacts[0].PlayerId);
+
+            await aufbau.Admin.PostAsync(
+                $"/api/tournaments/{aufbau.TournamentId}/registration/open", null);
+
+            var link = await aufbau.Admin.GetFromJsonAsync<RegistrationDetail>(
+                $"/api/tournaments/{aufbau.TournamentId}/registration", Json);
+
+            gastgeber ??= await BeitretenAsync(link!.Token, "Anna");
+
+            if (i > 0)
+            {
+                // Derselbe Mensch tritt jedem weiteren Turnier bei.
+                await gastgeber.PostAsJsonAsync(
+                    $"/api/join/{link!.Token}",
+                    new JoinRequest(Play: true, null, null, null, null, null, null, null),
+                    Json);
+            }
+
+            var meldungen = await aufbau.Admin.GetFromJsonAsync<List<EntryOverview>>(
+                $"/api/tournaments/{aufbau.TournamentId}/entries", Json);
+
+            foreach (var meldung in meldungen!)
+            {
+                await aufbau.Admin.PostAsync(
+                    $"/api/tournaments/{aufbau.TournamentId}/entries/{meldung.Id}/accept", null);
+            }
+
+            await aufbau.Admin.PostAsync(
+                $"/api/tournaments/{aufbau.TournamentId}/registration/close", null);
+            await aufbau.Admin.PostAsync($"/api/tournaments/{aufbau.TournamentId}/draw", null);
+
+            var phasen = await aufbau.Admin.GetFromJsonAsync<List<PhaseDetail>>(
+                $"/api/tournaments/{aufbau.TournamentId}/phases", Json);
+
+            await aufbau.Admin.PutAsJsonAsync(
+                $"/api/matches/{phasen!.SelectMany(p => p.Matches).Single().Id}/result",
+                new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 3)]),
+                Json);
+        }
+
+        var kontakte = await gastgeber!.GetFromJsonAsync<List<ConnectionView>>(
+            "/api/me/connections", Json);
+
+        Assert.All(ohneKonto, id => Assert.Contains(kontakte!, k => k.PlayerId == id && !k.CanBeInvited));
+
+        return (gastgeber!, ohneKonto);
+    }
+
+    private async Task<HttpClient> BeitretenAsync(string token, string vorname, string? partner = null)
     {
         var nachname = $"V{Guid.NewGuid():N}"[..10];
 
@@ -402,7 +611,15 @@ public sealed class VerabredungApiTests : IClassFixture<TennisTurnierApiFactory>
 
         var antwort = await client.PostAsJsonAsync(
             $"/api/join/{token}",
-            new JoinRequest(Play: true, vorname, nachname, null, null, null, null, null),
+            new JoinRequest(
+                Play: true,
+                vorname,
+                nachname,
+                null,
+                partner,
+                partner is null ? null : $"P{Guid.NewGuid():N}"[..10],
+                null,
+                null),
             Json);
 
         Assert.True(antwort.IsSuccessStatusCode, await antwort.Content.ReadAsStringAsync());

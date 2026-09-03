@@ -64,7 +64,9 @@ Endpunkte erreichbar.
 > ```
 
 Ein Token für die Testbenutzer (`systemadmin`, `clubadmin`, `referee`;
-Passwort jeweils gleich dem Benutzernamen):
+Passwort jeweils gleich dem Benutzernamen). Sie stehen ausschließlich in
+`deploy/keycloak/import-dev/` und damit nur in dem Keycloak, das
+`docker-compose.yml` startet — in einer gebauten Instanz gibt es sie nicht:
 
 ```bash
 curl -s -X POST http://localhost:8080/realms/tennisturnier/protocol/openid-connect/token \
@@ -120,13 +122,17 @@ Keycloak-Dienst von unten mitnimmt, bekommt beides ohne Zutun.
 | --- | --- |
 | `Oidc__Authority` | Der Aussteller, z. B. `https://idp.example.org/realms/matchday`. Leer heißt: keine Anmeldung, nur die öffentlichen Endpunkte. |
 | `Oidc__ClientId` | Der Client, unter dem sich die Oberfläche anmeldet. |
-| `Oidc__Audience` | Wofür ein Token gelten muss. Vorgabe `tennisturnier-api`. |
+| `Oidc__Audience` | Wofür ein Token gelten muss. Vorgabe `tennisturnier-api`. Leer **und** `Oidc__RequireAudience=false` heißt: jedes Token dieses Ausstellers gilt, auch eines für einen anderen Client. Leer allein verweigert den Start. |
 | `Oidc__Scope` | Vorgabe `openid profile email`. |
+| `Oidc__RequireAudience` | Vorgabe `true`. Auf `false` nur bei einem Aussteller, der keine feste Audience vergibt — dann gilt jedes seiner Token. |
+| `Oidc__RequireHttpsMetadata` | Vorgabe `true`. Nur für die lokale Entwicklung gegen Keycloak über HTTP abschaltbar. |
+| `Oidc__TrustUnverifiedEmail` | Vorgabe `false`: eine E-Mail-Adresse aus dem Token zählt nur mit bestätigtem `email_verified`. Nur auf `true` setzen, wenn der Aussteller den Claim nicht ausstellt **und** von sich aus keine unbestätigten Adressen zulässt. |
 | `Security__OpenAccess` | `true` lässt die Instanz ohne Anmeldung laufen (siehe unten). Zusammen mit `Oidc__Authority` verweigert die Anwendung den Start. |
-| `Security__BootstrapSystemAdmins__0` | Die E-Mail-Adresse, die beim ersten Anmelden Systemadministrator wird. Danach wieder leeren. |
-| `Security__SelfServiceOrganizers` | Vorgabe `true`: wer sich anmeldet, darf Turniere ausschreiben. Für eine Instanz mit offenem Anmeldeweg (siehe Google) auf `false`. |
+| `Security__BootstrapSystemAdmins__0` | Wer beim ersten Anmelden Systemadministrator wird — die **Subject-ID** des Kontos, oder ersatzweise seine E-Mail-Adresse. Danach wieder leeren. |
+| `Security__SelfServiceOrganizers` | Vorgabe `true`: wer sich anmeldet, darf Turniere ausschreiben. **Auf `false`, sobald sich beim Aussteller jeder selbst registrieren kann** — sonst legt jeder im Internet Turniere an. Die Rolle vergibt dann ein Systemadministrator. Die Anwendung schreibt beim Start eine Warnung, solange beides zusammensteht. |
 | `Tournament__TeamDrawSeed` | Saatwert für das Los der Teams. Nur für Vorführungen — wer ihn kennt, kennt die Paarung, bevor sie fällt. |
 | `ConnectionStrings__Default` | Vorgabe `Data Source=/data/matchday.db`, passend zum Datenträger. |
+| `Database__AutoMigrate` | Vorgabe `true`: das Schema wandert beim Start. Auf `false`, wo die Migration gesteuert werden soll — zwei gleichzeitig startende Prozesse überholen einander sonst. |
 
 Die Oberfläche holt sich `Oidc__Authority`, `Oidc__ClientId` und `Oidc__Scope`
 zur Laufzeit über `/config.js`. Sie sind deshalb nicht ins Bündel gebaut, und
@@ -163,6 +169,16 @@ ersten Schritt zum zweiten ist damit: Keycloak aufsetzen (unten),
 `Security__OpenAccess` entfernen, `Oidc__Authority` setzen, sich anmelden und
 über `Security__BootstrapSystemAdmins__0` zum Administrator machen.
 
+> **Die Subject-ID ist der sichere Eintrag, nicht die Adresse.** Beides wird
+> erkannt, aber eine E-Mail-Adresse gehört niemandem, solange sie niemand
+> bestätigt hat: bei einem Aussteller mit offener Selbstregistrierung ist die
+> Zeit zwischen „Adresse eingetragen" und „selbst angemeldet" ein Fenster, in
+> dem sich jemand anderes mit derselben Adresse registrieren und die Rolle
+> abholen könnte. MATCHDAY übernimmt eine Adresse deshalb nur mit bestätigtem
+> `email_verified` — der mitgelieferte Realm setzt dafür `verifyEmail`. Wer die
+> Subject-ID einträgt, umgeht die Frage ganz. Sie steht in Keycloak unter
+> *Users → der Benutzer → ID*.
+
 ### Keycloak als zweiter Dienst
 
 MATCHDAY prüft Tokens, stellt aber keine aus. Ohne erreichbaren Aussteller
@@ -170,7 +186,8 @@ bleibt es bei der öffentlichen Ansicht — das lokale Keycloak aus
 `docker-compose.yml` ist von Railway aus nicht erreichbar, und `localhost`
 zeigt dort auf den Container selbst.
 
-`deploy/keycloak/` enthält deshalb ein zweites Bild: derselbe Realm wie lokal,
+`deploy/keycloak/` enthält deshalb ein zweites Bild: derselbe Realm wie lokal —
+bis auf die Testkonten und den Direktzugang, die nur in `import-dev/` stehen —,
 aber im Produktionsmodus gegen PostgreSQL statt `start-dev` gegen den
 Arbeitsspeicher. Der Unterschied ist keiner der Bequemlichkeit — `start-dev`
 vergisst beim Neustart jeden Benutzer, jede Sitzung und jede Verknüpfung zu
@@ -193,6 +210,23 @@ einem Google-Konto.
 3. In MATCHDAY `Oidc__Authority` auf
    `https://${{keycloak.RAILWAY_PUBLIC_DOMAIN}}/realms/tennisturnier` setzen und
    `Oidc__ClientId` auf `tennisturnier-api`.
+4. **Entscheiden, wer ausschreiben darf.** Der mitgelieferte Realm lässt jeden
+   sich selbst registrieren (ADR-0012: der Beitrittslink führt zum Konto). Mit
+   `Security__SelfServiceOrganizers` auf der Vorgabe `true` heißt das: jeder im
+   Internet kann nicht nur beitreten, sondern auch eigene Turniere anlegen. Für
+   eine Vereinsinstanz gehört der Schalter auf `false`; Turnierleitungen beruft
+   dann ein Systemadministrator. Solange beides zusammensteht, sagt es die
+   Anwendung beim Start als Warnung.
+
+Zwei Dinge stellt der Realm selbst: **PKCE** wird verlangt (`S256`), und die
+erlaubten Weiterleitungen enden auf `/` und `/?*` statt auf `/*` — die
+Oberfläche führt ihre Navigation über die Adresszeile, mehr braucht sie nicht.
+Ein Platzhalter über den ganzen Pfad wäre die Einladung, denselben Client ohne
+PKCE zu fahren.
+
+**„Passwort vergessen" ist aus.** Es verschickt eine E-Mail, und ohne
+konfiguriertes SMTP endet der Weg in einer Fehlerseite. Wer SMTP im Realm
+einrichtet, setzt `resetPasswordAllowed` wieder auf `true`.
 
 Beide Dienste bekommen von Railway je eine eigene Domain, und die Verweise
 oben (`${{dienst.RAILWAY_PUBLIC_DOMAIN}}`, mit den tatsächlichen Dienstnamen)
@@ -218,10 +252,19 @@ erste Mal startet: eingespielt wird der Realm nur, solange es ihn noch nicht
 gibt — sonst überschriebe jeder Neustart die Benutzer, die inzwischen
 dazugekommen sind. Was danach kommt, gehört in die Administrationsoberfläche.
 
-Aus derselben Datei kommen `systemadmin`, `clubadmin` und `referee` mit
-Passwörtern, die ihren Namen gleichen. Sie sind für den Entwicklungsbetrieb
-gedacht; in einer erreichbaren Instanz gehören sie gelöscht oder umgestellt,
-sobald ein echtes Konto Systemadministrator ist.
+**Die Testkonten sind hier nicht dabei.** Der Realm liegt in zwei Fassungen
+vor: `deploy/keycloak/import/` ist die, die dieses Bild einspielt — ohne
+Konten und ohne `directAccessGrantsEnabled`. Die drei Konten
+`systemadmin`, `clubadmin` und `referee`, deren Passwort ihr Benutzername ist,
+stehen in `deploy/keycloak/import-dev/`, das nur `docker-compose.yml`
+einhängt.
+
+Das war einmal eine Datei für beides, und der Weg hinein war kurz: ein `curl`
+mit `grant_type=password` gegen die öffentliche Keycloak-Domain, und wer der
+Anleitung oben gefolgt war und `systemadmin@example.invalid` als
+Bootstrap-Adresse eingetragen hatte, bekam einen Systemadministrator dazu.
+`RealmDateiTests` hält die beiden Fassungen seitdem aneinander: sie dürfen sich
+nur in den Konten und im Direktzugang unterscheiden.
 
 ### Google als Anmeldeweg
 
@@ -342,11 +385,13 @@ Die tragenden Entscheidungen samt verworfener Alternativen stehen in
 - [ADR-0009](docs/adr/0009-turnier-als-wurzelaggregat.md): das Turnier ist die
   Wurzel, der Verein ist entfallen; Rollen hängen am Turnier, durchgesetzt per
   Query-Filter. Ersetzt ADR-0004.
-- [ADR-0010](docs/adr/0010-oeffentliche-selbstmeldung.md): Melden über einen
-  Token-Link, ohne Konto — samt den drei Regeln, ohne die der Endpunkt still
-  scheitert.
+- [ADR-0012](docs/adr/0012-mitgliedschaft-statt-selbstmeldung.md): das Turnier
+  ist eine Gruppe — der Link führt zum Beitritt, und wer beitritt, hat ein
+  Konto. Ersetzt ADR-0010, wo dasselbe noch ohne Konto ging.
 - [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler gehören keinem Turnier
-  — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
+  — samt dem Preis, dass der Query-Filter bei ihnen nicht greift. Formal von
+  ADR-0009 abgelöst (der Verein, dem sie nicht gehörten, ist entfallen); die
+  Entscheidung selbst und ihre drei Regeln gelten unverändert.
 
 ## Mitglieder: wer dazugehört
 

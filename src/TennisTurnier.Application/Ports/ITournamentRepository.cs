@@ -1,3 +1,4 @@
+using TennisTurnier.Application.Tournaments;
 using TennisTurnier.Domain.Formats;
 using TennisTurnier.Domain.Players;
 using TennisTurnier.Domain.Tournaments;
@@ -13,7 +14,7 @@ public interface ITournamentRepository
     Task<Tournament?> FindAsync(Guid tournamentId, CancellationToken cancellationToken = default);
 
     /// <summary>Die Turniere des Aufrufers — der Einstieg in die Oberfläche.</summary>
-    Task<IReadOnlyList<Tournament>> ListForCallerAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TournamentHeader>> ListForCallerAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Das Turnier zu einem Anmeldetoken — die einzige Abfrage, die am

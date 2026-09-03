@@ -317,6 +317,58 @@ describe('GanttBoard — Umhängen', () => {
     expect(onDropMatch).toHaveBeenCalledWith(fx.IDS.match1, fx.IDS.court2)
   })
 
+  it('gibt dem Zug eine Nutzlast — sonst zieht Firefox gar nicht erst', () => {
+    aufbau([platz(), platz({ id: fx.IDS.court2, name: 'Platz 2' })], [karte()])
+
+    const setData = vi.fn()
+    fireEvent.dragStart(screen.getByTitle('S. Moser vs L. Berger'), {
+      dataTransfer: { setData, effectAllowed: 'none' },
+    })
+
+    expect(setData).toHaveBeenCalledWith('text/plain', fx.IDS.match1)
+  })
+
+  it('legt eine Karte auch ohne Ziehen auf einen anderen Platz', () => {
+    // Ziehen gibt es auf Touchgeräten nicht, und das Handy am Turniertag ist
+    // der Bildschirm, für den diese Anwendung zuerst gebaut ist. Vorher war
+    // Ziehen der einzige Weg, eine Ansetzung umzuhängen — mit der Tastatur
+    // ebenso wenig wie mit dem Daumen.
+    const { onDropMatch, onOpenResult } = aufbau(
+      [platz(), platz({ id: fx.IDS.court2, name: 'Platz 2' })],
+      [karte()],
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /auf einen anderen Platz legen$/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Auf Platz 2' }))
+
+    expect(onDropMatch).toHaveBeenCalledWith(fx.IDS.match1, fx.IDS.court2)
+
+    // Und der Klick auf den kleinen Knopf öffnet nicht nebenbei die
+    // Ergebnismaske — die Karte selbst ist auch ein Knopf.
+    expect(onOpenResult).not.toHaveBeenCalled()
+  })
+
+  it('nimmt die Auswahl zurück, ohne etwas zu verschieben', () => {
+    const { onDropMatch } = aufbau(
+      [platz(), platz({ id: fx.IDS.court2, name: 'Platz 2' })],
+      [karte()],
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /auf einen anderen Platz legen$/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Verschieben abbrechen' }))
+
+    expect(screen.queryByRole('button', { name: 'Auf Platz 2' })).not.toBeInTheDocument()
+    expect(onDropMatch).not.toHaveBeenCalled()
+  })
+
+  it('bietet den Weg ohne Ziehen nicht an, wo nur zugesehen wird', () => {
+    aufbau([platz()], [karte()], true)
+
+    expect(
+      screen.queryByRole('button', { name: /auf einen anderen Platz legen$/ }),
+    ).not.toBeInTheDocument()
+  })
+
   it('markiert die Spalte, über der die Karte schwebt — und lässt wieder los', () => {
     const { container } = aufbau([platz(), platz({ id: fx.IDS.court2, name: 'Platz 2' })], [karte()])
 

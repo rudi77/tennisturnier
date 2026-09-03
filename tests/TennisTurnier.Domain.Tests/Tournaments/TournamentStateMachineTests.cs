@@ -285,6 +285,74 @@ public sealed class TournamentStateMachineTests
         Assert.Equal(TournamentState.Abandoned, tournament.State);
     }
 
+    /// <summary>
+    /// Ergebnisse gibt es ab der Auslosung und bis zum Abschluss.
+    ///
+    /// Vor der Auslosung existieren keine Matches. Nach einem Abbruch existieren
+    /// sie noch — die Phasen bleiben stehen —, und genau daran lag der Fehler:
+    /// ein abgebrochenes Turnier nahm Ergebnisse an und blieb dabei
+    /// stillschweigend abgebrochen.
+    /// </summary>
+    [Theory]
+    [InlineData(TournamentState.DrawGenerated)]
+    [InlineData(TournamentState.InProgress)]
+    [InlineData(TournamentState.Completed)]
+    public void Ergebnisse_gibt_es_von_der_Auslosung_bis_zum_Abschluss(TournamentState zustand)
+    {
+        var tournament = ReadyForDraw();
+        Draw(tournament);
+
+        if (zustand != TournamentState.DrawGenerated)
+        {
+            tournament.Start();
+        }
+
+        if (zustand == TournamentState.Completed)
+        {
+            tournament.Complete();
+        }
+
+        Assert.Equal(zustand, tournament.State);
+        tournament.RequireResultsAccepted();
+    }
+
+    [Fact]
+    public void Ein_abgebrochenes_Turnier_nimmt_keine_Ergebnisse_mehr_an()
+    {
+        var tournament = ReadyForDraw();
+        Draw(tournament);
+        tournament.Start();
+        tournament.Abandon();
+
+        var fehler = Assert.Throws<DomainException>(tournament.RequireResultsAccepted);
+
+        Assert.Contains("nimmt keine Ergebnisse an", fehler.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(TournamentState.Draft)]
+    [InlineData(TournamentState.RegistrationOpen)]
+    [InlineData(TournamentState.RegistrationClosed)]
+    public void Vor_der_Auslosung_gibt_es_nichts_einzutragen(TournamentState zustand)
+    {
+        var tournament = NewTournament();
+
+        if (zustand != TournamentState.Draft)
+        {
+            tournament.OpenRegistration();
+        }
+
+        if (zustand == TournamentState.RegistrationClosed)
+        {
+            var entry = tournament.Enter(Guid.NewGuid(), Guid.NewGuid());
+            tournament.Accept(entry.Id);
+            tournament.CloseRegistration();
+        }
+
+        Assert.Equal(zustand, tournament.State);
+        Assert.Throws<DomainException>(tournament.RequireResultsAccepted);
+    }
+
     [Fact]
     public void Ein_abgeschlossenes_Turnier_laesst_sich_nicht_abbrechen()
     {

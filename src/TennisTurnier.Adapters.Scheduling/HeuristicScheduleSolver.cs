@@ -234,7 +234,7 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
             var previousCourt = _problem.Existing.FirstOrDefault(a => a.MatchId == match.Id)?.CourtId;
 
             var best = _problem.Courts
-                .Select(court => (Court: court, Start: EarliestStart(court, readyAt, duration)))
+                .Select(court => (Court: court, Start: EarliestStart(match, court, readyAt, duration)))
                 .Where(candidate => candidate.Start is not null)
                 .OrderBy(candidate => candidate.Start!.Value)
                 // Bei gleicher Zeit zuerst der bisherige Platz. Ein Match, das
@@ -348,7 +348,21 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
 
         /// <summary>
         /// Ab wann das Match frühestens beginnen kann: nach dem Ende aller
-        /// Vorgänger und nach der Pause seiner Spieler.
+        /// Vorgänger.
+        ///
+        /// Die Spieler stehen hier bewusst nicht mehr. Sie standen es einmal,
+        /// als Maximum über alle ihre belegten Zeiten — und das gilt nur,
+        /// solange alles Belegte in der Vergangenheit dieses Matches liegt.
+        /// Eine festgenagelte Ansetzung liegt das nicht: nagelt die
+        /// Turnierleitung ein Match auf Samstag 18 Uhr, schob dieses Maximum
+        /// jedes andere Match derselben Spieler hinter 18 Uhr — auch die, die
+        /// vormittags längst hätten gespielt werden können. Sie fielen aus dem
+        /// Fenster oder rutschten auf den nächsten Tag, und zwar genau in dem
+        /// Fall, für den das Festnageln gedacht ist (ADR-0002).
+        ///
+        /// Die Spieler werden deshalb in <see cref="EarliestStart"/> geprüft,
+        /// wo sich der Beginn an einer belegten Zeit vorbeischieben lässt,
+        /// statt hinter sie.
         /// </summary>
         private DateTimeOffset ReadyAt(Match match)
         {
@@ -366,28 +380,19 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
                 }
             }
 
-            foreach (var playerId in PlayersOf(match))
-            {
-                if (_playedByPlayer.TryGetValue(playerId, out var played) && played.Count > 0)
-                {
-                    earliest = Later(earliest, played.Max(slot => slot.End) + _problem.MinimumRest);
-                }
-            }
-
             return earliest;
         }
 
         /// <summary>
         /// Der früheste Beginn auf diesem Platz, der in ein freies Fenster passt
-        /// und keine schon liegende Ansetzung berührt.
+        /// und weder eine schon liegende Ansetzung noch einen Spieler berührt.
         ///
-        /// Die Spieler kommen hier nicht mehr vor: <see cref="ReadyAt"/> hat den
-        /// Beginn bereits hinter das letzte Match jedes Beteiligten samt Pause
-        /// geschoben. Ein zweiter Blick darauf wäre eine Bedingung, die nie
-        /// zutrifft — die Prüfung gegen die Spieler gehört dorthin, wo eine
-        /// bestehende Ansetzung übernommen wird, und dort steht sie auch.
+        /// Die Spieler stehen hier und nicht mehr in <see cref="ReadyAt"/>: dort
+        /// verschob eine einzelne belegte Zeit den Beginn hinter sich, auch wenn
+        /// sie später lag. Hier wird an ihr vorbeigeschoben — und nur an ihr.
         /// </summary>
         private DateTimeOffset? EarliestStart(
+            Match match,
             SchedulableCourt court,
             DateTimeOffset readyAt,
             TimeSpan duration)
@@ -398,27 +403,65 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
 
                 // Innerhalb des Fensters nach vorne rücken, bis nichts mehr im
                 // Weg steht. Jede belegte Zeit schiebt den Beginn hinter ihr
-                // Ende plus Wechselpause.
+                // Ende — der Platz um die Wechselpause, ein Spieler um seine
+                // Erholungszeit.
                 while (start + duration <= window.End)
                 {
-                    var slot = new TimeSlot(start, start + duration);
-                    var blocking = _occupiedByCourt[court.Id]
-                        .Where(occupied => occupied.Overlaps(slot))
-                        .Select(occupied => occupied.End)
-                        .DefaultIfEmpty(DateTimeOffset.MinValue)
-                        .Max();
+                    var next = NextFreeStart(match, court, new TimeSlot(start, start + duration));
 
-                    if (blocking == DateTimeOffset.MinValue)
+                    if (next is null)
                     {
                         return start;
                     }
 
-                    start = blocking + CourtTurnaround;
+                    // Jeder Konflikt endet nach dem geprüften Beginn, der neue
+                    // liegt also echt später. Damit terminiert die Schleife am
+                    // Ende des Fensters.
+                    start = next.Value;
                 }
             }
 
             return null;
         }
+
+        /// <summary>
+        /// Der nächste Beginn, an dem der geprüfte Zeitraum nicht mehr mit dem
+        /// Platz oder einem Spieler kollidiert — oder <c>null</c>, wenn er es
+        /// jetzt schon nicht tut.
+        /// </summary>
+        private DateTimeOffset? NextFreeStart(Match match, SchedulableCourt court, TimeSlot slot)
+        {
+            var next = DateTimeOffset.MinValue;
+
+            foreach (var occupied in _occupiedByCourt[court.Id].Where(o => o.Overlaps(slot)))
+            {
+                next = Later(next, occupied.End + CourtTurnaround);
+            }
+
+            foreach (var playerId in PlayersOf(match))
+            {
+                if (!_playedByPlayer.TryGetValue(playerId, out var played))
+                {
+                    continue;
+                }
+
+                foreach (var other in played.Where(o => Collides(o, slot)))
+                {
+                    next = Later(next, other.End + _problem.MinimumRest);
+                }
+            }
+
+            return next == DateTimeOffset.MinValue ? null : next;
+        }
+
+        /// <summary>
+        /// Zwei Zeiten desselben Spielers vertragen sich nicht: sie überlappen,
+        /// oder zwischen ihnen liegt weniger als die Erholungszeit.
+        /// </summary>
+        private bool Collides(TimeSlot other, TimeSlot slot) =>
+            other.Overlaps(slot)
+            || (slot.Start - other.End >= TimeSpan.Zero && slot.Start - other.End < _problem.MinimumRest)
+            || (other.Start - slot.End >= TimeSpan.Zero && other.Start - slot.End < _problem.MinimumRest);
 
         /// <summary>
         /// Spielt hier jemand, der zu dieser Zeit schon auf einem anderen Platz
@@ -428,9 +471,7 @@ public sealed class HeuristicScheduleSolver : IScheduleSolver
         private bool ConflictsWithPlayers(Match match, TimeSlot slot) =>
             PlayersOf(match).Any(playerId =>
                 _playedByPlayer.TryGetValue(playerId, out var played)
-                && played.Any(other => other.Overlaps(slot)
-                    || (slot.Start - other.End >= TimeSpan.Zero && slot.Start - other.End < _problem.MinimumRest)
-                    || (other.Start - slot.End >= TimeSpan.Zero && other.Start - slot.End < _problem.MinimumRest)));
+                && played.Any(other => Collides(other, slot)));
 
         private void Occupy(Guid matchId, Guid courtId, TimeSlot slot)
         {

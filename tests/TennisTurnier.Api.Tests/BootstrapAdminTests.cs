@@ -54,6 +54,21 @@ public sealed class BootstrapAdminTests
     }
 
     [Fact]
+    public async Task Eine_unbestaetigte_Adresse_macht_niemanden_zum_Systemadministrator()
+    {
+        // Der gefährlichste Weg in diese Anwendung: der Betreiber trägt seine
+        // Adresse ein und richtet danach den Aussteller ein. Wer sich in diesem
+        // Fenster mit derselben, unbestätigten Adresse selbst registriert, wäre
+        // sonst vor ihm da — und Systemadministrator.
+        using var factory = new TennisTurnierApiFactory([AdminEmail]);
+
+        var client = factory.CreateClientAs(
+            "bootstrap-unbestaetigt", AdminEmail, emailBestaetigt: false);
+
+        Assert.Equal(0, await FremdeTurniereAsync(factory, client));
+    }
+
+    [Fact]
     public async Task Auch_die_Subject_ID_wird_erkannt()
     {
         // Nicht jeder Aussteller legt eine E-Mail in das Token. Ohne diesen Weg

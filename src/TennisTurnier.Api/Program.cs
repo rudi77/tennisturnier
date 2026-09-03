@@ -43,6 +43,20 @@ if (security.OpenAccess && oidc.IsConfigured)
         + "einer von beiden gehört entfernt.");
 }
 
+// Ein Aussteller ohne erwarteten Empfänger: dann gilt jedes Token dieses
+// Ausstellers, auch eines für einen ganz anderen Client seines Verbunds. Das
+// ist eine Entscheidung und darf nicht aus einem leeren Feld entstehen — genau
+// wie der offene Betrieb darüber.
+if (oidc.IsConfigured && string.IsNullOrWhiteSpace(oidc.Audience) && oidc.RequireAudience)
+{
+    throw new InvalidOperationException(
+        $"{OidcOptions.SectionName}:{nameof(OidcOptions.Audience)} ist leer, obwohl "
+        + $"{OidcOptions.SectionName}:{nameof(OidcOptions.Authority)} gesetzt ist. Ohne "
+        + "Empfänger gilt jedes Token dieses Ausstellers, auch eines für einen anderen "
+        + "Client. Wer einen Aussteller ohne feste Audience betreibt, sagt das über "
+        + $"{OidcOptions.SectionName}:{nameof(OidcOptions.RequireAudience)} ausdrücklich.");
+}
+
 builder.Services.AddApplication(security, tournaments);
 
 // Dasselbe hier: die Verbindungszeichenfolge steht in appsettings.json.
@@ -64,13 +78,35 @@ builder.Services.AddHeuristicScheduling();
 // Aussage wie überall sonst im offenen Betrieb: es gibt einen Benutzer, jeder
 // Aufruf ist er, und die Benutzerauflösung setzt ihn (ADR-0007). Wer prüft,
 // ob dieser eine Benutzer etwas darf, fragt weiterhin die Rechtematrix.
+// Und die zweite Verteidigungslinie: ohne ausdrückliches Gegenteil verlangt
+// jeder Endpunkt einen angemeldeten Aufrufer.
+//
+// Die Rechteprüfung im Anwendungsfall bleibt die eigentliche Grenze — sie
+// entscheidet, wer was darf, und antwortet mit 404 statt 403 (ADR-0004). Die
+// Fallback-Richtlinie entscheidet nichts davon. Sie sorgt nur dafür, dass ein
+// künftig vergessenes Require() nicht als anonymer Aufruf bis in die Datenbank
+// durchläuft: dann fehlt eine Prüfung, aber es fehlen nicht beide.
+//
+// ADR-0004 verlangt genau das ausdrücklich, und es stand nirgends.
 if (security.OpenAccess)
 {
     builder.Services.AddAuthorization(o =>
-        o.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
+    {
+        o.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build();
+        o.FallbackPolicy = o.DefaultPolicy;
+    });
+}
+else
+{
+    builder.Services.AddAuthorization(o =>
+        o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 }
 
 builder.Services.AddSingleton<IClock, SystemClock>();
+
+// Wohin ein gescheiterter Nachlauf gemeldet wird. Die Anwendungsschicht kennt
+// keine Protokollierung; die Composition Root entscheidet.
+builder.Services.AddSingleton<IPostCommitFailures, PostCommitFailureLog>();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<ITournamentNotifier, SignalRTournamentNotifier>();
 
@@ -84,6 +120,26 @@ builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 // Begründung, warum überall sonst keine Schranke steht — sie gilt jetzt auch
 // hier.
 var app = builder.Build();
+
+// Wer sich anmelden darf, darf auch ausschreiben — das ist der Zweck des
+// Selbstservice und für einen Verein richtig. Steht davor aber ein Aussteller
+// mit offener Selbstregistrierung, heißt derselbe Satz: wer im Internet ein
+// Konto anlegt, legt hier Turniere an.
+//
+// Welche der beiden Instanzen das ist, kann die Anwendung nicht wissen — sie
+// kennt den Aussteller nur als Adresse. Deshalb einmal beim Start als Frage
+// und nicht als Fehler: der mitgelieferte Realm hat die Registrierung offen,
+// und diese Zeile ist die einzige Stelle, an der das jemandem auffällt, bevor
+// es jemand ausprobiert.
+if (oidc.IsConfigured && security.SelfServiceOrganizers)
+{
+    app.Logger.LogWarning(
+        "Jeder, der sich bei {Authority} anmelden kann, darf hier Turniere ausschreiben. "
+        + "Ist die Selbstregistrierung dort offen, gilt das für jeden im Internet — dann "
+        + "gehört {Setting} auf false, und die Rolle vergibt ein Systemadministrator.",
+        oidc.Authority,
+        $"{BootstrapAdminOptions.SectionName}:{nameof(BootstrapAdminOptions.SelfServiceOrganizers)}");
+}
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -109,7 +165,9 @@ app.Use(async (context, next) =>
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    // Ohne Anmeldung, aber auch nur hier: die Beschreibung ist für den, der
+    // gerade anfängt, und in Produktion wird sie gar nicht erst angelegt.
+    app.MapOpenApi().AllowAnonymous();
 }
 
 app.UseAuthentication();
@@ -119,7 +177,9 @@ app.UseAuthorization();
 // auf, auf denen der Query-Filter aus ADR-0004 arbeitet.
 app.UseUserResolution();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("Health");
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+    .WithName("Health")
+    .AllowAnonymous();
 
 // Die Anmeldedaten der Oberfläche, zur Laufzeit statt einkompiliert.
 //
@@ -144,14 +204,16 @@ app.MapGet("/config.js", () => Results.Text(
     $"window.__tennisturnier = {oberflaechenKonfiguration};",
     "application/javascript",
     Encoding.UTF8))
-    .WithTags("Oberfläche");
+    .WithTags("Oberfläche")
+    .AllowAnonymous();
 
 // „Wer bin ich, und was darf ich" — die Oberfläche muss entscheiden, welche
 // Schaltfläche sie überhaupt zeigt. Ohne Anmeldung ist „niemand" die Antwort
 // und kein Fehler.
 app.MapGet("/api/me", async (IMeService service, CancellationToken ct) =>
     await service.GetAsync(ct) is { } me ? Results.Ok(me) : Results.NoContent())
-    .WithTags("Benutzer");
+    .WithTags("Benutzer")
+    .AllowAnonymous();
 
 app.MapTournamentEndpoints();
 app.MapMatchEndpoints();

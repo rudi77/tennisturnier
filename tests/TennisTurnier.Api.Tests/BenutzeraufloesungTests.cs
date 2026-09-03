@@ -76,6 +76,62 @@ public sealed class BenutzeraufloesungTests : IClassFixture<TennisTurnierApiFact
     }
 
     [Fact]
+    public async Task Eine_unbestaetigte_Adresse_wird_nicht_uebernommen()
+    {
+        // Die Adresse ist der Schlüssel, an dem Einladungen, der erste
+        // Systemadministrator und die Übernahme eines importierten Spielers
+        // hängen. Ein Aussteller mit offener Selbstregistrierung lässt sie frei
+        // wählen — übernähme die Anwendung sie ungeprüft, erbte der Schnellere
+        // alles, was für den Inhaber hinterlegt wurde.
+        var client = _factory.CreateClientAs(
+            $"unbestaetigt-{Guid.NewGuid():N}",
+            email: "fremde.adresse@example.invalid",
+            emailBestaetigt: false);
+
+        var me = await client.GetFromJsonAsync<MeResponse>("/api/me", Json);
+
+        Assert.NotNull(me);
+        Assert.Null(me.Email);
+    }
+
+    [Fact]
+    public async Task Ohne_email_verified_Claim_zaehlt_die_Adresse_als_unbestaetigt()
+    {
+        // „Der Aussteller sagt nichts dazu" ist keine Bestätigung. Ein
+        // fehlender Claim muss deshalb wie ein verneinter wirken — sonst
+        // genügte es, einen Aussteller ohne diesen Claim davorzuhängen.
+        var client = _factory.CreateClientAs(
+            $"ohne-verified-{Guid.NewGuid():N}",
+            email: "schweigsam@example.invalid",
+            ohneClaims: "email_verified");
+
+        var me = await client.GetFromJsonAsync<MeResponse>("/api/me", Json);
+
+        Assert.NotNull(me);
+        Assert.Null(me.Email);
+    }
+
+    [Fact]
+    public async Task Ein_Aussteller_ohne_den_Claim_laesst_sich_ausdruecklich_zulassen()
+    {
+        // Es gibt Verbünde, die den Claim nicht ausstellen und trotzdem nur
+        // bestätigte Adressen herausgeben — ein Firmenverzeichnis ohne
+        // Selbstregistrierung etwa. Diese Aussage kann nur der Betreiber
+        // treffen, und deshalb ist sie ein Schalter und keine stille Annahme.
+        using var factory = new TennisTurnierApiFactory([], trustUnverifiedEmail: true);
+
+        var client = factory.CreateClientAs(
+            $"vertraut-{Guid.NewGuid():N}",
+            email: "vertraut@example.invalid",
+            ohneClaims: "email_verified");
+
+        var me = await client.GetFromJsonAsync<MeResponse>("/api/me", Json);
+
+        Assert.NotNull(me);
+        Assert.Equal("vertraut@example.invalid", me.Email);
+    }
+
+    [Fact]
     public async Task Ganz_ohne_Namen_bleibt_der_Anzeigename_leer()
     {
         // Entra ID stellt Token ohne beides aus. Eine leere Anzeige ist dann

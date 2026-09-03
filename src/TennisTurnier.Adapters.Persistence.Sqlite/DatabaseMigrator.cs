@@ -18,5 +18,27 @@ public static class DatabaseMigrator
         var db = scope.ServiceProvider.GetRequiredService<TennisTurnierDbContext>();
 
         await db.Database.MigrateAsync(cancellationToken);
+
+        await AktiviereWalAsync(db, cancellationToken);
     }
+
+    /// <summary>
+    /// Schaltet die Datei auf das Write-Ahead-Log um.
+    ///
+    /// Im voreingestellten Rollback-Journal sperren Leser den Commit und der
+    /// Commit die Leser. Das ist genau die Kombination, die hier auftritt: die
+    /// öffentliche Ansicht wird von „einigen hundert Zuschauern" abgefragt
+    /// (ADR-0003), während am Platz Ergebnisse eingetragen werden. Mit WAL
+    /// lesen sie weiter, während geschrieben wird.
+    ///
+    /// Einmal beim Wandern und nicht bei jeder Verbindung: die Einstellung
+    /// steht in der Datei und überlebt den Neustart. Für eine
+    /// Speicherdatenbank ohne Datei gibt es sie nicht — SQLite antwortet dann
+    /// mit dem Modus, den es behält, und das ist kein Fehler, sondern die
+    /// Auskunft, dass hier nichts umzustellen war.
+    /// </summary>
+    private static Task AktiviereWalAsync(
+        TennisTurnierDbContext db,
+        CancellationToken cancellationToken) =>
+        db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
 }

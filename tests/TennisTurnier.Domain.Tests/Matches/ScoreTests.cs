@@ -173,6 +173,64 @@ public sealed class ScoreTests
         Assert.Equal(1, score.WinnerSide);
     }
 
+    /// <summary>
+    /// Im Vorteilssatz geht es bei 7:6 weiter — eine Aufgabe bei diesem Stand
+    /// ist deshalb eintragbar.
+    ///
+    /// Die Prüfung des abgebrochenen Satzes kannte den Vorteilssatz nicht: sie
+    /// wertete jedes 7:6 als „zu Ende gespielt" und wies die Aufgabe ab. Der
+    /// Schiedsrichter hatte dann keinen Weg mehr, das Ergebnis einzutragen.
+    /// </summary>
+    [Fact]
+    public void Eine_Aufgabe_bei_sieben_zu_sechs_im_Vorteilssatz_wird_eingetragen()
+    {
+        var score = Score.Retired(
+            [Set(6, 4), Set(4, 6)], Set(7, 6), retiringSide: 2, Advantage);
+
+        Assert.Equal(MatchOutcome.Retirement, score.Outcome);
+        Assert.Equal(1, score.WinnerSide);
+    }
+
+    [Fact]
+    public void Mit_Tiebreak_ist_sieben_zu_sechs_zu_Ende_gespielt()
+    {
+        // Die Gegenprobe: wo ein Tiebreak vorgesehen ist, endet der Satz bei
+        // 7:6 — dort gehört er zu den gespielten Sätzen und nicht in den
+        // abgebrochenen.
+        var regulaer = new MatchFormat(BestOf: 3, FinalSetMode.Regular, TiebreakAt: 6);
+
+        Assert.Throws<DomainException>(
+            () => Score.Retired([Set(6, 4)], Set(7, 6), retiringSide: 2, regulaer));
+    }
+
+    [Fact]
+    public void Eine_Aufgabe_mitten_im_Vorteilssatz_wird_eingetragen()
+    {
+        // 5:4 ist im Vorteilssatz nicht einmal am Ziel — der Satz läuft.
+        var score = Score.Retired(
+            [Set(6, 4), Set(4, 6)], Set(5, 4), retiringSide: 1, Advantage);
+
+        Assert.Equal(2, score.WinnerSide);
+    }
+
+    [Fact]
+    public void Ein_ausgespielter_Satz_gehoert_nicht_zu_den_abgebrochenen()
+    {
+        // 6:4 ist zu Ende gespielt, auch wenn danach aufgegeben wurde — der
+        // Satz gehört dann in die Liste der gespielten.
+        Assert.Throws<DomainException>(
+            () => Score.Retired([], Set(6, 4), retiringSide: 2, Standard));
+    }
+
+    [Fact]
+    public void Im_Vorteilssatz_bleibt_ein_entschiedener_Satz_abgewiesen()
+    {
+        // Zwei Spiele Vorsprung entscheiden ihn auch dort — 8:6 gehört zu den
+        // gespielten Sätzen.
+        Assert.Throws<DomainException>(
+            () => Score.Retired([Set(6, 4), Set(4, 6)], Set(8, 6), retiringSide: 2, Advantage));
+    }
+
     [Fact]
     public void Der_abgebrochene_Satz_zaehlt_fuer_niemanden()
     {

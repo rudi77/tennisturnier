@@ -69,9 +69,13 @@ public sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
         builder.HasIndex(m => new { m.PhaseId, m.Round, m.Position });
 
         // Die Indizes auf Side1_EntryId und Side2_EntryId liegen in der Migration
-        // MatchesAndAssignments: EF Core kann Indizes nicht über die Spalten eines
+        // MeldungsIndizes: EF Core kann Indizes nicht über die Spalten eines
         // Komplextyps beschreiben. Sie sind trotzdem nötig — „alle Matches dieser
         // Meldung" ist die häufigste Frage im ganzen System.
+        //
+        // Hier stand einmal eine Migration, die es nicht gab. Ein Verweis auf
+        // etwas Nichtvorhandenes liest sich wie eine Zusage und ist keine: der
+        // Profil-Lesepfad las alle Matches unter dem Query-Filter.
     }
 
     /// <summary>

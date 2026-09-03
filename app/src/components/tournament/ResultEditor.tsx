@@ -11,6 +11,7 @@ import {
   whyNotSaveable,
 } from '../../lib/matchFormat'
 import { ScoreStepper } from '../core/ScoreStepper'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useToast } from '../../hooks/useToast'
 
 type Grid = [number, number][]
@@ -59,9 +60,21 @@ export function ResultEditor({
 }) {
   const { show, showError } = useToast()
 
+  // `aria-modal` verspricht einen Dialog, der den Rest der Seite ausblendet.
+  // Ohne Fokusverwaltung war das eine Behauptung: der Fokus stand weiter
+  // dahinter, die Tabulatortaste lief durch die Seite darunter, Escape tat
+  // nichts, und beim Schließen war der Fokus verloren.
+  const dialog = useDialogFocus<HTMLDivElement>(true, onClose)
+
   const [grid, setGrid] = useState<Grid>(() => initialGrid(match, format))
   const [outcome, setOutcome] = useState<MatchOutcome>(match.score?.outcome ?? MatchOutcome.Normal)
-  const [affectedSide, setAffectedSide] = useState<number>(1)
+  // Aus dem bestehenden Ergebnis und nicht fest auf 1: wer eine Aufgabe
+  // korrigiert, fand sonst „Seite 1 hat aufgegeben" vor, obwohl Seite 2
+  // aufgegeben hatte — und ein Speichern ohne Zutun drehte das Ergebnis um.
+  // Aufgeschrieben ist der Sieger; aufgegeben hat die andere Seite.
+  const [affectedSide, setAffectedSide] = useState<number>(
+    () => (match.score !== null && match.score.winnerSide === 1 ? 2 : 1),
+  )
   const [saving, setSaving] = useState(false)
 
   const names = [
@@ -153,7 +166,14 @@ export function ResultEditor({
   }
 
   return (
-    <div className="md-scrim" role="dialog" aria-modal="true" aria-label="Ergebnis erfassen">
+    <div
+      className="md-scrim"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Ergebnis erfassen"
+      tabIndex={-1}
+      ref={dialog}
+    >
       <div
         style={{
           background: 'var(--surface)',

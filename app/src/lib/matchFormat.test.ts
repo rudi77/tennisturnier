@@ -155,6 +155,47 @@ describe('whyNotSaveable', () => {
     )
   })
 
+  it('verlangt, dass ein Satz bis zum Ziel geht', () => {
+    // Der Knopf sagte „speichern" und der Server sagte nein: die drei Regeln
+    // des regulären Satzes fehlten hier ganz.
+    expect(whyNotSaveable(bestOf3, [[3, 1]])).toBe('Satz 1: ein Satz geht mindestens bis 6.')
+    expect(whyNotSaveable(einSatz, [[3, 1]])).toBe('Satz 1: ein Satz geht mindestens bis 4.')
+  })
+
+  it('verlangt am Ziel zwei Spiele Vorsprung', () => {
+    expect(whyNotSaveable(bestOf3, [[6, 5]])).toBe(
+      'Satz 1: bei 6 braucht der Satz zwei Spiele Vorsprung.',
+    )
+  })
+
+  it('lässt die Verlängerung nur mit genau zwei Spielen enden', () => {
+    expect(whyNotSaveable(bestOf3, [[8, 5]])).toBe(
+      'Satz 1: nach der Verlängerung endet der Satz bei genau zwei Spielen Vorsprung.',
+    )
+  })
+
+  it('lässt den Tiebreak-Satz durch', () => {
+    expect(whyNotSaveable(bestOf3, [[7, 6], [6, 3]])).toBeNull()
+  })
+
+  it('kennt den Vorteilssatz ohne Tiebreak', () => {
+    // Dort gibt es kein 7:6 — der Satz geht weiter, bis zwei Spiele Vorsprung
+    // stehen.
+    expect(whyNotSaveable(bestOf3Advantage, [[6, 4], [4, 6], [7, 6]])).toBe(
+      'Satz 3: nach der Verlängerung endet der Satz bei genau zwei Spielen Vorsprung.',
+    )
+
+    expect(whyNotSaveable(bestOf3Advantage, [[6, 4], [4, 6], [8, 6]])).toBeNull()
+  })
+
+  it('lässt den Match-Tiebreak nur mit genau zwei Punkten verlängern', () => {
+    expect(whyNotSaveable(bestOf3, [[6, 4], [3, 6], [13, 10]])).toBe(
+      'M-Tiebreak: nach der Verlängerung endet der Tiebreak bei genau zwei Punkten Vorsprung.',
+    )
+
+    expect(whyNotSaveable(nurTiebreak, [[12, 10]])).toBeNull()
+  })
+
   it('nennt den fehlenden Satz', () => {
     expect(whyNotSaveable(bestOf3, [[6, 4]])).toBe(
       'Noch nicht entschieden — es fehlt ein Satz (Stand 1:0).',

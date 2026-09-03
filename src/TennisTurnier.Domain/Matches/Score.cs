@@ -265,24 +265,41 @@ public sealed record Score
             throw new DomainException($"{position}: ein abgebrochener Satz hat kein Tiebreak-Ergebnis ({set}).");
         }
 
-        var isMatchTiebreak = completedCount == format.BestOf - 1
-                              && format.FinalSetMode == FinalSetMode.MatchTiebreak10;
+        // Dieselbe Fallunterscheidung wie beim gespielten Satz — sie stand hier
+        // nur zur Hälfte. Ohne den Vorteilssatz galt ein 7:6 als zu Ende, und
+        // eine Aufgabe bei diesem Stand ließ sich nicht eintragen: im
+        // Vorteilssatz geht es dort weiter, bis zwei Spiele Vorsprung stehen.
+        var isFinalSet = completedCount == format.BestOf - 1;
+        var isMatchTiebreak = isFinalSet && format.FinalSetMode == FinalSetMode.MatchTiebreak10;
+        var allowTiebreak = !isFinalSet || format.FinalSetMode != FinalSetMode.Advantage;
 
-        if (IsSetOver(set, format, isMatchTiebreak))
+        if (IsSetOver(set, format, isMatchTiebreak, allowTiebreak))
         {
             throw new DomainException(
                 $"{position}: dieser Satz war zu Ende gespielt und gehört zu den gespielten Sätzen ({set}).");
         }
     }
 
-    private static bool IsSetOver(SetScore set, MatchFormat format, bool isMatchTiebreak)
+    private static bool IsSetOver(
+        SetScore set,
+        MatchFormat format,
+        bool isMatchTiebreak,
+        bool allowTiebreak)
     {
         var winner = Math.Max(set.Games1, set.Games2);
         var loser = Math.Min(set.Games1, set.Games2);
 
-        return isMatchTiebreak
-            ? winner >= 10 && winner - loser >= 2
-            : (winner >= format.TiebreakAt && winner - loser >= 2) || winner > format.TiebreakAt;
+        if (isMatchTiebreak)
+        {
+            return winner >= 10 && winner - loser >= 2;
+        }
+
+        // Mit Tiebreak endet der Satz auch bei einem Spiel Vorsprung — 7:6 ist
+        // der Tiebreak. Ohne ihn geht er weiter, bis zwei Spiele Vorsprung
+        // stehen, und 7:6 ist ein laufender Satz.
+        return allowTiebreak
+            ? (winner >= format.TiebreakAt && winner - loser >= 2) || winner > format.TiebreakAt
+            : winner >= format.TiebreakAt && winner - loser >= 2;
     }
 
     /// <summary>

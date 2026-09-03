@@ -782,6 +782,39 @@ public sealed class Tournament : Entity
         Touch();
     }
 
+    /// <summary>
+    /// Nimmt dieses Turnier noch Ergebnisse an?
+    ///
+    /// Drei Zustände tun das: <see cref="TournamentState.DrawGenerated"/>, weil
+    /// das erste Ergebnis den Turnierbetrieb überhaupt eröffnet;
+    /// <see cref="TournamentState.InProgress"/>, der Normalfall; und
+    /// <see cref="TournamentState.Completed"/>, weil sich auch das Finale noch
+    /// korrigieren lassen muss — sonst wäre es das einzige Match, dessen
+    /// Ergebnis feststeht, sobald es einmal dasteht.
+    ///
+    /// Vor der Auslosung gibt es keine Matches. Nach einem Abbruch gibt es sie
+    /// noch — die Phasen bleiben stehen —, und genau daran lag der Fehler: ein
+    /// abgebrochenes Turnier nahm Ergebnisse an, meldete sie im Feed und baute
+    /// seine öffentliche Ansicht neu, während der Abbruch stillschweigend
+    /// bestehen blieb.
+    ///
+    /// Öffentlich, weil die Prüfung im Anwendungsfall gebraucht wird und die
+    /// Regel hierher gehört.
+    /// </summary>
+    public void RequireResultsAccepted()
+    {
+        if (State is TournamentState.DrawGenerated
+            or TournamentState.InProgress
+            or TournamentState.Completed)
+        {
+            return;
+        }
+
+        throw new DomainException(
+            $"Ein Turnier im Zustand {State} nimmt keine Ergebnisse an. "
+            + "Ergebnisse gibt es ab der Auslosung und bis zum Abschluss.");
+    }
+
     private void Require(TournamentState expected)
     {
         if (State != expected)
