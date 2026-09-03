@@ -64,10 +64,28 @@ builder.Services.AddHeuristicScheduling();
 // Aussage wie überall sonst im offenen Betrieb: es gibt einen Benutzer, jeder
 // Aufruf ist er, und die Benutzerauflösung setzt ihn (ADR-0007). Wer prüft,
 // ob dieser eine Benutzer etwas darf, fragt weiterhin die Rechtematrix.
+// Und die zweite Verteidigungslinie: ohne ausdrückliches Gegenteil verlangt
+// jeder Endpunkt einen angemeldeten Aufrufer.
+//
+// Die Rechteprüfung im Anwendungsfall bleibt die eigentliche Grenze — sie
+// entscheidet, wer was darf, und antwortet mit 404 statt 403 (ADR-0004). Die
+// Fallback-Richtlinie entscheidet nichts davon. Sie sorgt nur dafür, dass ein
+// künftig vergessenes Require() nicht als anonymer Aufruf bis in die Datenbank
+// durchläuft: dann fehlt eine Prüfung, aber es fehlen nicht beide.
+//
+// ADR-0004 verlangt genau das ausdrücklich, und es stand nirgends.
 if (security.OpenAccess)
 {
     builder.Services.AddAuthorization(o =>
-        o.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
+    {
+        o.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build();
+        o.FallbackPolicy = o.DefaultPolicy;
+    });
+}
+else
+{
+    builder.Services.AddAuthorization(o =>
+        o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 }
 
 builder.Services.AddSingleton<IClock, SystemClock>();
@@ -109,7 +127,9 @@ app.Use(async (context, next) =>
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    // Ohne Anmeldung, aber auch nur hier: die Beschreibung ist für den, der
+    // gerade anfängt, und in Produktion wird sie gar nicht erst angelegt.
+    app.MapOpenApi().AllowAnonymous();
 }
 
 app.UseAuthentication();
@@ -119,7 +139,9 @@ app.UseAuthorization();
 // auf, auf denen der Query-Filter aus ADR-0004 arbeitet.
 app.UseUserResolution();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("Health");
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+    .WithName("Health")
+    .AllowAnonymous();
 
 // Die Anmeldedaten der Oberfläche, zur Laufzeit statt einkompiliert.
 //
@@ -144,14 +166,16 @@ app.MapGet("/config.js", () => Results.Text(
     $"window.__tennisturnier = {oberflaechenKonfiguration};",
     "application/javascript",
     Encoding.UTF8))
-    .WithTags("Oberfläche");
+    .WithTags("Oberfläche")
+    .AllowAnonymous();
 
 // „Wer bin ich, und was darf ich" — die Oberfläche muss entscheiden, welche
 // Schaltfläche sie überhaupt zeigt. Ohne Anmeldung ist „niemand" die Antwort
 // und kein Fehler.
 app.MapGet("/api/me", async (IMeService service, CancellationToken ct) =>
     await service.GetAsync(ct) is { } me ? Results.Ok(me) : Results.NoContent())
-    .WithTags("Benutzer");
+    .WithTags("Benutzer")
+    .AllowAnonymous();
 
 app.MapTournamentEndpoints();
 app.MapMatchEndpoints();

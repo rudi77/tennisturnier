@@ -333,10 +333,38 @@ public sealed class PublicViewApiTests : IClassFixture<TennisTurnierApiFactory>
     {
         var (_, tournamentId) = await DrawnTournamentAsync();
 
+        // Ohne Anmeldung endet es an der Fallback-Richtlinie, und zwar mit 401.
+        // Das verrät nichts: dieselbe Antwort kommt für jede Turnier-Id, auch
+        // für eine erfundene.
         var response = await Spectator()
             .PostAsync($"/api/tournaments/{tournamentId}/public-view/rebuild", null);
 
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await Spectator().PostAsync(
+                $"/api/tournaments/{Guid.NewGuid()}/public-view/rebuild", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Ein_Fremder_erfaehrt_beim_Neuaufbau_nicht_einmal_die_Existenz()
+    {
+        // Und angemeldet, aber ohne Rolle am Turnier: hier greift ADR-0004 —
+        // 404 statt 403, weil ein 403 die Existenz bestätigte. Die
+        // Fallback-Richtlinie ändert daran nichts, sie steht davor.
+        var (_, tournamentId) = await DrawnTournamentAsync();
+        var fremder = _factory.CreateClientAs($"fremder-{Guid.NewGuid():N}");
+
+        var response = await fremder.PostAsync(
+            $"/api/tournaments/{tournamentId}/public-view/rebuild", null);
+
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        var erfunden = await fremder.PostAsync(
+            $"/api/tournaments/{Guid.NewGuid()}/public-view/rebuild", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, erfunden.StatusCode);
     }
 
     [Fact]

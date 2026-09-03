@@ -30,14 +30,25 @@ public sealed class IdentityRegistrationTests
     }
 
     [Fact]
-    public void Ohne_Authority_gibt_es_kein_Verfahren()
+    public void Ohne_Authority_gibt_es_ein_Verfahren_das_niemanden_ausweist()
     {
+        // Ausgestellt wird hier nichts — es gibt keinen Aussteller. Registriert
+        // ist trotzdem eines, weil die Autorisierung nach einem fragt, sobald
+        // ein Endpunkt einen Ausweis verlangt. Ohne dieses Schema endete das in
+        // „No authenticationScheme was specified": einer 500 auf einen Aufruf,
+        // dessen richtige Antwort 401 ist.
         using var provider = Verdrahten(new OidcOptions());
 
-        var schemes = provider.GetRequiredService<IOptions<AuthenticationOptions>>().Value.Schemes;
+        var options = provider.GetRequiredService<IOptions<AuthenticationOptions>>().Value;
 
-        Assert.Empty(schemes);
-        Assert.Null(provider.GetRequiredService<IOptions<AuthenticationOptions>>().Value.DefaultScheme);
+        var schema = Assert.Single(options.Schemes);
+
+        Assert.Equal("OhneAussteller", schema.Name);
+        Assert.Equal("OhneAussteller", options.DefaultScheme);
+
+        // Und es weist niemanden aus: kein JWT-Verfahren, das etwas zu prüfen
+        // vorgäbe.
+        Assert.DoesNotContain(options.Schemes, s => s.Name == JwtBearerDefaults.AuthenticationScheme);
     }
 
     [Fact]
