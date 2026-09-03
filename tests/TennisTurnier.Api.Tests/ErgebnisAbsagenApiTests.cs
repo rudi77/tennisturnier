@@ -44,6 +44,53 @@ public sealed class ErgebnisAbsagenApiTests : IClassFixture<TennisTurnierApiFact
         return problem.GetProperty("detail").GetString() ?? string.Empty;
     }
 
+    /// <summary>
+    /// Ein abgebrochenes Turnier nimmt keine Ergebnisse mehr an.
+    ///
+    /// Die Phasen bleiben beim Abbruch stehen, und die Ergebniseingabe fragte
+    /// nur nach der Berechtigung. Ein Schiedsrichter konnte damit weiter
+    /// eintragen, der Feed meldete es und die öffentliche Ansicht wurde neu
+    /// gebaut — während das Turnier stillschweigend abgebrochen blieb.
+    /// </summary>
+    [Fact]
+    public async Task Ein_abgebrochenes_Turnier_nimmt_kein_Ergebnis_mehr()
+    {
+        var (turnier, matchId) = await AusgelostesTurnierAsync();
+
+        await turnier.Admin.PostAsync($"/api/tournaments/{turnier.TournamentId}/abandon", null);
+
+        var response = await turnier.Admin.PutAsJsonAsync(
+            $"/api/matches/{matchId}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 3)]),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Contains(
+            "nimmt keine Ergebnisse an",
+            await DetailAsync(response),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Ein_abgebrochenes_Turnier_laesst_auch_keine_Ruecknahme_zu()
+    {
+        // Die andere Richtung: erst eintragen, dann abbrechen. Auch das
+        // Zurücknehmen läuft über Feed und öffentliche Ansicht und hätte den
+        // Abbruch stillschweigend übergangen.
+        var (turnier, matchId) = await AusgelostesTurnierAsync();
+
+        await turnier.Admin.PutAsJsonAsync(
+            $"/api/matches/{matchId}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 3)]),
+            Json);
+
+        await turnier.Admin.PostAsync($"/api/tournaments/{turnier.TournamentId}/abandon", null);
+
+        var response = await turnier.Admin.DeleteAsync($"/api/matches/{matchId}/result");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
     [Fact]
     public async Task Ein_Freilos_wird_nicht_eingetragen()
     {

@@ -129,6 +129,7 @@ public sealed class MatchService : IMatchService
         var (tournament, phases, phase, match) = await LoadForResultAsync(matchId, cancellationToken);
 
         RequireResultPermission(tournament);
+        tournament.RequireResultsAccepted();
 
         // Ein bereits eingetragenes Ergebnis zu überschreiben ist eine Korrektur
         // und keine Eingabe. Sie wird deshalb auch als das ausgeführt, was sie
@@ -273,6 +274,7 @@ public sealed class MatchService : IMatchService
         var (tournament, phases, phase, _) = await LoadForResultAsync(matchId, cancellationToken);
 
         RequireResultPermission(tournament);
+        tournament.RequireResultsAccepted();
         RequireLaterPhasesUntouched(tournament, phases, phase);
 
         phase.ClearResult(matchId);
