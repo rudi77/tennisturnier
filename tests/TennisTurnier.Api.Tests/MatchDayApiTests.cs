@@ -297,6 +297,58 @@ public sealed class MatchDayApiTests : IClassFixture<TennisTurnierApiFactory>
     }
 
     [Fact]
+    public async Task Eine_unterbrochene_Partie_geht_nicht_auf_einen_belegten_Platz_zurueck()
+    {
+        // Der Regenguss ist vorbei, und auf Platz 1 läuft längst die nächste
+        // Partie. „Fortsetzen" ohne Platzwahl nimmt den alten Platz — ohne
+        // Prüfung stünden dort zwei Zuweisungen auf Running. Die Platzübersicht
+        // zeigte nur eine davon, und die andere wäre weder sichtbar noch zu
+        // beenden: die Historie des Platzes behauptete dauerhaft zwei
+        // gleichzeitige Partien.
+        var (admin, tournamentId) = await MatchDayAsync();
+        var board = await BoardAsync(admin, tournamentId);
+        var unterbrochen = board[0].Queue[0];
+        var naechste = board[0].Queue[1];
+
+        await admin.PostAsync($"/api/assignments/{unterbrochen.AssignmentId}/start", null);
+        await admin.PostAsync($"/api/assignments/{unterbrochen.AssignmentId}/suspend", null);
+
+        // Der Platz ist frei geworden und wird gleich wieder belegt.
+        await admin.PostAsync($"/api/assignments/{naechste.AssignmentId}/start", null);
+
+        var antwort = await admin.PostAsJsonAsync(
+            $"/api/assignments/{unterbrochen.AssignmentId}/resume", new ResumeMatchRequest(), Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
+
+        var danach = await BoardAsync(admin, tournamentId);
+        Assert.Equal(naechste.AssignmentId, danach[0].Current!.AssignmentId);
+    }
+
+    [Fact]
+    public async Task Eine_unterbrochene_Partie_geht_nicht_auf_einen_belegten_anderen_Platz()
+    {
+        // Dasselbe mit ausdrücklicher Platzwahl: der Zielplatz zählt, nicht der
+        // Platz, auf dem die Partie unterbrochen wurde.
+        var (admin, tournamentId) = await MatchDayAsync();
+        var board = await BoardAsync(admin, tournamentId);
+        var unterbrochen = board[0].Queue[0];
+        var andererPlatz = board[1].CourtId;
+        var dortLaufend = board[1].Queue[0];
+
+        await admin.PostAsync($"/api/assignments/{unterbrochen.AssignmentId}/start", null);
+        await admin.PostAsync($"/api/assignments/{unterbrochen.AssignmentId}/suspend", null);
+        await admin.PostAsync($"/api/assignments/{dortLaufend.AssignmentId}/start", null);
+
+        var antwort = await admin.PostAsJsonAsync(
+            $"/api/assignments/{unterbrochen.AssignmentId}/resume",
+            new ResumeMatchRequest(andererPlatz),
+            Json);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, antwort.StatusCode);
+    }
+
+    [Fact]
     public async Task Eine_unterbrochene_Partie_geht_auch_auf_demselben_Platz_weiter()
     {
         var (admin, tournamentId) = await MatchDayAsync();
