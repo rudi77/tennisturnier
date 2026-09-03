@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
+import { useDialogFocus } from '../../hooks/useDialogFocus'
 
 /**
  * Eine Lade, die von unten hereinkommt.
@@ -23,24 +24,11 @@ export function Sheet({
   onClose: () => void
   children: ReactNode
 }) {
-  const panel = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
-
   // Der Blick landet in der Lade und nicht dort, wo er vorher war: sonst
   // liest ein Screenreader weiter oben vor, während unten die Auswahl steht.
-  useEffect(() => {
-    if (open) panel.current?.focus()
-  }, [open])
+  // Und beim Schließen geht er dorthin zurück, wo er herkam — auf die
+  // Schaltfläche, die die Lade geöffnet hat.
+  const panel = useDialogFocus<HTMLDivElement>(open, onClose)
 
   if (!open) return null
 

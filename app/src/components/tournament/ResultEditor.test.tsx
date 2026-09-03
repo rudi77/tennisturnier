@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import { FinalSetMode, MatchOutcome, type MatchDetail, type MatchFormat } from '../../api/types'
@@ -24,7 +24,7 @@ function aufbau(
   const onClose = vi.fn()
   const onSaved = vi.fn(() => Promise.resolve())
 
-  renderWithProviders(
+  const gerendert = renderWithProviders(
     <>
       <ResultEditor
         match={over.match ?? fx.match()}
@@ -40,7 +40,7 @@ function aufbau(
     { workspace: null },
   )
 
-  return { onClose, onSaved }
+  return { onClose, onSaved, unmount: gerendert.unmount }
 }
 
 /** Einen Satzstand über den Stepper hochzählen. */
@@ -356,5 +356,24 @@ describe('ResultEditor', () => {
 
     freigeben()
     await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  it('schließt über Escape und gibt den Fokus zurück', async () => {
+    // `aria-modal` versprach einen Dialog; Escape tat nichts, und beim
+    // Schließen war der Fokus verloren.
+    const ausloeser = document.createElement('button')
+    document.body.appendChild(ausloeser)
+    ausloeser.focus()
+
+    const { onClose, unmount } = aufbau()
+
+    expect(document.activeElement).not.toBe(ausloeser)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalled()
+
+    unmount()
+    expect(document.activeElement).toBe(ausloeser)
+    ausloeser.remove()
   })
 })

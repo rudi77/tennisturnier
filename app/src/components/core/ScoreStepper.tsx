@@ -3,6 +3,11 @@
  *
  * Die Eingabe steht am Platz auf einem Tablet — deshalb keine Zahlenfelder,
  * sondern Flächen, die man ohne Tastatur trifft.
+ *
+ * Die Knöpfe sind schmal, ihre Trefferfläche ist es nicht: sie reicht über ein
+ * Pseudoelement bis `--hit-target`, ohne die sechs Spalten der Ergebnismaske
+ * auseinanderzuziehen. Gezeichnet 22 mal 34, getroffen 44 mal 44 — und die
+ * beiden überlappen einander nicht, weil die Zahl zwischen ihnen steht.
  */
 export function ScoreStepper({
   value,
@@ -15,57 +20,61 @@ export function ScoreStepper({
   label: string
   max?: number
 }) {
+  const setze = (next: number) => onChange(Math.min(max, Math.max(0, next)))
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 2, width: 64, justifyContent: 'center' }}>
+    // `spinbutton` und kein Bereich mit `aria-label`: das Label allein machte
+    // aus der Zahl nichts Vorlesbares — sie stand da, ohne dass ein Screenreader
+    // sie als Wert erkannte. Die Rolle sagt „eine Zahl zwischen null und max",
+    // nennt den aktuellen Stand und bringt die Pfeiltasten mit, mit denen sich
+    // dieselbe Eingabe ohne Maus machen lässt.
+    <div
+      className="md-stepper"
+      role="spinbutton"
+      tabIndex={0}
+      aria-label={label}
+      aria-valuenow={value}
+      aria-valuemin={0}
+      aria-valuemax={max}
+      onKeyDown={(event) => {
+        const schritt =
+          event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1
+          : event.key === 'ArrowDown' || event.key === 'ArrowLeft' ? -1
+          : 0
+
+        if (schritt !== 0) {
+          event.preventDefault()
+          setze(value + schritt)
+          return
+        }
+
+        if (event.key === 'Home') {
+          event.preventDefault()
+          setze(0)
+        } else if (event.key === 'End') {
+          event.preventDefault()
+          setze(max)
+        }
+      }}
+    >
       <button
         type="button"
+        className="md-stepper__btn md-stepper__btn--minus"
         aria-label={`${label} verringern`}
-        onClick={() => onChange(Math.max(0, value - 1))}
-        style={{
-          width: 22,
-          height: 34,
-          border: 'var(--border)',
-          background: 'var(--surface)',
-          borderRadius: 'var(--radius-sm) 0 0 var(--radius-sm)',
-          color: 'var(--court-700)',
-          fontSize: 14,
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-        }}
+        onClick={() => setze(value - 1)}
       >
         –
       </button>
-      <div
-        className="md-num"
-        aria-label={label}
-        style={{
-          width: 26,
-          height: 34,
-          display: 'grid',
-          placeItems: 'center',
-          borderTop: 'var(--border)',
-          borderBottom: 'var(--border)',
-          fontSize: 14,
-          fontWeight: 'var(--fw-semibold)',
-        }}
-      >
+
+      <span className="md-num md-stepper__value" aria-hidden="true">
         {value}
-      </div>
+      </span>
+
       <button
         type="button"
+        className="md-stepper__btn md-stepper__btn--plus"
         aria-label={`${label} erhöhen`}
-        onClick={() => onChange(Math.min(max, value + 1))}
-        style={{
-          width: 22,
-          height: 34,
-          border: 'var(--border)',
-          background: 'var(--surface)',
-          borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
-          color: 'var(--court-700)',
-          fontSize: 14,
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-        }}
+        onClick={() => setze(value + 1)}
       >
         +
       </button>
