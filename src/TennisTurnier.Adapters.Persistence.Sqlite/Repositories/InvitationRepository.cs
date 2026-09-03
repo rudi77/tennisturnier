@@ -38,19 +38,12 @@ public sealed class InvitationRepository : IInvitationRepository
     /// Läuft in der offenen Transaktion der Arbeitseinheit mit, sofern eine
     /// besteht: EF führt den Befehl auf derselben Verbindung aus.
     /// </summary>
-    public async Task RemoveRedeemedAsync(
+    public Task RemoveRedeemedAsync(
         IReadOnlyCollection<Guid> invitationIds,
-        CancellationToken cancellationToken = default)
-    {
-        if (invitationIds.Count == 0)
-        {
-            return;
-        }
-
-        await _db.Invitations
+        CancellationToken cancellationToken = default) =>
+        _db.Invitations
             .Where(i => invitationIds.Contains(i.Id))
             .ExecuteDeleteAsync(cancellationToken);
-    }
 
     /// <summary>
     /// Verglichen wird gegen die kleingeschriebene Adresse, weil genau die
