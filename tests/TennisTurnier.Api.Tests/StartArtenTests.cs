@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TennisTurnier.Adapters.Persistence.Sqlite;
 using TennisTurnier.Application.Ports;
@@ -70,6 +71,28 @@ public sealed class StartArtenTests
         // Die Vorlagen stehen nach dem Start bereit — ohne dass ein Test sie
         // gesät hätte.
         Assert.NotEqual(0, await VorlagenAsync(fabrik));
+    }
+
+    [Fact]
+    public async Task Eine_frische_Instanz_schreibt_ihr_Journal_voraus()
+    {
+        // Im voreingestellten Rollback-Journal sperren Leser den Commit und der
+        // Commit die Leser. Genau diese Kombination liegt hier vor: die
+        // öffentliche Ansicht wird von „einigen hundert Zuschauern" abgefragt
+        // (ADR-0003), während am Platz Ergebnisse eingetragen werden.
+        using var fabrik = new EntwicklungsFabrik();
+        fabrik.CreateClient();
+
+        using var bereich = fabrik.Services.CreateScope();
+        var db = bereich.ServiceProvider.GetRequiredService<TennisTurnierDbContext>();
+
+        var verbindung = db.Database.GetDbConnection();
+        await verbindung.OpenAsync();
+
+        await using var befehl = verbindung.CreateCommand();
+        befehl.CommandText = "PRAGMA journal_mode;";
+
+        Assert.Equal("wal", (string)(await befehl.ExecuteScalarAsync())!, ignoreCase: true);
     }
 
     [Fact]
