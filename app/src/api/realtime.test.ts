@@ -352,3 +352,175 @@ describe('subscribeToFeed', () => {
     expect(() => abmelden()).not.toThrow()
   })
 })
+
+/**
+ * Was an einer geteilten Verbindung schiefgeht, wenn jedes Abonnement sein
+ * eigenes Zubehör mitbringt.
+ */
+describe('die geteilte Verbindung', () => {
+  const ZWEITES = '22222222-2222-2222-2222-222222222222'
+
+  it('hängt Wiederanlauf und Abbruch nur einmal ein', async () => {
+    // Sie ließen sich nie wieder aushängen. Nach n Turnierwechseln lief ein
+    // Wiederverbinden n-mal durch — mit Anmeldungen für Turniere, die längst
+    // niemanden mehr interessieren.
+    const { subscribeToTournament } = await frisch()
+
+    subscribeToTournament(TURNIER, vi.fn())()
+    subscribeToTournament(ZWEITES, vi.fn())()
+    subscribeToTournament(TURNIER, vi.fn())
+
+    expect(hub.reconnected).toHaveLength(1)
+    expect(hub.closed).toHaveLength(1)
+  })
+
+  it('meldet nach einem Wiederverbinden genau die offenen Turniere an', async () => {
+    const { subscribeToTournament } = await frisch()
+
+    const ersteWeg = subscribeToTournament(TURNIER, vi.fn())
+    subscribeToTournament(ZWEITES, vi.fn())
+    await vi.waitFor(() => expect(hub.invoked).toHaveLength(2))
+
+    ersteWeg()
+    hub.invoked.length = 0
+
+    for (const handler of hub.reconnected) handler()
+
+    expect(hub.invoked).toEqual([['Subscribe', ZWEITES]])
+  })
+
+  it('meldet ein Turnier erst ab, wenn niemand mehr zusieht', async () => {
+    // Live-Ansicht und Feed desselben Turniers sind zwei Abonnements auf einer
+    // Gruppe. Wer beim Verlassen des einen abmeldete, nähme dem anderen seine
+    // Nachrichten.
+    const { subscribeToFeed, subscribeToTournament } = await frisch()
+
+    const ansicht = subscribeToTournament(TURNIER, vi.fn())
+    const feed = subscribeToFeed(TURNIER, vi.fn())
+    await vi.waitFor(() => expect(hub.invoked).toHaveLength(2))
+
+    hub.invoked.length = 0
+    ansicht()
+    expect(hub.invoked).toHaveLength(0)
+
+    feed()
+    expect(hub.invoked).toEqual([['Unsubscribe', TURNIER]])
+  })
+
+  it('nimmt den Faden wieder auf, wenn SignalR ihn fallen lässt', async () => {
+    // `withAutomaticReconnect()` gibt nach etwa einer halben Minute auf.
+    // Danach blieb die Verbindung für immer getrennt, und der Monitor im
+    // Vereinsheim hing bis zum nächsten Neuladen am Polling.
+    vi.useFakeTimers()
+    try {
+      const { subscribeToTournament } = await frisch()
+      const zustand = vi.fn()
+
+      subscribeToTournament(TURNIER, vi.fn(), zustand)
+
+      // Bis zur ersten Anmeldung warten und nicht bloß bis zum Start: sonst
+      // landet sie erst nach dem Zurücksetzen in der Liste und zählt mit.
+      await vi.waitFor(() => expect(hub.invoked).toHaveLength(1))
+
+      hub.state = HubConnectionState.Disconnected
+      hub.invoked.length = 0
+      for (const handler of hub.closed) handler()
+
+      expect(zustand).toHaveBeenLastCalledWith(false)
+
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.waitFor(() => expect(hub.startCalls).toBe(2))
+
+      expect(hub.invoked).toEqual([['Subscribe', TURNIER]])
+      expect(zustand).toHaveBeenLastCalledWith(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('probiert es nach einem gescheiterten Wiederanlauf später erneut', async () => {
+    vi.useFakeTimers()
+    try {
+      const { subscribeToTournament } = await frisch()
+      subscribeToTournament(TURNIER, vi.fn())
+      await vi.waitFor(() => expect(hub.startCalls).toBe(1))
+
+      hub.state = HubConnectionState.Disconnected
+
+      // Die Ablehnung gleich als behandelt markieren: sie wird erst beim
+      // nächsten Versuch abgewartet, und bis dahin gälte sie als unbehandelt.
+      const gescheitert = Promise.reject(new Error('kein Netz'))
+      gescheitert.catch(() => undefined)
+      hub.startResult = gescheitert
+
+      for (const handler of hub.closed) handler()
+
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.waitFor(() => expect(hub.startCalls).toBe(2))
+
+      // Der zweite Versuch wartet länger als der erste.
+      hub.startResult = Promise.resolve()
+      await vi.advanceTimersByTimeAsync(2000)
+      await vi.waitFor(() => expect(hub.startCalls).toBe(3))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('probiert nicht weiter, wenn niemand mehr zusieht', async () => {
+    vi.useFakeTimers()
+    try {
+      const { subscribeToTournament } = await frisch()
+      const abmelden = subscribeToTournament(TURNIER, vi.fn())
+      await vi.waitFor(() => expect(hub.startCalls).toBe(1))
+
+      abmelden()
+      hub.state = HubConnectionState.Disconnected
+      for (const handler of hub.closed) handler()
+
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(hub.startCalls).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('die geteilte Verbindung — Randfälle', () => {
+  it('meldet nicht ab, wenn dieselbe Abmeldung zweimal kommt', async () => {
+    // React ruft die Aufräumfunktion eines Effekts unter Umständen mehrfach
+    // auf. Eine zweite Abmeldung nähme einem inzwischen neuen Abonnenten
+    // seine Gruppe.
+    const { subscribeToTournament } = await frisch()
+    const abmelden = subscribeToTournament(TURNIER, vi.fn())
+    await vi.waitFor(() => expect(hub.invoked).toHaveLength(1))
+
+    hub.invoked.length = 0
+    abmelden()
+    abmelden()
+
+    expect(hub.invoked).toEqual([['Unsubscribe', TURNIER]])
+  })
+
+  it('lässt den Wiederanlauf fallen, wenn in der Wartezeit alle gehen', async () => {
+    vi.useFakeTimers()
+    try {
+      const { subscribeToTournament } = await frisch()
+      const abmelden = subscribeToTournament(TURNIER, vi.fn())
+      await vi.waitFor(() => expect(hub.invoked).toHaveLength(1))
+
+      hub.state = HubConnectionState.Disconnected
+      for (const handler of hub.closed) handler()
+
+      // Der Wiederanlauf ist geplant — und bis er dran ist, sieht niemand mehr
+      // zu.
+      abmelden()
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(hub.startCalls).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
