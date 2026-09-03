@@ -37,6 +37,7 @@ internal sealed class UserResolutionMiddleware : IMiddleware
     private readonly OrganizerBootstrap _organizers;
     private readonly InvitationRedemption _invitations;
     private readonly BootstrapAdminOptions _options;
+    private readonly OidcOptions _oidc;
     private readonly ILogger<UserResolutionMiddleware> _logger;
 
     public UserResolutionMiddleware(
@@ -46,6 +47,7 @@ internal sealed class UserResolutionMiddleware : IMiddleware
         OrganizerBootstrap organizers,
         InvitationRedemption invitations,
         BootstrapAdminOptions options,
+        OidcOptions oidc,
         ILogger<UserResolutionMiddleware> logger)
     {
         _userContext = userContext;
@@ -54,6 +56,7 @@ internal sealed class UserResolutionMiddleware : IMiddleware
         _organizers = organizers;
         _invitations = invitations;
         _options = options;
+        _oidc = oidc;
         _logger = logger;
     }
 
@@ -118,6 +121,46 @@ internal sealed class UserResolutionMiddleware : IMiddleware
         return new UserPrincipal(account.Id, assignments);
     }
 
+    /// <summary>
+    /// Die E-Mail-Adresse aus dem Token — aber nur, wenn der Aussteller sie
+    /// bestätigt hat.
+    ///
+    /// Sie ist kein Anzeigename, sondern ein Schlüssel: an ihr hängen der erste
+    /// Systemadministrator, jede Einladung an eine noch nicht angemeldete
+    /// Adresse und die Übernahme eines importierten Spielers samt Kontaktdaten
+    /// und Historie. Ein Aussteller mit offener Selbstregistrierung lässt die
+    /// Adresse frei wählen — wer sich vor ihrem Inhaber anmeldet, bekäme sonst,
+    /// was für diesen hinterlegt wurde.
+    ///
+    /// Ein fehlender Claim zählt wie ein verneinter: „der Aussteller sagt nichts
+    /// dazu" ist keine Bestätigung. Wer einen Aussteller betreibt, der den Claim
+    /// nicht ausstellt und trotzdem nur bestätigte Adressen herausgibt, sagt das
+    /// über <see cref="OidcOptions.TrustUnverifiedEmail"/> ausdrücklich.
+    /// </summary>
+    private string? BestaetigteEmail(ClaimsPrincipal claims)
+    {
+        var email = claims.FindFirst("email")?.Value;
+
+        if (string.IsNullOrWhiteSpace(email) || _oidc.TrustUnverifiedEmail)
+        {
+            return email;
+        }
+
+        // Als Zeichenkette und nicht als bool: der Claim kommt aus JSON, und je
+        // nach Aussteller steht dort true oder "true".
+        if (string.Equals(claims.FindFirst("email_verified")?.Value, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return email;
+        }
+
+        _logger.LogInformation(
+            "Token trägt eine unbestätigte E-Mail-Adresse; sie wird nicht übernommen. "
+            + "Wenn der Aussteller den Claim email_verified nicht ausstellt, ist "
+            + "Oidc:TrustUnverifiedEmail der dafür vorgesehene Schalter.");
+
+        return null;
+    }
+
     private async Task<UserPrincipal?> ResolveAsync(ClaimsPrincipal claims, CancellationToken cancellationToken)
     {
         // MapInboundClaims ist abgeschaltet, die Claims tragen also ihre
@@ -134,7 +177,7 @@ internal sealed class UserResolutionMiddleware : IMiddleware
         var account = await _directory.EnsureAccountAsync(
             issuer,
             subject.Value,
-            claims.FindFirst("email")?.Value,
+            BestaetigteEmail(claims),
             claims.FindFirst("name")?.Value ?? claims.FindFirst("preferred_username")?.Value,
             cancellationToken);
 

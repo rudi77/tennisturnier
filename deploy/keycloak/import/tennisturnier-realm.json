@@ -5,6 +5,7 @@
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": true,
+  "verifyEmail": true,
   "accessTokenLifespan": 3600,
   "clients": [
     {

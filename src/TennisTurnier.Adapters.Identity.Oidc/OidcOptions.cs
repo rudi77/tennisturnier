@@ -40,6 +40,25 @@ public sealed class OidcOptions
     public string Scope { get; set; } = "openid profile email";
 
     /// <summary>
+    /// Ob eine E-Mail-Adresse auch ohne bestätigten <c>email_verified</c>-Claim
+    /// übernommen wird.
+    ///
+    /// Vorgabe <c>false</c>, und das ist die Sicherheitsgrenze dieser Anwendung:
+    /// die Adresse ist der Schlüssel, an dem der erste Systemadministrator, jede
+    /// Einladung und die Übernahme eines importierten Spielers hängen. Ein
+    /// Aussteller mit offener Selbstregistrierung lässt jeden seine Adresse frei
+    /// wählen — wer sich vor dem echten Inhaber mit dessen Adresse anmeldet,
+    /// erbte sonst dessen Rollen und dessen Spielerhistorie.
+    ///
+    /// Auf <c>true</c> gehört der Schalter nur, wenn der Aussteller den Claim
+    /// gar nicht ausstellt <em>und</em> von sich aus keine unbestätigten
+    /// Adressen zulässt — ein Verbund ohne Selbstregistrierung etwa. Das ist
+    /// eine Aussage über den Aussteller, die nur der Betreiber treffen kann,
+    /// und deshalb steht sie als Schalter da und nicht als stille Annahme.
+    /// </summary>
+    public bool TrustUnverifiedEmail { get; set; }
+
+    /// <summary>
     /// Ist die Anmeldung überhaupt konfiguriert? Ohne Authority läuft die
     /// Anwendung rein öffentlich — brauchbar für einen ersten Blick auf die
     /// Live-Ansicht, aber ohne jede schreibende Funktion.

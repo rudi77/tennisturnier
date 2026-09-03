@@ -122,8 +122,9 @@ Keycloak-Dienst von unten mitnimmt, bekommt beides ohne Zutun.
 | `Oidc__ClientId` | Der Client, unter dem sich die Oberfläche anmeldet. |
 | `Oidc__Audience` | Wofür ein Token gelten muss. Vorgabe `tennisturnier-api`. |
 | `Oidc__Scope` | Vorgabe `openid profile email`. |
+| `Oidc__TrustUnverifiedEmail` | Vorgabe `false`: eine E-Mail-Adresse aus dem Token zählt nur mit bestätigtem `email_verified`. Nur auf `true` setzen, wenn der Aussteller den Claim nicht ausstellt **und** von sich aus keine unbestätigten Adressen zulässt. |
 | `Security__OpenAccess` | `true` lässt die Instanz ohne Anmeldung laufen (siehe unten). Zusammen mit `Oidc__Authority` verweigert die Anwendung den Start. |
-| `Security__BootstrapSystemAdmins__0` | Die E-Mail-Adresse, die beim ersten Anmelden Systemadministrator wird. Danach wieder leeren. |
+| `Security__BootstrapSystemAdmins__0` | Wer beim ersten Anmelden Systemadministrator wird — die **Subject-ID** des Kontos, oder ersatzweise seine E-Mail-Adresse. Danach wieder leeren. |
 | `Security__SelfServiceOrganizers` | Vorgabe `true`: wer sich anmeldet, darf Turniere ausschreiben. Für eine Instanz mit offenem Anmeldeweg (siehe Google) auf `false`. |
 | `Tournament__TeamDrawSeed` | Saatwert für das Los der Teams. Nur für Vorführungen — wer ihn kennt, kennt die Paarung, bevor sie fällt. |
 | `ConnectionStrings__Default` | Vorgabe `Data Source=/data/matchday.db`, passend zum Datenträger. |
@@ -162,6 +163,16 @@ Konto, und ein Systemadministrator kann ihm seine Rolle nehmen. Der Weg vom
 ersten Schritt zum zweiten ist damit: Keycloak aufsetzen (unten),
 `Security__OpenAccess` entfernen, `Oidc__Authority` setzen, sich anmelden und
 über `Security__BootstrapSystemAdmins__0` zum Administrator machen.
+
+> **Die Subject-ID ist der sichere Eintrag, nicht die Adresse.** Beides wird
+> erkannt, aber eine E-Mail-Adresse gehört niemandem, solange sie niemand
+> bestätigt hat: bei einem Aussteller mit offener Selbstregistrierung ist die
+> Zeit zwischen „Adresse eingetragen" und „selbst angemeldet" ein Fenster, in
+> dem sich jemand anderes mit derselben Adresse registrieren und die Rolle
+> abholen könnte. MATCHDAY übernimmt eine Adresse deshalb nur mit bestätigtem
+> `email_verified` — der mitgelieferte Realm setzt dafür `verifyEmail`. Wer die
+> Subject-ID einträgt, umgeht die Frage ganz. Sie steht in Keycloak unter
+> *Users → der Benutzer → ID*.
 
 ### Keycloak als zweiter Dienst
 

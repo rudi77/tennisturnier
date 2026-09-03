@@ -18,6 +18,10 @@ public static class IdentityRegistration
     /// </summary>
     public static IServiceCollection AddOidcIdentity(this IServiceCollection services, OidcOptions options)
     {
+        // Die Middleware braucht sie, um über die E-Mail aus dem Token zu
+        // entscheiden; ohne Registrierung stünde dort eine zweite Fassung.
+        services.AddSingleton(options);
+
         services.AddScoped<ScopedUserContext>();
         services.AddScoped<IUserContext>(sp => sp.GetRequiredService<ScopedUserContext>());
         services.AddScoped<UserResolutionMiddleware>();
