@@ -13,6 +13,7 @@ import * as fx from '../test/fixtures'
 import { renderWithProviders, user, workspace } from '../test/render'
 import { callsTo, db, lastBody, server } from '../test/server'
 import { Toast } from '../components/layout/Toast'
+import { toLocalInput } from '../lib/time'
 import { EntriesScreen } from './EntriesScreen'
 
 const T = fx.IDS.tournament
@@ -182,6 +183,7 @@ describe('EntriesScreen — Beitrittslink', () => {
   })
 
   it('speichert Kapazität und Meldeschluss', async () => {
+    db.registration = fx.registrationDetail({ capacity: null, deadline: null })
     aufbau()
     await screen.findByLabelText('Beitrittslink')
     const u = user()
@@ -201,7 +203,44 @@ describe('EntriesScreen — Beitrittslink', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Bedingungen gespeichert')
   })
 
-  it('lässt beides leer, wo nichts eingetragen ist', async () => {
+  it('zeigt an, was schon gesetzt ist', async () => {
+    aufbau()
+    await screen.findByLabelText('Beitrittslink')
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Kapazität (leer = offen)')).toHaveValue(16),
+    )
+    expect(screen.getByLabelText('Meldeschluss (leer = offen)')).toHaveValue(
+      toLocalInput('2026-05-10T22:00:00+00:00'),
+    )
+  })
+
+  it('löscht nichts, was schon gesetzt ist', async () => {
+    // Beide Felder gehen zusammen an den Server, und leer heißt dort „offen".
+    // Standen sie leer da, während etwas gesetzt war, nahm jedes Speichern dem
+    // Turnier beides — wer nur den Meldeschluss eintrug, verlor die Kapazität,
+    // und umgekehrt.
+    aufbau()
+    await waitFor(() =>
+      expect(screen.getByLabelText('Kapazität (leer = offen)')).toHaveValue(16),
+    )
+
+    await user().click(screen.getByRole('button', { name: 'Bedingungen speichern' }))
+
+    await waitFor(() => {
+      const body = lastBody('PUT', `/api/tournaments/${T}/registration`) as {
+        capacity: number | null
+        deadline: string | null
+      }
+      expect(body.capacity).toBe(16)
+      expect(new Date(body.deadline!).toISOString()).toBe(
+        new Date('2026-05-10T22:00:00+00:00').toISOString(),
+      )
+    })
+  })
+
+  it('lässt beides leer, wo nichts gesetzt ist', async () => {
+    db.registration = fx.registrationDetail({ capacity: null, deadline: null })
     aufbau()
     await screen.findByLabelText('Beitrittslink')
 
@@ -213,6 +252,27 @@ describe('EntriesScreen — Beitrittslink', () => {
         deadline: null,
       }),
     )
+  })
+
+  it('nimmt eine geleerte Kapazität als „offen"', async () => {
+    aufbau()
+    const u = user()
+
+    // Erst, wenn der gesetzte Wert dasteht — sonst leerte der Test ein Feld,
+    // das gleich darauf gefüllt wird.
+    await waitFor(() =>
+      expect(screen.getByLabelText('Kapazität (leer = offen)')).toHaveValue(16),
+    )
+
+    await u.clear(screen.getByLabelText('Kapazität (leer = offen)'))
+    await u.click(screen.getByRole('button', { name: 'Bedingungen speichern' }))
+
+    await waitFor(() => {
+      const body = lastBody('PUT', `/api/tournaments/${T}/registration`) as {
+        capacity: number | null
+      }
+      expect(body.capacity).toBeNull()
+    })
   })
 
   it('meldet einen abgewiesenen Zustand', async () => {

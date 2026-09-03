@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { CsvImportPanel } from '../components/tournament/CsvImportPanel'
 import { TeamPanel } from '../components/tournament/TeamPanel'
@@ -10,6 +10,7 @@ import { useResource } from '../hooks/useResource'
 import { useToast } from '../hooks/useToast'
 import { useWorkspace } from '../state/WorkspaceContext'
 import { tournaments as tournamentApi } from '../api/endpoints'
+import { toLocalInput } from '../lib/time'
 import {
   Discipline,
   EntryOrigin,
@@ -237,6 +238,15 @@ function LinkPanel({
   const [deadline, setDeadline] = useState<string>('')
   const [busy, setBusy] = useState(false)
 
+  // Beide Felder gehen zusammen an den Server, und leer heißt dort „offen".
+  // Standen sie leer da, während etwas gesetzt war, löschte jedes Speichern das
+  // jeweils andere: wer nur den Meldeschluss eintrug, nahm dem Turnier seine
+  // Kapazität, und umgekehrt.
+  useEffect(() => {
+    setCapacity(detail?.capacity?.toString() ?? '')
+    setDeadline(toLocalInput(detail?.deadline))
+  }, [detail])
+
   if (!detail) return null
 
   const url = joinUrl(detail.token)
@@ -319,7 +329,7 @@ function LinkPanel({
             type="number"
             min={1}
             value={capacity}
-            placeholder={detail.capacity?.toString() ?? 'offen'}
+            placeholder="offen"
             onChange={(event) => setCapacity(event.target.value)}
             style={{ width: 160 }}
           />

@@ -105,6 +105,27 @@ export function toDateOnly(date: Date): string {
 }
 
 /**
+ * Ein Zeitpunkt als Wert für ein `datetime-local`-Feld — in der Zeitzone des
+ * Browsers, weil das Feld selbst nichts anderes kennt.
+ *
+ * Das Gegenstück steht beim Speichern: `new Date(wert).toISOString()` liest den
+ * Wert in derselben Zeitzone wieder ein. Beide Richtungen gehören deshalb
+ * zusammen betrachtet — eine Fassung, die hier UTC schriebe, verschöbe den
+ * Meldeschluss bei jedem Öffnen des Bildschirms.
+ */
+export function toLocalInput(iso: string | null | undefined): string {
+  if (!iso) return ''
+
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const stunde = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+
+  return `${toDateOnly(date)}T${stunde}:${minute}`
+}
+
+/**
  * Ohne Parameter und deshalb einmal gebaut. Ein ICU-Formatierer ist nicht
  * billig, und der Termin steht auf jeder Turnierkarte — er entstünde sonst je
  * Karte und Neuzeichnung neu.
