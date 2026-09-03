@@ -69,6 +69,9 @@ public static class IdentityRegistration
                 jwt.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
+                    // Leer heißt hier „ausdrücklich nicht geprüft" — dass es
+                    // nicht aus Versehen leer ist, stellt die Composition Root
+                    // beim Start sicher.
                     ValidateAudience = !string.IsNullOrWhiteSpace(options.Audience),
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,

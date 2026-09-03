@@ -20,6 +20,22 @@ public sealed class OidcOptions
     public string Audience { get; set; } = string.Empty;
 
     /// <summary>
+    /// Muss ein Token für diese Anwendung ausgestellt sein?
+    ///
+    /// Vorgabe ja. Ohne die Prüfung gilt jedes Token des Ausstellers, auch
+    /// eines, das für einen ganz anderen Client seines Verbunds ausgestellt
+    /// wurde — wer dort ein Token bekommt, bekommt damit auch hier Zugang.
+    /// Eine leere <see cref="Audience"/> schaltete das bisher stillschweigend
+    /// ab; jetzt verweigert die Anwendung den Start.
+    ///
+    /// Auf <c>false</c> gehört der Schalter nur bei einem Aussteller, der
+    /// keine feste Audience vergibt. Das ist eine Aussage über den Aussteller,
+    /// die nur der Betreiber treffen kann — deshalb steht sie hier und
+    /// entsteht nicht aus einem leeren Feld.
+    /// </summary>
+    public bool RequireAudience { get; set; } = true;
+
+    /// <summary>
     /// Nur für die lokale Entwicklung gegen Keycloak über HTTP abschaltbar.
     /// In Produktion niemals <c>false</c>.
     /// </summary>

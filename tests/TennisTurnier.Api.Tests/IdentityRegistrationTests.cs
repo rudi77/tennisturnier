@@ -113,9 +113,12 @@ public sealed class IdentityRegistrationTests
     [Fact]
     public void Ohne_Audience_wird_der_Empfaenger_nicht_geprueft()
     {
-        // Entra ID stellt Token ohne feste Audience aus; eine Prüfung gegen die
-        // leere Zeichenkette wiese jedes davon ab.
-        using var provider = Verdrahten(new OidcOptions { Authority = Authority, Audience = "  " });
+        // Für einen Aussteller ohne feste Audience — eine Prüfung gegen die
+        // leere Zeichenkette wiese jedes seiner Token ab. Dass das eine
+        // ausdrückliche Entscheidung ist und kein vergessenes Feld, stellt die
+        // Composition Root beim Start sicher (siehe OffenerBetriebTests).
+        using var provider = Verdrahten(
+            new OidcOptions { Authority = Authority, Audience = "  ", RequireAudience = false });
 
         var jwt = provider
             .GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()

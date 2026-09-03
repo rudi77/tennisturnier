@@ -122,7 +122,7 @@ Keycloak-Dienst von unten mitnimmt, bekommt beides ohne Zutun.
 | --- | --- |
 | `Oidc__Authority` | Der Aussteller, z. B. `https://idp.example.org/realms/matchday`. Leer heißt: keine Anmeldung, nur die öffentlichen Endpunkte. |
 | `Oidc__ClientId` | Der Client, unter dem sich die Oberfläche anmeldet. |
-| `Oidc__Audience` | Wofür ein Token gelten muss. Vorgabe `tennisturnier-api`. |
+| `Oidc__Audience` | Wofür ein Token gelten muss. Vorgabe `tennisturnier-api`. Leer **und** `Oidc__RequireAudience=false` heißt: jedes Token dieses Ausstellers gilt, auch eines für einen anderen Client. Leer allein verweigert den Start. |
 | `Oidc__Scope` | Vorgabe `openid profile email`. |
 | `Oidc__TrustUnverifiedEmail` | Vorgabe `false`: eine E-Mail-Adresse aus dem Token zählt nur mit bestätigtem `email_verified`. Nur auf `true` setzen, wenn der Aussteller den Claim nicht ausstellt **und** von sich aus keine unbestätigten Adressen zulässt. |
 | `Security__OpenAccess` | `true` lässt die Instanz ohne Anmeldung laufen (siehe unten). Zusammen mit `Oidc__Authority` verweigert die Anwendung den Start. |

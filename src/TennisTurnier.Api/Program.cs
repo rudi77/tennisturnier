@@ -43,6 +43,20 @@ if (security.OpenAccess && oidc.IsConfigured)
         + "einer von beiden gehört entfernt.");
 }
 
+// Ein Aussteller ohne erwarteten Empfänger: dann gilt jedes Token dieses
+// Ausstellers, auch eines für einen ganz anderen Client seines Verbunds. Das
+// ist eine Entscheidung und darf nicht aus einem leeren Feld entstehen — genau
+// wie der offene Betrieb darüber.
+if (oidc.IsConfigured && string.IsNullOrWhiteSpace(oidc.Audience) && oidc.RequireAudience)
+{
+    throw new InvalidOperationException(
+        $"{OidcOptions.SectionName}:{nameof(OidcOptions.Audience)} ist leer, obwohl "
+        + $"{OidcOptions.SectionName}:{nameof(OidcOptions.Authority)} gesetzt ist. Ohne "
+        + "Empfänger gilt jedes Token dieses Ausstellers, auch eines für einen anderen "
+        + "Client. Wer einen Aussteller ohne feste Audience betreibt, sagt das über "
+        + $"{OidcOptions.SectionName}:{nameof(OidcOptions.RequireAudience)} ausdrücklich.");
+}
+
 builder.Services.AddApplication(security, tournaments);
 
 // Dasselbe hier: die Verbindungszeichenfolge steht in appsettings.json.

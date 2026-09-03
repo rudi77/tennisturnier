@@ -256,4 +256,51 @@ public sealed class OffenerBetriebTests
         Assert.Contains("Security:OpenAccess", fehler.Message, StringComparison.Ordinal);
         Assert.Contains("Oidc:Authority", fehler.Message, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Ein Aussteller ohne erwarteten Empfänger: die Anwendung startet nicht.
+    ///
+    /// Eine leere Audience schaltete die Prüfung stillschweigend ab, und dann
+    /// gilt jedes Token dieses Ausstellers — auch eines, das für einen ganz
+    /// anderen Client seines Verbunds ausgestellt wurde. Wer das braucht, sagt
+    /// es über <c>Oidc:RequireAudience</c>.
+    /// </summary>
+    private sealed class FabrikOhneEmpfaenger : WebApplicationFactory<Program>
+    {
+        internal bool Ausdruecklich { get; init; }
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseEnvironment("Testing");
+            builder.UseSetting("Database:AutoMigrate", "false");
+            builder.UseSetting("Oidc:Authority", "https://idp.example.invalid/realms/matchday");
+            builder.UseSetting("Oidc:Audience", string.Empty);
+
+            if (Ausdruecklich)
+            {
+                builder.UseSetting("Oidc:RequireAudience", "false");
+            }
+        }
+    }
+
+    [Fact]
+    public void Ein_Aussteller_ohne_erwarteten_Empfaenger_haelt_die_Anwendung_an()
+    {
+        using var fabrik = new FabrikOhneEmpfaenger();
+
+        var fehler = Assert.Throws<InvalidOperationException>(() => fabrik.CreateClient());
+
+        Assert.Contains("Oidc:Audience", fehler.Message, StringComparison.Ordinal);
+        Assert.Contains("Oidc:RequireAudience", fehler.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Wer_es_ausdruecklich_sagt_darf_ohne_Empfaenger_starten()
+    {
+        using var fabrik = new FabrikOhneEmpfaenger { Ausdruecklich = true };
+
+        // Kein Wurf: die Anwendung fährt hoch, und die öffentliche Ansicht
+        // steht — geprüft wird der Empfänger dann eben nicht.
+        Assert.NotNull(fabrik.CreateClient());
+    }
 }
