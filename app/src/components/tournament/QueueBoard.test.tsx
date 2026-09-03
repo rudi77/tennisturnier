@@ -52,7 +52,7 @@ describe('QueueBoard', () => {
     aufbau([fx.courtBoard({ current: null, queue: [] })])
 
     expect(screen.getByText('frei')).toBeInTheDocument()
-    expect(screen.getByText('Keine Zuweisung. Karten lassen sich hierher ziehen.')).toBeInTheDocument()
+    expect(screen.getByText(/Keine Zuweisung\. Karten lassen sich hierher ziehen/)).toBeInTheDocument()
   })
 
   it('hebt den Platz hervor, auf dem gespielt wird', () => {
@@ -271,6 +271,40 @@ describe('QueueBoard', () => {
     fireEvent.drop(container.querySelector('.md-queue__col')!)
 
     expect(onDropMatch).not.toHaveBeenCalled()
+  })
+
+  it('legt eine Karte auch ohne Ziehen auf einen anderen Platz', () => {
+    // Ziehen gibt es auf Touchgeräten nicht, und das Handy am Turniertag ist
+    // der Bildschirm, für den diese Anwendung zuerst gebaut ist. Vorher war
+    // Ziehen der einzige Weg, eine Ansetzung umzuhängen.
+    const { onDropMatch } = aufbau([
+      fx.courtBoard(),
+      fx.courtBoard({ courtId: fx.IDS.court2, courtName: 'Platz 2', current: null, queue: [] }),
+    ])
+
+    fireEvent.click(within(karteMit('S. Moser')).getByRole('button', { name: 'Verschieben' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Auf Platz 2' }))
+
+    expect(onDropMatch).toHaveBeenCalledWith(fx.IDS.match1, fx.IDS.court2)
+  })
+
+  it('nimmt die Auswahl zurück, ohne etwas zu verschieben', () => {
+    const { onDropMatch } = aufbau([
+      fx.courtBoard(),
+      fx.courtBoard({ courtId: fx.IDS.court2, courtName: 'Platz 2', current: null, queue: [] }),
+    ])
+
+    fireEvent.click(within(karteMit('S. Moser')).getByRole('button', { name: 'Verschieben' }))
+    fireEvent.click(within(karteMit('S. Moser')).getByRole('button', { name: 'Abbrechen' }))
+
+    expect(screen.queryByRole('button', { name: 'Auf Platz 2' })).not.toBeInTheDocument()
+    expect(onDropMatch).not.toHaveBeenCalled()
+  })
+
+  it('bietet den Weg ohne Ziehen nicht an, wo nur zugesehen wird', () => {
+    aufbau([fx.courtBoard()], null, true)
+
+    expect(screen.queryByRole('button', { name: 'Verschieben' })).not.toBeInTheDocument()
   })
 
   it('zieht auch das laufende Match', () => {

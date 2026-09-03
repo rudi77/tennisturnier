@@ -794,6 +794,45 @@ body {
   box-shadow: var(--shadow-xs);
 }
 
+/*
+  Der Weg auf einen anderen Platz, der ohne Maus funktioniert.
+
+  Ziehen gibt es auf Touchgeräten nicht, und das Handy am Turniertag ist der
+  Bildschirm, für den diese Anwendung zuerst gebaut ist. Der Knopf ist klein,
+  weil die Karte klein ist — seine Trefferfläche ist es über das Pseudoelement
+  nicht: sie reicht bis --hit-target, ohne das Layout der Karte zu verschieben.
+*/
+.md-gantt__move {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  opacity: 0.55;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.md-gantt__move::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-target);
+  height: var(--hit-target);
+  transform: translate(-50%, -50%);
+}
+
+.md-gantt__move:hover,
+.md-gantt__move[aria-pressed='true'] {
+  opacity: 1;
+}
+
 .md-gantt__card--running {
   background: var(--acc);
   border: 1px solid rgba(6, 21, 46, 0.25);
@@ -1133,6 +1172,7 @@ body {
 .md-pill:focus-visible,
 .md-nav__item:focus-visible,
 .md-checkrow:focus-visible,
+.md-gantt__move:focus-visible,
 .md-bracket__match:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
