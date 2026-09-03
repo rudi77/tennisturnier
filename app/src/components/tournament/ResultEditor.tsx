@@ -61,7 +61,13 @@ export function ResultEditor({
 
   const [grid, setGrid] = useState<Grid>(() => initialGrid(match, format))
   const [outcome, setOutcome] = useState<MatchOutcome>(match.score?.outcome ?? MatchOutcome.Normal)
-  const [affectedSide, setAffectedSide] = useState<number>(1)
+  // Aus dem bestehenden Ergebnis und nicht fest auf 1: wer eine Aufgabe
+  // korrigiert, fand sonst „Seite 1 hat aufgegeben" vor, obwohl Seite 2
+  // aufgegeben hatte — und ein Speichern ohne Zutun drehte das Ergebnis um.
+  // Aufgeschrieben ist der Sieger; aufgegeben hat die andere Seite.
+  const [affectedSide, setAffectedSide] = useState<number>(
+    () => (match.score !== null && match.score.winnerSide === 1 ? 2 : 1),
+  )
   const [saving, setSaving] = useState(false)
 
   const names = [

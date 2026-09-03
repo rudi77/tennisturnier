@@ -178,12 +178,38 @@ export function whyNotSaveable(
       return `${position}: ein Satz endet nicht unentschieden (${games1}:${games2}).`
     }
 
-    if (isMatchTiebreakSet(format, index)) {
-      const winner = Math.max(games1, games2)
-      const loser = Math.min(games1, games2)
+    const winner = Math.max(games1, games2)
+    const loser = Math.min(games1, games2)
 
+    if (isMatchTiebreakSet(format, index)) {
       if (winner < 10) return `${position}: ein Match-Tiebreak geht mindestens bis 10.`
       if (winner - loser < 2) return `${position}: zwei Punkte Vorsprung fehlen.`
+      if (winner > 10 && winner - loser !== 2) {
+        return `${position}: nach der Verlängerung endet der Tiebreak bei genau zwei Punkten Vorsprung.`
+      }
+
+      continue
+    }
+
+    // Der reguläre Satz. Diese drei Regeln fehlten hier — ein 3:1 galt als
+    // speicherbar, und der Server wies es ab, nachdem der Knopf etwas anderes
+    // versprochen hatte.
+    const ziel = format.tiebreakAt
+    const mitTiebreak = !(
+      index === format.bestOf - 1 && format.finalSetMode === FinalSetMode.Advantage
+    )
+
+    // Der Tiebreak-Satz: genau ein Spiel über dem Ziel, der andere genau darauf.
+    if (mitTiebreak && winner === ziel + 1 && loser === ziel) continue
+
+    if (winner < ziel) return `${position}: ein Satz geht mindestens bis ${ziel}.`
+
+    if (winner === ziel && winner - loser < 2) {
+      return `${position}: bei ${ziel} braucht der Satz zwei Spiele Vorsprung.`
+    }
+
+    if (winner > ziel && winner - loser !== 2) {
+      return `${position}: nach der Verlängerung endet der Satz bei genau zwei Spielen Vorsprung.`
     }
   }
 
