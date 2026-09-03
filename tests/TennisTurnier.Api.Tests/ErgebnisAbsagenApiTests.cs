@@ -91,6 +91,45 @@ public sealed class ErgebnisAbsagenApiTests : IClassFixture<TennisTurnierApiFact
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
+    /// <summary>
+    /// Ein Push, der nicht hinausgeht, kippt das Ergebnis nicht.
+    ///
+    /// Was nach dem Commit läuft, ist nicht mehr Teil des Schreibvorgangs: das
+    /// Ergebnis steht in der Datenbank, und der Hinweis an die Zuschauer ändert
+    /// daran nichts. Durchgereicht wurde die Ausnahme trotzdem — als 500 auf
+    /// einen Aufruf, der gelungen ist. Der Schiedsrichter versuchte es erneut
+    /// und bekam beim zweiten Mal einen Konflikt.
+    /// </summary>
+    [Fact]
+    public async Task Ein_gescheiterter_Push_kippt_das_Ergebnis_nicht()
+    {
+        using var fabrik = new TennisTurnierApiFactory([], kaputterPush: true);
+
+        var turnier = await fabrik.NeuesTurnierAsync(
+            $"leitung-{Guid.NewGuid():N}",
+            new TurnierWunsch { Teilnehmer = 4, Plaetze = 2, Platzzeiten = true });
+
+        var phasen = await turnier.Admin.GetFromJsonAsync<List<PhaseDetail>>(
+            $"/api/tournaments/{turnier.TournamentId}/phases", Json);
+
+        var match = phasen!.SelectMany(p => p.Matches).First(m => m.Status == MatchStatus.Ready);
+
+        var response = await turnier.Admin.PutAsJsonAsync(
+            $"/api/matches/{match.Id}/result",
+            new RecordResultRequest(MatchOutcome.Normal, [new SetScore(6, 4), new SetScore(6, 3)]),
+            Json);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        // Und das Ergebnis steht wirklich.
+        var danach = await turnier.Admin.GetFromJsonAsync<List<PhaseDetail>>(
+            $"/api/tournaments/{turnier.TournamentId}/phases", Json);
+
+        Assert.Equal(
+            MatchStatus.Finished,
+            danach!.SelectMany(p => p.Matches).Single(m => m.Id == match.Id).Status);
+    }
+
     [Fact]
     public async Task Ein_Freilos_wird_nicht_eingetragen()
     {

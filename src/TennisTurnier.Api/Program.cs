@@ -89,6 +89,10 @@ else
 }
 
 builder.Services.AddSingleton<IClock, SystemClock>();
+
+// Wohin ein gescheiterter Nachlauf gemeldet wird. Die Anwendungsschicht kennt
+// keine Protokollierung; die Composition Root entscheidet.
+builder.Services.AddSingleton<IPostCommitFailures, PostCommitFailureLog>();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<ITournamentNotifier, SignalRTournamentNotifier>();
 

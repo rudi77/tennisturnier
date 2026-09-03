@@ -55,6 +55,7 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
     private readonly bool _openAccess;
     private readonly bool _testSchema;
     private readonly bool _trustUnverifiedEmail;
+    private readonly bool _kaputterPush;
 
     private readonly Lock _migrationGate = new();
     private bool _migrated;
@@ -78,7 +79,8 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         int? teamDrawSeed = null,
         bool openAccess = false,
         bool testSchema = true,
-        bool trustUnverifiedEmail = false)
+        bool trustUnverifiedEmail = false,
+        bool kaputterPush = false)
     {
         _bootstrapSystemAdmins = bootstrapSystemAdmins;
         _publicRegistrationLimit = publicRegistrationLimit;
@@ -86,6 +88,7 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
         _openAccess = openAccess;
         _testSchema = testSchema;
         _trustUnverifiedEmail = trustUnverifiedEmail;
+        _kaputterPush = kaputterPush;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -149,6 +152,14 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
             }
 
             services.AddSingleton<IClock>(Clock);
+
+            // Ein Push, der nicht hinausgeht: der Schreibvorgang ist längst
+            // festgeschrieben, und trotzdem lief die Ausnahme bis zum Aufrufer
+            // durch — als 500 auf einen Aufruf, der gelungen ist.
+            if (_kaputterPush)
+            {
+                services.AddScoped<ITournamentNotifier, WerfenderNotifier>();
+            }
         });
     }
 
@@ -260,6 +271,17 @@ public sealed class TennisTurnierApiFactory : WebApplicationFactory<Program>
             {
             }
         }
+    }
+
+    /// <summary>Ein Push-Kanal, der nie ankommt.</summary>
+    private sealed class WerfenderNotifier : ITournamentNotifier
+    {
+        public Task ProjectionChangedAsync(
+            Guid tournamentId, string etag, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Der Hub ist nicht erreichbar.");
+
+        public Task FeedChangedAsync(Guid tournamentId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Der Hub ist nicht erreichbar.");
     }
 
     private sealed class HeaderAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>

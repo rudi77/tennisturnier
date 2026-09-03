@@ -57,7 +57,7 @@ public sealed class TournamentServiceTests
     /// Stelle prüfte nur, dass eine Attrappe aufgerufen wird.
     /// </summary>
     private FeedRecorder Chronist() =>
-        new(_feed, new PostCommitQueue(), _notifier, new FixedClock());
+        new(_feed, new PostCommitQueue(new SammelndeFehlermeldung()), _notifier, new FixedClock());
 
     private void ActAs(params RoleAssignment[] assignments) =>
         _userContext.Current = new UserPrincipal(UserId, assignments);
