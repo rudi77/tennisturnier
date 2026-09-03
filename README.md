@@ -64,7 +64,9 @@ Endpunkte erreichbar.
 > ```
 
 Ein Token für die Testbenutzer (`systemadmin`, `clubadmin`, `referee`;
-Passwort jeweils gleich dem Benutzernamen):
+Passwort jeweils gleich dem Benutzernamen). Sie stehen ausschließlich in
+`deploy/keycloak/import-dev/` und damit nur in dem Keycloak, das
+`docker-compose.yml` startet — in einer gebauten Instanz gibt es sie nicht:
 
 ```bash
 curl -s -X POST http://localhost:8080/realms/tennisturnier/protocol/openid-connect/token \
@@ -229,10 +231,19 @@ erste Mal startet: eingespielt wird der Realm nur, solange es ihn noch nicht
 gibt — sonst überschriebe jeder Neustart die Benutzer, die inzwischen
 dazugekommen sind. Was danach kommt, gehört in die Administrationsoberfläche.
 
-Aus derselben Datei kommen `systemadmin`, `clubadmin` und `referee` mit
-Passwörtern, die ihren Namen gleichen. Sie sind für den Entwicklungsbetrieb
-gedacht; in einer erreichbaren Instanz gehören sie gelöscht oder umgestellt,
-sobald ein echtes Konto Systemadministrator ist.
+**Die Testkonten sind hier nicht dabei.** Der Realm liegt in zwei Fassungen
+vor: `deploy/keycloak/import/` ist die, die dieses Bild einspielt — ohne
+Konten und ohne `directAccessGrantsEnabled`. Die drei Konten
+`systemadmin`, `clubadmin` und `referee`, deren Passwort ihr Benutzername ist,
+stehen in `deploy/keycloak/import-dev/`, das nur `docker-compose.yml`
+einhängt.
+
+Das war einmal eine Datei für beides, und der Weg hinein war kurz: ein `curl`
+mit `grant_type=password` gegen die öffentliche Keycloak-Domain, und wer der
+Anleitung oben gefolgt war und `systemadmin@example.invalid` als
+Bootstrap-Adresse eingetragen hatte, bekam einen Systemadministrator dazu.
+`RealmDateiTests` hält die beiden Fassungen seitdem aneinander: sie dürfen sich
+nur in den Konten und im Direktzugang unterscheiden.
 
 ### Google als Anmeldeweg
 

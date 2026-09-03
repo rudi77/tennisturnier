@@ -14,7 +14,7 @@
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "redirectUris": [
         "http://localhost:5000/*",
         "http://192.168.2.213:5000/*",
@@ -43,6 +43,53 @@
       }
     }
   ],
+  "users": [
+    {
+      "username": "systemadmin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "systemadmin@example.invalid",
+      "firstName": "System",
+      "lastName": "Administrator",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "systemadmin",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "clubadmin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "clubadmin@example.invalid",
+      "firstName": "Vereins",
+      "lastName": "Administrator",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "clubadmin",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "referee",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "referee@example.invalid",
+      "firstName": "Schieds",
+      "lastName": "Richter",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "referee",
+          "temporary": false
+        }
+      ]
+    }
+  ],
   "identityProviders": [
     {
       "alias": "google",
@@ -66,6 +113,5 @@
   "loginWithEmailAllowed": true,
   "resetPasswordAllowed": true,
   "rememberMe": true,
-  "duplicateEmailsAllowed": false,
-  "bruteForceProtected": true
+  "duplicateEmailsAllowed": false
 }
