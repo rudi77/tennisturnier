@@ -99,6 +99,52 @@ public sealed class RealmDateiTests
     }
 
     [Fact]
+    public void Beide_Fassungen_verlangen_PKCE()
+    {
+        // Die Oberfläche fährt den Code-Flow mit PKCE, weil oidc-client-ts das
+        // tut. Verlangt der Client es nicht, lässt sich derselbe Client auch
+        // ohne fahren — und dann ist ein abgefangener Code wieder etwas wert.
+        foreach (var realm in new[] { Produktion(), Entwicklung() })
+        {
+            foreach (var client in realm["clients"]!.AsArray())
+            {
+                Assert.Equal(
+                    "S256",
+                    client!["attributes"]?["pkce.code.challenge.method"]?.GetValue<string>());
+            }
+        }
+    }
+
+    [Fact]
+    public void Die_erlaubten_Weiterleitungen_decken_keinen_ganzen_Pfad_ab()
+    {
+        // Die Oberfläche führt ihre Navigation über die Adresszeile („?screen=…").
+        // Sie kehrt deshalb genau auf die Wurzel zurück, und mehr gehört nicht
+        // erlaubt: ein Platzhalter über den ganzen Pfad ist die Einladung,
+        // denselben Client anderswo anzumelden.
+        foreach (var realm in new[] { Produktion(), Entwicklung() })
+        {
+            foreach (var client in realm["clients"]!.AsArray())
+            {
+                var adressen = client!["redirectUris"]!.AsArray()
+                    .Select(a => a!.GetValue<string>())
+                    .ToList();
+
+                Assert.NotEmpty(adressen);
+                Assert.All(adressen, adresse => Assert.DoesNotContain("/*", adresse, StringComparison.Ordinal));
+            }
+        }
+    }
+
+    [Fact]
+    public void Ohne_SMTP_gibt_es_kein_vergessenes_Passwort()
+    {
+        // Der Weg verschickt eine E-Mail. Ohne konfiguriertes SMTP endet er in
+        // einer Fehlerseite — ein Angebot, das nicht einlöst, was es verspricht.
+        Assert.False(Produktion()["resetPasswordAllowed"]?.GetValue<bool>() ?? true);
+    }
+
+    [Fact]
     public void Die_Entwicklungsfassung_bringt_die_Testkonten_mit()
     {
         // Die andere Richtung: ohne sie stünde jeder e2e-Lauf ohne Anmeldung da,

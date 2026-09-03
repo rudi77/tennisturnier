@@ -103,6 +103,26 @@ builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 // hier.
 var app = builder.Build();
 
+// Wer sich anmelden darf, darf auch ausschreiben — das ist der Zweck des
+// Selbstservice und für einen Verein richtig. Steht davor aber ein Aussteller
+// mit offener Selbstregistrierung, heißt derselbe Satz: wer im Internet ein
+// Konto anlegt, legt hier Turniere an.
+//
+// Welche der beiden Instanzen das ist, kann die Anwendung nicht wissen — sie
+// kennt den Aussteller nur als Adresse. Deshalb einmal beim Start als Frage
+// und nicht als Fehler: der mitgelieferte Realm hat die Registrierung offen,
+// und diese Zeile ist die einzige Stelle, an der das jemandem auffällt, bevor
+// es jemand ausprobiert.
+if (oidc.IsConfigured && security.SelfServiceOrganizers)
+{
+    app.Logger.LogWarning(
+        "Jeder, der sich bei {Authority} anmelden kann, darf hier Turniere ausschreiben. "
+        + "Ist die Selbstregistrierung dort offen, gilt das für jeden im Internet — dann "
+        + "gehört {Setting} auf false, und die Rolle vergibt ein Systemadministrator.",
+        oidc.Authority,
+        $"{BootstrapAdminOptions.SectionName}:{nameof(BootstrapAdminOptions.SelfServiceOrganizers)}");
+}
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 

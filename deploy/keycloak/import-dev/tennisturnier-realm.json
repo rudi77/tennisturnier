@@ -16,10 +16,14 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "redirectUris": [
-        "http://localhost:5000/*",
-        "http://192.168.2.213:5000/*",
-        "http://localhost:5001/*",
-        "${MATCHDAY_ORIGIN:http://localhost:5000}/*"
+        "http://localhost:5000/",
+        "http://localhost:5000/?*",
+        "http://192.168.2.213:5000/",
+        "http://192.168.2.213:5000/?*",
+        "http://localhost:5001/",
+        "http://localhost:5001/?*",
+        "${MATCHDAY_ORIGIN:http://localhost:5000}/",
+        "${MATCHDAY_ORIGIN:http://localhost:5000}/?*"
       ],
       "webOrigins": [
         "http://localhost:5000",
@@ -39,7 +43,8 @@
         }
       ],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:5000/*##http://localhost:5001/*##http://192.168.2.213:5000/*##${MATCHDAY_ORIGIN:http://localhost:5000}/*"
+        "post.logout.redirect.uris": "http://localhost:5000/##http://localhost:5000/?*##http://localhost:5001/##http://localhost:5001/?*##http://192.168.2.213:5000/##http://192.168.2.213:5000/?*##${MATCHDAY_ORIGIN:http://localhost:5000}/##${MATCHDAY_ORIGIN:http://localhost:5000}/?*",
+        "pkce.code.challenge.method": "S256"
       }
     }
   ],
@@ -111,7 +116,7 @@
   ],
   "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
-  "resetPasswordAllowed": true,
+  "resetPasswordAllowed": false,
   "rememberMe": true,
   "duplicateEmailsAllowed": false
 }

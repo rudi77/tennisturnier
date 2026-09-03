@@ -127,7 +127,7 @@ Keycloak-Dienst von unten mitnimmt, bekommt beides ohne Zutun.
 | `Oidc__TrustUnverifiedEmail` | Vorgabe `false`: eine E-Mail-Adresse aus dem Token zählt nur mit bestätigtem `email_verified`. Nur auf `true` setzen, wenn der Aussteller den Claim nicht ausstellt **und** von sich aus keine unbestätigten Adressen zulässt. |
 | `Security__OpenAccess` | `true` lässt die Instanz ohne Anmeldung laufen (siehe unten). Zusammen mit `Oidc__Authority` verweigert die Anwendung den Start. |
 | `Security__BootstrapSystemAdmins__0` | Wer beim ersten Anmelden Systemadministrator wird — die **Subject-ID** des Kontos, oder ersatzweise seine E-Mail-Adresse. Danach wieder leeren. |
-| `Security__SelfServiceOrganizers` | Vorgabe `true`: wer sich anmeldet, darf Turniere ausschreiben. Für eine Instanz mit offenem Anmeldeweg (siehe Google) auf `false`. |
+| `Security__SelfServiceOrganizers` | Vorgabe `true`: wer sich anmeldet, darf Turniere ausschreiben. **Auf `false`, sobald sich beim Aussteller jeder selbst registrieren kann** — sonst legt jeder im Internet Turniere an. Die Rolle vergibt dann ein Systemadministrator. Die Anwendung schreibt beim Start eine Warnung, solange beides zusammensteht. |
 | `Tournament__TeamDrawSeed` | Saatwert für das Los der Teams. Nur für Vorführungen — wer ihn kennt, kennt die Paarung, bevor sie fällt. |
 | `ConnectionStrings__Default` | Vorgabe `Data Source=/data/matchday.db`, passend zum Datenträger. |
 
@@ -206,6 +206,23 @@ einem Google-Konto.
 3. In MATCHDAY `Oidc__Authority` auf
    `https://${{keycloak.RAILWAY_PUBLIC_DOMAIN}}/realms/tennisturnier` setzen und
    `Oidc__ClientId` auf `tennisturnier-api`.
+4. **Entscheiden, wer ausschreiben darf.** Der mitgelieferte Realm lässt jeden
+   sich selbst registrieren (ADR-0012: der Beitrittslink führt zum Konto). Mit
+   `Security__SelfServiceOrganizers` auf der Vorgabe `true` heißt das: jeder im
+   Internet kann nicht nur beitreten, sondern auch eigene Turniere anlegen. Für
+   eine Vereinsinstanz gehört der Schalter auf `false`; Turnierleitungen beruft
+   dann ein Systemadministrator. Solange beides zusammensteht, sagt es die
+   Anwendung beim Start als Warnung.
+
+Zwei Dinge stellt der Realm selbst: **PKCE** wird verlangt (`S256`), und die
+erlaubten Weiterleitungen enden auf `/` und `/?*` statt auf `/*` — die
+Oberfläche führt ihre Navigation über die Adresszeile, mehr braucht sie nicht.
+Ein Platzhalter über den ganzen Pfad wäre die Einladung, denselben Client ohne
+PKCE zu fahren.
+
+**„Passwort vergessen" ist aus.** Es verschickt eine E-Mail, und ohne
+konfiguriertes SMTP endet der Weg in einer Fehlerseite. Wer SMTP im Realm
+einrichtet, setzt `resetPasswordAllowed` wieder auf `true`.
 
 Beide Dienste bekommen von Railway je eine eigene Domain, und die Verweise
 oben (`${{dienst.RAILWAY_PUBLIC_DOMAIN}}`, mit den tatsächlichen Dienstnamen)
