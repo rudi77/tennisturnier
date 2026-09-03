@@ -4,8 +4,10 @@ services:
     container_name: tennisturnier-keycloak
     command: ["start-dev", "--import-realm"]
     environment:
-      # Nur für die lokale Entwicklung. In Produktion tritt Entra ID an diese
-      # Stelle, und der Unterschied ist reine Konfiguration (ADR-0007).
+      # Nur für die lokale Entwicklung. In Produktion tritt ein eigener
+      # Aussteller an diese Stelle — deploy/keycloak/ stellt dafür Keycloak im
+      # Produktionsmodus hin —, und der Unterschied ist reine Konfiguration
+      # (ADR-0007).
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HEALTH_ENABLED: "true"

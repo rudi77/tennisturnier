@@ -32,9 +32,10 @@ Zeit des Vereins und sagen nichts mehr über Rollen: die vergibt die Anwendung.
 Wer sich anmeldet, darf Turniere ausschreiben und führt, was er anlegt.
 
 > **Der Port 5000 ist nicht verhandelbar.** Der Test-Realm
-> (`deploy/keycloak/import/tennisturnier-realm.json`) trägt für den öffentlichen Client
-> `tennisturnier-api` genau `http://localhost:5000/*` als Redirect-URI und
-> `http://localhost:5000` als Web-Origin. Auf Vites Standardport 5173 bricht der
+> (`deploy/keycloak/import-dev/tennisturnier-realm.json` — die Fassung, die
+> `docker-compose.yml` einhängt) trägt für den öffentlichen Client
+> `tennisturnier-api` genau `http://localhost:5000/` und `http://localhost:5000/?*`
+> als Redirect-URIs und `http://localhost:5000` als Web-Origin. Auf Vites Standardport 5173 bricht der
 > Login-Redirect ab, bevor irgendetwas geladen ist. Deshalb steht in
 > `vite.config.ts` `strictPort: true`.
 
@@ -54,8 +55,8 @@ Wer sich anmeldet, darf Turniere ausschreiben und führt, was er anlegt.
 Die API konfiguriert **kein CORS** (`Program.cs` ruft weder `AddCors` noch
 `UseCors`). Ein Frontend auf einem eigenen Port wäre damit im Browser blockiert.
 
-Der Dev-Server leitet deshalb `/api`, `/public`, `/hubs` und `/health` an
-`http://localhost:5188` weiter — alles ist gleich-origin, und das Backend bleibt
+Der Dev-Server leitet deshalb `/api`, `/config.js`, `/public`, `/hubs` und
+`/health` an `http://localhost:5188` weiter — alles ist gleich-origin, und das Backend bleibt
 unverändert.
 
 **Für Produktion ist das eine offene Entscheidung**, und sie gehört ins Backend,

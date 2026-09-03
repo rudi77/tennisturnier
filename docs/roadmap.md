@@ -209,5 +209,7 @@ sind die Stellschrauben dafür, und sie gehören dem Turnier
 - **Trostrunde.** `SingleEliminationConsolationFormat` ist nicht eingeplant und fügt
   sich als fünftes `IPhaseFormat` ein.
 - ~~**Spielerstammdaten.**~~ Entschieden in [ADR-0008](adr/0008-spielerstammdaten.md):
-  global, mit Vereinszugehörigkeit als Beziehung. Der Preis — der Query-Filter
-  greift bei Spielern nicht — ist dort benannt.
+  turnierübergreifend. „Mit Vereinszugehörigkeit als Beziehung" stand hier aus
+  der Zeit des Vereins — `ClubMembership` wurde nie gebaut und ist mit ihm
+  entfallen. Der Preis — der Query-Filter greift bei Spielern nicht — ist im
+  ADR benannt und gilt unverändert.

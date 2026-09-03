@@ -5,9 +5,10 @@ import react from '@vitejs/plugin-react'
  * Der Dev-Server läuft auf Port 5000, nicht auf Vites 5173.
  *
  * Das ist keine Vorliebe: der Keycloak-Test-Realm des Backends
- * (`deploy/keycloak/import/tennisturnier-realm.json`) trägt für den öffentlichen
- * Client `tennisturnier-api` genau `http://localhost:5000/*` als Redirect-URI
- * und `http://localhost:5000` als Web-Origin. Auf einem anderen Port bricht der
+ * (`deploy/keycloak/import-dev/tennisturnier-realm.json`) trägt für den
+ * öffentlichen Client `tennisturnier-api` genau `http://localhost:5000/` und
+ * `http://localhost:5000/?*` als Redirect-URIs und `http://localhost:5000` als
+ * Web-Origin. Auf einem anderen Port bricht der
  * Login-Redirect ab, bevor irgendetwas geladen ist.
  *
  * Aus demselben Grund läuft die API über einen Proxy und nicht über eine

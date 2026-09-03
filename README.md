@@ -124,12 +124,15 @@ Keycloak-Dienst von unten mitnimmt, bekommt beides ohne Zutun.
 | `Oidc__ClientId` | Der Client, unter dem sich die Oberfläche anmeldet. |
 | `Oidc__Audience` | Wofür ein Token gelten muss. Vorgabe `tennisturnier-api`. Leer **und** `Oidc__RequireAudience=false` heißt: jedes Token dieses Ausstellers gilt, auch eines für einen anderen Client. Leer allein verweigert den Start. |
 | `Oidc__Scope` | Vorgabe `openid profile email`. |
+| `Oidc__RequireAudience` | Vorgabe `true`. Auf `false` nur bei einem Aussteller, der keine feste Audience vergibt — dann gilt jedes seiner Token. |
+| `Oidc__RequireHttpsMetadata` | Vorgabe `true`. Nur für die lokale Entwicklung gegen Keycloak über HTTP abschaltbar. |
 | `Oidc__TrustUnverifiedEmail` | Vorgabe `false`: eine E-Mail-Adresse aus dem Token zählt nur mit bestätigtem `email_verified`. Nur auf `true` setzen, wenn der Aussteller den Claim nicht ausstellt **und** von sich aus keine unbestätigten Adressen zulässt. |
 | `Security__OpenAccess` | `true` lässt die Instanz ohne Anmeldung laufen (siehe unten). Zusammen mit `Oidc__Authority` verweigert die Anwendung den Start. |
 | `Security__BootstrapSystemAdmins__0` | Wer beim ersten Anmelden Systemadministrator wird — die **Subject-ID** des Kontos, oder ersatzweise seine E-Mail-Adresse. Danach wieder leeren. |
 | `Security__SelfServiceOrganizers` | Vorgabe `true`: wer sich anmeldet, darf Turniere ausschreiben. **Auf `false`, sobald sich beim Aussteller jeder selbst registrieren kann** — sonst legt jeder im Internet Turniere an. Die Rolle vergibt dann ein Systemadministrator. Die Anwendung schreibt beim Start eine Warnung, solange beides zusammensteht. |
 | `Tournament__TeamDrawSeed` | Saatwert für das Los der Teams. Nur für Vorführungen — wer ihn kennt, kennt die Paarung, bevor sie fällt. |
 | `ConnectionStrings__Default` | Vorgabe `Data Source=/data/matchday.db`, passend zum Datenträger. |
+| `Database__AutoMigrate` | Vorgabe `true`: das Schema wandert beim Start. Auf `false`, wo die Migration gesteuert werden soll — zwei gleichzeitig startende Prozesse überholen einander sonst. |
 
 Die Oberfläche holt sich `Oidc__Authority`, `Oidc__ClientId` und `Oidc__Scope`
 zur Laufzeit über `/config.js`. Sie sind deshalb nicht ins Bündel gebaut, und
@@ -183,7 +186,8 @@ bleibt es bei der öffentlichen Ansicht — das lokale Keycloak aus
 `docker-compose.yml` ist von Railway aus nicht erreichbar, und `localhost`
 zeigt dort auf den Container selbst.
 
-`deploy/keycloak/` enthält deshalb ein zweites Bild: derselbe Realm wie lokal,
+`deploy/keycloak/` enthält deshalb ein zweites Bild: derselbe Realm wie lokal —
+bis auf die Testkonten und den Direktzugang, die nur in `import-dev/` stehen —,
 aber im Produktionsmodus gegen PostgreSQL statt `start-dev` gegen den
 Arbeitsspeicher. Der Unterschied ist keiner der Bequemlichkeit — `start-dev`
 vergisst beim Neustart jeden Benutzer, jede Sitzung und jede Verknüpfung zu
@@ -381,11 +385,13 @@ Die tragenden Entscheidungen samt verworfener Alternativen stehen in
 - [ADR-0009](docs/adr/0009-turnier-als-wurzelaggregat.md): das Turnier ist die
   Wurzel, der Verein ist entfallen; Rollen hängen am Turnier, durchgesetzt per
   Query-Filter. Ersetzt ADR-0004.
-- [ADR-0010](docs/adr/0010-oeffentliche-selbstmeldung.md): Melden über einen
-  Token-Link, ohne Konto — samt den drei Regeln, ohne die der Endpunkt still
-  scheitert.
+- [ADR-0012](docs/adr/0012-mitgliedschaft-statt-selbstmeldung.md): das Turnier
+  ist eine Gruppe — der Link führt zum Beitritt, und wer beitritt, hat ein
+  Konto. Ersetzt ADR-0010, wo dasselbe noch ohne Konto ging.
 - [ADR-0008](docs/adr/0008-spielerstammdaten.md): Spieler gehören keinem Turnier
-  — samt dem Preis, dass der Query-Filter bei ihnen nicht greift.
+  — samt dem Preis, dass der Query-Filter bei ihnen nicht greift. Formal von
+  ADR-0009 abgelöst (der Verein, dem sie nicht gehörten, ist entfallen); die
+  Entscheidung selbst und ihre drei Regeln gelten unverändert.
 
 ## Mitglieder: wer dazugehört
 
