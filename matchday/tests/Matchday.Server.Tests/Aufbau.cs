@@ -14,7 +14,12 @@ public sealed class Aufbau : IDisposable
 
     public Aufbau()
     {
-        Store = new TournamentStore($"Data Source={_path}");
+        // Pooling=False: Ohne Pool gibt es nichts zu leeren, und die Datei ist
+        // sofort nach dem letzten Befehl frei. Der frühere Weg — beim Aufräumen
+        // SqliteConnection.ClearAllPools() — wirkt auf den ganzen Prozess und
+        // damit auch auf die Testklassen, die xUnit gerade parallel laufen
+        // lässt: Eine Klasse räumte ab und zog den anderen die Verbindung weg.
+        Store = new TournamentStore($"Data Source={_path};Pooling=False");
         Live = new LiveHub();
         Actions = new TournamentActions(Store, Live, TimeProvider.System);
         Tools = new AgentTools(Actions);
@@ -41,9 +46,20 @@ public sealed class Aufbau : IDisposable
             TimeProvider.System,
             NullLogger<TournamentAgent>.Instance);
 
-    public void Dispose()
+    public void Dispose() => Wegräumen(_path);
+
+    /// <summary>
+    /// Eine Datei im Temp-Ordner, die einmal liegen bleibt, ist kein Grund,
+    /// einen grünen Lauf rot zu machen.
+    /// </summary>
+    internal static void Wegräumen(string pfad)
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        File.Delete(_path);
+        try
+        {
+            File.Delete(pfad);
+        }
+        catch (IOException)
+        {
+        }
     }
 }

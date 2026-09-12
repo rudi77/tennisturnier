@@ -20,14 +20,13 @@ public sealed class ApiTests : IDisposable
         // steht appsettings.json sonst später in der Kette und gewinnt — dann
         // liefen alle Tests gemeinsam auf matchday.db im Ausgabeverzeichnis.
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.UseSetting("ConnectionStrings:Default", $"Data Source={_path}"));
+            builder.UseSetting("ConnectionStrings:Default", $"Data Source={_path};Pooling=False"));
     }
 
     public void Dispose()
     {
         _factory.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        File.Delete(_path);
+        Aufbau.Wegräumen(_path);
     }
 
     private HttpClient Client(string browser, string? token = null)
