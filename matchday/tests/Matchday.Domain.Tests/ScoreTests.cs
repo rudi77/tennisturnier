@@ -105,6 +105,12 @@ public sealed class ScoreTests
     public void Ein_Satz_genuegt_im_Einsatzformat()
     {
         Assert.Equal(2, Score.Played([Set(3, 6)], SingleSet).WinnerSide);
+
+        // Auch mit Match-Tiebreak als Vorgabe: bei einem Satz ist der eine Satz ein Satz.
+        var einSatzMitVorgabe = new MatchFormat(BestOf: 1);
+        Assert.Equal(1, Score.Played([Set(7, 6, 4)], einSatzMitVorgabe).WinnerSide);
+        Assert.Throws<DomainException>(() => Score.Played([Set(10, 8)], einSatzMitVorgabe));
+        Score.Retired([], Set(5, 4), 2, einSatzMitVorgabe);
     }
 
     [Fact]

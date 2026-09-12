@@ -187,7 +187,7 @@ public sealed record Score
         }
 
         var isFinalSet = completedCount == format.BestOf - 1;
-        var isMatchTiebreak = isFinalSet && format.FinalSetMode == FinalSetMode.MatchTiebreak10;
+        var isMatchTiebreak = isFinalSet && format.BestOf > 1 && format.FinalSetMode == FinalSetMode.MatchTiebreak10;
         var allowTiebreak = !isFinalSet || format.FinalSetMode != FinalSetMode.Advantage;
 
         if (IsSetOver(set, format, isMatchTiebreak, allowTiebreak))
@@ -249,9 +249,10 @@ public sealed record Score
             throw new DomainException($"{position}: ein Satz endet nicht unentschieden ({set}).");
         }
 
+        // Ein Match über einen Satz hat keinen „letzten Satz“, der ein Tiebreak sein könnte.
         var isFinalSet = index == format.BestOf - 1;
 
-        if (isFinalSet && format.FinalSetMode == FinalSetMode.MatchTiebreak10)
+        if (isFinalSet && format.BestOf > 1 && format.FinalSetMode == FinalSetMode.MatchTiebreak10)
         {
             ValidateMatchTiebreak(set, position);
             return;
