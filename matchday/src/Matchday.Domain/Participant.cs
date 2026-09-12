@@ -56,7 +56,7 @@ public static class Lineups
     /// <summary>Zerlegt einen Eintrag in Spieler. Leere Teile fallen weg.</summary>
     public static IReadOnlyList<string> Split(string text)
     {
-        var parts = new List<string> { text ?? string.Empty };
+        var parts = new List<string> { text };
 
         foreach (var mark in Marks)
         {

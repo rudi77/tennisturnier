@@ -41,6 +41,7 @@ public sealed class TournamentTests
 
         Assert.Throws<DomainException>(() => t.AddParticipant("rudi"));
         Assert.Throws<DomainException>(() => t.AddParticipant(""));
+        Assert.Throws<DomainException>(() => t.AddParticipant(" / "));
         Assert.Equal("Rudi", t.FindParticipant("RUDI")!.Name);
         Assert.Equal("Max", t.FindParticipant("ma")!.Name);
 
@@ -425,6 +426,23 @@ public sealed class TournamentTests
         Assert.Equal("Anna / Tom", t.FindParticipant("Tom/Anna")!.Name);
         Assert.Equal("Anna / Tom", t.FindParticipant("Anna")!.Name);
         Assert.Null(t.FindParticipant("Eva"));
+    }
+
+    [Fact]
+    public void Ein_mehrdeutiger_Namensteil_findet_niemanden()
+    {
+        // Zwei, die aufeinander passen: „Ann“ könnte beide meinen. Dann lieber
+        // niemanden zurückgeben als den ersten — der Aufrufer sagt daraufhin,
+        // dass er den Namen nicht findet, und der Benutzer wird deutlicher.
+        var t = Neu(Mode.Knockout, "Anna", "Annalena");
+
+        Assert.Equal("Anna", t.FindParticipant("Anna")!.Name);
+        Assert.Equal("Annalena", t.FindParticipant("lena")!.Name);
+        Assert.Null(t.FindParticipant("Ann"));
+
+        // Ohne Namen passt jeder — und genau deshalb keiner.
+        Assert.Null(t.FindParticipant(""));
+        Assert.Null(t.FindParticipant("  "));
     }
 
     [Fact]

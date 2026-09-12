@@ -170,7 +170,7 @@ public sealed class Tournament
     public Participant AddParticipant(string name)
     {
         RequireSetup("Die Teilnehmerliste");
-        var players = Lineups.Split(name ?? string.Empty).Select(player => CleanName(player)).ToList();
+        var players = Lineups.Split(RequireText(name, "Der Name")).Select(CleanName).ToList();
         RequireLineup(players);
 
         var clean = Lineups.Compose(players);
@@ -243,14 +243,15 @@ public sealed class Tournament
     /// </summary>
     public Participant? FindParticipant(string name)
     {
-        var clean = (name ?? string.Empty).Trim();
+        var clean = name.Trim();
+        var asked = Lineups.Split(clean);
 
-        if (clean.Length == 0)
+        // Ohne Namen ist jeder ein Treffer — das wäre kein Fund, sondern der
+        // erste in der Liste.
+        if (asked.Count == 0)
         {
             return null;
         }
-
-        var asked = Lineups.Split(clean);
 
         return _participants.FirstOrDefault(p => p.Is(asked))
             ?? _participants.FirstOrDefault(p => p.IsCalled(clean))
