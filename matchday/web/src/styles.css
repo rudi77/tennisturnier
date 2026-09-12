@@ -449,3 +449,61 @@ a { color: var(--accent); }
 @media (max-width: 460px) {
   .mark span { display: none; }
 }
+
+/* --- Breites Fenster: nebeneinander statt untereinander -------------------
+ *
+ * Auf dem Telefon ist Übereinander richtig — dort gibt es nur eine Spalte.
+ * Auf einem Schirm ist es verschenkter Platz: Das Bracket wird schmal
+ * gequetscht, während links und rechts nichts steht, und das Gespräch
+ * verdeckt den Spielstand, statt daneben zu stehen.
+ *
+ * Ein Raster statt der Spalte. Die Bühne nimmt zwei Zeilen, damit das
+ * Eingabefeld unter dem Gespräch bleibt und nicht unter ihr — die beiden
+ * gehören zusammen. Dafür braucht es keine Änderung am Markup: Die Bereiche
+ * benennen sich selbst.
+ */
+@media (min-width: 900px) {
+  .chat {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(22rem, 0.9fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "bar    bar"
+      "notice notice"
+      "stage  transcript"
+      "stage  composer";
+  }
+
+  .chat__bar { grid-area: bar; }
+  .notice { grid-area: notice; margin: 12px 16px; }
+
+  .stage {
+    grid-area: stage;
+    min-height: 0;
+    padding-bottom: 16px;
+    /* Die Trennung wandert mit: unten auf dem Telefon, zur Seite hier. */
+    border-bottom: none;
+    border-right: 1px solid var(--line);
+  }
+
+  .chat__transcript {
+    grid-area: transcript;
+    /* Im Raster gibt die Zeile die Höhe vor, nicht der Inhalt. Die Deckelung
+       von der schmalen Ansicht würde das Gespräch hier künstlich kürzen. */
+    max-height: none;
+    min-height: 0;
+    overflow-y: auto;
+    margin: 0;
+    max-width: none;
+  }
+
+  .composer {
+    grid-area: composer;
+    position: static;
+    max-width: none;
+    margin: 0;
+  }
+
+  /* Mehr Luft für die Widgets, wo sie da ist. */
+  .stage > * { max-width: 1000px; }
+}
