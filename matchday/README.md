@@ -1,10 +1,19 @@
 # MATCHDAY — ein Turnier mit Freunden
 
 Ein Turnier anlegen, Freunde eintragen, auslosen, Ergebnisse eintragen, und
-alle sehen auf dem Handy, wie es steht. Geführt wird das Ganze im Gespräch:
-unten ein Eingabefeld, wahlweise per Sprache, und der Agent legt an, trägt
-ein, lost aus und zeigt jeweils das Widget, das gerade zählt. Warum es so
+alle sehen auf dem Handy, wie es steht. **Einzel oder Doppel** — im Doppel ist
+ein Teilnehmer ein Team, geschrieben `Anna / Tom`
+([ADR-0020](../docs/adr/0020-einzel-und-doppel.md)). Geführt wird das Ganze im
+Gespräch: unten ein Eingabefeld, wahlweise per Sprache, und der Agent legt an,
+trägt ein, lost aus und zeigt jeweils das Widget, das gerade zählt. Warum es so
 gebaut ist, steht in [ADR-0016](../docs/adr/0016-neuanfang-ein-turnier-mit-freunden.md).
+
+**Drei Wege, und jeder führt durch:** ganz im Gespräch, ganz über die Widgets
+auf der Bühne, oder gemischt. Beide rufen dieselben Anwendungsfälle, und der
+Live-Strom bringt jede Änderung sofort auf den anderen Weg. Der Agent **handelt
+und erklärt**: Fragen zur App, zum Ablauf, zu den Modi und zu den Spielregeln
+beantwortet er aus seinem Wissen, ohne ein Werkzeug zu rufen
+([ADR-0021](../docs/adr/0021-der-agent-erklaert-und-die-widgets-koennen-alles.md)).
 
 Keine Konten. Wer ein Turnier anlegt, bekommt einen **Verwalterlink** (`?a=…`,
 geheim) und einen **Mitschau-Link** (`?t=…`, für alle).
@@ -18,9 +27,11 @@ dotnet build && dotnet test
 AZURE_OPENAI_ENDPOINT=https://….openai.azure.com/ AZURE_OPENAI_API_KEY=… AZURE_OPENAI_DEPLOYMENT=gpt-5   dotnet run --project src/Matchday.Server
 ```
 
-Dann `http://localhost:5080` öffnen. Ohne Modellzugang läuft alles außer dem
-Eingabefeld: die Widgets rufen die HTTP-API direkt. Der Satz über dem
-Eingabefeld sagt dann, was genau fehlt.
+Dann `http://localhost:5080` öffnen. Ohne Modellzugang bleibt nur das
+Eingabefeld stumm: Jeder Schritt — anlegen, Rahmen ändern, Teilnehmer eintragen,
+auslosen und zurücknehmen, Ergebnisse, teilen, löschen — geht auch über die
+Widgets, und die rufen die HTTP-API direkt. Der Satz über dem Eingabefeld sagt,
+was genau fehlt.
 
 Ohne Azure-Ressource geht es auch direkt über OpenAI:
 `Agent__Provider=OpenAI OPENAI_API_KEY=sk-… OPENAI_MODEL=gpt-5`.
@@ -32,14 +43,17 @@ leitet `/api` auf 5080 weiter).
 
 | Wo | Was |
 | --- | --- |
-| `src/Matchday.Domain` | Turnier, Teilnehmer, Matches, Satzvalidierung, K.o.-Baum, Kreisverfahren, Tabelle. Keine Pakete. |
+| `src/Matchday.Domain` | Turnier, Teilnehmer (Einzel und Doppel), Matches, Satzvalidierung, K.o.-Baum, Kreisverfahren, Tabelle. Keine Pakete. |
 | `src/Matchday.Server` | Minimal API, SQLite als Dokumentspeicher, Live-Stream per SSE, der Agent mit seinen zwölf Werkzeugen, Auslieferung der Oberfläche. |
 | `web` | Vite + React: das Gespräch mit Widgets, die Ergebnismaske, die Mitschau-Ansicht. |
 | `tests` | Domänen- und Servertests, darunter die Werkzeuge des Agenten ohne Modell. |
 
 Die Werkzeuge des Agenten und die HTTP-API rufen dieselben Anwendungsfälle
 (`TournamentActions`). Der Agent entscheidet nie fachlich: Auslosung,
-Satzprüfung und Tabelle kommen aus der Domäne.
+Satzprüfung und Tabelle kommen aus der Domäne. Was er über die Anwendung und
+über Tennis weiß, steht in `Agent/Knowledge.cs` und hängt unter den
+Anweisungen — ein Test hält fest, dass zu jedem Modus, jeder Disziplin und jeder
+Variante des letzten Satzes dort etwas steht.
 
 Die Werkzeugschleife dreht das **Microsoft Agent Framework**; MATCHDAY liest sie
 mit und macht daraus die Ereignisse für die Oberfläche. Warum, steht in

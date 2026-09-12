@@ -50,7 +50,7 @@ export function PublicScreen({ tournamentId }: { tournamentId: string }) {
             <TournamentHeader view={view} />
             {view.state === 'Setup' ? (
               <section className="card">
-                <h2 className="card__title">Teilnehmer</h2>
+                <h2 className="card__title">{view.discipline === 'Doubles' ? 'Teams' : 'Teilnehmer'}</h2>
                 {view.participants.length === 0 ? (
                   <p className="muted">Noch niemand eingetragen.</p>
                 ) : (

@@ -39,6 +39,14 @@ public sealed class AgentTools(TournamentActions actions)
         description = "Id des Turniers. Weglassen heißt: das aktuelle Turnier.",
     };
 
+    /// <summary>Steht wie <see cref="TournamentIdProperty"/> bewusst über <see cref="Definitions"/>.</summary>
+    private static readonly object DisciplineProperty = new
+    {
+        type = "string",
+        @enum = new[] { "Singles", "Doubles" },
+        description = "Singles = Einzel, Doubles = Doppel. Im Doppel ist ein Teilnehmer ein Team aus zwei Spielern.",
+    };
+
     public static IReadOnlyList<ToolDefinition> Definitions { get; } =
     [
         new("list_tournaments",
@@ -46,17 +54,18 @@ public sealed class AgentTools(TournamentActions actions)
             Schema(new { })),
 
         new("create_tournament",
-            "Legt ein neues Turnier an und macht es zum aktuellen Turnier. Nur der Name ist Pflicht; frag nicht nach dem Rest, außer der Benutzer will es angeben. Standard: K.o., zwei Gewinnsätze mit Match-Tiebreak.",
+            "Legt ein neues Turnier an und macht es zum aktuellen Turnier. Nur der Name ist Pflicht; frag nicht nach dem Rest, außer der Benutzer will es angeben. Standard: Einzel, K.o., zwei Gewinnsätze mit Match-Tiebreak.",
             Schema(new
             {
                 name = new { type = "string", description = "Name des Turniers" },
                 date = new { type = "string", description = "Datum als YYYY-MM-DD, falls genannt" },
                 location = new { type = "string", description = "Ort, falls genannt" },
                 mode = new { type = "string", @enum = new[] { "Knockout", "RoundRobin" }, description = "Knockout = K.o., RoundRobin = jeder gegen jeden" },
+                discipline = DisciplineProperty,
                 bestOf = new { type = "integer", @enum = new[] { 1, 3, 5 }, description = "Sätze insgesamt: 1, 3 oder 5" },
                 finalSet = new { type = "string", @enum = new[] { "Regular", "MatchTiebreak10", "Advantage" }, description = "Letzter Satz: normal, Match-Tiebreak bis 10, oder ohne Tiebreak" },
                 tiebreakAt = new { type = "integer", description = "Ab wie vielen Spielen der Satz endet, üblich 6; kurze Sätze 4" },
-                participants = new { type = "array", items = new { type = "string" }, description = "Teilnehmer, falls gleich genannt" },
+                participants = new { type = "array", items = new { type = "string" }, description = "Teilnehmer, falls gleich genannt. Im Doppel je Team ein Eintrag mit beiden Spielern: „Anna / Tom“." },
             }, "name")),
 
         new("get_tournament",
@@ -64,7 +73,7 @@ public sealed class AgentTools(TournamentActions actions)
             Schema(new { tournamentId = TournamentIdProperty }, "tournamentId")),
 
         new("update_tournament",
-            "Ändert Name, Datum, Ort, Modus oder Satzformat des aktuellen Turniers. Modus und Format nur vor der Auslosung.",
+            "Ändert Name, Datum, Ort, Modus, Disziplin oder Satzformat des aktuellen Turniers. Modus, Disziplin und Format nur vor der Auslosung; die Disziplin nur, solange noch niemand eingetragen ist.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
@@ -72,21 +81,22 @@ public sealed class AgentTools(TournamentActions actions)
                 date = new { type = "string", description = "YYYY-MM-DD, oder leerer String zum Entfernen" },
                 location = new { type = "string", description = "Ort, oder leerer String zum Entfernen" },
                 mode = new { type = "string", @enum = new[] { "Knockout", "RoundRobin" } },
+                discipline = DisciplineProperty,
                 bestOf = new { type = "integer", @enum = new[] { 1, 3, 5 } },
                 finalSet = new { type = "string", @enum = new[] { "Regular", "MatchTiebreak10", "Advantage" } },
                 tiebreakAt = new { type = "integer" },
             })),
 
         new("add_participants",
-            "Trägt Teilnehmer in das aktuelle Turnier ein. Nur vor der Auslosung.",
+            "Trägt Teilnehmer in das aktuelle Turnier ein. Nur vor der Auslosung. Im Doppel ist ein Teilnehmer ein Team: je Eintrag beide Spieler, getrennt durch „/“.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
-                names = new { type = "array", items = new { type = "string" }, description = "Namen der Teilnehmer" },
+                names = new { type = "array", items = new { type = "string" }, description = "Namen der Teilnehmer; im Doppel je Team „Anna / Tom“" },
             }, "names")),
 
         new("remove_participants",
-            "Streicht Teilnehmer aus dem aktuellen Turnier. Nur vor der Auslosung.",
+            "Streicht Teilnehmer aus dem aktuellen Turnier. Nur vor der Auslosung. Im Doppel genügt ein Spieler des Teams.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
@@ -102,7 +112,7 @@ public sealed class AgentTools(TournamentActions actions)
             Schema(new { tournamentId = TournamentIdProperty })),
 
         new("record_result",
-            "Trägt ein Ergebnis ein. Das Match wird über die beiden Namen gefunden. Sätze aus Sicht des Siegers: bei 6:4, 3:6, 10:8 für den Sieger also [[6,4],[3,6],[10,8]]. Bei Nichtantreten (walkover) oder Aufgabe (retired) ist winner der, der weiterkommt.",
+            "Trägt ein Ergebnis ein. Das Match wird über die beiden Namen gefunden; im Doppel genügt je Team ein Spieler oder das Paar als „Anna / Tom“. Sätze aus Sicht des Siegers: bei 6:4, 3:6, 10:8 für den Sieger also [[6,4],[3,6],[10,8]]. Bei Nichtantreten (walkover) oder Aufgabe (retired) ist winner der, der weiterkommt.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
@@ -201,15 +211,14 @@ public sealed class AgentTools(TournamentActions actions)
             Date(input, "date"),
             String(input, "location"),
             Enum<Mode>(input, "mode") ?? Mode.Knockout,
-            format);
+            format,
+            Enum<Discipline>(input, "discipline") ?? Discipline.Singles,
+            Strings(input, "participants"));
 
+        // Teilnehmer gehören in dieselbe Anfrage: Scheitert ein Name — im
+        // Doppel etwa ein Team mit nur einem Spieler —, steht sonst ein halb
+        // gefülltes Turnier da, das niemand bestellt hat.
         var t = await actions.CreateAsync(actor, request, ct);
-        var names = Strings(input, "participants");
-
-        if (names.Count > 0)
-        {
-            t = await actions.AddParticipantsAsync(actor, t.Id, names, ct);
-        }
 
         var links = ViewBuilder.Links(t, baseUrl);
         return Show(t, WidgetTournament, extra: $"Mitschau-Link: {links.PublicUrl}");
@@ -232,6 +241,7 @@ public sealed class AgentTools(TournamentActions actions)
             Location: location is { Length: > 0 } ? location : null,
             ClearLocation: location is { Length: 0 },
             Mode: Enum<Mode>(input, "mode"),
+            Discipline: Enum<Discipline>(input, "discipline"),
             Format: hasFormat ? FormatFrom(input, current.Format) : null);
 
         return Show(await actions.UpdateAsync(actor, id, request, ct), WidgetTournament);
@@ -332,7 +342,7 @@ public sealed class AgentTools(TournamentActions actions)
     {
         var lines = new List<string>
         {
-            $"Turnier „{t.Name}“ (id {t.Id}), {ModeText(t.Mode)}, {t.Format.Describe()}, Zustand: {StateText(t.State)}",
+            $"Turnier „{t.Name}“ (id {t.Id}), {DisciplineText(t.Discipline)}, {ModeText(t.Mode)}, {t.Format.Describe()}, Zustand: {StateText(t.State)}",
         };
 
         if (t.Date is { } date)
@@ -345,7 +355,8 @@ public sealed class AgentTools(TournamentActions actions)
             lines.Add($"Ort: {t.Location}");
         }
 
-        lines.Add($"Teilnehmer ({t.Participants.Count}): {string.Join(", ", t.Participants.Select(p => p.Name))}");
+        var what = t.Discipline == Discipline.Doubles ? "Teams" : "Teilnehmer";
+        lines.Add($"{what} ({t.Participants.Count}): {string.Join("; ", t.Participants.Select(p => p.Name))}");
 
         if (t.Matches.Count > 0)
         {
@@ -377,9 +388,11 @@ public sealed class AgentTools(TournamentActions actions)
         return score.Outcome == MatchOutcome.Retirement ? $"{text} (Aufgabe)" : text;
     }
 
-    private static string ModeText(Mode mode) => mode == Mode.Knockout ? "K.o." : "jeder gegen jeden";
+    internal static string ModeText(Mode mode) => mode == Mode.Knockout ? "K.o." : "jeder gegen jeden";
 
-    private static string StateText(TournamentState state) => state switch
+    internal static string DisciplineText(Discipline discipline) => discipline == Discipline.Doubles ? "Doppel" : "Einzel";
+
+    internal static string StateText(TournamentState state) => state switch
     {
         TournamentState.Setup => "Vorbereitung (noch nicht ausgelost)",
         TournamentState.Running => "läuft",

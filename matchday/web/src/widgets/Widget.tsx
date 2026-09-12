@@ -1,4 +1,4 @@
-import { api, type AdminView, type Links, type TournamentSummary, type TournamentView } from '../api'
+import { api, type AdminView, type CreateBody, type Links, type TournamentSummary, type TournamentView } from '../api'
 import { adminTokenFor } from '../client'
 import { Bracket } from './Bracket'
 import { ParticipantList } from './ParticipantList'
@@ -33,6 +33,7 @@ export function Widget({
   apply,
   open,
   onNewTournament,
+  onDeleted,
 }: {
   item: WidgetItem
   views: Record<string, TournamentView>
@@ -40,6 +41,7 @@ export function Widget({
   apply: Apply
   open: (id: string) => Promise<void>
   onNewTournament: (view: TournamentView) => void
+  onDeleted: () => void
 }) {
   const [editing, setEditing] = useState<MatchView | null>(null)
 
@@ -48,9 +50,9 @@ export function Widget({
       <TournamentList
         tournaments={(item.data as TournamentSummary[] | null) ?? []}
         onOpen={open}
-        onCreate={(name) =>
+        onCreate={(body: CreateBody) =>
           act(async () => {
-            const admin = await api.create({ name })
+            const admin = await api.create(body)
             onNewTournament(admin.tournament)
             return admin
           })
@@ -102,7 +104,7 @@ export function Widget({
     default:
       return (
         <>
-          <TournamentCard view={view} admin={admin} act={act} onOpen={onOpen} />
+          <TournamentCard view={view} admin={admin} act={act} onOpen={onOpen} onDeleted={onDeleted} />
           {editor}
         </>
       )

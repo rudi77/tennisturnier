@@ -6,6 +6,7 @@ import { adminTokenFor, clientId, rememberAdminToken } from './client'
 import { idToken, rememberToken, ABGEMELDET, type AuthConfig } from './auth'
 
 export type Mode = 'Knockout' | 'RoundRobin'
+export type Discipline = 'Singles' | 'Doubles'
 export type TournamentState = 'Setup' | 'Running' | 'Completed'
 export type FinalSetMode = 'Regular' | 'MatchTiebreak10' | 'Advantage'
 export type MatchStatus = 'Pending' | 'Ready' | 'Finished'
@@ -27,6 +28,8 @@ export interface SetScore {
 export interface Participant {
   id: string
   name: string
+  /** Im Doppel die beiden Spieler; im Einzel fehlt das Feld oder enthält den Namen. */
+  players?: string[] | null
 }
 
 export interface SideView {
@@ -75,6 +78,7 @@ export interface TournamentView {
   date: string | null
   location: string | null
   mode: Mode
+  discipline: Discipline
   format: MatchFormat
   formatText: string
   state: TournamentState
@@ -90,6 +94,7 @@ export interface TournamentSummary {
   date: string | null
   location: string | null
   mode: Mode
+  discipline: Discipline
   state: TournamentState
   participantCount: number
   adminToken: string
@@ -104,6 +109,32 @@ export interface AdminView {
   tournament: TournamentView
   links: Links
   adminToken: string
+}
+
+/** Was der Server beim Anlegen annimmt. Alles außer dem Namen ist freiwillig. */
+export interface CreateBody {
+  name: string
+  date?: string | null
+  location?: string | null
+  mode?: Mode
+  discipline?: Discipline
+  format?: MatchFormat
+  participants?: string[]
+}
+
+/**
+ * Was sich ändern lässt. Ein leerer String bei `date` oder `location` heißt
+ * löschen — so unterscheidet der Server „weg damit“ von „nicht angefasst“.
+ */
+export interface UpdateBody {
+  name?: string
+  date?: string | null
+  clearDate?: boolean
+  location?: string | null
+  clearLocation?: boolean
+  mode?: Mode
+  discipline?: Discipline
+  format?: MatchFormat
 }
 
 export type ResultKind = 'Played' | 'Walkover' | 'Retired'
@@ -170,7 +201,8 @@ export const api = {
   mine: () => call<TournamentSummary[]>('GET', '/api/tournaments'),
   get: (id: string) => call<TournamentView>('GET', `/api/tournaments/${id}`),
   byAdmin: (token: string) => call<AdminView>('GET', `/api/tournaments/by-admin/${encodeURIComponent(token)}`),
-  create: (body: { name: string; mode?: Mode }) => call<AdminView>('POST', '/api/tournaments', body),
+  create: (body: CreateBody) => call<AdminView>('POST', '/api/tournaments', body),
+  update: (id: string, body: UpdateBody) => call<AdminView>('PUT', `/api/tournaments/${id}`, body, id),
   addParticipants: (id: string, names: string[]) =>
     call<AdminView>('POST', `/api/tournaments/${id}/participants`, { names }, id),
   removeParticipant: (id: string, participantId: string) =>

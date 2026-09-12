@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Matchday.Domain;
 using Matchday.Server.Agent;
 using Matchday.Server.Api;
 using Microsoft.Extensions.AI;
@@ -226,7 +227,7 @@ public sealed class TournamentAgentTests : IDisposable
         await Lauf(_a.Agent(modell), new ChatRequest("Was steht an?", "sitzung-6", angelegt.Id));
 
         var gelesen = modell.Anfragen.Single().Single().Text;
-        Assert.Contains($"Aktuelles Turnier: „Sommercup“ (id {angelegt.Id})", gelesen);
+        Assert.Contains($"Aktuelles Turnier: „Sommercup“ (id {angelegt.Id}, Einzel, K.o.,", gelesen);
     }
 
     [Fact]
@@ -297,7 +298,25 @@ public sealed class TournamentAgentTests : IDisposable
 
         await Lauf(_a.Agent(modell), new ChatRequest("Wie steht es?", "sitzung-9", fremd.Id));
 
-        Assert.Contains($"Aktuelles Turnier: „Herbstcup“ (id {fremd.Id})", modell.Anfragen.Single().Single().Text);
+        Assert.Contains($"Aktuelles Turnier: „Herbstcup“ (id {fremd.Id}, Einzel, K.o.,", modell.Anfragen.Single().Single().Text);
+    }
+
+    [Fact]
+    public async Task Der_Kontext_sagt_was_fuer_ein_Turnier_es_ist()
+    {
+        // Ohne die Disziplin im Kontext trüge der Agent im Doppel zwei Spieler
+        // als zwei Teams ein — und bekäme eine Absage für etwas, das hier steht.
+        var t = await _a.Actions.CreateAsync(
+            _a.Rudi,
+            new CreateTournamentRequest("Doppelrunde", Discipline: Discipline.Doubles, Participants: ["Anna / Tom", "Rudi / Max"]),
+            CancellationToken.None);
+
+        var modell = new Modell([new TextContent("Alles klar.")]);
+        await Lauf(_a.Agent(modell), new ChatRequest("Wer spielt mit?", "sitzung-11", t.Id));
+
+        var kontext = modell.Anfragen.Single().Single().Text;
+        Assert.Contains("Doppel", kontext);
+        Assert.Contains("2 Teams", kontext);
     }
 
     [Fact]

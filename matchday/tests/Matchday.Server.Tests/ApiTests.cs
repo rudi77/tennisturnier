@@ -82,6 +82,59 @@ public sealed class ApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Ein_Doppelturnier_entsteht_in_einer_Anfrage()
+    {
+        var rudi = Client("browser-rudi");
+
+        // Der Weg der Widgets: Rahmen und Teams in einem Rutsch, ohne Modell.
+        var created = await rudi.PostAsJsonAsync("/api/tournaments", new
+        {
+            name = "Doppelrunde",
+            mode = "RoundRobin",
+            discipline = "Doubles",
+            participants = new[] { "Anna / Tom", "Rudi und Max" },
+        });
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var admin = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var tournament = admin.GetProperty("tournament");
+        var id = tournament.GetProperty("id").GetString();
+
+        Assert.Equal("Doubles", tournament.GetProperty("discipline").GetString());
+        Assert.Equal(
+            ["Anna / Tom", "Rudi / Max"],
+            tournament.GetProperty("participants").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
+
+        // Ein Team mit nur einem Spieler fällt auf, und zwar vollständig: das
+        // halb gefüllte Turnier entsteht gar nicht.
+        var halb = await rudi.PostAsJsonAsync("/api/tournaments", new
+        {
+            name = "Halbes Doppel",
+            discipline = "Doubles",
+            participants = new[] { "Eva" },
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, halb.StatusCode);
+        Assert.DoesNotContain("Halbes Doppel", await (await rudi.GetAsync("/api/tournaments")).Content.ReadAsStringAsync());
+
+        // Die Disziplin steht nicht mehr zur Wahl, sobald Teams drinstehen.
+        var umstellen = await rudi.PutAsJsonAsync($"/api/tournaments/{id}", new { discipline = "Singles" });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, umstellen.StatusCode);
+
+        // Der Rest des Rahmens geht weiterhin — auch ohne Gespräch.
+        var geändert = await rudi.PutAsJsonAsync($"/api/tournaments/{id}", new { name = "Doppelrunde am See", location = "Baden", date = "2026-09-19" });
+        geändert.EnsureSuccessStatusCode();
+        var sicht = (await geändert.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tournament");
+        Assert.Equal("Doppelrunde am See", sicht.GetProperty("name").GetString());
+        Assert.Equal("Baden", sicht.GetProperty("location").GetString());
+
+        // Auslosen, Ergebnis über die Namen der Teams, und die Tabelle folgt.
+        (await rudi.PostAsync($"/api/tournaments/{id}/draw", null)).EnsureSuccessStatusCode();
+        var nachAuslosung = await rudi.GetFromJsonAsync<JsonElement>($"/api/tournaments/{id}");
+        var match = nachAuslosung.GetProperty("matches").EnumerateArray().Single();
+        Assert.Contains(" / ", match.GetProperty("side1").GetProperty("name").GetString()!);
+    }
+
+    [Fact]
     public async Task Ohne_Schalter_verlangt_die_Instanz_keine_Anmeldung()
     {
         // Der Normalfall dieser Instanz: kein Konto nötig, und entsprechend

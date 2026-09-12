@@ -14,7 +14,16 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
     {
         ArgumentNullException.ThrowIfNull(request);
         var tournament = Tournament.Create(
-            request.Name, actor.ClientId, clock.GetUtcNow(), request.Mode, request.Format, request.Date, request.Location);
+            request.Name, actor.ClientId, clock.GetUtcNow(), request.Mode, request.Format, request.Date, request.Location, request.Discipline);
+
+        // Teilnehmer gleich mit: Ein Turnier anzulegen und dann niemanden
+        // eintragen zu können, wäre ein halber Weg — und über den Chat kommt
+        // beides ohnehin in einem Satz.
+        foreach (var name in request.Participants ?? [])
+        {
+            tournament.AddParticipant(name);
+        }
+
         await store.InsertAsync(tournament, ct);
         return tournament;
     }
@@ -59,6 +68,11 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
             if (request.Mode is { } mode && mode != t.Mode)
             {
                 t.SetMode(mode);
+            }
+
+            if (request.Discipline is { } discipline && discipline != t.Discipline)
+            {
+                t.SetDiscipline(discipline);
             }
 
             if (request.Format is not null && request.Format != t.Format)

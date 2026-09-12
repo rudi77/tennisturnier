@@ -383,6 +383,7 @@ public sealed class TournamentTests
             null,
             null,
             Mode.Knockout,
+            Discipline.Singles,
             MatchFormat.Standard,
             TournamentState.Running,
             "browser-1",
@@ -394,6 +395,105 @@ public sealed class TournamentTests
         var t = Tournament.FromSnapshot(schnappschuss);
 
         Assert.Equal("Finale (? – Freilos)", t.Describe(t.Matches[0]));
+    }
+
+    // --- Einzel und Doppel ------------------------------------------------
+
+    [Fact]
+    public void Im_Doppel_ist_ein_Teilnehmer_ein_Team()
+    {
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+
+        Assert.Equal("Anna / Tom", t.AddParticipant("Anna / Tom").Name);
+        Assert.Equal("Rudi / Max", t.AddParticipant("Rudi und Max").Name);
+        Assert.Equal(["Rudi", "Max"], t.Participants[1].Lineup);
+
+        // Ein Name allein ist kein Team, und zweimal derselbe Spieler auch nicht.
+        Assert.Throws<DomainException>(() => t.AddParticipant("Eva"));
+        Assert.Throws<DomainException>(() => t.AddParticipant("Eva / Eva"));
+        Assert.Contains("Anna", Assert.Throws<DomainException>(() => t.AddParticipant("Anna / Eva")).Message);
+    }
+
+    [Fact]
+    public void Ein_Team_laesst_sich_auf_drei_Weisen_ansprechen()
+    {
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+        t.AddParticipant("Anna / Tom");
+        t.AddParticipant("Rudi / Max");
+
+        Assert.Equal("Anna / Tom", t.FindParticipant("Anna / Tom")!.Name);
+        Assert.Equal("Anna / Tom", t.FindParticipant("Tom/Anna")!.Name);
+        Assert.Equal("Anna / Tom", t.FindParticipant("Anna")!.Name);
+        Assert.Null(t.FindParticipant("Eva"));
+    }
+
+    [Fact]
+    public void Im_Einzel_sind_zwei_Namen_ein_Fehler()
+    {
+        var t = Neu(Mode.Knockout, "Rudi");
+
+        var fehler = Assert.Throws<DomainException>(() => t.AddParticipant("Anna / Tom"));
+        Assert.Contains("Einzel", fehler.Message);
+    }
+
+    [Fact]
+    public void Die_Disziplin_wechselt_nur_mit_leerer_Liste()
+    {
+        var t = Neu(Mode.Knockout, "Rudi");
+        Assert.Throws<DomainException>(() => t.SetDiscipline(Discipline.Doubles));
+
+        // Derselbe Wert ist kein Wechsel — das darf niemandem im Weg stehen.
+        t.SetDiscipline(Discipline.Singles);
+
+        t.RemoveParticipant(t.Participants[0].Id);
+        t.SetDiscipline(Discipline.Doubles);
+        t.AddParticipant("Anna / Tom");
+        t.AddParticipant("Rudi / Max");
+
+        t.Draw(new Random(1));
+        Assert.Throws<DomainException>(() => t.SetDiscipline(Discipline.Singles));
+    }
+
+    [Fact]
+    public void Ein_Doppelturnier_laeuft_wie_ein_Einzel_durch()
+    {
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+        t.AddParticipant("Anna / Tom");
+        t.AddParticipant("Rudi / Max");
+        t.Draw(new Random(1));
+
+        var finale = t.Matches.Single();
+        Assert.Equal("Finale", finale.Label);
+        Assert.Contains(" / ", t.Describe(finale));
+
+        t.RecordResult(finale.Id, Score.Played([new(6, 4), new(6, 4)], t.Format));
+        Assert.Equal(TournamentState.Completed, t.State);
+        Assert.Equal(1, t.Standings()[0].Rank);
+    }
+
+    [Fact]
+    public void Ein_Schnappschuss_traegt_Disziplin_und_Aufstellung()
+    {
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+        t.AddParticipant("Anna / Tom");
+
+        var wieder = Tournament.FromSnapshot(t.ToSnapshot());
+
+        Assert.Equal(Discipline.Doubles, wieder.Discipline);
+        Assert.Equal(["Anna", "Tom"], wieder.Participants[0].Lineup);
+    }
+
+    [Fact]
+    public void Ein_Teilnehmer_ohne_Aufstellung_ist_sein_eigener_Spieler()
+    {
+        // So stehen alle Turniere in der Datenbank, die vor dem Doppel angelegt
+        // wurden: ein Name, kein Feld für die Spieler.
+        var rudi = new Participant(Guid.NewGuid(), "Rudi");
+
+        Assert.Equal(["Rudi"], rudi.Lineup);
+        Assert.True(rudi.IsCalled("rudi"));
+        Assert.True(rudi.Has("RUDI"));
+        Assert.False(rudi.Has("Max"));
     }
 
     private static Match Find(Tournament t, string a, string b) =>

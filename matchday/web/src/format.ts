@@ -1,6 +1,8 @@
-import type { MatchView, Mode, SetScore, TournamentState, TournamentView } from './api'
+import type { Discipline, MatchView, Mode, SetScore, TournamentState, TournamentView } from './api'
 
 export const modeText = (mode: Mode) => (mode === 'Knockout' ? 'K.o.' : 'Jeder gegen jeden')
+
+export const disciplineText = (discipline: Discipline) => (discipline === 'Doubles' ? 'Doppel' : 'Einzel')
 
 export const stateText = (state: TournamentState) =>
   state === 'Setup' ? 'Vorbereitung' : state === 'Running' ? 'Läuft' : 'Abgeschlossen'

@@ -37,6 +37,7 @@ public sealed class Tournament
         DateOnly? date,
         string? location,
         Mode mode,
+        Discipline discipline,
         MatchFormat format,
         TournamentState state,
         string ownerId,
@@ -50,6 +51,7 @@ public sealed class Tournament
         Date = date;
         Location = location;
         Mode = mode;
+        Discipline = discipline;
         Format = format;
         State = state;
         OwnerId = ownerId;
@@ -68,6 +70,8 @@ public sealed class Tournament
     public string? Location { get; private set; }
 
     public Mode Mode { get; private set; }
+
+    public Discipline Discipline { get; private set; }
 
     public MatchFormat Format { get; private set; }
 
@@ -92,7 +96,8 @@ public sealed class Tournament
         Mode mode = Mode.Knockout,
         MatchFormat? format = null,
         DateOnly? date = null,
-        string? location = null)
+        string? location = null,
+        Discipline discipline = Discipline.Singles)
     {
         format ??= MatchFormat.Standard;
         format.Validate();
@@ -103,6 +108,7 @@ public sealed class Tournament
             date,
             CleanOptional(location),
             mode,
+            discipline,
             format,
             TournamentState.Setup,
             RequireText(ownerId, "Eigentümer"),
@@ -126,6 +132,25 @@ public sealed class Tournament
         Mode = mode;
     }
 
+    /// <summary>
+    /// Einzel oder Doppel. Der Wechsel geht nur mit leerer Teilnehmerliste: Ein
+    /// Einzelname ist kein Team, und ein Team ist kein Einzelname — was schon
+    /// auf der Liste steht, ließe sich nicht umdeuten.
+    /// </summary>
+    public void SetDiscipline(Discipline discipline)
+    {
+        RequireSetup("Die Disziplin");
+
+        if (discipline != Discipline && _participants.Count > 0)
+        {
+            throw new DomainException(discipline == Discipline.Doubles
+                ? "Im Doppel besteht jeder Teilnehmer aus zwei Spielern. Erst die Teilnehmerliste leeren, dann auf Doppel wechseln."
+                : "Im Einzel steht ein Name je Teilnehmer. Erst die Teilnehmerliste leeren, dann auf Einzel wechseln.");
+        }
+
+        Discipline = discipline;
+    }
+
     public void SetFormat(MatchFormat format)
     {
         ArgumentNullException.ThrowIfNull(format);
@@ -138,14 +163,36 @@ public sealed class Tournament
 
     // --- Teilnehmer -------------------------------------------------------
 
+    /// <summary>
+    /// Trägt einen Teilnehmer ein. Im Einzel ist das ein Name, im Doppel ein
+    /// Paar — „Anna / Tom“, „Anna und Tom“, „Anna + Tom“.
+    /// </summary>
     public Participant AddParticipant(string name)
     {
         RequireSetup("Die Teilnehmerliste");
-        var clean = CleanName(name);
+        var players = Lineups.Split(name ?? string.Empty).Select(player => CleanName(player)).ToList();
+        RequireLineup(players);
+
+        var clean = Lineups.Compose(players);
 
         if (_participants.Any(p => string.Equals(p.Name, clean, StringComparison.OrdinalIgnoreCase)))
         {
             throw new DomainException($"„{clean}“ steht schon auf der Liste.");
+        }
+
+        // Im Doppel zählt auch der einzelne Spieler: Wer in zwei Teams steht,
+        // müsste gegen sich selbst spielen.
+        foreach (var player in players)
+        {
+            if (_participants.FirstOrDefault(p => p.Has(player)) is { } other)
+            {
+                throw new DomainException($"„{player}“ spielt schon in „{other.Name}“ mit.");
+            }
+        }
+
+        if (players.Count == 2 && string.Equals(players[0], players[1], StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DomainException("Ein Doppel braucht zwei verschiedene Spieler.");
         }
 
         if (_participants.Count >= MaxParticipants)
@@ -153,9 +200,30 @@ public sealed class Tournament
             throw new DomainException($"Mehr als {MaxParticipants} Teilnehmer passen nicht in ein Turnier.");
         }
 
-        var participant = new Participant(Guid.NewGuid(), clean);
+        var participant = new Participant(Guid.NewGuid(), clean, players);
         _participants.Add(participant);
         return participant;
+    }
+
+    /// <summary>So viele Spieler, wie die Disziplin verlangt — einer oder zwei.</summary>
+    private void RequireLineup(IReadOnlyList<string> players)
+    {
+        if (players.Count == 0)
+        {
+            throw new DomainException("Der Name darf nicht leer sein.");
+        }
+
+        if (Discipline == Discipline.Singles && players.Count > 1)
+        {
+            throw new DomainException(
+                $"Dieses Turnier ist ein Einzel — „{Lineups.Compose(players)}“ sind zwei Spieler. Entweder auf Doppel umstellen oder einen Namen eintragen.");
+        }
+
+        if (Discipline == Discipline.Doubles && players.Count != 2)
+        {
+            throw new DomainException(
+                $"Im Doppel besteht ein Team aus zwei Spielern, getrennt durch „/“ — etwa „{players[0]} / Partner“.");
+        }
     }
 
     public void RemoveParticipant(Guid participantId)
@@ -169,11 +237,24 @@ public sealed class Tournament
         }
     }
 
+    /// <summary>
+    /// Den Teilnehmer zu einem Namen. Im Doppel trifft auch das Paar in anderer
+    /// Schreibweise („Tom/Anna“) und der einzelne Spieler („Anna“).
+    /// </summary>
     public Participant? FindParticipant(string name)
     {
-        var clean = name.Trim();
-        return _participants.FirstOrDefault(p => string.Equals(p.Name, clean, StringComparison.OrdinalIgnoreCase))
-            ?? _participants.SingleOrDefaultSafe(p => p.Name.Contains(clean, StringComparison.OrdinalIgnoreCase));
+        var clean = (name ?? string.Empty).Trim();
+
+        if (clean.Length == 0)
+        {
+            return null;
+        }
+
+        var asked = Lineups.Split(clean);
+
+        return _participants.FirstOrDefault(p => p.Is(asked))
+            ?? _participants.FirstOrDefault(p => p.IsCalled(clean))
+            ?? _participants.SingleOrDefaultSafe(p => p.Mentions(clean));
     }
 
     // --- Auslosung --------------------------------------------------------
@@ -386,6 +467,7 @@ public sealed class Tournament
         Date,
         Location,
         Mode,
+        Discipline,
         Format,
         State,
         OwnerId,
@@ -412,6 +494,7 @@ public sealed class Tournament
             snapshot.Date,
             snapshot.Location,
             snapshot.Mode,
+            snapshot.Discipline,
             snapshot.Format,
             snapshot.State,
             snapshot.OwnerId,

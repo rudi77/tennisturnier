@@ -34,11 +34,14 @@ const toolLabels: Record<string, string> = {
 }
 
 const GREETING =
-  'Hallo! Ich bin MATCHDAY. Sag mir, wie dein Turnier heißen soll und wer mitspielt — den Rest machen wir gemeinsam.'
+  'Hallo! Ich bin MATCHDAY. Sag mir, wie dein Turnier heißen soll und wer mitspielt — oder frag mich, wie etwas funktioniert. Alles geht auch mit den Knöpfen oben, gemischt ist auch gut.'
 
 const SUGGESTIONS = [
   'Neues Turnier „Samstagsrunde“ mit Rudi, Max, Anna und Tom',
+  'Leg ein Doppelturnier an: Anna / Tom gegen Rudi / Max',
   'Jeder gegen jeden, ein Satz bis 4',
+  'Wie funktioniert „jeder gegen jeden“?',
+  'Wie zählt ein Match-Tiebreak?',
   'Zeig mir meine Turniere',
 ]
 
@@ -90,6 +93,22 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
       setStage({ widget, tournamentId: view.id, data: null })
     },
     [showView],
+  )
+
+  /** Das aktuelle Turnier ist gelöscht: kein aktuelles mehr, und die Liste zeigt, was bleibt. */
+  const forget = useCallback(
+    (tournamentId: string) => {
+      forgetAdminToken(tournamentId)
+      setViews((all) => {
+        const rest = { ...all }
+        delete rest[tournamentId]
+        return rest
+      })
+      setCurrent(null)
+      rememberCurrent(null)
+      setStage(null)
+    },
+    [],
   )
 
   /** Die eigenen Turniere auf die Bühne — über die Kopfzeile jederzeit erreichbar. */
@@ -363,7 +382,18 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
 
       <section className="stage" aria-label="Anzeige">
         {stage ? (
-          <Widget item={stage} views={views} act={act} apply={takeAdmin} open={open} onNewTournament={(v) => { select(v.id); showTournament(v) }} />
+          <Widget
+            item={stage}
+            views={views}
+            act={act}
+            apply={takeAdmin}
+            open={open}
+            onNewTournament={(v) => { select(v.id); showTournament(v) }}
+            onDeleted={() => {
+              if (current) forget(current)
+              void showMine()
+            }}
+          />
         ) : (
           <p className="stage__empty">Hier erscheint, worüber ihr gerade redet — Turnier, Teilnehmer, Bracket oder Tabelle.</p>
         )}
