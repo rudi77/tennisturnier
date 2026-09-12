@@ -37,6 +37,15 @@ public sealed class ModelAccess
         _settings = settings;
         Missing = connection.Missing;
 
+        // Einmal beim Start ins Protokoll, damit die Frage „ist die Variable
+        // überhaupt angekommen?" nicht am Wert scheitert, den niemand zeigen
+        // darf. Fehlt ein Name hier, erreicht die Variable den Prozess nicht —
+        // dann liegt es an der Umgebung, nicht am Eingetragenen.
+        loggers.CreateLogger<ModelAccess>().LogInformation(
+            "Modellzugang {Zustand}. Sichtbare Modellvariablen (nur Namen): {Variablen}",
+            connection.Client is null ? "fehlt" : "steht",
+            SichtbareNamen());
+
         // Die Werkzeugschleife steckt in der Kette, nicht im Agenten: so bleibt
         // MaxToolRounds an einer Stelle, und der Agent zählt keine Runden selbst.
         _client = connection.Client?.AsBuilder()
@@ -132,7 +141,18 @@ public sealed class ModelAccess
 
         if (key is null && !settings.UseAzureCredential)
         {
-            return (null, $"Kein Zugang zu Azure OpenAI konfiguriert (AZURE_OPENAI_API_KEY, oder Agent__UseAzureCredential=true für die Anmeldung der Umgebung).{Anyway}");
+            // „Ich habe den Schlüssel doch gesetzt" stimmt meistens — und trotzdem
+            // steht er nicht zur Verfügung. Gesetzt und leer angekommen ist ein
+            // anderer Fehler als nie angekommen: das eine ist ein Tippfehler im
+            // Wert, das andere eine Variable, die den Prozess nicht erreicht.
+            // Beides gleich zu benennen, schickt die Suche an die falsche Stelle.
+            // Gefragt wird nach genau der Variablen, die der Satz auch nennt —
+            // sonst spräche die Meldung von der einen und prüfte die andere.
+            var vorhanden = configuration["AZURE_OPENAI_API_KEY"] is not null;
+
+            return (null, vorhanden
+                ? $"AZURE_OPENAI_API_KEY ist gesetzt, kommt hier aber leer an.{Anyway}"
+                : $"Kein Zugang zu Azure OpenAI konfiguriert (AZURE_OPENAI_API_KEY, oder Agent__UseAzureCredential=true für die Anmeldung der Umgebung).{Anyway}");
         }
 
         // Ohne Schlüssel die Anmeldung der Umgebung: Managed Identity im
@@ -143,6 +163,19 @@ public sealed class ModelAccess
 
         return (client.GetChatClient(deployment).AsIChatClient(), string.Empty);
     }
+
+    /// <summary>
+    /// Die Namen der Umgebungsvariablen, die das Modell betreffen — nie ihre
+    /// Werte. Leer heißt: keine davon ist im Prozess angekommen.
+    /// </summary>
+    private static string SichtbareNamen() =>
+        string.Join(
+            ", ",
+            Environment.GetEnvironmentVariables()
+                .Keys
+                .Cast<string>()
+                .Where(name => name.Contains("OPENAI", StringComparison.OrdinalIgnoreCase))
+                .Order(StringComparer.Ordinal));
 
     /// <summary>Der erste Wert, der wirklich einer ist.</summary>
     private static string? First(params string?[] candidates) =>

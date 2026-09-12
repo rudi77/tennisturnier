@@ -168,6 +168,21 @@ public sealed class ModelAccessTests
         Assert.Equal(erwartet, ModelAccess.ReasoningFor(aufwand)?.Effort);
     }
 
+    [Fact]
+    public void Ein_leer_angekommener_Schluessel_sagt_das_auch_so()
+    {
+        // Der Unterschied, der zählt: hier wurde etwas eingetragen, es kommt nur
+        // leer an. Dieselbe Meldung wie für „gar nicht gesetzt" schickte die
+        // Suche in die Umgebung statt zum Wert.
+        var zugang = Zugang(
+            new AgentOptions { Model = "gpt-5" },
+            ("AZURE_OPENAI_ENDPOINT", "https://turnier.openai.azure.com/"),
+            ("AZURE_OPENAI_API_KEY", "   "));
+
+        Assert.False(zugang.IsConfigured);
+        Assert.Contains("ist gesetzt, kommt hier aber leer an", zugang.Missing);
+    }
+
     private static ModelAccess Zugang(AgentOptions einstellungen, params (string Schlüssel, string Wert)[] konfiguration)
     {
         var werte = konfiguration.Select(eintrag => new KeyValuePair<string, string?>(eintrag.Schlüssel, eintrag.Wert));
