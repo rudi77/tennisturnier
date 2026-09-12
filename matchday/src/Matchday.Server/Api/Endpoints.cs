@@ -1,0 +1,154 @@
+using System.Text.Json;
+using Matchday.Domain;
+using Matchday.Server.Live;
+using Matchday.Server.Storage;
+
+namespace Matchday.Server.Api;
+
+/// <summary>
+/// Die HTTP-API, die die Widgets direkt rufen — am Modell vorbei (ADR-0016).
+/// Wer handelt, steht in zwei Kopfzeilen: der Browser in <c>X-Matchday-Client</c>,
+/// der Verwalterlink in <c>X-Admin-Token</c>.
+/// </summary>
+public static class Endpoints
+{
+    public const string ClientHeader = "X-Matchday-Client";
+    public const string AdminHeader = "X-Admin-Token";
+
+    public static void MapMatchday(this IEndpointRouteBuilder app)
+    {
+        var api = app.MapGroup("/api");
+
+        api.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+        var tournaments = api.MapGroup("/tournaments");
+
+        tournaments.MapPost("/", async (HttpContext http, TournamentActions actions, CreateTournamentRequest request, CancellationToken ct) =>
+        {
+            var t = await actions.CreateAsync(ActorOf(http), request, ct);
+            return Results.Created($"/api/tournaments/{t.Id}", Admin(t, http));
+        });
+
+        tournaments.MapGet("/", async (HttpContext http, TournamentActions actions, CancellationToken ct) =>
+        {
+            var mine = await actions.ListMineAsync(ActorOf(http), ct);
+            return Results.Ok(mine.Select(ViewBuilder.Summarize));
+        });
+
+        tournaments.MapGet("/by-admin/{token}", async (HttpContext http, TournamentActions actions, string token, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.GetByAdminTokenAsync(token, ct), http)));
+
+        tournaments.MapGet("/{id:guid}", async (TournamentActions actions, Guid id, CancellationToken ct) =>
+            Results.Ok(ViewBuilder.Build(await actions.GetAsync(id, ct))));
+
+        tournaments.MapGet("/{id:guid}/live", Live);
+
+        tournaments.MapPut("/{id:guid}", async (HttpContext http, TournamentActions actions, Guid id, UpdateTournamentRequest request, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.UpdateAsync(ActorOf(http), id, request, ct), http)));
+
+        tournaments.MapDelete("/{id:guid}", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
+        {
+            await actions.DeleteAsync(ActorOf(http), id, ct);
+            return Results.NoContent();
+        });
+
+        tournaments.MapPost("/{id:guid}/participants", async (HttpContext http, TournamentActions actions, Guid id, AddParticipantsRequest request, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.AddParticipantsAsync(ActorOf(http), id, request.Names, ct), http)));
+
+        tournaments.MapDelete("/{id:guid}/participants/{participantId:guid}", async (HttpContext http, TournamentActions actions, Guid id, Guid participantId, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.RemoveParticipantAsync(ActorOf(http), id, participantId, ct), http)));
+
+        tournaments.MapPost("/{id:guid}/draw", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.DrawAsync(ActorOf(http), id, ct), http)));
+
+        tournaments.MapDelete("/{id:guid}/draw", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.UndoDrawAsync(ActorOf(http), id, ct), http)));
+
+        tournaments.MapPut("/{id:guid}/matches/{matchId:guid}/result", async (HttpContext http, TournamentActions actions, Guid id, Guid matchId, ResultRequest request, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.RecordResultAsync(ActorOf(http), id, matchId, request, ct), http)));
+
+        tournaments.MapDelete("/{id:guid}/matches/{matchId:guid}/result", async (HttpContext http, TournamentActions actions, Guid id, Guid matchId, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.ClearResultAsync(ActorOf(http), id, matchId, ct), http)));
+
+        tournaments.MapPost("/{id:guid}/admin-token/rotate", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.RotateAdminTokenAsync(ActorOf(http), id, ct), http)));
+    }
+
+    /// <summary>Server-Sent Events: jede Änderung als vollständige Sicht, alle 20 Sekunden ein Lebenszeichen.</summary>
+    private static async Task Live(HttpContext http, TournamentActions actions, LiveHub hub, Guid id, CancellationToken ct)
+    {
+        var tournament = await actions.GetAsync(id, ct);
+
+        http.Response.Headers.ContentType = "text/event-stream";
+        http.Response.Headers.CacheControl = "no-cache";
+        http.Response.Headers["X-Accel-Buffering"] = "no";
+
+        using var subscription = hub.Subscribe(id, out var reader);
+        await Write(http, "view", ViewBuilder.Build(tournament), ct);
+
+        while (!ct.IsCancellationRequested)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+
+            try
+            {
+                var view = await reader.ReadAsync(timeout.Token);
+
+                if (view is null)
+                {
+                    await Write(http, "deleted", new { id }, ct);
+                    return;
+                }
+
+                await Write(http, "view", view, ct);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                await http.Response.WriteAsync(": keepalive\n\n", ct);
+                await http.Response.Body.FlushAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (System.Threading.Channels.ChannelClosedException)
+            {
+                return;
+            }
+        }
+    }
+
+    internal static async Task Write(HttpContext http, string eventName, object payload, CancellationToken ct)
+    {
+        await http.Response.WriteAsync($"event: {eventName}\ndata: {JsonSerializer.Serialize(payload, TournamentStore.Json)}\n\n", ct);
+        await http.Response.Body.FlushAsync(ct);
+    }
+
+    internal static Actor ActorOf(HttpContext http)
+    {
+        var client = http.Request.Headers[ClientHeader].FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(client) || client.Length > 100)
+        {
+            throw new ForbiddenException($"Die Kopfzeile {ClientHeader} fehlt.");
+        }
+
+        return new Actor(client, http.Request.Headers[AdminHeader].FirstOrDefault());
+    }
+
+    internal static string BaseUrl(HttpContext http)
+    {
+        var forwardedProto = http.Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
+        var forwardedHost = http.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
+        var scheme = string.IsNullOrEmpty(forwardedProto) ? http.Request.Scheme : forwardedProto;
+        var host = string.IsNullOrEmpty(forwardedHost) ? http.Request.Host.Value : forwardedHost;
+        return $"{scheme}://{host}";
+    }
+
+    /// <summary>Was die Verwaltung bekommt: die Sicht plus die beiden Links.</summary>
+    private static object Admin(Tournament t, HttpContext http) => new AdminView(
+        ViewBuilder.Build(t), ViewBuilder.Links(t, BaseUrl(http)), t.AdminToken);
+}
+
+public sealed record AdminView(TournamentView Tournament, TournamentLinks Links, string AdminToken);

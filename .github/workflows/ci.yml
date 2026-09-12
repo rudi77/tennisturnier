@@ -182,3 +182,37 @@ jobs:
             app/playwright-report
             app/test-results
           if-no-files-found: warn
+
+  matchday:
+    name: MATCHDAY (matchday/)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: matchday
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: matchday/web/package-lock.json
+
+      - name: Oberfläche
+        working-directory: matchday/web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Bauen und testen
+        run: |
+          dotnet restore
+          dotnet build --no-restore --configuration Release
+          dotnet test --no-build --configuration Release

@@ -2,6 +2,13 @@
 
 [![CI](https://github.com/rudi77/tennisturnier/actions/workflows/ci.yml/badge.svg)](https://github.com/rudi77/tennisturnier/actions/workflows/ci.yml)
 
+> **Neuanfang.** Unter [`matchday/`](matchday/README.md) entsteht die
+> Anwendung neu: ein Turnier mit Freunden, geführt von einem Agenten, ohne
+> Konten. Warum, steht in [ADR-0016](docs/adr/0016-neuanfang-ein-turnier-mit-freunden.md).
+> Der Baum darunter ist der bisherige Stand und bleibt, bis der neue die vier
+> Dinge kann, die er können soll.
+
+
 Turnierplattform für Tennisvereine: Platzverwaltung, Turniere in verschiedenen Modi
 (K.O., Gruppenphase + K.O., jeder gegen jeden, Liga, Schweizer System) für Einzel,
 Doppel und Mixed, einstellbares Satzformat bis hinunter zu Kurzsätzen mit
