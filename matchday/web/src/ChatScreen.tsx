@@ -191,8 +191,15 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   }, [])
 
   // --- Das aktuelle Turnier lebt: was andere eintragen, erscheint hier ---
+  //
+  // Abonniert wird erst, wenn das Turnier einmal geladen wurde. Die Id kommt
+  // aus dem Speicher des Browsers und kann auf ein gelöschtes Turnier zeigen —
+  // ein EventSource darauf bekommt 404 und versucht es endlos weiter, denn
+  // einen Statuscode reicht er nicht heraus. Abonnieren, was man kennt.
+  const bekannt = current !== null && views[current] !== undefined
+
   useEffect(() => {
-    if (!current) return
+    if (!current || !bekannt) return
     return subscribeLive(current, showView, () => {
       setViews((all) => {
         const rest = { ...all }
@@ -203,7 +210,10 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
       select(null)
       setStage(null)
     })
-  }, [current, showView, select])
+    // views selbst gehört nicht in die Abhängigkeiten: Jedes Live-Ereignis
+    // ersetzt das Objekt, und das risse die Verbindung bei jedem Ereignis ab,
+    // um sie neu aufzubauen. Der Merker kippt einmal und bleibt dann stehen.
+  }, [current, bekannt, showView, select])
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
