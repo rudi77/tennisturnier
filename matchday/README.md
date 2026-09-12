@@ -66,7 +66,7 @@ docker run --rm -p 8080:8080 -v matchday-daten:/data   -e AZURE_OPENAI_ENDPOINT=
 | Variable | Bedeutung |
 | --- | --- |
 | `AZURE_OPENAI_ENDPOINT` | Die Adresse der Azure-OpenAI-Ressource. |
-| `AZURE_OPENAI_DEPLOYMENT` | Der Name des Deployments. Gleichwertig: `Agent__Model`, Vorgabe `gpt-5`. |
+| `AZURE_OPENAI_DEPLOYMENT` | Der Name des Deployments — **ohne ihn läuft der Agent nicht**. Eine Vorgabe gibt es bewusst nicht: Deployment-Namen sind frei gewählt, und ein geratener endet in einem 404 beim ersten Satz. Gleichwertig: `Agent__Model`, das in der Kette davor steht. |
 | `AZURE_OPENAI_API_KEY` | Der Schlüssel. Fehlt er, bleibt das Eingabefeld stumm, alles andere läuft. |
 | `Agent__UseAzureCredential` | `true` nimmt statt des Schlüssels die Anmeldung der Umgebung — Managed Identity im Betrieb, `az login` auf dem Rechner. |
 | `Agent__Provider` | `AzureOpenAI` (Vorgabe) oder `OpenAI`. Bei `OpenAI` zählen `OPENAI_API_KEY` und `OPENAI_MODEL`. |

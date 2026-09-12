@@ -27,23 +27,28 @@ public sealed class ModelAccess
 
     /// <summary>Für die Tests: ein Modell von Hand statt eines aus der Konfiguration.</summary>
     internal ModelAccess(AgentOptions settings, IChatClient client, ILoggerFactory loggers)
-        : this(settings, (client, string.Empty), loggers)
+        : this(settings, (client, string.Empty, settings.Model), loggers)
     {
     }
 
-    private ModelAccess(AgentOptions settings, (IChatClient? Client, string Missing) connection, ILoggerFactory loggers)
+    private ModelAccess(AgentOptions settings, (IChatClient? Client, string Missing, string Model) connection, ILoggerFactory loggers)
     {
         _loggers = loggers;
         _settings = settings;
         Missing = connection.Missing;
+        Model = connection.Model;
 
         // Einmal beim Start ins Protokoll, damit die Frage „ist die Variable
         // überhaupt angekommen?" nicht am Wert scheitert, den niemand zeigen
         // darf. Fehlt ein Name hier, erreicht die Variable den Prozess nicht —
         // dann liegt es an der Umgebung, nicht am Eingetragenen.
+        // Das aufgelöste Modell gehört dazu: Ein Deployment, das es auf der
+        // Ressource nicht gibt, scheitert sonst erst beim ersten Satz des
+        // Benutzers — mit einem 404 tief im Stapel statt einer Zeile beim Start.
         loggers.CreateLogger<ModelAccess>().LogInformation(
-            "Modellzugang {Zustand}. Sichtbare Modellvariablen (nur Namen): {Variablen}",
+            "Modellzugang {Zustand}, Modell „{Modell}\". Sichtbare Modellvariablen (nur Namen): {Variablen}",
             connection.Client is null ? "fehlt" : "steht",
+            Model,
             SichtbareNamen());
 
         // Die Werkzeugschleife steckt in der Kette, nicht im Agenten: so bleibt
@@ -55,6 +60,9 @@ public sealed class ModelAccess
 
     /// <summary>Leer, wenn der Zugang steht; sonst der Satz für die Oberfläche.</summary>
     public string Missing { get; }
+
+    /// <summary>Das aufgelöste Modell — bei Azure der Name des Deployments.</summary>
+    public string Model { get; }
 
     public bool IsConfigured => _client is not null;
 
@@ -98,27 +106,27 @@ public sealed class ModelAccess
         _ => new ReasoningOptions { Effort = ReasoningEffort.Medium },
     };
 
-    private static (IChatClient? Client, string Missing) Connect(AgentOptions settings, IConfiguration configuration) =>
+    private static (IChatClient? Client, string Missing, string Model) Connect(AgentOptions settings, IConfiguration configuration) =>
         settings.Provider == ModelProvider.OpenAI
             ? OpenAi(settings, configuration)
             : AzureOpenAi(settings, configuration);
 
-    private static (IChatClient? Client, string Missing) OpenAi(AgentOptions settings, IConfiguration configuration)
+    private static (IChatClient? Client, string Missing, string Model) OpenAi(AgentOptions settings, IConfiguration configuration)
     {
         var model = First(settings.Model, configuration["OpenAI:Model"], configuration["OPENAI_MODEL"]);
         var key = First(settings.ApiKey, configuration["OpenAI:ApiKey"], configuration["OPENAI_API_KEY"]);
 
         if (model is null)
         {
-            return (null, $"Kein Modell konfiguriert (OPENAI_MODEL).{Anyway}");
+            return (null, $"Kein Modell konfiguriert (OPENAI_MODEL).{Anyway}", string.Empty);
         }
 
         return key is null
-            ? (null, $"Kein Modellschlüssel konfiguriert (OPENAI_API_KEY).{Anyway}")
-            : (new OpenAI.Chat.ChatClient(model, new ApiKeyCredential(key)).AsIChatClient(), string.Empty);
+            ? (null, $"Kein Modellschlüssel konfiguriert (OPENAI_API_KEY).{Anyway}", string.Empty)
+            : (new OpenAI.Chat.ChatClient(model, new ApiKeyCredential(key)).AsIChatClient(), string.Empty, model);
     }
 
-    private static (IChatClient? Client, string Missing) AzureOpenAi(AgentOptions settings, IConfiguration configuration)
+    private static (IChatClient? Client, string Missing, string Model) AzureOpenAi(AgentOptions settings, IConfiguration configuration)
     {
         var deployment = First(settings.Model, configuration["AzureOpenAI:Deployment"], configuration["AZURE_OPENAI_DEPLOYMENT"]);
         var endpoint = First(settings.Endpoint, configuration["AzureOpenAI:Endpoint"], configuration["AZURE_OPENAI_ENDPOINT"]);
@@ -126,17 +134,17 @@ public sealed class ModelAccess
 
         if (deployment is null)
         {
-            return (null, $"Kein Deployment konfiguriert (AZURE_OPENAI_DEPLOYMENT).{Anyway}");
+            return (null, $"Kein Deployment konfiguriert (AZURE_OPENAI_DEPLOYMENT).{Anyway}", string.Empty);
         }
 
         if (endpoint is null)
         {
-            return (null, $"Kein Azure-Endpunkt konfiguriert (AZURE_OPENAI_ENDPOINT).{Anyway}");
+            return (null, $"Kein Azure-Endpunkt konfiguriert (AZURE_OPENAI_ENDPOINT).{Anyway}", string.Empty);
         }
 
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
         {
-            return (null, $"„{endpoint}“ ist keine Adresse für AZURE_OPENAI_ENDPOINT.{Anyway}");
+            return (null, $"„{endpoint}“ ist keine Adresse für AZURE_OPENAI_ENDPOINT.{Anyway}", string.Empty);
         }
 
         if (key is null && !settings.UseAzureCredential)
@@ -152,7 +160,7 @@ public sealed class ModelAccess
 
             return (null, vorhanden
                 ? $"AZURE_OPENAI_API_KEY ist gesetzt, kommt hier aber leer an.{Anyway}"
-                : $"Kein Zugang zu Azure OpenAI konfiguriert (AZURE_OPENAI_API_KEY, oder Agent__UseAzureCredential=true für die Anmeldung der Umgebung).{Anyway}");
+                : $"Kein Zugang zu Azure OpenAI konfiguriert (AZURE_OPENAI_API_KEY, oder Agent__UseAzureCredential=true für die Anmeldung der Umgebung).{Anyway}", string.Empty);
         }
 
         // Ohne Schlüssel die Anmeldung der Umgebung: Managed Identity im
@@ -161,7 +169,7 @@ public sealed class ModelAccess
             ? new AzureOpenAIClient(uri, new DefaultAzureCredential())
             : new AzureOpenAIClient(uri, new ApiKeyCredential(key));
 
-        return (client.GetChatClient(deployment).AsIChatClient(), string.Empty);
+        return (client.GetChatClient(deployment).AsIChatClient(), string.Empty, deployment);
     }
 
     /// <summary>

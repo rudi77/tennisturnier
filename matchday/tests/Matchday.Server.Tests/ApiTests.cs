@@ -98,13 +98,16 @@ public sealed class ApiTests : IDisposable
         // Nicht nur dass etwas fehlt, sondern was: der Status trägt denselben
         // Satz, den das Gespräch als Fehler schicken würde. Fehlte er hier,
         // bliebe der Oberfläche nur ein fest verdrahteter Verdacht.
-        Assert.Contains("AZURE_OPENAI_ENDPOINT", status.GetProperty("missing").GetString());
+        //
+        // Hier ist gar nichts konfiguriert, und geprüft wird der Reihe nach —
+        // also fehlt zuerst das Deployment.
+        Assert.Contains("AZURE_OPENAI_DEPLOYMENT", status.GetProperty("missing").GetString());
 
         var response = await rudi.PostAsJsonAsync("/api/chat", new { message = "Hallo" });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("event: session", body);
-        Assert.Contains("AZURE_OPENAI_ENDPOINT", body);
+        Assert.Contains("AZURE_OPENAI_DEPLOYMENT", body);
     }
 
     [Fact]

@@ -169,6 +169,47 @@ public sealed class ModelAccessTests
     }
 
     [Fact]
+    public void Das_Deployment_kommt_aus_der_Umgebung()
+    {
+        // Der Fall, der lange nicht ging: nur die Umgebungsvariable gesetzt,
+        // sonst nichts. Solange AgentOptions.Model eine Vorgabe trug, gewann
+        // die immer — und AZURE_OPENAI_DEPLOYMENT war unerreichbarer Code, der
+        // erst als 404 beim ersten Satz auffiel.
+        var zugang = Zugang(
+            new AgentOptions(),
+            ("AZURE_OPENAI_DEPLOYMENT", "turnier-gpt"),
+            ("AZURE_OPENAI_ENDPOINT", "https://turnier.openai.azure.com/"),
+            ("AZURE_OPENAI_API_KEY", "geheim"));
+
+        Assert.True(zugang.IsConfigured);
+        Assert.Equal("turnier-gpt", zugang.Model);
+    }
+
+    [Fact]
+    public void Agent__Model_geht_weiterhin_und_steht_vorn()
+    {
+        var zugang = Zugang(
+            new AgentOptions { Model = "von-hand" },
+            ("AZURE_OPENAI_DEPLOYMENT", "aus-der-umgebung"),
+            ("AZURE_OPENAI_ENDPOINT", "https://turnier.openai.azure.com/"),
+            ("AZURE_OPENAI_API_KEY", "geheim"));
+
+        Assert.Equal("von-hand", zugang.Model);
+    }
+
+    [Fact]
+    public void Bei_OpenAI_traegt_das_Modell_denselben_Weg()
+    {
+        var zugang = Zugang(
+            new AgentOptions { Provider = ModelProvider.OpenAI },
+            ("OPENAI_MODEL", "gpt-5"),
+            ("OPENAI_API_KEY", "geheim"));
+
+        Assert.True(zugang.IsConfigured);
+        Assert.Equal("gpt-5", zugang.Model);
+    }
+
+    [Fact]
     public void Ein_leer_angekommener_Schluessel_sagt_das_auch_so()
     {
         // Der Unterschied, der zählt: hier wurde etwas eingetragen, es kommt nur

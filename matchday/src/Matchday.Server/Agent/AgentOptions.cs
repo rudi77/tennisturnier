@@ -11,8 +11,16 @@ public sealed class AgentOptions
 {
     public ModelProvider Provider { get; set; } = ModelProvider.AzureOpenAI;
 
-    /// <summary>Bei Azure der Name des Deployments, bei OpenAI der Modellname.</summary>
-    public string Model { get; set; } = "gpt-5";
+    /// <summary>
+    /// Bei Azure der Name des Deployments, bei OpenAI der Modellname.
+    ///
+    /// Bewusst ohne Vorgabe. Eine hier eingetragene Vorgabe steht in der Kette
+    /// vor AZURE_OPENAI_DEPLOYMENT und OPENAI_MODEL — und macht beide damit
+    /// unerreichbar, weil sie nie leer ist. Ein Deployment-Name ist ohnehin
+    /// frei gewählt; zu raten, wie er heißt, endet in einem 404 beim ersten
+    /// Satz statt in einem Hinweis beim Start.
+    /// </summary>
+    public string Model { get; set; } = string.Empty;
 
     /// <summary>Nur bei Azure: die Adresse der Ressource. Sonst ohne Bedeutung.</summary>
     public string? Endpoint { get; set; }
