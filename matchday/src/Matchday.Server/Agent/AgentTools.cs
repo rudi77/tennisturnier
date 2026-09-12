@@ -26,6 +26,19 @@ public sealed class AgentTools(TournamentActions actions)
 
     private static readonly JsonSerializerOptions Json = TournamentStore.Json;
 
+    /// <summary>
+    /// Muss über <see cref="Definitions"/> stehen, nicht darunter. Statische
+    /// Initialisierer laufen in Textreihenfolge: Stünde dieses Feld später, wäre
+    /// es beim Bau der Liste noch null, und jedes Werkzeug mit tournamentId
+    /// schickte „tournamentId": null. Azure weist das Schema dann zurück — mit
+    /// einem 400 im Gespräch, nicht mit einem Fehler beim Start.
+    /// </summary>
+    private static readonly object TournamentIdProperty = new
+    {
+        type = "string",
+        description = "Id des Turniers. Weglassen heißt: das aktuelle Turnier.",
+    };
+
     public static IReadOnlyList<ToolDefinition> Definitions { get; } =
     [
         new("list_tournaments",
@@ -122,12 +135,6 @@ public sealed class AgentTools(TournamentActions actions)
             "Löscht ein Turnier endgültig. Nur nach ausdrücklicher Zustimmung des Benutzers.",
             Schema(new { tournamentId = TournamentIdProperty }, "tournamentId")),
     ];
-
-    private static readonly object TournamentIdProperty = new
-    {
-        type = "string",
-        description = "Id des Turniers. Weglassen heißt: das aktuelle Turnier.",
-    };
 
     private static object Schema(object properties, params string[] required) => new
     {
