@@ -28,7 +28,12 @@ RUN dotnet publish src/Matchday.Server/Matchday.Server.csproj -c Release -o /app
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app ./
-VOLUME /data
+# Die Datenbank ist eine Datei und liegt getrennt von der Anwendung, damit ein
+# angehängter Datenträger genau hierher zeigen kann. Nur angelegt, nicht als
+# VOLUME deklariert: Railways Builder weist ein VOLUME zurück und verlangt
+# stattdessen einen Datenträger, der im Dienst konfiguriert wird. Ohne ihn
+# überlebt die Datenbank den nächsten Start nicht.
+RUN mkdir -p /data
 ENV ConnectionStrings__Default="Data Source=/data/matchday.db"
 EXPOSE 8080
 

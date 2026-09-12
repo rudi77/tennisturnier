@@ -13,14 +13,18 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
-var connectionString = builder.Configuration.GetConnectionString("Default") ?? "Data Source=matchday.db";
+// Die Vorgabe steht in appsettings.json, nicht hier ein zweites Mal. Fehlt sie,
+// soll es beim Start auffallen und nicht in einer leeren Datenbank enden.
+var connectionString = builder.Configuration.GetConnectionString("Default");
+ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 builder.Services.AddSingleton(new TournamentStore(connectionString));
 builder.Services.AddSingleton<LiveHub>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<TournamentActions>();
 builder.Services.AddSingleton<AgentTools>();
-builder.Services.AddSingleton<TournamentAgent>();
 builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection("Agent"));
+builder.Services.AddSingleton<ModelAccess>();
+builder.Services.AddSingleton<TournamentAgent>();
 
 var app = builder.Build();
 

@@ -168,4 +168,119 @@ public sealed class ScoreTests
         Assert.Equal("2 Gewinnsätze bis 4, Match-Tiebreak statt des letzten Satzes", Kurz.Describe());
         Assert.Throws<DomainException>(() => new MatchFormat(BestOf: 2).Validate());
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(13)]
+    public void Ein_Satz_geht_bis_eins_bis_zwoelf(int bis)
+    {
+        Assert.Throws<DomainException>(() => new MatchFormat(BestOf: 3, TiebreakAt: bis).Validate());
+    }
+
+    [Fact]
+    public void Mehr_Saetze_als_das_Format_hergibt()
+    {
+        Assert.Throws<DomainException>(() =>
+            Score.Played([Set(6, 4), Set(4, 6), Set(6, 4), Set(6, 4)], Advantage));
+    }
+
+    [Fact]
+    public void Nach_dem_entscheidenden_Satz_kommt_keiner_mehr()
+    {
+        // Zwei Sätze gewonnen, danach steht noch ein dritter da.
+        Assert.Throws<DomainException>(() => Score.Played([Set(6, 4), Set(6, 4), Set(4, 6)], Advantage));
+    }
+
+    [Fact]
+    public void In_der_Verlaengerung_entscheiden_genau_zwei_Spiele()
+    {
+        Score.Played([Set(6, 4), Set(4, 6), Set(8, 6)], Advantage);
+        Assert.Throws<DomainException>(() => Score.Played([Set(6, 4), Set(4, 6), Set(8, 5)], Advantage));
+    }
+
+    [Theory]
+    [InlineData(-1, 2)]
+    [InlineData(2, -1)]
+    public void Ein_abgebrochener_Satz_hat_keine_negativen_Spiele(int a, int b)
+    {
+        Assert.Throws<DomainException>(() => Score.Retired([], Set(a, b), retiringSide: 2, Standard));
+    }
+
+    [Fact]
+    public void Ein_abgebrochener_Satz_hat_kein_Tiebreak_Ergebnis()
+    {
+        Assert.Throws<DomainException>(() => Score.Retired([], Set(2, 1, 3), retiringSide: 2, Standard));
+    }
+
+    [Fact]
+    public void Eine_Aufgabe_im_Match_Tiebreak()
+    {
+        // Beim Stand 1:1 läuft der Match-Tiebreak — darin darf aufgegeben werden,
+        // solange er noch nicht gewonnen ist.
+        var laufend = Score.Retired([Set(6, 4), Set(4, 6)], Set(5, 3), retiringSide: 2, Standard);
+        Assert.Equal(1, laufend.WinnerSide);
+
+        Assert.Throws<DomainException>(() =>
+            Score.Retired([Set(6, 4), Set(4, 6)], Set(10, 3), retiringSide: 2, Standard));
+    }
+
+    [Fact]
+    public void Wann_ein_abgebrochener_Satz_noch_laeuft()
+    {
+        // Mit Tiebreak: 6:5 läuft noch, 6:4 und 7:5 sind zu Ende gespielt.
+        Score.Retired([], Set(6, 5), retiringSide: 2, Standard);
+        Assert.Throws<DomainException>(() => Score.Retired([], Set(6, 4), retiringSide: 2, Standard));
+        Assert.Throws<DomainException>(() => Score.Retired([], Set(7, 5), retiringSide: 2, Standard));
+
+        // Im Vorteilssatz: 4:2 und 6:5 laufen noch, 8:6 ist zu Ende.
+        Score.Retired([Set(6, 4), Set(4, 6)], Set(4, 2), retiringSide: 2, Advantage);
+        Score.Retired([Set(6, 4), Set(4, 6)], Set(6, 5), retiringSide: 2, Advantage);
+        Assert.Throws<DomainException>(() =>
+            Score.Retired([Set(6, 4), Set(4, 6)], Set(8, 6), retiringSide: 2, Advantage));
+    }
+
+    [Fact]
+    public void Ergebnisse_vergleichen_sich_ueber_alles_was_sie_ausmacht()
+    {
+        var score = Score.Played([Set(6, 4), Set(6, 2)], Standard);
+
+        Assert.False(score.Equals(null));
+        Assert.True(score.Equals(Score.Played([Set(6, 4), Set(6, 2)], Standard)));
+
+        // Anderer Ausgang, andere Seite, anderer abgebrochener Satz.
+        Assert.NotEqual(Score.Walkover(absentSide: 2), Score.ByeFor(1));
+        Assert.NotEqual(Score.ByeFor(1), Score.ByeFor(2));
+        Assert.NotEqual(
+            Score.Retired([Set(6, 4)], Set(2, 1), retiringSide: 2, Standard),
+            Score.Retired([Set(6, 4)], Set(3, 1), retiringSide: 2, Standard));
+    }
+
+    [Fact]
+    public void Gleiche_Ergebnisse_liegen_im_selben_Fach()
+    {
+        var menge = new HashSet<Score>
+        {
+            Score.Played([Set(6, 4), Set(6, 2)], Standard),
+            Score.Played([Set(6, 4), Set(6, 2)], Standard),
+            Score.Played([Set(6, 4), Set(6, 3)], Standard),
+
+            // Ohne Sätze: kampflos und Freilos sind zwei verschiedene Dinge.
+            Score.Walkover(absentSide: 2),
+            Score.ByeFor(1),
+        };
+
+        Assert.Equal(4, menge.Count);
+    }
+
+    [Fact]
+    public void Jeder_Ausgang_schreibt_sich_anders()
+    {
+        Assert.Equal("6:4, 6:2", Score.Played([Set(6, 4), Set(6, 2)], Standard).ToString());
+        Assert.Equal("kampflos", Score.Walkover(absentSide: 2).ToString());
+        Assert.Equal("Freilos", Score.ByeFor(1).ToString());
+        Assert.Equal("Aufgabe", Score.Retired([], null, retiringSide: 2, Standard).ToString());
+
+        // Ein Ausgang, den es nicht gibt — so etwas kann nur aus der Datenbank kommen.
+        Assert.Equal("99", Score.Rehydrate((MatchOutcome)99, 1, [], null).ToString());
+    }
 }

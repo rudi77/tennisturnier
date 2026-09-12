@@ -170,10 +170,6 @@ public sealed class AgentTools(TournamentActions actions)
         {
             return new ToolOutcome(e.Message, IsError: true);
         }
-        catch (ArgumentException e)
-        {
-            return new ToolOutcome(e.Message, IsError: true);
-        }
     }
 
     // --- Die Werkzeuge ---------------------------------------------------

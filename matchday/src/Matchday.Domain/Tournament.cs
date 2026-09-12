@@ -199,11 +199,11 @@ public sealed class Tournament
         _matches.AddRange(Mode == Mode.Knockout ? KnockoutDraw.Build(order) : RoundRobinDraw.Build(order));
         State = TournamentState.Running;
 
-        // Freilose sind entschieden, bevor ein Ball fliegt.
+        // Freilose sind entschieden, bevor ein Ball fliegt. Das Freilos steht auf
+        // Seite 2 (siehe Match.IsBye), also kommt Seite 1 weiter.
         foreach (var match in _matches.Where(m => m.IsBye).ToList())
         {
-            var advancing = match.Side1.Kind == SideKind.Bye ? 2 : 1;
-            RecordResult(match.Id, Score.ByeFor(advancing));
+            RecordResult(match.Id, Score.ByeFor(advancingSide: 1));
         }
     }
 
@@ -250,9 +250,11 @@ public sealed class Tournament
 
         match.SetScore(score);
 
-        foreach (var dependent in Dependents(match))
+        // Jedem Match sagen, dass hier ein Sieger steht: nachrücken tut nur, wer
+        // auf dieses Match wartet — das entscheidet Resolve selbst.
+        foreach (var other in _matches)
         {
-            dependent.Resolve(match.Id, match.WinnerId!.Value);
+            other.Resolve(match.Id, match.WinnerId!.Value);
         }
 
         State = _matches.All(m => m.Status == MatchStatus.Finished) ? TournamentState.Completed : TournamentState.Running;
@@ -281,9 +283,9 @@ public sealed class Tournament
 
         match.SetScore(null);
 
-        foreach (var dependent in Dependents(match))
+        foreach (var other in _matches)
         {
-            dependent.Unresolve(match.Id);
+            other.Unresolve(match.Id);
         }
 
         State = TournamentState.Running;
@@ -301,8 +303,8 @@ public sealed class Tournament
 
         foreach (var match in _matches.Where(m => m.Score is { Outcome: not MatchOutcome.Bye }))
         {
-            tallies[match.Side1.ParticipantId!.Value].Account(match);
-            tallies[match.Side2.ParticipantId!.Value].Account(match);
+            tallies[match.Side1.ParticipantId!.Value].Account(match, side: 1);
+            tallies[match.Side2.ParticipantId!.Value].Account(match, side: 2);
         }
 
         return Mode == Mode.RoundRobin ? RankTable(tallies.Values) : RankPlacement(tallies.Values);
@@ -431,7 +433,7 @@ public sealed class Tournament
 
     public string NameOf(Side side) => side.Kind switch
     {
-        SideKind.Participant => _participants.FirstOrDefault(p => p.Id == side.ParticipantId)?.Name ?? "?",
+        SideKind.Participant => _participants.FirstOrDefault(p => p.Id == side.ParticipantId!.Value)?.Name ?? "?",
         SideKind.Bye => "Freilos",
         _ => $"Sieger aus {FindMatch(side.SourceMatchId!.Value).Label}",
     };

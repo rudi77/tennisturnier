@@ -273,7 +273,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
 
       {configured === false && (
         <div className="notice" role="status">
-          Ohne Modellschlüssel (ANTHROPIC_API_KEY) bleibt das Eingabefeld stumm — die Widgets funktionieren trotzdem.
+          Ohne Modellzugang (AZURE_OPENAI_ENDPOINT und AZURE_OPENAI_API_KEY) bleibt das Eingabefeld stumm — die Widgets funktionieren trotzdem.
         </div>
       )}
 

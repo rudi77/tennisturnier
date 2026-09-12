@@ -273,6 +273,129 @@ public sealed class TournamentTests
         Assert.Equal("Finale", t.Matches[^1].Label);
     }
 
+    [Fact]
+    public void Ein_Freilos_steht_immer_auf_der_zweiten_Seite()
+    {
+        // Darauf verlässt sich die Domäne: wer ein Freilos hat, steht auf Seite 1
+        // und kommt weiter. Der Setzbaum füllt die geraden Positionen zuerst, und
+        // die sind nie überzählig — ändert sich das, muss dieser Test scheitern.
+        foreach (var spieler in new[] { 3, 5, 6, 7, 9, 11, 31 })
+        {
+            var t = Neu(Mode.Knockout, [.. Enumerable.Range(1, spieler).Select(i => $"S{i}")]);
+            t.Draw(new Random(spieler));
+
+            foreach (var freilos in t.Matches.Where(m => m.IsBye))
+            {
+                Assert.Equal(SideKind.Participant, freilos.Side1.Kind);
+                Assert.Equal(SideKind.Bye, freilos.Side2.Kind);
+                Assert.Equal(1, freilos.Score!.WinnerSide);
+            }
+        }
+    }
+
+    [Fact]
+    public void Ein_grosser_Baum_zaehlt_seine_Runden_durch()
+    {
+        var t = Neu(Mode.Knockout, [.. Enumerable.Range(1, 32).Select(i => $"S{i}")]);
+        t.Draw(new Random(7));
+
+        var namen = t.Matches.Select(m => m.Label).ToList();
+
+        Assert.Contains("Runde 1 1", namen);
+        Assert.Contains("Achtelfinale 1", namen);
+        Assert.Contains("Viertelfinale 1", namen);
+        Assert.Contains("Halbfinale 1", namen);
+        Assert.Contains("Finale", namen);
+    }
+
+    [Fact]
+    public void Mehr_als_vierundsechzig_Teilnehmer_passen_nicht()
+    {
+        var t = Tournament.Create("Massenandrang", "browser-1", Now);
+
+        for (var i = 1; i <= Tournament.MaxParticipants; i++)
+        {
+            t.AddParticipant($"S{i}");
+        }
+
+        Assert.Throws<DomainException>(() => t.AddParticipant("Einer zu viel"));
+    }
+
+    [Fact]
+    public void Ein_zu_langer_Name_wird_abgewiesen()
+    {
+        var t = Neu(Mode.Knockout);
+
+        Assert.Throws<DomainException>(() => t.AddParticipant(new string('x', 81)));
+        t.AddParticipant(new string('x', 80));
+    }
+
+    [Fact]
+    public void Vor_der_Auslosung_gibt_es_keine_Ergebnisse()
+    {
+        var t = Neu(Mode.Knockout, "Rudi", "Max");
+
+        Assert.Throws<DomainException>(() => t.RecordResult(Guid.NewGuid(), Score.Walkover(absentSide: 2)));
+        Assert.Throws<DomainException>(() => t.ClearResult(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void Ein_Match_das_es_nicht_gibt()
+    {
+        var t = Neu(Mode.Knockout, "Rudi", "Max");
+        t.Draw(new Random(1));
+
+        Assert.Throws<DomainException>(() => t.FindMatch(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void Beide_Halbfinals_lassen_sich_einzeln_zuruecknehmen()
+    {
+        var t = Neu(Mode.Knockout, "Rudi", "Max", "Anna", "Tom");
+        t.Draw(new Random(1));
+
+        var halbfinals = t.Matches.Where(m => m.Round == 1).ToList();
+        var finale = t.Matches.Single(m => m.Round == 2);
+
+        t.RecordResult(halbfinals[0].Id, Sieg1(t));
+        t.RecordResult(halbfinals[1].Id, Sieg1(t));
+        Assert.Equal(MatchStatus.Ready, finale.Status);
+
+        // Das zweite zurücknehmen macht die zweite Seite des Finales wieder offen,
+        // die erste bleibt besetzt.
+        t.ClearResult(halbfinals[1].Id);
+        Assert.Equal(SideKind.Participant, finale.Side1.Kind);
+        Assert.Equal(SideKind.WinnerOf, finale.Side2.Kind);
+
+        t.ClearResult(halbfinals[0].Id);
+        Assert.Equal(SideKind.WinnerOf, finale.Side1.Kind);
+        Assert.Equal(MatchStatus.Pending, finale.Status);
+    }
+
+    [Fact]
+    public void Ein_Name_der_nicht_mehr_da_ist_heisst_Fragezeichen()
+    {
+        // So etwas entsteht nur, wenn die Datenbank etwas Widersprüchliches hergibt.
+        var verschwunden = Guid.NewGuid();
+        var schnappschuss = new TournamentSnapshot(
+            Guid.NewGuid(),
+            "Cup",
+            null,
+            null,
+            Mode.Knockout,
+            MatchFormat.Standard,
+            TournamentState.Running,
+            "browser-1",
+            "token-lang-genug-fuer-den-test",
+            Now,
+            [],
+            [new MatchSnapshot(Guid.NewGuid(), 1, 1, "Finale", Side.Of(verschwunden), Side.Bye, null)]);
+
+        var t = Tournament.FromSnapshot(schnappschuss);
+
+        Assert.Equal("Finale (? – Freilos)", t.Describe(t.Matches[0]));
+    }
+
     private static Match Find(Tournament t, string a, string b) =>
         t.Matches.Single(m =>
             (t.NameOf(m.Side1) == a && t.NameOf(m.Side2) == b) || (t.NameOf(m.Side1) == b && t.NameOf(m.Side2) == a));

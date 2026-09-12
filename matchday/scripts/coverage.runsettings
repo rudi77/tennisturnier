@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Abdeckung über beide Testprojekte hinweg, in einem Bericht.
+
+  MergeWith ist der Grund, warum die Projekte nacheinander laufen müssen
+  (scripts/coverage.ps1 tut das): nachträglich zusammengeführte Berichte können
+  nicht mehr unterscheiden, welcher Ausgang einer Verzweigung gelaufen ist. Zwei
+  Zeilen mit „50 Prozent" ergeben zusammengezählt wieder 50, obwohl beide
+  Ausgänge liefen. Coverlets json-Datei zählt je Ausgang, und der
+  cobertura-Bericht des letzten Laufs ist die Summe aller.
+-->
+<RunSettings>
+  <RunConfiguration>
+    <CollectSourceInformation>true</CollectSourceInformation>
+  </RunConfiguration>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>json,cobertura</Format>
+          <MergeWith>TestResults/coverage.json</MergeWith>
+          <ExcludeByAttribute>GeneratedCodeAttribute</ExcludeByAttribute>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

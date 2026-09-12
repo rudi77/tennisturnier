@@ -74,8 +74,8 @@ public static class Endpoints
             Results.Ok(Admin(await actions.RotateAdminTokenAsync(ActorOf(http), id, ct), http)));
     }
 
-    /// <summary>Server-Sent Events: jede Änderung als vollständige Sicht, alle 20 Sekunden ein Lebenszeichen.</summary>
-    private static async Task Live(HttpContext http, TournamentActions actions, LiveHub hub, Guid id, CancellationToken ct)
+    /// <summary>Server-Sent Events: jede Änderung als vollständige Sicht, dazwischen ein Lebenszeichen.</summary>
+    internal static async Task Live(HttpContext http, TournamentActions actions, LiveHub hub, Guid id, CancellationToken ct)
     {
         var tournament = await actions.GetAsync(id, ct);
 
@@ -86,10 +86,12 @@ public static class Endpoints
         using var subscription = hub.Subscribe(id, out var reader);
         await Write(http, "view", ViewBuilder.Build(tournament), ct);
 
-        while (!ct.IsCancellationRequested)
+        // Kein Abbruch in der Bedingung: jeder Ausgang dieser Schleife ist ein
+        // return, und ein abgebrochener Aufruf kommt als OperationCanceledException.
+        while (true)
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            timeout.CancelAfter(hub.KeepAlive);
 
             try
             {
@@ -109,10 +111,6 @@ public static class Endpoints
                 await http.Response.Body.FlushAsync(ct);
             }
             catch (OperationCanceledException)
-            {
-                return;
-            }
-            catch (System.Threading.Channels.ChannelClosedException)
             {
                 return;
             }

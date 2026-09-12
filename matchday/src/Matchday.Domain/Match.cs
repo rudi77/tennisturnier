@@ -66,7 +66,12 @@ public sealed class Match
         ? MatchStatus.Finished
         : Side1.IsSettled && Side2.IsSettled ? MatchStatus.Ready : MatchStatus.Pending;
 
-    public bool IsBye => Side1.Kind == SideKind.Bye || Side2.Kind == SideKind.Bye;
+    /// <summary>
+    /// Ein Freilos steht immer auf Seite 2: <see cref="KnockoutDraw"/> besetzt die
+    /// geraden Positionen des Baums zuerst, und die sind nie überzählig. Auf
+    /// Seite 1 steht also der, der weiterkommt.
+    /// </summary>
+    public bool IsBye => Side2.Kind == SideKind.Bye;
 
     public Guid? WinnerId => Score is null ? null : SideOf(Score.WinnerSide).ParticipantId;
 

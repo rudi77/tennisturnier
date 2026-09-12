@@ -466,3 +466,6 @@ app/.playwright/
 
 # MATCHDAY (matchday/): die gebaute Oberfläche liegt neben der Anwendung
 matchday/src/Matchday.Server/wwwroot/
+
+# Der Zwischenstand von tsc — entsteht bei jedem Bauen neu.
+matchday/web/tsconfig.tsbuildinfo

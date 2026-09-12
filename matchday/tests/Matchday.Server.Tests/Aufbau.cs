@@ -2,6 +2,8 @@ using Matchday.Server.Agent;
 using Matchday.Server.Api;
 using Matchday.Server.Live;
 using Matchday.Server.Storage;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Matchday.Server.Tests;
 
@@ -29,6 +31,15 @@ public sealed class Aufbau : IDisposable
     public Actor Rudi { get; } = new("browser-rudi", null);
 
     public Actor Fremder { get; } = new("browser-fremd", null);
+
+    /// <summary>Der Agent mit einem vorlesenden Modell statt einem echten.</summary>
+    public TournamentAgent Agent(IChatClient modell, AgentOptions? einstellungen = null) =>
+        new(Tools,
+            Actions,
+            Store,
+            new ModelAccess(einstellungen ?? new AgentOptions(), modell, NullLoggerFactory.Instance),
+            TimeProvider.System,
+            NullLogger<TournamentAgent>.Instance);
 
     public void Dispose()
     {

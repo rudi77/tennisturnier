@@ -289,3 +289,17 @@ jobs:
           dotnet restore
           dotnet build --no-restore --configuration Release
           dotnet test --no-build --configuration Release
+
+      # Läuft die Testprojekte noch einmal, diesmal mit Messung: eine offene
+      # Zeile oder ein ungenommener Ausgang macht den Durchlauf rot.
+      - name: Abdeckung
+        shell: pwsh
+        run: ./scripts/coverage.ps1
+
+      - name: Berichte ablegen
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: matchday-berichte
+          path: matchday/TestResults
+          if-no-files-found: warn

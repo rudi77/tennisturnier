@@ -1,10 +1,10 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
-using Anthropic;
-using Anthropic.Models.Messages;
 using Matchday.Server.Api;
 using Matchday.Server.Storage;
-using Microsoft.Extensions.Options;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 
 namespace Matchday.Server.Agent;
 
@@ -14,25 +14,21 @@ public sealed record ChatEvent(string Type, object Data);
 public sealed record ChatRequest(string Message, string? SessionId = null, Guid? TournamentId = null);
 
 /// <summary>
-/// Die Werkzeugschleife: Modell fragen, Werkzeuge ausführen, Ergebnisse
-/// zurückgeben, bis das Modell antwortet. Selbst geschrieben, weil jeder
-/// Schritt als Ereignis an die Oberfläche gehen soll (ADR-0016).
+/// Das Gespräch mit dem Modell. Die Werkzeugschleife führt das Microsoft Agent
+/// Framework; hier wird sie nur mitgelesen, damit jeder Schritt als Ereignis an
+/// die Oberfläche geht: Text, Werkzeugaufruf, Widget (ADR-0017).
 /// </summary>
 public sealed class TournamentAgent(
     AgentTools tools,
     TournamentActions actions,
     TournamentStore store,
-    IOptions<AgentOptions> options,
-    IConfiguration configuration,
+    ModelAccess model,
     TimeProvider clock,
     ILogger<TournamentAgent> log)
 {
     private static readonly JsonSerializerOptions Json = TournamentStore.Json;
 
-    private string? ApiKey =>
-        configuration["Anthropic:ApiKey"] is { Length: > 0 } key ? key : Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
+    public bool IsConfigured => model.IsConfigured;
 
     public async Task<ChatSession> LoadSessionAsync(string sessionId, Actor actor, CancellationToken ct)
     {
@@ -56,9 +52,9 @@ public sealed class TournamentAgent(
             session.TournamentId = requested;
         }
 
-        if (!IsConfigured)
+        if (!model.IsConfigured)
         {
-            yield return new ChatEvent("error", new { message = "Kein Modellschlüssel konfiguriert (ANTHROPIC_API_KEY). Die Widgets funktionieren trotzdem." });
+            yield return new ChatEvent("error", new { message = model.Missing });
             yield break;
         }
 
@@ -68,175 +64,231 @@ public sealed class TournamentAgent(
             Blocks = [new StoredBlock { Kind = BlockKind.Text, Text = await ContextFor(session, actor, ct) + "\n\n" + request.Message }],
         });
 
-        var client = new AnthropicClient { ApiKey = ApiKey };
-        var settings = options.Value;
+        var run = new ToolRun(tools, actor, baseUrl, session.TournamentId);
+        var agent = model.CreateAgent(SystemPrompt, run.Functions);
 
-        for (var round = 0; round <= settings.MaxToolRounds; round++)
+        var updates = new List<AgentResponseUpdate>();
+        var steps = new Dictionary<string, ToolStep>();
+        var text = new StringBuilder();
+        var failed = false;
+
+        var stream = agent.RunStreamingAsync([.. session.Messages.Select(ToChatMessage)], cancellationToken: ct);
+        await using var updateStream = stream.GetAsyncEnumerator(ct);
+
+        while (true)
         {
-            var (response, failure) = await AskAsync(client, session, settings, ct);
+            AgentResponseUpdate? update;
 
-            if (response is null)
+            try
             {
-                log.LogError(failure, "Modellaufruf fehlgeschlagen");
-                yield return new ChatEvent("error", new { message = "Das Modell ist gerade nicht erreichbar. Die Widgets funktionieren trotzdem." });
-                yield break;
+                update = await updateStream.MoveNextAsync() ? updateStream.Current : null;
             }
-
-            var assistant = new StoredMessage { Role = "assistant" };
-            var toolUses = new List<(string Id, string Name, JsonElement Input)>();
-
-            foreach (var block in response.Content)
+            catch (Exception e) when (e is not OperationCanceledException)
             {
-                if (block.TryPickText(out var text))
-                {
-                    assistant.Blocks.Add(new StoredBlock { Kind = BlockKind.Text, Text = text.Text });
-                    yield return new ChatEvent("text", new { text = text.Text });
-                }
-                else if (block.TryPickThinking(out var thinking))
-                {
-                    assistant.Blocks.Add(new StoredBlock { Kind = BlockKind.Thinking, Text = thinking.Thinking, Signature = thinking.Signature });
-                }
-                else if (block.TryPickToolUse(out var toolUse))
-                {
-                    var input = JsonSerializer.SerializeToElement(toolUse.Input, Json);
-                    assistant.Blocks.Add(new StoredBlock { Kind = BlockKind.ToolUse, Id = toolUse.ID, Name = toolUse.Name, Input = input });
-                    toolUses.Add((toolUse.ID, toolUse.Name, input));
-                }
-            }
-
-            session.Messages.Add(assistant);
-
-            if (response.StopReason == "refusal")
-            {
-                yield return new ChatEvent("error", new { message = "Das Modell hat diese Anfrage abgelehnt." });
+                log.LogError(e, "Modellaufruf fehlgeschlagen");
+                failed = true;
                 break;
             }
 
-            if (toolUses.Count == 0 || response.StopReason != "tool_use")
+            if (update is null)
             {
                 break;
             }
 
-            var results = new StoredMessage { Role = "user" };
+            updates.Add(update);
 
-            foreach (var (id, name, input) in toolUses)
+            foreach (var chatEvent in EventsFrom(update, run, session, steps, text))
             {
-                yield return new ChatEvent("tool", new { name, input });
-
-                var outcome = await tools.ExecuteAsync(name, input, actor, session.TournamentId, baseUrl, ct);
-
-                if (outcome.TournamentId is { } switched)
-                {
-                    session.TournamentId = switched;
-                }
-                else if (name == "delete_tournament" && !outcome.IsError)
-                {
-                    session.TournamentId = null;
-                }
-
-                if (outcome.Widget is not null)
-                {
-                    yield return new ChatEvent("widget", new { widget = outcome.Widget, data = outcome.WidgetData, tournamentId = session.TournamentId });
-                }
-
-                results.Blocks.Add(new StoredBlock
-                {
-                    Kind = BlockKind.ToolResult,
-                    ToolUseId = id,
-                    Text = outcome.ResultForModel,
-                    IsError = outcome.IsError,
-                    Widget = outcome.Widget,
-                });
+                yield return chatEvent;
             }
+        }
 
-            session.Messages.Add(results);
+        foreach (var chatEvent in Rest(text))
+        {
+            yield return chatEvent;
+        }
+
+        session.TournamentId = run.TournamentId;
+
+        if (failed)
+        {
+            // Bruchstücke nicht aufheben: ein Werkzeugaufruf ohne Ergebnis
+            // würde die nächste Runde stolpern lassen. Was die Werkzeuge in der
+            // Datenbank getan haben, steht dort ohnehin.
+            await store.SaveSessionJsonAsync(session.Id, session.ClientId, JsonSerializer.Serialize(session, Json), ct);
+            yield return new ChatEvent("error", new { message = "Das Modell ist gerade nicht erreichbar. Die Widgets funktionieren trotzdem." });
+            yield break;
+        }
+
+        foreach (var message in updates.ToAgentResponse().Messages)
+        {
+            var stored = ToStored(message, steps);
+
+            if (stored.Blocks.Count > 0)
+            {
+                session.Messages.Add(stored);
+            }
         }
 
         await store.SaveSessionJsonAsync(session.Id, session.ClientId, JsonSerializer.Serialize(session, Json), ct);
         yield return new ChatEvent("done", new { sessionId = session.Id, tournamentId = session.TournamentId });
     }
 
-    private async Task<(Message? Response, Exception? Failure)> AskAsync(AnthropicClient client, ChatSession session, AgentOptions settings, CancellationToken ct)
+    // --- Vom Strom zu den Ereignissen --------------------------------------
+
+    /// <summary>
+    /// Was ein Stück des Stroms für die Oberfläche bedeutet. Text wird gesammelt
+    /// und erst herausgegeben, wenn er fertig ist: die Oberfläche macht aus
+    /// jedem Textereignis eine Sprechblase, und Wort für Wort wären es hunderte.
+    /// </summary>
+    private static List<ChatEvent> EventsFrom(
+        AgentResponseUpdate update,
+        ToolRun run,
+        ChatSession session,
+        Dictionary<string, ToolStep> steps,
+        StringBuilder text)
     {
-        try
+        var events = new List<ChatEvent>();
+
+        foreach (var content in update.Contents)
         {
-            return (await client.Messages.Create(BuildParams(session, settings), cancellationToken: ct), null);
+            switch (content)
+            {
+                case TextContent { Text.Length: > 0 } part:
+                    text.Append(part.Text);
+                    break;
+
+                case FunctionCallContent:
+                    events.AddRange(Rest(text));
+                    break;
+
+                case FunctionResultContent result:
+                    events.AddRange(Rest(text));
+
+                    // Kein Schritt heißt: dieser Aufruf ist nicht gelaufen, weil
+                    // die Runden aufgebraucht waren. Dann gibt es nichts zu zeigen.
+                    if (run.NextStep() is { } step)
+                    {
+                        steps[result.CallId] = step;
+                        session.TournamentId = run.TournamentId;
+                        events.Add(new ChatEvent("tool", new { name = step.Name, input = step.Input }));
+
+                        if (step.Outcome.Widget is not null)
+                        {
+                            events.Add(new ChatEvent("widget", new { widget = step.Outcome.Widget, data = step.Outcome.WidgetData, tournamentId = session.TournamentId }));
+                        }
+                    }
+
+                    break;
+            }
         }
-        catch (Exception e) when (e is not OperationCanceledException)
-        {
-            return (null, e);
-        }
+
+        return events;
     }
 
-    // --- Aufbau der Anfrage ------------------------------------------------
-
-    private MessageCreateParams BuildParams(ChatSession session, AgentOptions settings) => new()
+    /// <summary>Der gesammelte Text, falls noch etwas aussteht.</summary>
+    private static List<ChatEvent> Rest(StringBuilder text)
     {
-        Model = settings.Model,
-        MaxTokens = settings.MaxTokens,
-        System = new List<TextBlockParam>
+        if (text.Length == 0)
         {
-            new() { Text = SystemPrompt, CacheControl = new CacheControlEphemeral() },
-        },
-        OutputConfig = new OutputConfig { Effort = EffortOf(settings.Effort) },
-        Tools = [.. AgentTools.Definitions.Select(ToSdkTool)],
-        Messages = [.. session.Messages.Select(ToSdkMessage)],
-    };
+            return [];
+        }
 
-    private static Effort EffortOf(string effort) => effort.ToLowerInvariant() switch
-    {
-        "low" => Effort.Low,
-        "high" => Effort.High,
-        "max" => Effort.Max,
-        _ => Effort.Medium,
-    };
-
-    private static ToolUnion ToSdkTool(ToolDefinition definition)
-    {
-        var schema = JsonSerializer.SerializeToElement(definition.InputSchema, Json);
-        var properties = schema.GetProperty("properties").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone());
-        var required = schema.GetProperty("required").EnumerateArray().Select(e => e.GetString()!).ToList();
-
-        return new Tool
-        {
-            Name = definition.Name,
-            Description = definition.Description,
-            InputSchema = new() { Properties = properties, Required = required },
-        };
+        var events = new List<ChatEvent> { new("text", new { text = text.ToString() }) };
+        text.Clear();
+        return events;
     }
 
-    private static MessageParam ToSdkMessage(StoredMessage message)
+    // --- Zwischen Speicherform und Framework -------------------------------
+
+    private static ChatMessage ToChatMessage(StoredMessage message)
     {
-        var content = new List<ContentBlockParam>();
+        var contents = new List<AIContent>();
 
         foreach (var block in message.Blocks)
         {
             switch (block.Kind)
             {
                 case BlockKind.Text:
-                    content.Add(new TextBlockParam { Text = block.Text ?? "" });
+                    contents.Add(new TextContent(block.Text ?? string.Empty));
                     break;
                 case BlockKind.Thinking:
-                    content.Add(new ThinkingBlockParam { Thinking = block.Text ?? "", Signature = block.Signature ?? "" });
+                    contents.Add(new TextReasoningContent(block.Text ?? string.Empty) { ProtectedData = block.Signature });
                     break;
                 case BlockKind.ToolUse:
-                    content.Add(new ToolUseBlockParam
-                    {
-                        ID = block.Id!,
-                        Name = block.Name!,
-                        Input = block.Input!.Value.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone()),
-                    });
+                    contents.Add(new FunctionCallContent(block.Id ?? string.Empty, block.Name ?? string.Empty, Arguments(block.Input)));
                     break;
                 case BlockKind.ToolResult:
-                    content.Add(new ToolResultBlockParam { ToolUseID = block.ToolUseId!, Content = block.Text ?? "", IsError = block.IsError });
+                    contents.Add(new FunctionResultContent(block.ToolUseId ?? string.Empty, block.Text ?? string.Empty));
                     break;
             }
         }
 
-        return new MessageParam { Role = message.Role == "assistant" ? Role.Assistant : Role.User, Content = content };
+        return new ChatMessage(RoleOf(message), contents);
     }
 
-    /// <summary>Was sich je Runde ändert, steht in der Nachricht, nicht im System-Prompt — der bleibt im Cache.</summary>
+    /// <summary>
+    /// Ein Werkzeugergebnis trägt seine eigene Rolle — auch in Sitzungen, die
+    /// noch aus der Zeit davor stammen und es beim Benutzer stehen haben.
+    /// </summary>
+    private static ChatRole RoleOf(StoredMessage message) =>
+        message.Blocks.Any(block => block.Kind == BlockKind.ToolResult) ? ChatRole.Tool
+            : message.Role == "assistant" ? ChatRole.Assistant
+            : ChatRole.User;
+
+    private static Dictionary<string, object?> Arguments(JsonElement? input) =>
+        input is { ValueKind: JsonValueKind.Object } element
+            ? element.EnumerateObject().ToDictionary(property => property.Name, property => (object?)property.Value.Clone())
+            : [];
+
+    private static StoredMessage ToStored(ChatMessage message, Dictionary<string, ToolStep> steps)
+    {
+        var stored = new StoredMessage { Role = message.Role.Value };
+
+        foreach (var content in message.Contents)
+        {
+            switch (content)
+            {
+                case TextContent { Text.Length: > 0 } text:
+                    stored.Blocks.Add(new StoredBlock { Kind = BlockKind.Text, Text = text.Text });
+                    break;
+
+                case TextReasoningContent reasoning:
+                    stored.Blocks.Add(new StoredBlock { Kind = BlockKind.Thinking, Text = reasoning.Text, Signature = reasoning.ProtectedData });
+                    break;
+
+                // Aufruf und Ergebnis gehören zusammen in den Verlauf oder gar
+                // nicht: eine offene Frage — oder eine Antwort ohne Frage —
+                // würde die nächste Runde beim Modell abgewiesen werden. Offen
+                // bleibt, was die Runden nicht mehr geschafft haben, und was das
+                // Modell sich an Werkzeugen ausgedacht hat.
+                case FunctionCallContent call when steps.ContainsKey(call.CallId):
+                    stored.Blocks.Add(new StoredBlock
+                    {
+                        Kind = BlockKind.ToolUse,
+                        Id = call.CallId,
+                        Name = call.Name,
+                        Input = JsonSerializer.SerializeToElement(call.Arguments, Json),
+                    });
+                    break;
+
+                case FunctionResultContent result when steps.TryGetValue(result.CallId, out var step):
+                    stored.Blocks.Add(new StoredBlock
+                    {
+                        Kind = BlockKind.ToolResult,
+                        ToolUseId = result.CallId,
+                        Text = step.Result,
+                        IsError = step.Outcome.IsError,
+                        Widget = step.Outcome.Widget,
+                    });
+                    break;
+            }
+        }
+
+        return stored;
+    }
+
+    /// <summary>Was sich je Runde ändert, steht in der Nachricht, nicht in den Anweisungen.</summary>
     private async Task<string> ContextFor(ChatSession session, Actor actor, CancellationToken ct)
     {
         var now = clock.GetLocalNow();

@@ -38,10 +38,10 @@ internal sealed class Tally(Participant participant)
 
     public int? EliminatedInRound { get; private set; }
 
-    public void Account(Match match)
+    /// <summary>Rechnet ein Match an — <paramref name="side"/> ist die Seite dieses Teilnehmers.</summary>
+    public void Account(Match match, int side)
     {
         var score = match.Score!;
-        var side = match.Side1.ParticipantId == Participant.Id ? 1 : 2;
         var other = side == 1 ? 2 : 1;
 
         Played++;

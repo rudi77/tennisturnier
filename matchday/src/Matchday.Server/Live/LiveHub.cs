@@ -12,6 +12,13 @@ public sealed class LiveHub
 {
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Guid, Channel<TournamentView?>>> _subscribers = new();
 
+    /// <summary>
+    /// Wie lange die Mitschau auf eine Änderung wartet, bevor sie ein
+    /// Lebenszeichen schickt. Zwanzig Sekunden im Betrieb; die Tests drehen es
+    /// herunter, damit sie nicht warten müssen.
+    /// </summary>
+    public TimeSpan KeepAlive { get; init; } = TimeSpan.FromSeconds(20);
+
     public IDisposable Subscribe(Guid tournamentId, out ChannelReader<TournamentView?> reader)
     {
         var channel = Channel.CreateBounded<TournamentView?>(new BoundedChannelOptions(8)
