@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, adoptAdminLink, subscribeLive, type AdminView, type TournamentSummary, type TournamentView, type Links } from './api'
-import { currentTournament, rememberAdminToken, rememberCurrent, rememberSession, sessionId, forgetAdminToken } from './client'
+import { currentTournament, rememberAdminToken, rememberCurrent, rememberSession, sessionId, forgetAdminToken, adminTokenFor } from './client'
 import { sendMessage, type WidgetEvent } from './chat'
 import { Composer } from './Composer'
 import { Widget, type WidgetItem } from './widgets/Widget'
@@ -12,7 +12,6 @@ export type Item =
   | { id: number; kind: 'tool'; name: string }
   | { id: number; kind: 'error'; text: string }
   | { id: number; kind: 'pending' }
-  | ({ id: number; kind: 'widget' } & WidgetItem)
 
 /** Omit über eine Union, Glied für Glied — das eingebaute Omit nähme nur die gemeinsamen Felder. */
 type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never
@@ -48,6 +47,12 @@ const id = () => nextId++
 export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   const [items, setItems] = useState<Item[]>([])
   const [views, setViews] = useState<Record<string, TournamentView>>({})
+
+  // Die Bühne: genau ein Widget, und keine Spur davon im Verlauf. Der Agent
+  // benennt weiterhin, was zu sehen ist — gezeigt wird es aber an einer festen
+  // Stelle, statt im Gespräch nach oben zu wandern, sobald jemand etwas sagt.
+  const [stage, setStage] = useState<WidgetItem | null>(null)
+
   const [current, setCurrent] = useState<string | null>(currentTournament())
   const [session, setSession] = useState<string | null>(sessionId())
   const [configured, setConfigured] = useState<boolean | null>(null)
@@ -77,13 +82,44 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
     rememberCurrent(tournamentId)
   }, [])
 
-  /** Die Turnierkarte: Rahmen oben, darunter je nach Zustand Teilnehmer, Bracket oder Tabelle. */
+  /** Die Turnierkarte auf die Bühne: Rahmen oben, darunter je nach Zustand Teilnehmer, Bracket oder Tabelle. */
   const showTournament = useCallback(
     (view: TournamentView, widget = 'tournament') => {
       showView(view)
-      append({ kind: 'widget', widget, tournamentId: view.id, data: null })
+      setStage({ widget, tournamentId: view.id, data: null })
     },
-    [append, showView],
+    [showView],
+  )
+
+  /** Die eigenen Turniere auf die Bühne — über die Kopfzeile jederzeit erreichbar. */
+  const showMine = useCallback(async () => {
+    try {
+      const mine = await api.mine()
+      for (const t of mine) rememberAdminToken(t.id, t.adminToken)
+      setStage({ widget: 'tournaments', tournamentId: null, data: mine })
+    } catch (e) {
+      append({ kind: 'error', text: (e as Error).message })
+    }
+  }, [append])
+
+  /**
+   * Die Links auf die Bühne. Gebaut werden sie vom Server — derselbe Aufruf,
+   * den auch der Verwalterlink nimmt. Sie hier nachzubauen hieße, die Form der
+   * Adresse an zwei Stellen zu pflegen.
+   */
+  const showShare = useCallback(
+    async (tournamentId: string) => {
+      const token = adminTokenFor(tournamentId)
+      if (!token) return
+      try {
+        const admin = await api.byAdmin(token)
+        takeAdmin(admin)
+        setStage({ widget: 'share', tournamentId: admin.tournament.id, data: admin.links })
+      } catch (e) {
+        append({ kind: 'error', text: (e as Error).message })
+      }
+    },
+    [append, takeAdmin],
   )
 
   // --- Start: Schlüssel prüfen, Verwalterlink übernehmen, Gespräch nachladen ---
@@ -130,10 +166,12 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
             if (view) {
               select(view.id)
               showTournament(view)
-            } else {
-              select(null)
+              return
             }
+            select(null)
           }
+          // Kein laufendes Turnier — dann ist die Historie das Nützlichste.
+          if (!cancelled) await showMine()
           return
         } catch {
           rememberSession(null)
@@ -142,12 +180,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
       }
 
       append({ kind: 'assistant', text: GREETING })
-      const mine = await api.mine().catch(() => [] as TournamentSummary[])
-      if (cancelled) return
-      if (mine.length > 0) {
-        for (const t of mine) rememberAdminToken(t.id, t.adminToken)
-        append({ kind: 'widget', widget: 'tournaments', tournamentId: null, data: mine })
-      }
+      if (!cancelled) await showMine()
     }
 
     void start()
@@ -168,12 +201,13 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
       })
       forgetAdminToken(current)
       select(null)
+      setStage(null)
     })
   }, [current, showView, select])
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [items, views])
+  }, [items])
 
   // --- Senden ---
   const send = useCallback(
@@ -217,23 +251,24 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
     [busy, session, current],
   )
 
+  /** Ein Widget des Agenten löst ab, was auf der Bühne steht, statt sich anzuhängen. */
   function handleWidget(event: WidgetEvent) {
     const { widget, data, tournamentId } = event
     if (widget === 'tournaments') {
       const list = (data ?? []) as TournamentSummary[]
       for (const t of list) rememberAdminToken(t.id, t.adminToken)
-      setItems((all) => [...all.filter((i) => i.kind !== 'pending'), { id: id(), kind: 'widget', widget, tournamentId: null, data: list }, { id: id(), kind: 'pending' }])
+      setStage({ widget, tournamentId: null, data: list })
       return
     }
     if (widget === 'share') {
       const share = data as { tournament: TournamentView; links: Links }
       showView(share.tournament)
-      setItems((all) => [...all.filter((i) => i.kind !== 'pending'), { id: id(), kind: 'widget', widget, tournamentId: share.tournament.id, data: share.links }, { id: id(), kind: 'pending' }])
+      setStage({ widget, tournamentId: share.tournament.id, data: share.links })
       return
     }
     const view = data as TournamentView | null
     if (view) showView(view)
-    setItems((all) => [...all.filter((i) => i.kind !== 'pending'), { id: id(), kind: 'widget', widget, tournamentId: tournamentId ?? view?.id ?? null, data: null }, { id: id(), kind: 'pending' }])
+    setStage({ widget, tournamentId: tournamentId ?? view?.id ?? null, data: null })
   }
 
   // --- Direkte Handlungen aus den Widgets, am Modell vorbei ---
@@ -263,6 +298,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   )
 
   const current_view = current ? views[current] : undefined
+  const canShare = current_view !== undefined && adminTokenFor(current_view.id) !== null
 
   return (
     <div className="chat">
@@ -275,6 +311,16 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
         ) : (
           <span className="chat__current chat__current--none">Kein Turnier gewählt</span>
         )}
+        <div className="chat__actions">
+          <button type="button" className="button button--quiet" onClick={() => void showMine()} title="Alle Turniere dieses Browsers">
+            Turniere
+          </button>
+          {canShare && (
+            <button type="button" className="button button--quiet" onClick={() => void showShare(current_view.id)} title="Mitschau-Link und Verwalterlink">
+              Teilen
+            </button>
+          )}
+        </div>
       </header>
 
       {configured === false && (
@@ -283,9 +329,17 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
         </div>
       )}
 
+      <section className="stage" aria-label="Anzeige">
+        {stage ? (
+          <Widget item={stage} views={views} act={act} apply={takeAdmin} open={open} onNewTournament={(v) => { select(v.id); showTournament(v) }} />
+        ) : (
+          <p className="stage__empty">Hier erscheint, worüber ihr gerade redet — Turnier, Teilnehmer, Bracket oder Tabelle.</p>
+        )}
+      </section>
+
       <main className="chat__transcript">
         {items.map((item) => (
-          <Row key={item.id} item={item} views={views} act={act} apply={takeAdmin} open={open} onNewTournament={(v) => { select(v.id); showTournament(v) }} />
+          <Row key={item.id} item={item} />
         ))}
         {items.length <= 2 && !busy && configured !== false && (
           <div className="suggestions">
@@ -304,21 +358,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   )
 }
 
-function Row({
-  item,
-  views,
-  act,
-  apply,
-  open,
-  onNewTournament,
-}: {
-  item: Item
-  views: Record<string, TournamentView>
-  act: (work: () => Promise<AdminView | void>) => Promise<void>
-  apply: (admin: AdminView) => TournamentView
-  open: (id: string) => Promise<void>
-  onNewTournament: (view: TournamentView) => void
-}) {
+function Row({ item }: { item: Item }) {
   switch (item.kind) {
     case 'user':
       return <div className="bubble bubble--user">{item.text}</div>
@@ -334,7 +374,5 @@ function Row({
           <span /><span /><span />
         </div>
       )
-    case 'widget':
-      return <Widget item={item} views={views} act={act} apply={apply} open={open} onNewTournament={onNewTournament} />
   }
 }
