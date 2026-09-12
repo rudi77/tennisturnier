@@ -27,6 +27,7 @@ noch einmal von vorn beginnt.
 | [0018](0018-railway-liefert-matchday-aus.md) | Railway liefert MATCHDAY aus, und die Pipeline hält es nicht auf | Accepted |
 | [0019](0019-anmeldung-mit-google-als-schalter.md) | Eine Anmeldung mit Google, und ein Schalter davor | Accepted |
 | [0020](0020-einzel-und-doppel.md) | Einzel und Doppel: ein Teilnehmer ist eine Aufstellung | Accepted |
+| [0021](0021-der-agent-erklaert-und-die-widgets-koennen-alles.md) | Der Agent erklärt auch, und jeder Weg führt durch | Accepted |
 
 ## Status
 

@@ -1,32 +1,38 @@
 import { useState } from 'react'
 import { api, type TournamentView } from '../api'
+import { isTeam, splitEntries } from '../entries'
 import type { Act } from './Widget'
 
-/** Namen, sonst nichts. Eintragen und streichen gehen direkt, am Modell vorbei. */
+/**
+ * Namen, sonst nichts — im Doppel je Teilnehmer zwei, getrennt durch „/“.
+ * Eintragen und streichen gehen direkt, am Modell vorbei.
+ */
 export function ParticipantList({ view, admin, act, embedded = false }: { view: TournamentView; admin: boolean; act: Act; embedded?: boolean }) {
   const [name, setName] = useState('')
   const [confirm, setConfirm] = useState(false)
   const setup = view.state === 'Setup'
   const canEdit = admin && setup
+  const doubles = view.discipline === 'Doubles'
+  const entries = splitEntries(name)
+
+  // Im Doppel fängt der Hinweis ab, was die Domäne ohnehin zurückweisen würde —
+  // nur eben, bevor jemand auf „Eintragen“ drückt.
+  const incomplete = doubles && entries.some((entry) => !isTeam(entry))
 
   function add() {
-    const names = name
-      .split(/[,\n;]/)
-      .map((n) => n.trim())
-      .filter(Boolean)
-    if (names.length === 0) return
+    if (entries.length === 0 || incomplete) return
     setName('')
-    void act(() => api.addParticipants(view.id, names))
+    void act(() => api.addParticipants(view.id, entries))
   }
 
   const body = (
     <>
       <div className="card__head">
-        <h2 className="card__title">Teilnehmer</h2>
+        <h2 className="card__title">{doubles ? 'Teams' : 'Teilnehmer'}</h2>
         <span className="muted">{view.participants.length}</span>
       </div>
       {view.participants.length === 0 ? (
-        <p className="muted">Noch niemand eingetragen.</p>
+        <p className="muted">{doubles ? 'Noch kein Team eingetragen.' : 'Noch niemand eingetragen.'}</p>
       ) : (
         <ol className="participants">
           {view.participants.map((p) => (
@@ -49,12 +55,18 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
             add()
           }}
         >
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, oder mehrere mit Komma" aria-label="Neuer Teilnehmer" />
-          <button type="submit" className="button" disabled={!name.trim()}>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={doubles ? 'Anna / Tom, oder mehrere Teams mit Komma' : 'Name, oder mehrere mit Komma'}
+            aria-label={doubles ? 'Neues Team' : 'Neuer Teilnehmer'}
+          />
+          <button type="submit" className="button" disabled={entries.length === 0 || incomplete}>
             Eintragen
           </button>
         </form>
       )}
+      {canEdit && incomplete && <p className="field__note">Ein Doppel braucht zwei Spieler je Team: „Anna / Tom“.</p>}
       {canEdit && view.participants.length >= 2 && (
         <div className="actions">
           {confirm ? (
