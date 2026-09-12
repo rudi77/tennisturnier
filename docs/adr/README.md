@@ -22,6 +22,7 @@ noch einmal von vorn beginnt.
 | [0013](0013-spielerprofil-und-verbindungen.md) | Das Spielerprofil zeigt, was der Fragende ohnehin sehen darf | Accepted |
 | [0014](0014-turnierfeed.md) | Das Turnier redet: ein Feed statt einer stillen Chronik | Accepted |
 | [0015](0015-verabredungen.md) | Eine Verabredung ist kein Turnier mit einem Match | Accepted |
+| [0016](0016-neuanfang-ein-turnier-mit-freunden.md) | Neuanfang: ein Turnier mit Freunden, geführt von einem Agenten | Accepted |
 
 ## Status
 
