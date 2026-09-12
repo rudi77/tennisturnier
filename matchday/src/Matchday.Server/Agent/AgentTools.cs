@@ -349,7 +349,7 @@ public sealed class AgentTools(TournamentActions actions)
             lines.Add("Matches:");
             lines.AddRange(t.Matches.Select(m =>
                 $"- {m.Label}: {t.NameOf(m.Side1)} – {t.NameOf(m.Side2)}" +
-                (m.Score is null ? (m.Status == MatchStatus.Ready ? " (offen)" : " (Gegner offen)") : $" → {t.NameOf(m.SideOf(m.Score.WinnerSide))} {m.Score}")));
+                (m.Score is null ? (m.Status == MatchStatus.Ready ? " (offen)" : " (Gegner offen)") : $" → {t.NameOf(m.SideOf(m.Score.WinnerSide))} {ScoreFromWinner(m.Score)}")));
         }
 
         if (t.State != TournamentState.Setup)
@@ -360,6 +360,18 @@ public sealed class AgentTools(TournamentActions actions)
         }
 
         return string.Join("\n", lines);
+    }
+
+    /// <summary>Das Ergebnis aus Sicht des Siegers — so, wie das Modell es auch entgegennimmt.</summary>
+    private static string ScoreFromWinner(Score score)
+    {
+        if (score.WinnerSide == 1 || score.Sets.Count == 0)
+        {
+            return score.ToString();
+        }
+
+        var text = string.Join(", ", score.Sets.Select(s => new SetScore(s.Games2, s.Games1, s.TiebreakPoints)));
+        return score.Outcome == MatchOutcome.Retirement ? $"{text} (Aufgabe)" : text;
     }
 
     private static string ModeText(Mode mode) => mode == Mode.Knockout ? "K.o." : "jeder gegen jeden";

@@ -463,3 +463,6 @@ app/test-results/
 app/blob-report/
 app/.playwright/
 /test-results/
+
+# MATCHDAY (matchday/): die gebaute Oberfläche liegt neben der Anwendung
+matchday/src/Matchday.Server/wwwroot/
