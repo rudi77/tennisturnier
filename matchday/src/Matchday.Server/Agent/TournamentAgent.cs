@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using Matchday.Domain;
 using Matchday.Server.Api;
 using Matchday.Server.Storage;
 using Microsoft.Agents.AI;
@@ -304,12 +305,12 @@ public sealed class TournamentAgent(
 
         lines.Add(mine.Count == 0
             ? "Turniere in diesem Browser: keine"
-            : "Turniere in diesem Browser: " + string.Join("; ", mine.Select(t => $"„{t.Name}“ (id {t.Id}, {t.State}, {t.Participants.Count} Teilnehmer)")));
+            : "Turniere in diesem Browser: " + string.Join("; ", mine.Select(Describe)));
 
         if (session.TournamentId is { } current)
         {
             var t = mine.FirstOrDefault(x => x.Id == current) ?? await store.FindAsync(current, ct);
-            lines.Add(t is null ? "Aktuelles Turnier: keines mehr (gelöscht)" : $"Aktuelles Turnier: „{t.Name}“ (id {t.Id})");
+            lines.Add(t is null ? "Aktuelles Turnier: keines mehr (gelöscht)" : $"Aktuelles Turnier: {Describe(t)}");
         }
         else
         {
@@ -319,6 +320,15 @@ public sealed class TournamentAgent(
         lines.Add("</context>");
         return string.Join("\n", lines);
     }
+
+    /// <summary>
+    /// Ein Turnier in einer Zeile. Die Disziplin gehört dazu: Wer sie erst mit
+    /// get_tournament erführe, trüge im Doppel zwei Spieler als zwei Teams ein
+    /// und bekäme eine Absage für etwas, das im Kontext stehen könnte.
+    /// </summary>
+    private static string Describe(Tournament t) =>
+        $"„{t.Name}“ (id {t.Id}, {AgentTools.DisciplineText(t.Discipline)}, {AgentTools.ModeText(t.Mode)}, " +
+        $"{AgentTools.StateText(t.State)}, {t.Participants.Count} {(t.Discipline == Discipline.Doubles ? "Teams" : "Teilnehmer")})";
 
     /// <summary>
     /// Die Anweisungen. Sie sagen, wie der Agent handelt; was er über die

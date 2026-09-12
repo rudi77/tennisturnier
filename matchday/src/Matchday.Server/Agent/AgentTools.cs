@@ -388,11 +388,11 @@ public sealed class AgentTools(TournamentActions actions)
         return score.Outcome == MatchOutcome.Retirement ? $"{text} (Aufgabe)" : text;
     }
 
-    private static string ModeText(Mode mode) => mode == Mode.Knockout ? "K.o." : "jeder gegen jeden";
+    internal static string ModeText(Mode mode) => mode == Mode.Knockout ? "K.o." : "jeder gegen jeden";
 
-    private static string DisciplineText(Discipline discipline) => discipline == Discipline.Doubles ? "Doppel" : "Einzel";
+    internal static string DisciplineText(Discipline discipline) => discipline == Discipline.Doubles ? "Doppel" : "Einzel";
 
-    private static string StateText(TournamentState state) => state switch
+    internal static string StateText(TournamentState state) => state switch
     {
         TournamentState.Setup => "Vorbereitung (noch nicht ausgelost)",
         TournamentState.Running => "läuft",
