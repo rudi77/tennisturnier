@@ -3,6 +3,7 @@
  * handelt: die Browserkennung und, wenn vorhanden, das Verwaltertoken.
  */
 import { adminTokenFor, clientId, rememberAdminToken } from './client'
+import { idToken, rememberToken, ABGEMELDET, type AuthConfig } from './auth'
 
 export type Mode = 'Knockout' | 'RoundRobin'
 export type TournamentState = 'Setup' | 'Running' | 'Completed'
@@ -130,11 +131,25 @@ async function call<T>(method: string, path: string, body?: unknown, tournamentI
   }
   const token = tournamentId ? adminTokenFor(tournamentId) : null
   if (token) headers['X-Admin-Token'] = token
+
+  // Ist keine Anmeldung verlangt, gibt es kein Token und die Kopfzeile fehlt —
+  // der Server schaut dann ohnehin nicht danach.
+  const angemeldet = idToken()
+  if (angemeldet) headers.Authorization = `Bearer ${angemeldet}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   const response = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
 
   if (!response.ok) {
+    // Ein abgelaufenes oder zurückgezogenes Token trägt nicht mehr. Das hier
+    // zu bemerken und nicht in jedem Aufrufer einzeln, hält die Stelle an
+    // einer Stelle — und die Oberfläche kommt zurück auf die Anmeldung,
+    // statt eine Fehlermeldung nach der anderen zu zeigen.
+    if (response.status === 401 && idToken()) {
+      rememberToken(null)
+      window.dispatchEvent(new Event(ABGEMELDET))
+    }
+
     let message = `Fehler ${response.status}`
     try {
       const problem = (await response.json()) as { error?: string }
@@ -150,6 +165,7 @@ async function call<T>(method: string, path: string, body?: unknown, tournamentI
 }
 
 export const api = {
+  authConfig: () => call<AuthConfig>('GET', '/api/auth/config'),
   status: () => call<{ configured: boolean; missing: string }>('GET', '/api/chat/status'),
   mine: () => call<TournamentSummary[]>('GET', '/api/tournaments'),
   get: (id: string) => call<TournamentView>('GET', `/api/tournaments/${id}`),

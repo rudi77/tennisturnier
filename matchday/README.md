@@ -73,7 +73,23 @@ docker run --rm -p 8080:8080 -v matchday-daten:/data   -e AZURE_OPENAI_ENDPOINT=
 | `Agent__Effort` | `low`, `medium` (Vorgabe), `high`, `max`. Leer schickt gar nichts mit — für Modelle ohne Reasoning. |
 | `Agent__MaxTokens` | Vorgabe 4096. |
 | `Agent__MaxToolRounds` | Wie oft der Agent in einer Antwort Werkzeuge rufen darf. Vorgabe 12. |
+| `Auth__Required` | Vorgabe `false`: kein Konto, Verwalter- und Mitschau-Links wie in ADR-0016. Auf `true` verlangt jeder besitzergebundene Aufruf eine Google-Anmeldung — **auf einer öffentlich erreichbaren Instanz gehört er dorthin** (ADR-0019). |
+| `Auth__GoogleClientId` | Die Client-Id aus der Google Cloud Console, zugleich die Audience der Token. Bei `Auth__Required=true` Pflicht: Fehlt sie, bricht der Start ab, statt jeden still abzuweisen. |
 | `ConnectionStrings__Default` | Vorgabe im Bild `Data Source=/data/matchday.db`. Ohne Datenträger ist die Datenbank nach jedem Neustart leer. |
+
+### Die Anmeldung einrichten
+
+1. In der [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   eine **OAuth-Client-ID** vom Typ *Webanwendung* anlegen.
+2. Als **autorisierten JavaScript-Ursprung** die Adresse der Instanz eintragen,
+   ohne Pfad und ohne Schrägstrich am Ende — für die Entwicklung zusätzlich
+   `http://localhost:5080`. Ein Ursprung, der dort nicht steht, bekommt von
+   Google keinen Knopf, sondern eine Fehlermeldung in der Konsole.
+   Weiterleitungs-URIs braucht es nicht: Die Oberfläche holt das Id-Token über
+   Google Identity Services, nicht über einen Umweg auf den Server.
+3. `Auth__GoogleClientId` auf die Client-Id setzen und `Auth__Required=true`.
+
+Zuschauer bleiben davon unberührt — der Mitschau-Link verlangt keine Anmeldung.
 
 Auf Railway: der Dienst dieses Repositories baut MATCHDAY. **Root Directory
 bleibt die Wurzel** — das `railway.json` dort nennt `matchday/Dockerfile` und

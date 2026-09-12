@@ -5,6 +5,7 @@ import { sendMessage, type WidgetEvent } from './chat'
 import { Composer } from './Composer'
 import { Widget, type WidgetItem } from './widgets/Widget'
 import { Mark } from './Mark'
+import { ABGEMELDET, idToken, kontoAus, rememberToken } from './auth'
 
 export type Item =
   | { id: number; kind: 'user'; text: string }
@@ -310,6 +311,13 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   const current_view = current ? views[current] : undefined
   const canShare = current_view !== undefined && adminTokenFor(current_view.id) !== null
 
+  // Wer angemeldet ist, soll das sehen und wieder herauskommen. Ohne
+  // Anmeldung gibt es kein Token, und die Kopfzeile bleibt wie bisher.
+  const konto = (() => {
+    const token = idToken()
+    return token === null ? null : kontoAus(token)
+  })()
+
   return (
     <div className="chat">
       <header className="chat__bar">
@@ -328,6 +336,20 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
           {canShare && (
             <button type="button" className="button button--quiet" onClick={() => void showShare(current_view.id)} title="Mitschau-Link und Verwalterlink">
               Teilen
+            </button>
+          )}
+          {konto && (
+            <button
+              type="button"
+              className="chat__account"
+              onClick={() => {
+                rememberToken(null)
+                window.dispatchEvent(new Event(ABGEMELDET))
+              }}
+              title={`${konto.email || konto.name} — abmelden`}
+              aria-label={`Angemeldet als ${konto.email || konto.name}. Abmelden.`}
+            >
+              {konto.bild ? <img src={konto.bild} alt="" /> : <span>{(konto.name || '?').slice(0, 1)}</span>}
             </button>
           )}
         </div>

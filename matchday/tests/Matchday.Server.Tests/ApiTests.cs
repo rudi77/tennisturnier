@@ -82,6 +82,17 @@ public sealed class ApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Ohne_Schalter_verlangt_die_Instanz_keine_Anmeldung()
+    {
+        // Der Normalfall dieser Instanz: kein Konto nötig, und entsprechend
+        // auch keine Client-Id zu melden (ADR-0016).
+        var config = await Client("browser-rudi").GetFromJsonAsync<JsonElement>("/api/auth/config");
+
+        Assert.False(config.GetProperty("required").GetBoolean());
+        Assert.Equal(string.Empty, config.GetProperty("googleClientId").GetString());
+    }
+
+    [Fact]
     public async Task Der_Chat_sagt_ohne_Schluessel_was_fehlt()
     {
         var rudi = Client("browser-rudi");

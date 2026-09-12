@@ -507,3 +507,52 @@ a { color: var(--accent); }
   /* Mehr Luft für die Widgets, wo sie da ist. */
   .stage > * { max-width: 1000px; }
 }
+
+/* --- Anmeldung ------------------------------------------------------------ */
+
+.signin {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg-stage);
+}
+
+.signin__box {
+  width: min(100%, 26rem);
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 32px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  text-align: center;
+}
+
+.signin__title { margin: 0; font-size: 1.3rem; }
+.signin__text { margin: 0; color: var(--fg-muted); font-size: 0.92rem; }
+.signin__error { margin: 0; color: var(--danger); font-size: 0.9rem; }
+
+/* Der Knopf kommt von Google und bringt seine eigenen Maße mit — hier steht
+   nur, dass er mittig sitzt und nicht über den Kasten hinausragt. */
+.signin__button { display: flex; justify-content: center; min-height: 44px; max-width: 100%; overflow: hidden; }
+
+.chat__account {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg-elev);
+  overflow: hidden;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--fg);
+}
+.chat__account img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.chat__account:hover { border-color: var(--accent); }

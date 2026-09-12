@@ -1,5 +1,8 @@
+using System.Security.Claims;
 using System.Text.Json;
 using Matchday.Domain;
+using Matchday.Server.Auth;
+using Microsoft.Extensions.Options;
 using Matchday.Server.Live;
 using Matchday.Server.Storage;
 
@@ -35,8 +38,15 @@ public static class Endpoints
             return Results.Ok(mine.Select(ViewBuilder.Summarize));
         });
 
+        // Der Verwalterlink ist ein Schlüssel, kein Besitz — er geht durch
+        // RequireLogin und nicht durch ActorOf. Steht die Anmeldung, muss man
+        // angemeldet sein, um ihn einzulösen; was man damit darf, entscheidet
+        // weiterhin das Token.
         tournaments.MapGet("/by-admin/{token}", async (HttpContext http, TournamentActions actions, string token, CancellationToken ct) =>
-            Results.Ok(Admin(await actions.GetByAdminTokenAsync(token, ct), http)));
+        {
+            RequireLogin(http);
+            return Results.Ok(Admin(await actions.GetByAdminTokenAsync(token, ct), http));
+        });
 
         tournaments.MapGet("/{id:guid}", async (TournamentActions actions, Guid id, CancellationToken ct) =>
             Results.Ok(ViewBuilder.Build(await actions.GetAsync(id, ct))));
@@ -123,8 +133,26 @@ public static class Endpoints
         await http.Response.Body.FlushAsync(ct);
     }
 
+    /// <summary>
+    /// Wer handelt. Die eine Stelle, durch die jeder besitzergebundene Aufruf
+    /// läuft — und damit die eine Stelle, an der die Anmeldung hängt.
+    ///
+    /// Ohne Anmeldung bleibt es beim Browser, der sich selbst benennt
+    /// (ADR-0016). Mit Anmeldung zählt das Konto: Die Kennung kommt aus dem
+    /// geprüften Token und nicht mehr aus einer Kopfzeile, die jeder setzen
+    /// kann. Damit folgen einem die eigenen Turniere auch auf ein anderes
+    /// Gerät — und ein fremder Browser kommt nicht mehr an sie heran, indem er
+    /// eine Kennung errät (ADR-0019).
+    /// </summary>
     internal static Actor ActorOf(HttpContext http)
     {
+        var admin = http.Request.Headers[AdminHeader].FirstOrDefault();
+
+        if (Required(http))
+        {
+            return new Actor(AccountOf(http), admin);
+        }
+
         var client = http.Request.Headers[ClientHeader].FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(client) || client.Length > 100)
@@ -132,7 +160,42 @@ public static class Endpoints
             throw new ForbiddenException($"Die Kopfzeile {ClientHeader} fehlt.");
         }
 
-        return new Actor(client, http.Request.Headers[AdminHeader].FirstOrDefault());
+        return new Actor(client, admin);
+    }
+
+    /// <summary>
+    /// Nur die Anmeldung prüfen, ohne einen Handelnden zu brauchen — für
+    /// Endpunkte, die keinem Eigentümer gehören und trotzdem nicht offen
+    /// stehen sollen, wenn der Schalter an ist.
+    /// </summary>
+    internal static void RequireLogin(HttpContext http)
+    {
+        if (Required(http))
+        {
+            _ = AccountOf(http);
+        }
+    }
+
+    private static bool Required(HttpContext http) =>
+        http.RequestServices.GetRequiredService<IOptions<AuthOptions>>().Value.Required;
+
+    /// <summary>
+    /// Die Kennung des angemeldeten Kontos. Das Präfix hält sie von den
+    /// selbst vergebenen Browserkennungen getrennt: Sonst könnte ein Browser,
+    /// der sich eine Google-Id als Kennung gibt, nach dem Abschalten der
+    /// Anmeldung fremde Turniere sehen.
+    /// </summary>
+    private static string AccountOf(HttpContext http)
+    {
+        var subject = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? http.User.FindFirst("sub")?.Value;
+
+        if (http.User.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(subject))
+        {
+            throw new UnauthorizedException("Dafür musst du angemeldet sein.");
+        }
+
+        return $"google:{subject}";
     }
 
     internal static string BaseUrl(HttpContext http)
