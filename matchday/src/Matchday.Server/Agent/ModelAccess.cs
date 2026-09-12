@@ -165,8 +165,19 @@ public sealed class ModelAccess
     }
 
     /// <summary>
-    /// Die Namen der Umgebungsvariablen, die das Modell betreffen — nie ihre
-    /// Werte. Leer heißt: keine davon ist im Prozess angekommen.
+    /// Wonach gesucht wird. Absichtlich grob: Ein Name, der nur beinahe stimmt,
+    /// ist der häufigste Grund, warum eine gesetzte Variable nicht ankommt —
+    /// und ein Filter, der exakt den richtigen Namen verlangt, versteckt
+    /// ausgerechnet diesen Fall. <c>AZURE_OPEN_AI_API_KEY</c> soll hier
+    /// auftauchen, nicht durchfallen.
+    /// </summary>
+    private static readonly string[] Verdaechtig = ["OPEN", "AZURE", "KEY"];
+
+    /// <summary>
+    /// Die Namen der Umgebungsvariablen, die das Modell betreffen könnten — nie
+    /// ihre Werte. Steht ein erwarteter Name nicht dabei, erreicht er den
+    /// Prozess nicht; steht er falsch geschrieben dabei, ist die Ursache
+    /// gefunden.
     /// </summary>
     private static string SichtbareNamen() =>
         string.Join(
@@ -174,7 +185,7 @@ public sealed class ModelAccess
             Environment.GetEnvironmentVariables()
                 .Keys
                 .Cast<string>()
-                .Where(name => name.Contains("OPENAI", StringComparison.OrdinalIgnoreCase))
+                .Where(name => Verdaechtig.Any(teil => name.Contains(teil, StringComparison.OrdinalIgnoreCase)))
                 .Order(StringComparer.Ordinal));
 
     /// <summary>Der erste Wert, der wirklich einer ist.</summary>
