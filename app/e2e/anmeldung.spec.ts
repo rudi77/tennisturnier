@@ -13,7 +13,6 @@
  */
 
 import { alsTurnierleitung, expect, test, turnierMitFeld } from './support/fixtures'
-import { ABGEMELDET } from './support/keycloak'
 
 test('leitet von selbst zum Identity Provider und wieder zurück', async ({ page }) => {
   await page.goto('/')
@@ -65,20 +64,59 @@ test('führt einen Zuschauerlink ohne Konto direkt zum Zusehen', async ({ page, 
 })
 
 test('meldet wieder ab — und zwar auch beim Aussteller', async ({ page }) => {
-  // Hier stand einmal das Gegenteil. Mit persönlichen Konten ist die
-  // überlebende Sitzung der Fehler: „Abmelden" hieß, dass der nächste Aufruf
-  // wortlos denselben Menschen zurückbrachte.
-  await alsTurnierleitung(page)
+  // Zu Fuß angemeldet und nicht eingepflanzt. Hier stand einmal eine
+  // eingepflanzte Sitzung, und der Test war damit blind für genau den Fehler,
+  // den er prüfen sollte: ohne Anmeldung beim Aussteller gibt es dort auch
+  // keine Sitzung, die das Abmelden beenden könnte. Der Lauf landete auf der
+  // Maske, weil der Aussteller ihn ohnehin nicht kannte — und hätte ein
+  // Abmelden, das den Aussteller nie erreicht, für gelungen gehalten.
+  await page.goto('/')
+  await page.waitForURL(/localhost:8080/)
+  await page.locator('#username').fill('clubadmin')
+  await page.locator('#password').fill('clubadmin')
+  await page.locator('#kc-login').click()
+  await page.waitForURL(/localhost:5001/)
   await expect(page.getByRole('navigation', { name: 'Hauptnavigation' })).toBeVisible()
-
-  // Ab hier soll die Testsitzung nicht mehr nachwachsen — sonst prüfte der
-  // Test nur, dass sein eigenes Init-Skript läuft.
-  await page.evaluate((marke) => window.sessionStorage.setItem(marke, '1'), ABGEMELDET)
 
   await page.getByRole('button', { name: 'Abmelden' }).click()
 
-  // Beim Aussteller abgemeldet: der Rücksprung landet in der Anwendung, die
-  // niemanden mehr kennt und deshalb sofort wieder zur Maske schickt.
+  // Der Rücksprung landet in der Anwendung, die niemanden mehr kennt und
+  // deshalb sofort wieder zur Maske schickt.
+  await page.waitForURL(/realms\/tennisturnier/)
+  await expect(page.locator('#username')).toBeVisible()
+
+  // Und der Aussteller kennt ihn auch nicht mehr. Das ist die Frage, an der
+  // sich das Abmelden entscheidet, und die Maske allein beantwortet sie nicht:
+  // sie erscheint auch dann, wenn nur die Anwendung vergessen hat und die
+  // Sitzung beim Aussteller weiterlebt. Eine stille Anfrage bekäme in dem Fall
+  // wortlos einen neuen Code statt einer Absage.
+  const still = await page.request.get(
+    'http://localhost:8080/realms/tennisturnier/protocol/openid-connect/auth' +
+      '?client_id=tennisturnier-api' +
+      '&redirect_uri=' +
+      encodeURIComponent('http://localhost:5001/') +
+      '&response_type=code&scope=openid&prompt=none&state=abmeldeprobe',
+    { maxRedirects: 0 },
+  )
+
+  expect(still.headers()['location'] ?? '').toContain('error=login_required')
+})
+
+test('bleibt abgemeldet, auch wenn der Lauf die Sitzung eingepflanzt hat', async ({ page }) => {
+  // Die Kehrseite der eingepflanzten Sitzung: das Skript, das sie einpflanzt,
+  // läuft bei jedem Laden der Seite — auch bei dem, das auf das Abmelden
+  // folgt. Ohne Sperre wäre der Abgemeldete beim Rücksprung wortlos wieder
+  // angemeldet, und jeder Test, der nach dem Abmelden noch etwas behauptet,
+  // prüfte nur noch, dass dieses Skript läuft.
+  //
+  // Die Sperre lässt sich nicht von Hand setzen, sondern bewaffnet sich selbst
+  // (`support/keycloak.ts`) — die vorige musste ein Test setzen, und als
+  // niemand mehr daran dachte, war sie wirkungslos, ohne dass es auffiel.
+  await alsTurnierleitung(page)
+  await expect(page.getByRole('navigation', { name: 'Hauptnavigation' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Abmelden' }).click()
+
   await page.waitForURL(/realms\/tennisturnier/)
   await expect(page.locator('#username')).toBeVisible()
 })

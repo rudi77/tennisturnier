@@ -22,7 +22,14 @@ import { setTokenProvider } from '../api/client'
 
 interface AuthState {
   user: User | null
-  status: 'loading' | 'anonymous' | 'authenticated'
+  /**
+   * `signing-out` ist ein eigener Zustand und nicht bloß „noch angemeldet":
+   * `signoutRedirect` räumt die Sitzung hier weg, *bevor* es zum Aussteller
+   * weiterleitet. Ohne diesen Zwischenzustand stünde die Anwendung in genau
+   * diesem Fenster als `anonymous` da — und `ToLogin` schickte den Abmeldenden
+   * postwendend wieder zur Anmeldung, mitten in die laufende Abmeldung hinein.
+   */
+  status: 'loading' | 'anonymous' | 'authenticated' | 'signing-out'
   /** Ohne konfigurierte Authority gibt es nur die öffentliche Ansicht. */
   configured: boolean
   /**
@@ -102,7 +109,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const onUnloaded = () => {
       setUser(null)
-      setStatus('anonymous')
+      // Nicht während einer laufenden Abmeldung: `signoutRedirect` löst dieses
+      // Ereignis selbst aus, kurz bevor es weiterleitet. Ein `anonymous` an
+      // dieser Stelle wäre das Startsignal für die Weiterleitung zur Anmeldung
+      // — und die käme der Abmeldung zuvor.
+      setStatus((vorher) => (vorher === 'signing-out' ? vorher : 'anonymous'))
     }
 
     manager.events.addUserLoaded(onLoaded)
@@ -139,8 +150,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // auch andere Anwendungen desselben Realms ab. Mit persönlichen Konten ist
     // die überlebende Sitzung der Fehler: „Abmelden" hieß, dass der nächste
     // Klick auf „Anmelden" wortlos denselben Menschen zurückbrachte.
+
+    // Ab hier ist die Anwendung weder angemeldet noch abgemeldet, sondern
+    // unterwegs. Der Zustand hält `ToLogin` zurück, bis der Browser wirklich
+    // beim Aussteller ist; er endet mit dem Verlassen der Seite.
+    setStatus('signing-out')
+
     void userManager.signoutRedirect().catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : 'Abmelden nicht möglich.')
+      // Der Weg zum Aussteller ist nicht zustande gekommen; die Sitzung hier
+      // hat `signoutRedirect` trotzdem schon geräumt. Also zurück in den
+      // Zustand, der dazu passt — mit gesetztem Fehler leitet `ToLogin` nicht
+      // weiter, sondern sagt, was schiefging.
+      setStatus('anonymous')
     })
   }, [])
 

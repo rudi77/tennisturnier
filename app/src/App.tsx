@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { AuthProvider, useAuth } from './auth/AuthProvider'
-import { ToastProvider } from './hooks/useToast'
+import { ToastProvider, useToast } from './hooks/useToast'
 import { Toast } from './components/layout/Toast'
 import { AppNav, type ScreenId } from './components/layout/AppNav'
 import { AppBar } from './components/layout/AppBar'
@@ -56,6 +56,18 @@ function Root() {
     return <Loading label="Anmeldung wird geprüft …" />
   }
 
+  // Vor allem anderen, und insbesondere vor jedem Zweig, der zur Anmeldung
+  // leitet: Wer sich gerade abmeldet, ist unterwegs zum Aussteller. Hier stand
+  // dieser Zweig einmal nicht, und das war der Fehler — `signoutRedirect`
+  // räumt die Sitzung weg, bevor es weiterleitet, `ToLogin` sah ein
+  // `anonymous` und schickte sofort zur Anmeldung. Diese Weiterleitung gewann
+  // das Rennen gegen die Abmeldung: der Aussteller kam nie bis zum Abmelden,
+  // seine Sitzung lebte weiter, und der Abmeldende landete wortlos wieder dort,
+  // wo er hergekommen war.
+  if (status === 'signing-out') {
+    return <Loading label="Abmeldung läuft …" />
+  }
+
   // Wer einem Beitrittslink folgt, braucht ein Konto — er bekommt es auf dem
   // Weg. Der Link führt jetzt durch die Anmeldung statt an ihr vorbei: das ist
   // der Unterschied zwischen einer Meldung und einer Mitgliedschaft (ADR-0012).
@@ -75,10 +87,13 @@ function Root() {
   // Zuschauerseite sagt es ihm, statt ihn zur Anmeldung zu schicken.
   if (status === 'anonymous' && tournamentId !== null) {
     return (
-      <PublicScreen
-        standalone
-        action={configured ? { label: 'Anmelden', onClick: login } : undefined}
-      />
+      <>
+        <AuthFehler />
+        <PublicScreen
+          standalone
+          action={configured ? { label: 'Anmelden', onClick: login } : undefined}
+        />
+      </>
     )
   }
 
@@ -93,6 +108,33 @@ function Root() {
   }
 
   return <AppShell />
+}
+
+/**
+ * Der Platz, an dem ein Fehler der Anmeldung sichtbar wird, wo die Seite
+ * selbst nichts davon erzählt.
+ *
+ * Es gibt genau eine solche Seite, und das ist kein Zufall: überall sonst
+ * wechselt ein Fehlschlag den Zustand auf `anonymous`, und dann steht der
+ * Fehler bei `ToLogin` — ausführlich, mit dem Weg zurück. Die Zuschauerseite
+ * ist die Ausnahme. Wer dort auf „Anmelden" drückt, bleibt anonym und bleibt
+ * beim Turnier stehen; scheitert der Weg zum Aussteller, ändert sich nichts
+ * an der Seite, und ohne diese Meldung rührte sich gar nichts.
+ *
+ * Als Meldung und nicht als Sperrfläche: der Fehlschlag nimmt dem Zuschauer
+ * nicht, was er gerade ansieht — er sagt nur, dass der Weg zum Aussteller
+ * nicht zustande kam.
+ */
+function AuthFehler() {
+  const { error } = useAuth()
+  const { showError } = useToast()
+
+  useEffect(() => {
+    if (!error) return
+    showError(new Error(error))
+  }, [error, showError])
+
+  return null
 }
 
 /**

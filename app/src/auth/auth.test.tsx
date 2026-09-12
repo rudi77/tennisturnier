@@ -332,6 +332,28 @@ describe('AuthProvider', () => {
     expect(removeUser).not.toHaveBeenCalled()
   })
 
+  it('bleibt unterwegs, wenn die Sitzung schon vor der Weiterleitung fällt', async () => {
+    // Der Fehler, an dem das Abmelden zuletzt scheiterte, und zwar lautlos:
+    // `signoutRedirect` räumt die Sitzung hier weg, *bevor* der Browser beim
+    // Aussteller ist. Wurde daraus ein `anonymous`, schickte die Anwendung im
+    // selben Augenblick zur Anmeldung — diese Weiterleitung gewann das Rennen
+    // gegen die Abmeldung, der Aussteller wurde nie erreicht, und seine
+    // Sitzung lebte weiter. Für den Abmeldenden sah es aus, als täte der Knopf
+    // nichts.
+    state.existing = alsBenutzer()
+    aufbau()
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
+
+    await userEvent().click(screen.getByRole('button', { name: 'abmelden' }))
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('signing-out'))
+
+    // Genau das tut `oidc-client-ts` als Nächstes.
+    events.unloaded.forEach((handler) => handler())
+
+    await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('—'))
+    expect(screen.getByTestId('status')).toHaveTextContent('signing-out')
+  })
+
   it('meldet, wenn der Weg zum Abmelden scheitert', async () => {
     signoutRedirect.mockRejectedValueOnce(new Error('IdP nicht erreichbar'))
     state.existing = alsBenutzer()

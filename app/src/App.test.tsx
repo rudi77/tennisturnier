@@ -185,6 +185,21 @@ describe('App — Eingang', () => {
     expect(signinRedirect).toHaveBeenCalled()
   })
 
+  it('sagt es auch, wenn der Weg zum Aussteller von dort scheitert', async () => {
+    // Die eine Seite, auf der ein Fehlschlag der Anmeldung sonst spurlos
+    // bliebe: der Zuschauer bleibt anonym und bleibt beim Turnier, die Seite
+    // wechselt nicht, und ohne Meldung sähe es aus, als täte der Knopf nichts.
+    signinRedirect.mockRejectedValueOnce(new Error('IdP nicht erreichbar'))
+    bei(`/?t=${T}`)
+    render(<App />)
+
+    await userEvent().click(await screen.findByRole('button', { name: 'Anmelden' }))
+
+    expect(await screen.findByText('IdP nicht erreichbar')).toBeInTheDocument()
+    // Und das Turnier steht weiterhin da — die Meldung nimmt nichts weg.
+    expect(screen.getByText('Clubmeisterschaft 2026')).toBeInTheDocument()
+  })
+
   it('läuft ohne konfigurierte Authority rein öffentlich', async () => {
     state.configured = false
     bei(`/?t=${T}`)

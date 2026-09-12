@@ -17,12 +17,19 @@ export const CLIENT_ID = 'tennisturnier-api'
 export type Benutzer = 'systemadmin' | 'clubadmin' | 'referee'
 
 /**
- * Die Marke, mit der ein Test sagt: ab jetzt bitte nicht mehr einpflanzen.
+ * Die Marke, an der das Einpflanzskript merkt, dass es schon einmal gelaufen
+ * ist.
  *
  * Sie steht im sessionStorage und überlebt damit genau so lange wie die
  * Sitzung, um die es geht.
+ *
+ * Hier stand einmal das Gegenteil: eine Marke, die der *Test* setzen musste,
+ * um das Nachwachsen abzustellen. Das ging genau so lange gut, wie jemand
+ * daran dachte — und als der einzige Test, der sie setzte, auf eine echte
+ * Anmeldung umgestellt wurde, setzte sie niemand mehr. Der Schutz war da und
+ * wirkte nie. Jetzt bewaffnet er sich selbst.
  */
-export const ABGEMELDET = 'matchday-test:abgemeldet'
+const EINGEPFLANZT = 'matchday-test:eingepflanzt'
 
 interface TokenAntwort {
   access_token: string
@@ -117,10 +124,18 @@ export async function sitzungEinpflanzen(
   }
 
   await page.addInitScript(
-    ([schluessel, wert, abgemeldet]) => {
-      if (window.sessionStorage.getItem(abgemeldet as string)) return
+    ([schluessel, wert, marke]) => {
+      // Schon einmal eingepflanzt, und die Sitzung ist trotzdem weg? Dann hat
+      // die Anwendung sie entfernt — abgemeldet oder abgelaufen. Das ist eine
+      // Aussage über die Anwendung, und sie darf nicht davon überschrieben
+      // werden, dass dieses Skript bei jedem Laden erneut läuft. Sonst prüfte
+      // ein Test nach dem Abmelden nur noch, dass sein eigenes Skript läuft.
+      const marker = window.sessionStorage.getItem(marke as string)
+      if (marker && !window.sessionStorage.getItem(schluessel as string)) return
+
       window.sessionStorage.setItem(schluessel as string, wert as string)
+      window.sessionStorage.setItem(marke as string, '1')
     },
-    [`oidc.user:${AUTHORITY}:${CLIENT_ID}`, JSON.stringify(user), ABGEMELDET],
+    [`oidc.user:${AUTHORITY}:${CLIENT_ID}`, JSON.stringify(user), EINGEPFLANZT],
   )
 }
