@@ -12,6 +12,7 @@ public sealed record TournamentView(
     DateOnly? Date,
     string? Location,
     Mode Mode,
+    Discipline Discipline,
     MatchFormat Format,
     string FormatText,
     TournamentState State,
@@ -35,7 +36,7 @@ public sealed record SideView(SideKind Kind, Guid? ParticipantId, string Name);
 
 public sealed record ScoreView(MatchOutcome Outcome, int WinnerSide, IReadOnlyList<SetScore> Sets, string Text);
 
-public sealed record TournamentSummary(Guid Id, string Name, DateOnly? Date, string? Location, Mode Mode, TournamentState State, int ParticipantCount, string AdminToken);
+public sealed record TournamentSummary(Guid Id, string Name, DateOnly? Date, string? Location, Mode Mode, Discipline Discipline, TournamentState State, int ParticipantCount, string AdminToken);
 
 /// <summary>Die beiden Links: einer zum Mitschauen, einer zum Verwalten.</summary>
 public sealed record TournamentLinks(string PublicUrl, string AdminUrl);
@@ -48,6 +49,7 @@ public static class ViewBuilder
         t.Date,
         t.Location,
         t.Mode,
+        t.Discipline,
         t.Format,
         t.Format.Describe(),
         t.State,
@@ -67,7 +69,7 @@ public static class ViewBuilder
         t.Matches.Count == 0 ? 0 : t.Matches.Max(m => m.Round));
 
     public static TournamentSummary Summarize(Tournament t) => new(
-        t.Id, t.Name, t.Date, t.Location, t.Mode, t.State, t.Participants.Count, t.AdminToken);
+        t.Id, t.Name, t.Date, t.Location, t.Mode, t.Discipline, t.State, t.Participants.Count, t.AdminToken);
 
     public static TournamentLinks Links(Tournament t, string baseUrl) => new(
         $"{baseUrl}/?t={t.Id}",

@@ -26,6 +26,7 @@ noch einmal von vorn beginnt.
 | [0017](0017-agentenframework-maf-und-azure-openai.md) | Das Agentenframework: MAF statt eigener Schleife, Azure OpenAI statt Anthropic | Accepted |
 | [0018](0018-railway-liefert-matchday-aus.md) | Railway liefert MATCHDAY aus, und die Pipeline hält es nicht auf | Accepted |
 | [0019](0019-anmeldung-mit-google-als-schalter.md) | Eine Anmeldung mit Google, und ein Schalter davor | Accepted |
+| [0020](0020-einzel-und-doppel.md) | Einzel und Doppel: ein Teilnehmer ist eine Aufstellung | Accepted |
 
 ## Status
 

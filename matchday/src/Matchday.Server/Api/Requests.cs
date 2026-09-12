@@ -14,7 +14,9 @@ public sealed record CreateTournamentRequest(
     DateOnly? Date = null,
     string? Location = null,
     Mode Mode = Mode.Knockout,
-    MatchFormat? Format = null);
+    MatchFormat? Format = null,
+    Discipline Discipline = Discipline.Singles,
+    IReadOnlyList<string>? Participants = null);
 
 public sealed record UpdateTournamentRequest(
     string? Name = null,
@@ -23,6 +25,7 @@ public sealed record UpdateTournamentRequest(
     string? Location = null,
     bool ClearLocation = false,
     Mode? Mode = null,
+    Discipline? Discipline = null,
     MatchFormat? Format = null);
 
 public sealed record AddParticipantsRequest(IReadOnlyList<string> Names);

@@ -345,6 +345,59 @@ public sealed class AgentToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task Ein_Doppel_vom_Anlegen_bis_zum_Ergebnis()
+    {
+        var anlegen = await Run("create_tournament", new
+        {
+            name = "Doppelrunde",
+            discipline = "Doubles",
+            bestOf = 1,
+            participants = new[] { "Anna / Tom", "Rudi und Max" },
+        });
+
+        Assert.False(anlegen.IsError);
+        Assert.Contains("Doppel", anlegen.ResultForModel);
+        Assert.Contains("Teams (2): Anna / Tom; Rudi / Max", anlegen.ResultForModel);
+        var id = anlegen.TournamentId!.Value;
+
+        // Ein Team mit einem Spieler weist die Domäne zurück, und der Satz
+        // darüber sagt dem Modell, was fehlt.
+        var halb = await Run("add_participants", new { names = new[] { "Eva" } }, id);
+        Assert.True(halb.IsError);
+        Assert.Contains("zwei Spielern", halb.ResultForModel);
+
+        var los = await Run("draw", new { }, id);
+        Assert.False(los.IsError);
+
+        // Für das Ergebnis genügt je Team ein Spieler.
+        var ergebnis = await Run("record_result", new { winner = "Anna", loser = "Max", sets = new[] { new[] { 6, 3 } } }, id);
+        Assert.False(ergebnis.IsError);
+        Assert.Contains("Anna / Tom 6:3", ergebnis.ResultForModel);
+
+        // Gestrichen wird auch über einen Spieler — nur eben vor der Auslosung.
+        var zurueck = await Run("undo_draw", new { }, id);
+        Assert.False(zurueck.IsError);
+        var weg = await Run("remove_participants", new { names = new[] { "Tom" } }, id);
+        Assert.Contains("Teams (1): Rudi / Max", weg.ResultForModel);
+    }
+
+    [Fact]
+    public async Task Die_Disziplin_laesst_sich_wechseln_solange_die_Liste_leer_ist()
+    {
+        var anlegen = await Run("create_tournament", new { name = "Cup" });
+        var id = anlegen.TournamentId!.Value;
+
+        var aufDoppel = await Run("update_tournament", new { discipline = "Doubles" }, id);
+        Assert.False(aufDoppel.IsError);
+        Assert.Contains("Doppel", aufDoppel.ResultForModel);
+
+        await Run("add_participants", new { names = new[] { "Anna / Tom" } }, id);
+        var zurueck = await Run("update_tournament", new { discipline = "Singles" }, id);
+        Assert.True(zurueck.IsError);
+        Assert.Contains("Teilnehmerliste leeren", zurueck.ResultForModel);
+    }
+
+    [Fact]
     public async Task Alle_gestrichenen_Namen_gefunden()
     {
         var anlegen = await Run("create_tournament", new { name = "Cup", participants = new[] { "Rudi", "Max", "Anna" } });

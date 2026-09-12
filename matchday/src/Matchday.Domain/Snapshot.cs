@@ -7,6 +7,7 @@ public sealed record TournamentSnapshot(
     DateOnly? Date,
     string? Location,
     Mode Mode,
+    Discipline Discipline,
     MatchFormat Format,
     TournamentState State,
     string OwnerId,
