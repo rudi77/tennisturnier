@@ -28,6 +28,16 @@ public sealed class TournamentAgentTests : IDisposable
     }
 
     [Fact]
+    public void Der_Grund_steht_auch_ohne_Gespraech_bereit()
+    {
+        // Die Oberfläche fragt den Status, bevor jemand etwas eintippt. Käme
+        // der Grund erst als Fehlerereignis eines Gesprächs, stünde über dem
+        // stummen Eingabefeld nichts als eine Vermutung.
+        Assert.Contains("AZURE_OPENAI_ENDPOINT", OhneModell().Missing);
+        Assert.Equal(string.Empty, _a.Agent(new Modell()).Missing);
+    }
+
+    [Fact]
     public async Task Ein_Satz_wird_ein_Textereignis()
     {
         var modell = new Modell([new TextContent("Sag mir, wie das Turnier heißen soll.")]);

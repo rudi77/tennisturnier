@@ -150,7 +150,7 @@ async function call<T>(method: string, path: string, body?: unknown, tournamentI
 }
 
 export const api = {
-  status: () => call<{ configured: boolean }>('GET', '/api/chat/status'),
+  status: () => call<{ configured: boolean; missing: string }>('GET', '/api/chat/status'),
   mine: () => call<TournamentSummary[]>('GET', '/api/tournaments'),
   get: (id: string) => call<TournamentView>('GET', `/api/tournaments/${id}`),
   byAdmin: (token: string) => call<AdminView>('GET', `/api/tournaments/by-admin/${encodeURIComponent(token)}`),

@@ -30,6 +30,9 @@ public sealed class TournamentAgent(
 
     public bool IsConfigured => model.IsConfigured;
 
+    /// <summary>Leer, wenn der Zugang steht; sonst der Satz, der sagt, was fehlt.</summary>
+    public string Missing => model.Missing;
+
     public async Task<ChatSession> LoadSessionAsync(string sessionId, Actor actor, CancellationToken ct)
     {
         var json = await store.FindSessionJsonAsync(sessionId, actor.ClientId, ct);

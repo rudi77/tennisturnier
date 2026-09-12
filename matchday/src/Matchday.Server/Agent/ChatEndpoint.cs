@@ -6,7 +6,10 @@ public static class ChatEndpoint
 {
     public static void MapChat(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/chat/status", (TournamentAgent agent) => Results.Ok(new { configured = agent.IsConfigured }));
+        // Nicht nur ob, sondern was: ModelAccess unterscheidet drei Fälle, und
+        // ohne den Satz bliebe der Oberfläche nur Raten.
+        app.MapGet("/api/chat/status", (TournamentAgent agent) =>
+            Results.Ok(new { configured = agent.IsConfigured, missing = agent.Missing }));
 
         app.MapGet("/api/chat/{sessionId}", async (HttpContext http, TournamentAgent agent, string sessionId, CancellationToken ct) =>
         {

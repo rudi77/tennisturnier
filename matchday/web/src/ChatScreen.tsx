@@ -51,6 +51,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   const [current, setCurrent] = useState<string | null>(currentTournament())
   const [session, setSession] = useState<string | null>(sessionId())
   const [configured, setConfigured] = useState<boolean | null>(null)
+  const [missing, setMissing] = useState('')
   const [busy, setBusy] = useState(false)
   const bottom = useRef<HTMLDivElement>(null)
 
@@ -90,9 +91,14 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
     let cancelled = false
 
     async function start() {
-      const status = await api.status().catch(() => ({ configured: false }))
+      // Antwortet der Server gar nicht, ist das ein anderer Fall als ein
+      // fehlender Schlüssel — und soll auch anders dastehen.
+      const status = await api
+        .status()
+        .catch(() => ({ configured: false, missing: 'Der Server antwortet gerade nicht. Die Widgets funktionieren trotzdem.' }))
       if (cancelled) return
       setConfigured(status.configured)
+      setMissing(status.missing)
 
       if (adminToken) {
         try {
@@ -273,7 +279,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
 
       {configured === false && (
         <div className="notice" role="status">
-          Ohne Modellzugang (AZURE_OPENAI_ENDPOINT und AZURE_OPENAI_API_KEY) bleibt das Eingabefeld stumm — die Widgets funktionieren trotzdem.
+          {missing}
         </div>
       )}
 

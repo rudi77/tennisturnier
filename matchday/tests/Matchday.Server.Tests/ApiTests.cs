@@ -91,8 +91,14 @@ public sealed class ApiTests : IDisposable
         // In der Testumgebung ist kein Schlüssel gesetzt; falls doch, prüfen wir nur die Form.
         if (status.GetProperty("configured").GetBoolean())
         {
+            Assert.Equal(string.Empty, status.GetProperty("missing").GetString());
             return;
         }
+
+        // Nicht nur dass etwas fehlt, sondern was: der Status trägt denselben
+        // Satz, den das Gespräch als Fehler schicken würde. Fehlte er hier,
+        // bliebe der Oberfläche nur ein fest verdrahteter Verdacht.
+        Assert.Contains("AZURE_OPENAI_ENDPOINT", status.GetProperty("missing").GetString());
 
         var response = await rudi.PostAsJsonAsync("/api/chat", new { message = "Hallo" });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
