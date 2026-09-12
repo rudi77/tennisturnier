@@ -107,18 +107,26 @@ docker run --rm -p 8080:8080 -v matchday-daten:/data \
 
 ### Railway
 
-Railway baut direkt aus GitHub. `railway.json` legt fest, dass das `Dockerfile`
-gebaut wird und nicht geraten — ohne diese Angabe sucht Railpack nach einem
+**Railway betreibt `matchday/`, nicht diesen Baum.** Das `railway.json` in der
+Wurzel nennt `matchday/Dockerfile` als Bauplan und `/api/health` als
+Gesundheitsprüfung; der Bau läuft aus der Wurzel, weil ein Dockerfile nicht aus
+seinem Kontext hinausgreifen kann. Der alte Baum lässt sich weiterhin von Hand
+bauen (`docker build -t tennisturnier .`), wird aber nicht mehr ausgeliefert —
+so sieht es ADR-0016 vor.
+
+Die Angabe des Bauplans ist nicht optional: ohne sie sucht Railpack nach einem
 Projekt, das es kennt, und findet in einer Projektmappe aus mehreren
 Verzeichnissen keines.
 
-1. In Railway ein Projekt aus dem GitHub-Repository anlegen. Mehr als das
-   Repository braucht es nicht: Bauweise, Gesundheitsprüfung und
-   Neustartverhalten stehen in `railway.json`.
+1. In Railway einen Dienst aus dem GitHub-Repository anlegen. **Root Directory
+   bleibt die Wurzel** — Bauweise, Gesundheitsprüfung und Neustartverhalten
+   stehen in `railway.json`.
 2. Einen Datenträger anlegen und auf `/data` hängen. **Ohne ihn ist die
    Datenbank nach jedem Neustart leer** — sie ist eine Datei, und ein Container
    ohne Datenträger vergisst seine Dateien.
-3. Die Variablen setzen (siehe unten).
+3. Die Variablen setzen — für `matchday` sind das die `AZURE_OPENAI_*` aus
+   `matchday/README.md`. Die `Oidc__*` unten gelten dem alten Baum; MATCHDAY
+   kennt keine Anmeldung mehr, sondern Verwalterlinks (ADR-0016).
 
 Den Port gibt Railway über `PORT` vor; die Anwendung nimmt ihn beim Start
 entgegen. Die Adresse der Instanz gehört anschließend in den Identity Provider —
