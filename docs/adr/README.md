@@ -24,6 +24,7 @@ noch einmal von vorn beginnt.
 | [0015](0015-verabredungen.md) | Eine Verabredung ist kein Turnier mit einem Match | Accepted |
 | [0016](0016-neuanfang-ein-turnier-mit-freunden.md) | Neuanfang: ein Turnier mit Freunden, geführt von einem Agenten | Accepted |
 | [0017](0017-agentenframework-maf-und-azure-openai.md) | Das Agentenframework: MAF statt eigener Schleife, Azure OpenAI statt Anthropic | Accepted |
+| [0018](0018-railway-liefert-matchday-aus.md) | Railway liefert MATCHDAY aus, und die Pipeline hält es nicht auf | Accepted |
 
 ## Status
 
