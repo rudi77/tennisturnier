@@ -12,9 +12,76 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Welcher Baum ist überhaupt betroffen?
+  #
+  # Railway liefert MATCHDAY aus und wartet dabei auf diese Pipeline: ist sie
+  # rot, unterbleibt der Deploy. Der alte Baum wird aber nicht mehr
+  # ausgeliefert (ADR-0016) — sein Durchlauf darf die Auslieferung des neuen
+  # also nicht aufhalten. Wer ihn anfasst, bekommt ihn weiterhin vollständig
+  # geprüft; wer ihn nicht anfasst, wartet nicht auf ihn.
+  bereich:
+    name: Betroffene Bäume
+    runs-on: ubuntu-latest
+
+    outputs:
+      alt: ${{ steps.pruefen.outputs.alt }}
+      matchday: ${{ steps.pruefen.outputs.matchday }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: pruefen
+        env:
+          BASIS: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+
+          # Ohne brauchbaren Vergleichspunkt — neuer Branch, erster Push — gilt
+          # alles als geändert. Zu viel zu prüfen ist ein Ärgernis, zu wenig
+          # ein Fehler.
+          brauchbar=true
+          case "${BASIS}" in
+            "" | 0000000000000000000000000000000000000000) brauchbar=false ;;
+          esac
+          if [ "${brauchbar}" = true ] && ! git cat-file -e "${BASIS}^{commit}" 2>/dev/null; then
+            brauchbar=false
+          fi
+
+          if [ "${brauchbar}" = false ]; then
+            echo "Kein Vergleichspunkt — es gilt alles als geändert."
+            echo "alt=true" >> "$GITHUB_OUTPUT"
+            echo "matchday=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          dateien=$(git diff --name-only "${BASIS}" HEAD)
+          echo "Geändert:"
+          echo "${dateien}" | sed 's/^/  /'
+
+          # Die Pipeline selbst zählt zu matchday: geprüft wird sie an dem
+          # Baum, der auch ausgeliefert wird. Sie dem alten zuzuschlagen hieße,
+          # jede Änderung an ihr durch dessen Durchlauf zu schicken — und der
+          # ist lang und derzeit rot, hielte also die Auslieferung auf.
+          alt=false
+          matchday=false
+          if echo "${dateien}" | grep -qE '^(app|src|tests|deploy)/|^(Dockerfile|docker-compose\.yml|NuGet\.config|TennisTurnier\.slnx|Directory\.(Build|Packages)\.props)$'; then
+            alt=true
+          fi
+          if echo "${dateien}" | grep -qE '^matchday/|^\.github/workflows/'; then
+            matchday=true
+          fi
+
+          echo "alter Baum: ${alt}, matchday: ${matchday}"
+          echo "alt=${alt}" >> "$GITHUB_OUTPUT"
+          echo "matchday=${matchday}" >> "$GITHUB_OUTPUT"
+
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    needs: bereich
+    if: needs.bereich.outputs.alt == 'true'
 
     steps:
       - uses: actions/checkout@v5
@@ -83,6 +150,8 @@ jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
+    needs: bereich
+    if: needs.bereich.outputs.alt == 'true'
     defaults:
       run:
         working-directory: app
@@ -129,6 +198,8 @@ jobs:
   e2e:
     name: Ende zu Ende
     runs-on: ubuntu-latest
+    needs: bereich
+    if: needs.bereich.outputs.alt == 'true'
 
     steps:
       - uses: actions/checkout@v5
@@ -186,6 +257,8 @@ jobs:
   matchday:
     name: MATCHDAY (matchday/)
     runs-on: ubuntu-latest
+    needs: bereich
+    if: needs.bereich.outputs.matchday == 'true'
     defaults:
       run:
         working-directory: matchday
