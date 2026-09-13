@@ -496,6 +496,14 @@ public sealed class TournamentTests
 
         Assert.Contains($"{Tournament.MaxParticipants}", fehler.Message);
         Assert.Equal(Tournament.MaxParticipants, t.Participants.Count);
+
+        // Und die Grenze steht vor der Namensprüfung: Eine überlange Liste wird
+        // abgewiesen, ohne sie erst Namen gegen Namen durchzugehen — auch wenn
+        // ganz vorne schon ein Name doppelt steht.
+        var leer = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+        var zuViele = Enumerable.Range(0, 400).Select(i => $"Spieler{i}").Prepend("Eva").Append("Eva").ToList();
+
+        Assert.Contains($"{Tournament.MaxParticipants}", Assert.Throws<DomainException>(() => leer.AddRandomTeams(zuViele)).Message);
     }
 
     [Fact]
