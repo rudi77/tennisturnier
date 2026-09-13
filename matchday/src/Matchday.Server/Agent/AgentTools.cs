@@ -95,6 +95,14 @@ public sealed class AgentTools(TournamentActions actions)
                 names = new { type = "array", items = new { type = "string" }, description = "Namen der Teilnehmer; im Doppel je Team „Anna / Tom“" },
             }, "names")),
 
+        new("add_random_teams",
+            "Würfelt aus einzelnen Spielern Doppel-Teams und trägt sie ein — das Los für die Paarungen. Nur im Doppel und nur vor der Auslosung. Nimm dieses Werkzeug, wenn der Benutzer zufällige Teams will, statt selbst Paare zu bilden; gemischt wird in der Anwendung. Die Spielerzahl muss gerade sein.",
+            Schema(new
+            {
+                tournamentId = TournamentIdProperty,
+                players = new { type = "array", items = new { type = "string" }, description = "Die Spieler einzeln, je Eintrag ein Name — keine Paare" },
+            }, "players")),
+
         new("remove_participants",
             "Streicht Teilnehmer aus dem aktuellen Turnier. Nur vor der Auslosung. Im Doppel genügt ein Spieler des Teams.",
             Schema(new
@@ -165,6 +173,7 @@ public sealed class AgentTools(TournamentActions actions)
                 "get_tournament" => await GetAsync(Id(input, currentTournamentId), ct),
                 "update_tournament" => await UpdateAsync(input, actor, Id(input, currentTournamentId), ct),
                 "add_participants" => Show(await actions.AddParticipantsAsync(actor, Id(input, currentTournamentId), Strings(input, "names"), ct), WidgetParticipants),
+                "add_random_teams" => Show(await actions.AddRandomTeamsAsync(actor, Id(input, currentTournamentId), Strings(input, "players"), ct), WidgetParticipants),
                 "remove_participants" => await RemoveAsync(input, actor, Id(input, currentTournamentId), ct),
                 "draw" => Show(await actions.DrawAsync(actor, Id(input, currentTournamentId), ct)),
                 "undo_draw" => Show(await actions.UndoDrawAsync(actor, Id(input, currentTournamentId), ct), WidgetParticipants),

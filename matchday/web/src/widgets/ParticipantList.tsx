@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { api, type TournamentView } from '../api'
-import { isTeam, splitEntries } from '../entries'
+import { isTeam, splitEntries, splitPlayers } from '../entries'
 import type { Act } from './Widget'
 
 /**
  * Namen, sonst nichts — im Doppel je Teilnehmer zwei, getrennt durch „/“.
  * Eintragen und streichen gehen direkt, am Modell vorbei.
+ *
+ * Im Doppel darf dasselbe Feld auch einzelne Spieler tragen: Dann würfelt
+ * „Teams auslosen“ die Paare — dieselbe Domänenmethode, die der Agent ruft.
  */
 export function ParticipantList({ view, admin, act, embedded = false }: { view: TournamentView; admin: boolean; act: Act; embedded?: boolean }) {
   const [name, setName] = useState('')
@@ -19,10 +22,21 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
   // nur eben, bevor jemand auf „Eintragen“ drückt.
   const incomplete = doubles && entries.some((entry) => !isTeam(entry))
 
+  // Lauter einzelne Namen im Doppel: gemeint sind Spieler, nicht halbe Teams.
+  // Daraus wird kein Fehler, sondern ein Angebot.
+  const loose = doubles && entries.length >= 2 && entries.every((entry) => splitPlayers(entry).length === 1)
+  const canRandom = loose && entries.length % 2 === 0
+
   function add() {
     if (entries.length === 0 || incomplete) return
     setName('')
     void act(() => api.addParticipants(view.id, entries))
+  }
+
+  function randomTeams() {
+    if (!canRandom) return
+    setName('')
+    void act(() => api.addRandomTeams(view.id, entries))
   }
 
   const body = (
@@ -52,21 +66,37 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
           className="inline-form"
           onSubmit={(e) => {
             e.preventDefault()
-            add()
+            // Eingabetaste tut, was der Knopf daneben tut — im Doppel also
+            // auslosen, sobald dort einzelne Spieler stehen.
+            if (loose) randomTeams()
+            else add()
           }}
         >
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={doubles ? 'Anna / Tom, oder mehrere Teams mit Komma' : 'Name, oder mehrere mit Komma'}
+            placeholder={doubles ? 'Anna / Tom — oder Spieler einzeln zum Auslosen' : 'Name, oder mehrere mit Komma'}
             aria-label={doubles ? 'Neues Team' : 'Neuer Teilnehmer'}
           />
-          <button type="submit" className="button" disabled={entries.length === 0 || incomplete}>
-            Eintragen
-          </button>
+          {loose ? (
+            <button type="button" className="button" disabled={!canRandom} onClick={randomTeams} title="Aus den einzelnen Spielern zufällige Teams würfeln">
+              Teams auslosen
+            </button>
+          ) : (
+            <button type="submit" className="button" disabled={entries.length === 0 || incomplete}>
+              Eintragen
+            </button>
+          )}
         </form>
       )}
-      {canEdit && incomplete && <p className="field__note">Ein Doppel braucht zwei Spieler je Team: „Anna / Tom“.</p>}
+      {canEdit && loose && (
+        <p className="field__note">
+          {canRandom
+            ? `${entries.length} Spieler einzeln — „Teams auslosen“ würfelt ${entries.length / 2} Teams daraus.`
+            : `${entries.length} Spieler gehen nicht auf: ein Team sind zwei. Einer fehlt oder ist zu viel.`}
+        </p>
+      )}
+      {canEdit && incomplete && !loose && <p className="field__note">Ein Doppel braucht zwei Spieler je Team: „Anna / Tom“.</p>}
       {canEdit && view.participants.length >= 2 && (
         <div className="actions">
           {confirm ? (

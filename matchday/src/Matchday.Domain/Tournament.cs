@@ -226,6 +226,81 @@ public sealed class Tournament
         }
     }
 
+    /// <summary>
+    /// Würfelt aus einzelnen Spielern Teams und trägt sie ein — das Los für die
+    /// Paarungen, nur im Doppel. Gemischt wird hier, wie bei der Auslosung: Wer
+    /// mit wem spielt, entscheidet über den Turnierverlauf, und das ist eine
+    /// Sache der Anwendung und nicht des Modells, das sich Namen ausdenken
+    /// könnte.
+    ///
+    /// Geprüft wird alles vor dem ersten Eintrag. Fiele der Fehler erst beim
+    /// dritten Paar auf, stünden zwei erwürfelte Teams auf der Liste, die so
+    /// niemand bestellt hat — und ein zweiter Versuch würfelte sie nicht neu.
+    /// </summary>
+    public IReadOnlyList<Participant> AddRandomTeams(IReadOnlyList<string> players, Random? random = null)
+    {
+        ArgumentNullException.ThrowIfNull(players);
+        RequireSetup("Die Teilnehmerliste");
+
+        if (Discipline != Discipline.Doubles)
+        {
+            throw new DomainException(
+                "Zufällige Teams gibt es nur im Doppel — im Einzel spielt jeder für sich. Erst auf Doppel umstellen, dann lose ich die Paare aus.");
+        }
+
+        var names = players.Select(CleanName).ToList();
+
+        if (names.Count < 2)
+        {
+            throw new DomainException("Zum Auslosen der Teams braucht es mindestens zwei Spieler.");
+        }
+
+        if (names.Count % 2 == 1)
+        {
+            throw new DomainException(
+                $"{names.Count} Spieler gehen im Doppel nicht auf: ein Team sind zwei. Nimm einen heraus oder nenn mir einen weiteren.");
+        }
+
+        foreach (var name in names)
+        {
+            // Ein Eintrag ist ein Spieler. Stünde hier schon ein Paar, käme mit
+            // dem Partner ein Dreier heraus — und das fiele erst beim Eintragen
+            // auf, mitten in der halb gewürfelten Liste.
+            if (Lineups.Split(name).Count != 1)
+            {
+                throw new DomainException($"„{name}“ ist kein einzelner Spieler. Nenn mir die Spieler einzeln, die Paare würfle ich.");
+            }
+
+            var doppelt = names.Count(other => string.Equals(other, name, StringComparison.OrdinalIgnoreCase));
+
+            if (doppelt > 1)
+            {
+                throw new DomainException($"„{name}“ steht {doppelt}-mal in der Liste. Jeder Spieler spielt in genau einem Team.");
+            }
+
+            if (_participants.FirstOrDefault(p => p.Has(name)) is { } schon)
+            {
+                throw new DomainException($"„{name}“ spielt schon in „{schon.Name}“ mit.");
+            }
+        }
+
+        if (_participants.Count + (names.Count / 2) > MaxParticipants)
+        {
+            throw new DomainException($"Mehr als {MaxParticipants} Teilnehmer passen nicht in ein Turnier.");
+        }
+
+        (random ?? Random.Shared).Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(names));
+
+        var teams = new List<Participant>();
+
+        for (var i = 0; i < names.Count; i += 2)
+        {
+            teams.Add(AddParticipant(Lineups.Compose([names[i], names[i + 1]])));
+        }
+
+        return teams;
+    }
+
     public void RemoveParticipant(Guid participantId)
     {
         RequireSetup("Die Teilnehmerliste");

@@ -65,6 +65,9 @@ public static class Endpoints
         tournaments.MapPost("/{id:guid}/participants", async (HttpContext http, TournamentActions actions, Guid id, AddParticipantsRequest request, CancellationToken ct) =>
             Results.Ok(Admin(await actions.AddParticipantsAsync(ActorOf(http), id, request.Names, ct), http)));
 
+        tournaments.MapPost("/{id:guid}/participants/random-teams", async (HttpContext http, TournamentActions actions, Guid id, RandomTeamsRequest request, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.AddRandomTeamsAsync(ActorOf(http), id, request.Players, ct), http)));
+
         tournaments.MapDelete("/{id:guid}/participants/{participantId:guid}", async (HttpContext http, TournamentActions actions, Guid id, Guid participantId, CancellationToken ct) =>
             Results.Ok(Admin(await actions.RemoveParticipantAsync(ActorOf(http), id, participantId, ct), http)));
 

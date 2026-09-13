@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, adoptAdminLink, subscribeLive, type AdminView, type TournamentSummary, type TournamentView, type Links } from './api'
-import { currentTournament, rememberAdminToken, rememberCurrent, rememberSession, sessionId, forgetAdminToken, adminTokenFor } from './client'
+import { chatOpen, currentTournament, forgetAdminToken, adminTokenFor, rememberAdminToken, rememberChatOpen, rememberCurrent, rememberSession, sessionId } from './client'
 import { sendMessage, type WidgetEvent } from './chat'
 import { Composer } from './Composer'
 import { Widget, type WidgetItem } from './widgets/Widget'
@@ -24,6 +24,7 @@ const toolLabels: Record<string, string> = {
   get_tournament: 'Turnier geholt',
   update_tournament: 'Turnier geändert',
   add_participants: 'Teilnehmer eingetragen',
+  add_random_teams: 'Teams ausgelost',
   remove_participants: 'Teilnehmer gestrichen',
   draw: 'Ausgelost',
   undo_draw: 'Auslosung zurückgenommen',
@@ -39,6 +40,7 @@ const GREETING =
 const SUGGESTIONS = [
   'Neues Turnier „Samstagsrunde“ mit Rudi, Max, Anna und Tom',
   'Leg ein Doppelturnier an: Anna / Tom gegen Rudi / Max',
+  'Doppel mit Rudi, Andi, Flo, Enti — würfle die Teams',
   'Jeder gegen jeden, ein Satz bis 4',
   'Wie funktioniert „jeder gegen jeden“?',
   'Wie zählt ein Match-Tiebreak?',
@@ -62,7 +64,19 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [missing, setMissing] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // Aufgeklappt oder zu. Auf dem Telefon stehen Bühne und Gespräch
+  // übereinander: Wer gerade nur mit den Widgets arbeitet, klappt das Gespräch
+  // weg und hat den ganzen Schirm für Bracket oder Tabelle. Am breiten Fenster
+  // stehen sie nebeneinander, dort bleibt der Griff verborgen.
+  const [offen, setOffen] = useState(chatOpen)
+
   const bottom = useRef<HTMLDivElement>(null)
+
+  const showChat = useCallback((wanted: boolean) => {
+    setOffen(wanted)
+    rememberChatOpen(wanted)
+  }, [])
 
   const append = useCallback((item: ItemInput) => {
     setItems((all) => [...all, { ...item, id: id() } as Item])
@@ -236,14 +250,19 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   }, [current, bekannt, showView, select])
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [items])
+    // Ist das Gespräch zugeklappt, gibt es nichts zu scrollen — und der Ruf
+    // würde die Bühne mitziehen.
+    if (offen) bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [items, offen])
 
   // --- Senden ---
   const send = useCallback(
     async (text: string) => {
       const message = text.trim()
       if (!message || busy) return
+      // Wer fragt, will die Antwort sehen: ein zugeklapptes Gespräch geht dafür
+      // wieder auf.
+      showChat(true)
       setBusy(true)
       append({ kind: 'user', text: message })
       append({ kind: 'pending' })
@@ -278,7 +297,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
       setBusy(false)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busy, session, current],
+    [busy, session, current, showChat],
   )
 
   /** Ein Widget des Agenten löst ab, was auf der Bühne steht, statt sich anzuhängen. */
@@ -338,7 +357,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   })()
 
   return (
-    <div className="chat">
+    <div className={offen ? 'chat' : 'chat chat--zu'}>
       <header className="chat__bar">
         <Mark />
         {current_view ? (
@@ -399,7 +418,24 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
         )}
       </section>
 
-      <main className="chat__transcript">
+      {/* Der Griff: nur auf dem Telefon zu sehen, dort trennt er Bühne und
+          Gespräch — und zugeklappt zeigt er, was zuletzt gesagt wurde. */}
+      <button
+        type="button"
+        className="chat__handle"
+        onClick={() => showChat(!offen)}
+        aria-expanded={offen}
+        aria-controls="gespraech"
+        aria-label={offen ? 'Gespräch zuklappen' : 'Gespräch aufklappen'}
+        title={offen ? 'Gespräch zuklappen — mehr Platz für die Widgets' : 'Gespräch aufklappen'}
+      >
+        <span className="chat__handle-text">{(offen ? null : lastLine(items)) ?? 'Gespräch'}</span>
+        <span className="chat__handle-sign" aria-hidden="true">
+          {offen ? '▾' : '▴'}
+        </span>
+      </button>
+
+      <main className="chat__transcript" id="gespraech">
         {items.map((item) => (
           <Row key={item.id} item={item} />
         ))}
@@ -418,6 +454,27 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
       <Composer onSend={send} disabled={busy || configured === false} />
     </div>
   )
+}
+
+/**
+ * Die letzte gesprochene Zeile, einzeilig — das, was im zugeklappten Griff
+ * steht. Werkzeugzeilen und der denkende Punkt zählen nicht: Sie sagen nichts,
+ * was jemand nachlesen wollte.
+ */
+export function lastLine(items: Item[]): string | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]
+
+    if (item.kind === 'user' || item.kind === 'assistant' || item.kind === 'error') {
+      const text = item.text.replace(/\s+/g, ' ').trim()
+
+      if (text) {
+        return item.kind === 'user' ? `Du: ${text}` : text
+      }
+    }
+  }
+
+  return null
 }
 
 function Row({ item }: { item: Item }) {

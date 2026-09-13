@@ -30,6 +30,9 @@ public sealed record UpdateTournamentRequest(
 
 public sealed record AddParticipantsRequest(IReadOnlyList<string> Names);
 
+/// <summary>Einzelne Spieler, aus denen das Los die Doppel-Teams bildet.</summary>
+public sealed record RandomTeamsRequest(IReadOnlyList<string> Players);
+
 public enum ResultKind
 {
     Played,

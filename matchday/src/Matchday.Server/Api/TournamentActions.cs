@@ -91,6 +91,13 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
             }
         }, ct);
 
+    /// <summary>
+    /// Spieler einzeln herein, Teams heraus: Gemischt wird in der Domäne, nicht
+    /// im Agenten und nicht in der Oberfläche.
+    /// </summary>
+    public Task<Tournament> AddRandomTeamsAsync(Actor actor, Guid id, IReadOnlyList<string> players, CancellationToken ct = default) =>
+        MutateAsync(actor, id, t => t.AddRandomTeams(players), ct);
+
     public Task<Tournament> RemoveParticipantAsync(Actor actor, Guid id, Guid participantId, CancellationToken ct = default) =>
         MutateAsync(actor, id, t => t.RemoveParticipant(participantId), ct);
 

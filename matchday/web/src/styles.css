@@ -184,6 +184,37 @@ a { color: var(--accent); }
   font-size: 0.92rem;
 }
 
+/* --- Der Griff: Gespräch auf- und zuklappen (nur schmal) ------------------
+ *
+ * Auf dem Telefon teilen sich Bühne und Gespräch einen Schirm. Wer gerade nur
+ * mit den Widgets arbeitet — Ergebnisse eintragen, durchs Bracket wischen —,
+ * klappt das Gespräch weg und hat alles. Das Eingabefeld bleibt: Wer doch
+ * etwas sagt, bekommt das Gespräch von selbst zurück.
+ */
+
+.chat__handle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  background: var(--bg);
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.chat__handle-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat__handle-sign { flex: none; font-size: 0.9rem; }
+.chat__handle:hover { color: var(--fg); }
+
+/* Zugeklappt: Die Bühne bekommt den Platz, denn sie ist die, die wächst. */
+.chat--zu .chat__transcript { display: none; }
+
 /* --- Gespräch --- */
 
 .chat__transcript {
@@ -488,6 +519,11 @@ a { color: var(--accent); }
 
   .chat__bar { grid-area: bar; }
   .notice { grid-area: notice; margin: 12px 16px; }
+
+  /* Nebeneinander verdeckt das Gespräch nichts — der Griff hat hier keine
+     Aufgabe, und ein zugeklapptes Telefon soll den Schirm nicht mitnehmen. */
+  .chat__handle { display: none; }
+  .chat--zu .chat__transcript { display: flex; }
 
   .stage {
     grid-area: stage;

@@ -19,14 +19,14 @@ internal static class Knowledge
 
         Der Ablauf:
         1. Anlegen. Pflicht ist der Name. Freiwillig: Datum, Ort, Disziplin (Einzel oder Doppel), Modus (K.o. oder jeder gegen jeden), Satzformat. Vorgabe ist Einzel, K.o., zwei Gewinnsätze mit Match-Tiebreak statt des dritten Satzes.
-        2. Teilnehmer eintragen, bis zu 64. Im Einzel ein Name je Teilnehmer. Im Doppel ist ein Teilnehmer ein Team aus zwei Spielern, geschrieben „Anna / Tom“.
+        2. Teilnehmer eintragen, bis zu 64. Im Einzel ein Name je Teilnehmer. Im Doppel ist ein Teilnehmer ein Team aus zwei Spielern, geschrieben „Anna / Tom“. Die Teams müssen nicht feststehen: Aus einer geraden Zahl einzelner Spieler würfelt die Anwendung die Paare (im Gespräch das Werkzeug add_random_teams, auf der Bühne der Knopf „Teams auslosen“ in der Teilnehmerliste). Gemischt wird in der Domäne, wie bei der Auslosung.
         3. Auslosen, ab zwei Teilnehmern. Die Reihenfolge wird gemischt, es gibt keine Setzliste. Danach stehen Teilnehmerliste, Modus, Disziplin und Satzformat fest. Zurücknehmen geht, kostet aber alle Matches und Ergebnisse.
         4. Ergebnisse eintragen. Bracket, Tabelle und Platzierung folgen daraus von selbst. Ein Ergebnis zurücknehmen geht nur, solange das Folgematch noch keines hat.
         5. Zustände: Vorbereitung (noch nicht ausgelost), läuft, abgeschlossen (jedes Match hat ein Ergebnis).
 
         Zwei Links, vom Server gebaut: der Mitschau-Link (endet auf `?t=…`) ist für alle, zeigt Bracket und Tabelle live ohne Neuladen und verlangt keine Anmeldung. Der Verwalterlink (`?a=…`) ist geheim — wer ihn hat, darf an diesem Turnier alles. Er ist nicht zurückholbar, nur rotierbar; danach gilt der alte nicht mehr. Konten gibt es nicht; eine Instanz kann eine Google-Anmeldung verlangen, dann folgen einem die eigenen Turniere auch auf ein anderes Gerät.
 
-        Auf der Bühne steht immer genau ein Widget: Turnierkarte, Teilnehmerliste, Bracket, Tabelle, Turnierliste oder die Links. Ohne mich gehen dort: Turnier anlegen und seine Einstellungen ändern, Teilnehmer eintragen und streichen, auslosen und die Auslosung zurücknehmen, ein Match antippen und im Ergebnisfenster Sätze, Nichtantreten, Aufgabe eintragen oder das Ergebnis löschen, Turnier löschen, Links kopieren und teilen, über „Turniere“ in der Kopfzeile die eigene Liste öffnen.
+        Auf der Bühne steht immer genau ein Widget: Turnierkarte, Teilnehmerliste, Bracket, Tabelle, Turnierliste oder die Links. Ohne mich gehen dort: Turnier anlegen und seine Einstellungen ändern, Teilnehmer eintragen und streichen, im Doppel Teams aus einzelnen Spielern auslosen, auslosen und die Auslosung zurücknehmen, ein Match antippen und im Ergebnisfenster Sätze, Nichtantreten, Aufgabe eintragen oder das Ergebnis löschen, Turnier löschen, Links kopieren und teilen, über „Turniere“ in der Kopfzeile die eigene Liste öffnen.
         </anwendung>
 
         <modi>
