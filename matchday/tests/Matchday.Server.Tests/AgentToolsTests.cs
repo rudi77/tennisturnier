@@ -20,7 +20,7 @@ public sealed class AgentToolsTests : IDisposable
     [Fact]
     public void Jedes_Werkzeug_hat_ein_gueltiges_Schema()
     {
-        Assert.Equal(12, AgentTools.Definitions.Count);
+        Assert.Equal(13, AgentTools.Definitions.Count);
 
         foreach (var tool in AgentTools.Definitions)
         {
@@ -94,6 +94,47 @@ public sealed class AgentToolsTests : IDisposable
         Assert.False(weg.IsError);
         Assert.Null(weg.TournamentId);
         Assert.Empty(await _a.Actions.ListMineAsync(_a.Rudi));
+    }
+
+    [Fact]
+    public async Task Zufaellige_Teams_ueber_das_Werkzeug()
+    {
+        // Der Fall aus dem Gespräch: acht Spieler, keine Paare, „mach daraus
+        // Teams“. Das Werkzeug würfelt — der Agent muss nichts erfinden.
+        var anlegen = await Run("create_tournament", new { name = "Doppelrunde", discipline = "Doubles" });
+        var id = anlegen.TournamentId!.Value;
+
+        var teams = await Run(
+            "add_random_teams",
+            new { players = new[] { "Rudi", "Andi", "Flo", "Schneitei", "Tom Riedi", "Enti", "Harry", "Manfred" } },
+            id);
+
+        Assert.False(teams.IsError);
+        Assert.Equal(AgentTools.WidgetParticipants, teams.Widget);
+        Assert.Contains("Teams (4)", teams.ResultForModel);
+
+        var stand = await _a.Actions.GetAsync(id);
+        Assert.Equal(4, stand.Participants.Count);
+        Assert.All(stand.Participants, p => Assert.Equal(2, p.Lineup.Count));
+        Assert.Equal(
+            ["Andi", "Enti", "Flo", "Harry", "Manfred", "Rudi", "Schneitei", "Tom Riedi"],
+            stand.Participants.SelectMany(p => p.Lineup).Order(StringComparer.Ordinal));
+
+        // Ein Neunter geht nicht auf, und niemand steht danach doppelt da.
+        var ungerade = await Run("add_random_teams", new { players = new[] { "Eva", "Ida", "Nina" } }, id);
+        Assert.True(ungerade.IsError);
+        Assert.Contains("3", ungerade.ResultForModel);
+        Assert.Equal(4, (await _a.Actions.GetAsync(id)).Participants.Count);
+    }
+
+    [Fact]
+    public async Task Zufaellige_Teams_gibt_es_nur_im_Doppel()
+    {
+        var anlegen = await Run("create_tournament", new { name = "Cup" });
+        var abgelehnt = await Run("add_random_teams", new { players = new[] { "Rudi", "Max" } }, anlegen.TournamentId!.Value);
+
+        Assert.True(abgelehnt.IsError);
+        Assert.Contains("Doppel", abgelehnt.ResultForModel);
     }
 
     [Fact]

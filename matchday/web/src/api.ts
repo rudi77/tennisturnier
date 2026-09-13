@@ -205,6 +205,9 @@ export const api = {
   update: (id: string, body: UpdateBody) => call<AdminView>('PUT', `/api/tournaments/${id}`, body, id),
   addParticipants: (id: string, names: string[]) =>
     call<AdminView>('POST', `/api/tournaments/${id}/participants`, { names }, id),
+  /** Einzelne Spieler hinein, ausgeloste Teams heraus — gemischt wird auf dem Server. */
+  addRandomTeams: (id: string, players: string[]) =>
+    call<AdminView>('POST', `/api/tournaments/${id}/participants/random-teams`, { players }, id),
   removeParticipant: (id: string, participantId: string) =>
     call<AdminView>('DELETE', `/api/tournaments/${id}/participants/${participantId}`, undefined, id),
   draw: (id: string) => call<AdminView>('POST', `/api/tournaments/${id}/draw`, undefined, id),

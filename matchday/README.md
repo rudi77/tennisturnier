@@ -8,6 +8,11 @@ Gespräch: unten ein Eingabefeld, wahlweise per Sprache, und der Agent legt an,
 trägt ein, lost aus und zeigt jeweils das Widget, das gerade zählt. Warum es so
 gebaut ist, steht in [ADR-0016](../docs/adr/0016-neuanfang-ein-turnier-mit-freunden.md).
 
+Im Doppel müssen die Paare nicht feststehen: Nenn die Spieler einzeln, und
+**das Los bildet die Teams** — im Gespräch („mach daraus zufällige Teams“) wie
+über den Knopf „Teams auslosen“ in der Teilnehmerliste. Gemischt wird in der
+Domäne, wie bei der Auslosung selbst.
+
 **Drei Wege, und jeder führt durch:** ganz im Gespräch, ganz über die Widgets
 auf der Bühne, oder gemischt. Beide rufen dieselben Anwendungsfälle, und der
 Live-Strom bringt jede Änderung sofort auf den anderen Weg. Der Agent **handelt
@@ -44,8 +49,8 @@ leitet `/api` auf 5080 weiter).
 | Wo | Was |
 | --- | --- |
 | `src/Matchday.Domain` | Turnier, Teilnehmer (Einzel und Doppel), Matches, Satzvalidierung, K.o.-Baum, Kreisverfahren, Tabelle. Keine Pakete. |
-| `src/Matchday.Server` | Minimal API, SQLite als Dokumentspeicher, Live-Stream per SSE, der Agent mit seinen zwölf Werkzeugen, Auslieferung der Oberfläche. |
-| `web` | Vite + React: das Gespräch mit Widgets, die Ergebnismaske, die Mitschau-Ansicht. |
+| `src/Matchday.Server` | Minimal API, SQLite als Dokumentspeicher, Live-Stream per SSE, der Agent mit seinen dreizehn Werkzeugen, Auslieferung der Oberfläche. |
+| `web` | Vite + React: das Gespräch mit Widgets, die Ergebnismaske, die Mitschau-Ansicht. Auf dem Telefon lässt sich das Gespräch zuklappen — dann gehört der Schirm den Widgets. |
 | `tests` | Domänen- und Servertests, darunter die Werkzeuge des Agenten ohne Modell. |
 
 Die Werkzeuge des Agenten und die HTTP-API rufen dieselben Anwendungsfälle

@@ -6,6 +6,7 @@ const CLIENT_KEY = 'matchday.client'
 const SESSION_KEY = 'matchday.session'
 const TOKENS_KEY = 'matchday.tokens'
 const CURRENT_KEY = 'matchday.current'
+const CHAT_KEY = 'matchday.chat'
 
 function read(key: string): string | null {
   try {
@@ -64,6 +65,19 @@ export function forgetAdminToken(tournamentId: string) {
   const all = tokens()
   delete all[tournamentId]
   write(TOKENS_KEY, JSON.stringify(all))
+}
+
+/**
+ * Ob das Gespräch aufgeklappt ist. Auf dem Telefon teilen sich Bühne und
+ * Gespräch einen Schirm; wer die Widgets groß haben will, klappt es zu — und
+ * findet es beim nächsten Öffnen wieder so vor. Ohne Eintrag ist es offen.
+ */
+export function chatOpen(): boolean {
+  return read(CHAT_KEY) !== 'zu'
+}
+
+export function rememberChatOpen(open: boolean) {
+  write(CHAT_KEY, open ? null : 'zu')
 }
 
 export function currentTournament(): string | null {

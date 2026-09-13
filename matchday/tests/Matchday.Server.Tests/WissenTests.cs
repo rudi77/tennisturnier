@@ -67,6 +67,16 @@ public sealed class WissenTests
         Assert.Contains("ohne ein Werkzeug zu rufen", TournamentAgent.SystemPrompt);
     }
 
+    [Fact]
+    public void Die_Anweisungen_schicken_zufaellige_Teams_an_das_Werkzeug()
+    {
+        // Der Fall aus dem Gespräch: Auf „mach daraus Teams“ hat der Agent
+        // geantwortet, er dürfe das nicht. Er darf — die Anwendung würfelt.
+        Assert.Contains("add_random_teams", TournamentAgent.SystemPrompt);
+        Assert.Contains("zufällige Teams", TournamentAgent.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("add_random_teams", Knowledge.Text);
+    }
+
     private static void Erklaert<T>(IEnumerable<T> werte, Dictionary<T, string> begriffe)
         where T : notnull
     {

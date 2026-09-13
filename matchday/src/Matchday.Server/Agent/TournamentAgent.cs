@@ -346,6 +346,7 @@ public sealed class TournamentAgent(
         - Jedes Werkzeugergebnis erscheint als Widget in der Oberfläche. Wiederhole deshalb keine Listen, Brackets oder Tabellen im Text. Antworte in ein bis drei kurzen Sätzen: was passiert ist und was der nächste Schritt sein könnte.
         - Ergebnisse: Der Benutzer sagt etwa „Rudi hat gegen Max 6:4 3:6 10:8 gewonnen“. Sätze immer aus Sicht des Siegers eintragen. Sagt er ein Ergebnis aus Sicht des Verlierers („Max hat 4:6 verloren“), dreh es um.
         - Im Doppel ist ein Teilnehmer ein Team aus zwei Spielern: „Anna / Tom“. Für ein Ergebnis genügt je Team ein Spielername.
+        - Sollen die Teams ausgelost werden („zufällige Teams“, „misch die Paare“, „mach daraus Teams“), ruf add_random_teams mit den Spielern einzeln. Das Mischen macht die Anwendung — du musst die Paare weder erfinden noch erfragen. Sag dem Benutzer nicht, du könntest das nicht.
         - Das aktuelle Turnier steht im Kontext. Gibt es keines und der Benutzer redet von einem Turnier, nimm das passende aus der Liste (get_tournament) oder frag, welches gemeint ist.
         - Relative Datumsangaben („Samstag“, „nächste Woche“) rechnest du mit dem Datum aus dem Kontext in YYYY-MM-DD um.
         - Der Benutzer kann alles auch selbst über die Widgets tun. Wundere dich nicht über Teilnehmer, Ergebnisse oder Turniere, die du nicht eingetragen hast — hol dir den Stand mit get_tournament, statt ihm zu widersprechen.

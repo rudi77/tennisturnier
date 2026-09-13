@@ -416,6 +416,97 @@ public sealed class TournamentTests
     }
 
     [Fact]
+    public void Zufaellige_Teams_verteilen_jeden_Spieler_genau_einmal()
+    {
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+
+        var teams = t.AddRandomTeams(["Rudi", "Andi", "Flo", "Schneitei", "Tom Riedi", "Enti", "Harry", "Manfred"], new Random(7));
+
+        Assert.Equal(4, teams.Count);
+        Assert.Equal(4, t.Participants.Count);
+        Assert.All(teams, team => Assert.Equal(2, team.Lineup.Count));
+        Assert.Equal(
+            ["Andi", "Enti", "Flo", "Harry", "Manfred", "Rudi", "Schneitei", "Tom Riedi"],
+            teams.SelectMany(team => team.Lineup).Order(StringComparer.Ordinal));
+
+        // Und die Paare stehen so da, wie Teams überall stehen.
+        Assert.All(teams, team => Assert.Contains(" / ", team.Name));
+    }
+
+    [Fact]
+    public void Zufaellige_Teams_werden_wirklich_gemischt()
+    {
+        // Zwei Lose, zwei Ergebnisse: Käme die Liste unverändert durch, stünden
+        // hier zweimal dieselben Paare — und „zufällig“ wäre ein Wort.
+        var spieler = new[] { "A", "B", "C", "D", "E", "F", "G", "H" };
+
+        static string[] Lose(string[] spieler, int saat)
+        {
+            var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+            return [.. t.AddRandomTeams(spieler, new Random(saat)).Select(team => team.Name)];
+        }
+
+        Assert.NotEqual(Lose(spieler, 1), Lose(spieler, 2));
+    }
+
+    [Fact]
+    public void Zufaellige_Teams_weisen_zurueck_was_nicht_aufgeht()
+    {
+        var einzel = Neu(Mode.Knockout, "Rudi");
+        Assert.Contains("Doppel", Assert.Throws<DomainException>(() => einzel.AddRandomTeams(["Anna", "Tom"])).Message);
+
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+
+        // Aus keinem Spieler wird kein Team. Null ist zwar gerade, aber ein Los
+        // über nichts ist kein Los.
+        Assert.Contains("mindestens zwei", Assert.Throws<DomainException>(() => t.AddRandomTeams([])).Message);
+
+        // Ungerade geht nicht auf, und die Zahl steht im Satz.
+        Assert.Contains("3", Assert.Throws<DomainException>(() => t.AddRandomTeams(["Anna", "Tom", "Rudi"])).Message);
+
+        // Ein Paar ist kein Spieler: Mit dem Partner wäre es ein Dreier.
+        Assert.Contains("einzelner Spieler", Assert.Throws<DomainException>(() => t.AddRandomTeams(["Anna / Tom", "Rudi"])).Message);
+
+        // Doppelt genannt, und schon eingetragen.
+        Assert.Throws<DomainException>(() => t.AddRandomTeams(["Anna", "anna"]));
+        t.AddParticipant("Anna / Tom");
+        Assert.Contains("Anna / Tom", Assert.Throws<DomainException>(() => t.AddRandomTeams(["Anna", "Rudi"])).Message);
+
+        // Nichts davon hat etwas eingetragen — das eine Team von Hand steht allein da.
+        Assert.Single(t.Participants);
+
+        t.AddParticipant("Rudi / Max");
+        t.Draw(new Random(1));
+        Assert.Throws<DomainException>(() => t.AddRandomTeams(["Eva", "Ida"]));
+    }
+
+    [Fact]
+    public void Zufaellige_Teams_sprengen_das_Turnier_nicht()
+    {
+        // Voll ist voll — und zwar bevor das erste Paar fällt, sonst stünden die
+        // ersten Teams drin und die letzten nicht.
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+
+        for (var i = 0; i < Tournament.MaxParticipants; i++)
+        {
+            t.AddParticipant($"Anna{i} / Tom{i}");
+        }
+
+        var fehler = Assert.Throws<DomainException>(() => t.AddRandomTeams(["Eva", "Ida"]));
+
+        Assert.Contains($"{Tournament.MaxParticipants}", fehler.Message);
+        Assert.Equal(Tournament.MaxParticipants, t.Participants.Count);
+
+        // Und die Grenze steht vor der Namensprüfung: Eine überlange Liste wird
+        // abgewiesen, ohne sie erst Namen gegen Namen durchzugehen — auch wenn
+        // ganz vorne schon ein Name doppelt steht.
+        var leer = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+        var zuViele = Enumerable.Range(0, 400).Select(i => $"Spieler{i}").Prepend("Eva").Append("Eva").ToList();
+
+        Assert.Contains($"{Tournament.MaxParticipants}", Assert.Throws<DomainException>(() => leer.AddRandomTeams(zuViele)).Message);
+    }
+
+    [Fact]
     public void Ein_Team_laesst_sich_auf_drei_Weisen_ansprechen()
     {
         var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);

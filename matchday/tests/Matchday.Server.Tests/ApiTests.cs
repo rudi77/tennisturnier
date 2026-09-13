@@ -135,6 +135,40 @@ public sealed class ApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Teams_auslosen_geht_auch_ohne_Modell()
+    {
+        var rudi = Client("browser-rudi");
+
+        var created = await rudi.PostAsJsonAsync("/api/tournaments", new { name = "Doppelrunde", discipline = "Doubles" });
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tournament").GetProperty("id").GetString();
+
+        var gelost = await rudi.PostAsJsonAsync($"/api/tournaments/{id}/participants/random-teams", new
+        {
+            players = new[] { "Rudi", "Andi", "Flo", "Schneitei" },
+        });
+
+        gelost.EnsureSuccessStatusCode();
+        var teams = (await gelost.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("tournament").GetProperty("participants")
+            .EnumerateArray().Select(p => p.GetProperty("name").GetString()!).ToList();
+
+        Assert.Equal(2, teams.Count);
+        Assert.Equal(["Andi", "Flo", "Rudi", "Schneitei"], teams.SelectMany(name => name.Split(" / ")).Order(StringComparer.Ordinal));
+
+        // Ungerade geht nicht auf — und lässt die Liste, wie sie war.
+        var ungerade = await rudi.PostAsJsonAsync($"/api/tournaments/{id}/participants/random-teams", new { players = new[] { "Eva", "Ida", "Nina" } });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, ungerade.StatusCode);
+
+        var stand = await rudi.GetFromJsonAsync<JsonElement>($"/api/tournaments/{id}");
+        Assert.Equal(2, stand.GetProperty("participants").GetArrayLength());
+
+        // Wer nur zuschaut, lost nicht aus.
+        var fremd = Client("browser-fremd");
+        var verboten = await fremd.PostAsJsonAsync($"/api/tournaments/{id}/participants/random-teams", new { players = new[] { "Eva", "Ida" } });
+        Assert.Equal(HttpStatusCode.Forbidden, verboten.StatusCode);
+    }
+
+    [Fact]
     public async Task Ohne_Schalter_verlangt_die_Instanz_keine_Anmeldung()
     {
         // Der Normalfall dieser Instanz: kein Konto nötig, und entsprechend
