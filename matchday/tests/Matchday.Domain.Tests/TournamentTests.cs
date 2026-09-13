@@ -457,6 +457,10 @@ public sealed class TournamentTests
 
         var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
 
+        // Aus keinem Spieler wird kein Team. Null ist zwar gerade, aber ein Los
+        // über nichts ist kein Los.
+        Assert.Contains("mindestens zwei", Assert.Throws<DomainException>(() => t.AddRandomTeams([])).Message);
+
         // Ungerade geht nicht auf, und die Zahl steht im Satz.
         Assert.Contains("3", Assert.Throws<DomainException>(() => t.AddRandomTeams(["Anna", "Tom", "Rudi"])).Message);
 
@@ -474,6 +478,24 @@ public sealed class TournamentTests
         t.AddParticipant("Rudi / Max");
         t.Draw(new Random(1));
         Assert.Throws<DomainException>(() => t.AddRandomTeams(["Eva", "Ida"]));
+    }
+
+    [Fact]
+    public void Zufaellige_Teams_sprengen_das_Turnier_nicht()
+    {
+        // Voll ist voll — und zwar bevor das erste Paar fällt, sonst stünden die
+        // ersten Teams drin und die letzten nicht.
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+
+        for (var i = 0; i < Tournament.MaxParticipants; i++)
+        {
+            t.AddParticipant($"Anna{i} / Tom{i}");
+        }
+
+        var fehler = Assert.Throws<DomainException>(() => t.AddRandomTeams(["Eva", "Ida"]));
+
+        Assert.Contains($"{Tournament.MaxParticipants}", fehler.Message);
+        Assert.Equal(Tournament.MaxParticipants, t.Participants.Count);
     }
 
     [Fact]
