@@ -4,6 +4,9 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  # Auf Zuruf: „Actions → CI → Run workflow“. Damit ist auch der Durchlauf
+  # Ende zu Ende erreichbar, der von selbst nicht mehr mitläuft.
+  workflow_dispatch:
 
 # Ein zweiter Push auf denselben Branch macht den laufenden Durchgang
 # gegenstandslos — er darf abgebrochen werden, statt die Warteschlange zu füllen.
@@ -35,12 +38,18 @@ jobs:
       - id: pruefen
         env:
           BASIS: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HAUPT: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
 
-          # Ohne brauchbaren Vergleichspunkt — neuer Branch, erster Push — gilt
-          # alles als geändert. Zu viel zu prüfen ist ein Ärgernis, zu wenig
-          # ein Fehler.
+          # Beim ersten Push eines neuen Branches gibt es kein Davor — dann ist
+          # die Abzweigung von main der richtige Vergleichspunkt. Er ist
+          # derselbe, den der Lauf desselben Commits als Pull Request nimmt;
+          # ohne ihn galt hier alles als geändert, und derselbe Commit war
+          # einmal grün und einmal rot, je nachdem, welcher Auslöser ihn
+          # anfasste. Erst wenn auch das nicht geht — kein main in Sicht —,
+          # bleibt es beim Alles-gilt: zu viel zu prüfen ist ein Ärgernis, zu
+          # wenig ein Fehler.
           brauchbar=true
           case "${BASIS}" in
             "" | 0000000000000000000000000000000000000000) brauchbar=false ;;
@@ -50,10 +59,15 @@ jobs:
           fi
 
           if [ "${brauchbar}" = false ]; then
-            echo "Kein Vergleichspunkt — es gilt alles als geändert."
-            echo "alt=true" >> "$GITHUB_OUTPUT"
-            echo "matchday=true" >> "$GITHUB_OUTPUT"
-            exit 0
+            if abzweigung=$(git merge-base HEAD "origin/${HAUPT}" 2>/dev/null); then
+              echo "Kein Vergleichspunkt — es gilt die Abzweigung von ${HAUPT}: ${abzweigung}"
+              BASIS="${abzweigung}"
+            else
+              echo "Kein Vergleichspunkt und kein ${HAUPT} — es gilt alles als geändert."
+              echo "alt=true" >> "$GITHUB_OUTPUT"
+              echo "matchday=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
 
           dateien=$(git diff --name-only "${BASIS}" HEAD)
@@ -195,11 +209,21 @@ jobs:
             app/dist
           if-no-files-found: warn
 
+  # Ende zu Ende läuft nur noch auf Zuruf.
+  #
+  # Er prüft den alten Baum, und der wird nicht mehr ausgeliefert (ADR-0016).
+  # Zugleich ist er der längste Durchlauf der Pipeline und derzeit rot, ohne
+  # dass ein Commit daran schuld wäre: Keycloak weist die von Hand gebaute
+  # Authorize-Adresse der Anmeldeprobe ab, weil ihr code_challenge_method
+  # fehlt, und im Spielplan fängt der Knopf „Satz 2 verringern“ den Klick auf
+  # „Satz 1 erhöhen“ ab. Wer den alten Baum wieder pflegt, holt den Durchlauf
+  # über „Actions → CI → Run workflow“ zurück — abgeschaltet ist er, nicht
+  # gelöscht, und kein einziger Test ist dafür angefasst worden.
   e2e:
     name: Ende zu Ende
     runs-on: ubuntu-latest
     needs: bereich
-    if: needs.bereich.outputs.alt == 'true'
+    if: github.event_name == 'workflow_dispatch' && needs.bereich.outputs.alt == 'true'
 
     steps:
       - uses: actions/checkout@v5
