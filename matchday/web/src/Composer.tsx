@@ -6,7 +6,11 @@ export function Composer({ onSend, disabled }: { onSend: (text: string) => void;
   const [text, setText] = useState('')
   const [listening, setListening] = useState<Listening | null>(null)
   const area = useRef<HTMLTextAreaElement>(null)
+  const mic = useRef<Listening | null>(null)
   const canSpeak = speechAvailable()
+
+  // Ein offenes Mikrofon überlebt die Maske nicht: Wer weggeht, hört auf.
+  useEffect(() => () => mic.current?.stop(), [])
 
   useEffect(() => {
     const el = area.current
@@ -27,14 +31,21 @@ export function Composer({ onSend, disabled }: { onSend: (text: string) => void;
       listening.stop()
       return
     }
+    // Was schon im Feld steht, bleibt stehen — Gesprochenes kommt dahinter.
+    const typed = text.trim()
+    const withTyped = (spoken: string) => (typed ? `${typed} ${spoken}` : spoken)
     const l = listen(
-      (interim) => setText(interim),
+      (interim) => setText(withTyped(interim)),
       (final) => {
         setText('')
-        onSend(final)
+        onSend(withTyped(final))
       },
-      () => setListening(null),
+      () => {
+        mic.current = null
+        setListening(null)
+      },
     )
+    mic.current = l
     setListening(l)
   }
 
@@ -66,7 +77,7 @@ export function Composer({ onSend, disabled }: { onSend: (text: string) => void;
         ref={area}
         rows={1}
         value={text}
-        placeholder={disabled ? 'Gerade nicht möglich' : listening ? 'Ich höre zu …' : 'Was soll passieren?'}
+        placeholder={disabled ? 'Gerade nicht möglich' : listening ? 'Ich höre zu — zum Senden aufs Mikrofon tippen' : 'Was soll passieren?'}
         disabled={disabled}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {

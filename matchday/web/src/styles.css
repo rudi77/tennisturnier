@@ -164,6 +164,9 @@ a { color: var(--accent); }
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* Letzte Sicherung: Kein Widget schiebt die Seite seitwärts. Was Breite
+     braucht — Bracket, Tabelle —, bringt seinen eigenen Schieber mit. */
+  overflow-x: hidden;
   padding: 16px;
   padding-bottom: 0;
   border-bottom: 1px solid var(--line);
@@ -315,6 +318,10 @@ a { color: var(--accent); }
   border-radius: var(--radius);
   padding: 14px 16px;
   width: 100%;
+  /* Ein langer Name, eine Adresse, ein Satz auf einem Knopf: Nichts davon darf
+     über die Karte hinausstehen — lieber umbrechen als hinausragen. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .card--flush { padding: 14px 0 14px 16px; }
 .card__section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -355,8 +362,15 @@ a { color: var(--accent); }
   border-radius: 10px;
   padding: 8px 14px;
   cursor: pointer;
+  /* Kurze Beschriftungen bleiben in einer Zeile, der Knopf aber nie breiter
+     als das, worin er steht. */
   white-space: nowrap;
+  max-width: 100%;
 }
+
+/* Ein Knopf, dessen Beschriftung ein ganzer Satz ist: Er bricht um, statt aus
+   der Karte zu ragen und die Seite seitwärts scrollen zu lassen. */
+.button--wrap { white-space: normal; text-align: left; }
 .button:disabled { opacity: 0.45; cursor: default; }
 .button--primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 600; }
 .button--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
@@ -426,6 +440,7 @@ a { color: var(--accent); }
   cursor: pointer;
 }
 .tournaments__item:hover { border-color: var(--accent); }
+.tournaments__item > span { min-width: 0; }
 .tournaments__name { grid-column: 1; font-weight: 600; }
 .tournaments__item .muted { grid-column: 1; font-size: 0.85rem; }
 .tournaments__item .state { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
@@ -454,7 +469,9 @@ a { color: var(--accent); }
   .modal__box { border-radius: 18px; }
 }
 
-.segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 8px 0; max-width: 100%; }
+/* Auf schmalen Geräten passen „K.o.“ und „Jeder gegen jeden“ nicht
+   nebeneinander — dann steht das zweite eben darunter. */
+.segmented { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 8px 0; max-width: 100%; }
 .segmented button { border: 0; background: transparent; padding: 8px 12px; cursor: pointer; }
 .segmented button + button { border-left: 1px solid var(--line); }
 .segmented button.on { background: var(--accent); color: var(--accent-fg); font-weight: 600; }

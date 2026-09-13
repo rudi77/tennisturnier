@@ -97,7 +97,7 @@ export function TournamentForm({
       </label>
 
       {!open ? (
-        <button type="button" className="button button--quiet" onClick={() => setOpen(true)}>
+        <button type="button" className="button button--quiet button--wrap" onClick={() => setOpen(true)}>
           Mehr einstellen — Datum, Ort, Einzel oder Doppel, Modus, Sätze
         </button>
       ) : (
