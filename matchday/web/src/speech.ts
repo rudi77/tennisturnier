@@ -43,8 +43,30 @@ export interface Listening {
   stop(): void
 }
 
-/** Aus Stücken ein Gesagtes: ein Leerzeichen dazwischen, keines zu viel. */
-const join = (...parts: string[]) => parts.join(' ').replace(/\s+/g, ' ').trim()
+const tidy = (text: string) => text.replace(/\s+/g, ' ').trim()
+const lower = (text: string) => text.toLocaleLowerCase()
+
+/**
+ * Aus Stücken ein Gesagtes: ein Leerzeichen dazwischen, keines zu viel — und
+ * nichts doppelt. Chrome auf Android liefert im Dauerhören jedes Zwischenstück
+ * als eigenes Ergebnis, das das Vorige schon enthält („Anna", „Anna schlägt",
+ * „Anna schlägt Tom"), oder wiederholt ein Stück. Ein Stück, das das Bisherige
+ * fortsetzt, ersetzt es; eines, das als ganze Wörter schon am Anfang oder Ende
+ * steht, entfällt.
+ */
+export function join(...parts: string[]): string {
+  let text = ''
+  for (const part of parts) {
+    const piece = tidy(part)
+    if (!piece) continue
+    const a = lower(text)
+    const b = lower(piece)
+    if (b.startsWith(a)) text = piece
+    else if (a.startsWith(`${b} `) || a.endsWith(` ${b}`)) continue
+    else text = `${text} ${piece}`
+  }
+  return text
+}
 
 export function listen(
   onInterim: (text: string) => void,

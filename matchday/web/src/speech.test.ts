@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { listen, speechAvailable } from './speech'
+import { join, listen, speechAvailable } from './speech'
 
 /** Ein Browser, der sich führen lässt: Er hört, was der Test ihm sagt. */
 class FakeRecognition {
@@ -167,5 +167,76 @@ describe('listen', () => {
     vi.stubGlobal('window', {})
     expect(speechAvailable()).toBe(false)
     expect(listen(() => undefined, () => undefined, () => undefined)).toBeNull()
+  })
+})
+
+describe('join', () => {
+  it('setzt Stücke mit genau einem Leerzeichen aneinander', () => {
+    expect(join(' Trage  ein', '', '6:4 für Anna ')).toBe('Trage ein 6:4 für Anna')
+  })
+
+  it('nimmt das längere Stück, wenn es das Bisherige fortsetzt', () => {
+    expect(join('Anna', 'Anna schlägt', 'anna schlägt Tom')).toBe('anna schlägt Tom')
+  })
+
+  it('lässt ganze Wiederholungen am Anfang oder Ende weg', () => {
+    expect(join('Anna schlägt Tom', 'Anna schlägt', 'Tom', 'schlägt Tom')).toBe('Anna schlägt Tom')
+  })
+
+  it('verschluckt keine Wortteile', () => {
+    expect(join('Anna schlägt Tom', 'om')).toBe('Anna schlägt Tom om')
+    expect(join('Anna schlägt Tom', 'Ann')).toBe('Anna schlägt Tom Ann')
+  })
+})
+
+describe('listen auf Android', () => {
+  it('macht aus wachsenden Stücken einen Satz, nicht viele', () => {
+    const interim = vi.fn()
+    const final = vi.fn()
+    const listening = listen(interim, final, () => undefined)
+
+    recognition().hear([['Anna', false]])
+    recognition().hear([['Anna', true]])
+    recognition().hear([
+      ['Anna', true],
+      ['Anna schlägt', true],
+    ])
+    recognition().hear([
+      ['Anna', true],
+      ['Anna schlägt', true],
+      ['Anna schlägt Tom', true],
+      ['Anna schlägt Tom 6:4', false],
+    ])
+    recognition().hear([
+      ['Anna', true],
+      ['Anna schlägt', true],
+      ['Anna schlägt Tom', true],
+      ['Anna schlägt Tom 6:4', true],
+      ['6:4', true],
+    ])
+    listening?.stop()
+
+    expect(interim.mock.calls.map(([t]) => t)).toEqual([
+      'Anna',
+      'Anna',
+      'Anna schlägt',
+      'Anna schlägt Tom 6:4',
+      'Anna schlägt Tom 6:4',
+    ])
+    expect(final).toHaveBeenCalledTimes(1)
+    expect(final).toHaveBeenCalledWith('Anna schlägt Tom 6:4')
+  })
+
+  it('nimmt nach einer Pause nicht noch einmal auf, was der neue Lauf wiederholt', () => {
+    const final = vi.fn()
+    const listening = listen(() => undefined, final, () => undefined)
+
+    recognition().hear([['Leg ein Turnier an', true]])
+    recognition().pause()
+    recognition().hear([['Leg ein Turnier an', true]])
+    recognition().hear([['Leg ein Turnier an am Samstag', true]])
+    listening?.stop()
+
+    expect(final).toHaveBeenCalledWith('Leg ein Turnier an am Samstag')
   })
 })
