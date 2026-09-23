@@ -98,6 +98,8 @@ if (auth.Required)
 builder.Services.AddSingleton<ModelAccess>();
 builder.Services.AddSingleton<TournamentAgent>();
 
+builder.Services.AddSingleton(new IndexPage(builder.Environment.WebRootFileProvider));
+
 var app = builder.Build();
 
 // Railway schließt TLS vor der Anwendung ab. Ohne die weitergereichten
@@ -137,6 +139,9 @@ app.MapMatchday();
 app.MapChat();
 
 // Die Oberfläche liegt gebaut neben der Anwendung; alles, was keine API ist, ist die eine Seite.
+// Die Seite selbst geht durch die Vorschau: Ein geteilter Link soll in der
+// Gruppe zeigen, um welches Turnier es geht.
+app.UsePreview();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapFallbackToFile("index.html");
