@@ -274,7 +274,7 @@ public sealed class TournamentAgentTests : IDisposable
               ]
             }
             """;
-        await _a.Store.SaveSessionJsonAsync("sitzung-8", _a.Rudi.ClientId, halb, CancellationToken.None);
+        await _a.Store.SaveSessionJsonAsync("sitzung-8", _a.Rudi.ClientId, halb, ct: CancellationToken.None);
 
         var modell = new Modell([new TextContent("Fangen wir neu an.")]);
         var ereignisse = await Lauf(_a.Agent(modell), new ChatRequest("Wo waren wir?", "sitzung-8"));

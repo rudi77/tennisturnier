@@ -28,6 +28,7 @@ noch einmal von vorn beginnt.
 | [0019](0019-anmeldung-mit-google-als-schalter.md) | Eine Anmeldung mit Google, und ein Schalter davor | Accepted |
 | [0020](0020-einzel-und-doppel.md) | Einzel und Doppel: ein Teilnehmer ist eine Aufstellung | Accepted |
 | [0021](0021-der-agent-erklaert-und-die-widgets-koennen-alles.md) | Der Agent erklärt auch, und jeder Weg führt durch | Accepted |
+| [0022](0022-live-zaehlen-eintragen-link-und-gespraech-je-turnier.md) | Live zählen, ein Eintragen-Link und ein Gespräch je Turnier | Accepted |
 
 ## Status
 

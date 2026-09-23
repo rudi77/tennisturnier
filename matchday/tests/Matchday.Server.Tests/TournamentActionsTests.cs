@@ -99,6 +99,15 @@ public sealed class TournamentActionsTests : IDisposable
 
         await _a.Actions.AddParticipantsAsync(_a.Rudi, t.Id, ["A", "B"]);
         await _a.Actions.DrawAsync(_a.Rudi, t.Id);
+
+        // Ausgelost, aber noch kein Punkt: Der Modus lässt sich ändern, und es wird neu gelost.
+        var neu = await _a.Actions.UpdateAsync(_a.Rudi, t.Id, new UpdateTournamentRequest(Mode: Mode.Knockout));
+        Assert.Equal(Mode.Knockout, neu.Mode);
+        Assert.Equal(TournamentState.Running, neu.State);
+        neu = await _a.Actions.UpdateAsync(_a.Rudi, t.Id, new UpdateTournamentRequest(Mode: Mode.RoundRobin));
+
+        // Mit dem ersten Punkt steht der Rahmen.
+        await _a.Actions.LiveAsync(_a.Rudi, t.Id, neu.Matches[0].Id, new LiveRequest(LiveAction.Point, 1));
         await Assert.ThrowsAsync<DomainException>(() =>
             _a.Actions.UpdateAsync(_a.Rudi, t.Id, new UpdateTournamentRequest(Mode: Mode.Knockout)));
 

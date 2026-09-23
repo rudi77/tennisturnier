@@ -327,7 +327,7 @@ public sealed class ApiTests : IDisposable
     private async Task Verlauf(string sitzung, string json)
     {
         var store = new Matchday.Server.Storage.TournamentStore($"Data Source={_path}");
-        await store.SaveSessionJsonAsync(sitzung, "browser-rudi", json, CancellationToken.None);
+        await store.SaveSessionJsonAsync(sitzung, "browser-rudi", json, ct: CancellationToken.None);
     }
 
     [Fact]

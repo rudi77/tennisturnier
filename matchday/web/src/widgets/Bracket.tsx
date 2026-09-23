@@ -29,11 +29,19 @@ export function Bracket({ view, onOpen, embedded = false }: { view: TournamentVi
 export function MatchCard({ match, onOpen, showLabel = false }: { match: MatchView; onOpen: ((match: MatchView) => void) | null; showLabel?: boolean }) {
   const clickable = onOpen !== null && !match.isBye && match.status !== 'Pending'
   const winner = match.score?.winnerSide ?? null
-  const className = ['match', match.status === 'Finished' ? 'match--finished' : '', match.isBye ? 'match--bye' : '', clickable ? 'match--clickable' : ''].filter(Boolean).join(' ')
+  const playing = match.status === 'Playing'
+  const className = ['match', match.status === 'Finished' ? 'match--finished' : '', playing ? 'match--playing' : '', match.isBye ? 'match--bye' : '', clickable ? 'match--clickable' : '']
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <button type="button" className={className} disabled={!clickable} onClick={() => onOpen?.(match)} role="listitem" aria-label={match.label}>
       {showLabel && <span className="match__label">{match.label}</span>}
+      {playing && (
+        <span className="match__live" aria-label="Läuft gerade">
+          <span className="live__dot" /> live
+        </span>
+      )}
       <Side match={match} side={1} winner={winner === 1} />
       <Side match={match} side={2} winner={winner === 2} />
       {match.score && match.score.outcome !== 'Normal' && match.score.outcome !== 'Bye' && (
@@ -47,6 +55,8 @@ function Side({ match, side, winner }: { match: MatchView; side: 1 | 2; winner: 
   const s = side === 1 ? match.side1 : match.side2
   const open = s.kind !== 'Participant'
   const columns = setColumns(match, side)
+  // Solange gespielt wird, steht hinter den Sätzen der Punktestand des Spiels.
+  const live = !match.score && match.live && !match.live.inMatchTiebreak ? match.live : null
   return (
     <span className={`side${winner ? ' side--winner' : ''}${open ? ' side--open' : ''}`}>
       <span className="side__name">{s.name}</span>
@@ -57,6 +67,7 @@ function Side({ match, side, winner }: { match: MatchView; side: 1 | 2; winner: 
             {c.tiebreak !== null && !c.won && <sup>{c.tiebreak}</sup>}
           </span>
         ))}
+        {live && <span className="set set--points">{side === 1 ? live.points1 : live.points2}</span>}
       </span>
     </span>
   )

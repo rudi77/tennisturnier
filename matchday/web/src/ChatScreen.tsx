@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, adoptAdminLink, subscribeLive, type AdminView, type TournamentSummary, type TournamentView, type Links } from './api'
+import { api, adoptAdminLink, isAdmin, subscribeLive, type Scored, type TournamentSummary, type TournamentView, type Links, type Transcript } from './api'
 import { chatOpen, currentTournament, forgetAdminToken, adminTokenFor, rememberAdminToken, rememberChatOpen, rememberCurrent, rememberSession, sessionId } from './client'
 import { sendMessage, type WidgetEvent } from './chat'
 import { Composer } from './Composer'
@@ -47,8 +47,44 @@ const SUGGESTIONS = [
   'Zeig mir meine Turniere',
 ]
 
+/** Im Gespräch zu einem Turnier: was man dort typischerweise will. */
+const TOURNAMENT_SUGGESTIONS = [
+  'Wie steht es gerade?',
+  'Wer spielt als Nächstes?',
+  'Gib mir die Links zum Teilen',
+  'Wie funktioniert das Live-Zählen?',
+]
+
 let nextId = 1
 const id = () => nextId++
+
+/** Der erste Satz in einem Gespräch, das zu einem Turnier gehört, aber noch leer ist. */
+const greetingFor = (name: string) =>
+  `Hier geht es um „${name}“. Frag mich, lass mich eintragen oder ändern — oder tipp auf der Bühne ein Match an und zähl live mit.`
+
+/**
+ * Was nach einer Runde mit dem Gespräch geschieht. `bound` ist das Turnier,
+ * dem das Gespräch gehört, `active` das, bei dem der Agent zuletzt war.
+ *
+ * - bind: Ein allgemeines Gespräch hat sein Turnier gefunden.
+ * - switch: Ein anderes Turnier ist ins Spiel gekommen — weiter in dessen Gespräch.
+ * - unbind: Das Turnier des Gesprächs gibt es nicht mehr; es ist wieder allgemein.
+ */
+export type AfterRun = { kind: 'stay' } | { kind: 'bind'; tournamentId: string } | { kind: 'switch'; tournamentId: string } | { kind: 'unbind' }
+
+export function afterRun(current: string | null, bound: string | null, active: string | null): AfterRun {
+  if (bound === null) return current === null ? { kind: 'stay' } : { kind: 'unbind' }
+  if (active !== null && active !== bound) return { kind: 'switch', tournamentId: active }
+  if (current !== bound) return { kind: 'bind', tournamentId: bound }
+  return { kind: 'stay' }
+}
+
+/** Ein nachgeladenes Gespräch als Zeilen — nur was gesagt wurde, keine Werkzeugdetails. */
+export function itemsOf(transcript: Transcript): ItemInput[] {
+  return transcript.messages
+    .filter((m) => m.text)
+    .map((m): ItemInput => (m.role === 'user' ? { kind: 'user', text: m.text } : { kind: 'assistant', text: m.text }))
+}
 
 export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   const [items, setItems] = useState<Item[]>([])
@@ -64,6 +100,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [missing, setMissing] = useState('')
   const [busy, setBusy] = useState(false)
+  const [askDelete, setAskDelete] = useState(false)
 
   // Aufgeklappt oder zu. Auf dem Telefon stehen Bühne und Gespräch
   // übereinander: Wer gerade nur mit den Widgets arbeitet, klappt das Gespräch
@@ -87,10 +124,10 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   }, [])
 
   const takeAdmin = useCallback(
-    (admin: AdminView) => {
-      rememberAdminToken(admin.tournament.id, admin.adminToken)
-      showView(admin.tournament)
-      return admin.tournament
+    (scored: Scored) => {
+      if (isAdmin(scored)) rememberAdminToken(scored.tournament.id, scored.adminToken)
+      showView(scored.tournament)
+      return scored.tournament
     },
     [showView],
   )
@@ -99,6 +136,46 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
     setCurrent(tournamentId)
     rememberCurrent(tournamentId)
   }, [])
+
+  /**
+   * Das Gespräch wechseln: je Turnier eines, ohne Turnier das allgemeine.
+   * Was dort schon gesagt wurde, steht wieder da; ein neues beginnt mit einem
+   * Gruß, und angelegt wird es erst mit der ersten Nachricht.
+   */
+  const loadChat = useCallback(async (tournamentId: string | null, name?: string) => {
+    let transcript: Transcript | null = null
+    try {
+      if (tournamentId) transcript = await api.chatFor(tournamentId)
+      else {
+        const general = sessionId()
+        if (general) transcript = await api.session(general)
+      }
+    } catch {
+      transcript = null
+    }
+
+    // Ein allgemeines Gespräch, das inzwischen einem Turnier gehört, ist nicht mehr das allgemeine.
+    if (!tournamentId && transcript?.tournamentId) transcript = null
+    if (!tournamentId && !transcript) rememberSession(null)
+
+    const lines = transcript ? itemsOf(transcript) : []
+    setSession(transcript?.id ?? null)
+    setItems(
+      (lines.length > 0 ? lines : [{ kind: 'assistant' as const, text: tournamentId && name ? greetingFor(name) : GREETING }]).map(
+        (line) => ({ ...line, id: id() }) as Item,
+      ),
+    )
+  }, [])
+
+  /** Ein Turnier öffnen heißt: auch sein Gespräch öffnen. */
+  const switchTo = useCallback(
+    async (view: TournamentView | null) => {
+      setAskDelete(false)
+      select(view?.id ?? null)
+      await loadChat(view?.id ?? null, view?.name)
+    },
+    [select, loadChat],
+  )
 
   /** Die Turnierkarte auf die Bühne: Rahmen oben, darunter je nach Zustand Teilnehmer, Bracket oder Tabelle. */
   const showTournament = useCallback(
@@ -109,7 +186,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
     [showView],
   )
 
-  /** Das aktuelle Turnier ist gelöscht: kein aktuelles mehr, und die Liste zeigt, was bleibt. */
+  /** Das aktuelle Turnier ist gelöscht: kein aktuelles mehr, das allgemeine Gespräch, und die Liste zeigt, was bleibt. */
   const forget = useCallback(
     (tournamentId: string) => {
       forgetAdminToken(tournamentId)
@@ -118,11 +195,10 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
         delete rest[tournamentId]
         return rest
       })
-      setCurrent(null)
-      rememberCurrent(null)
       setStage(null)
+      void switchTo(null)
     },
-    [],
+    [switchTo],
   )
 
   /** Die eigenen Turniere auf die Bühne — über die Kopfzeile jederzeit erreichbar. */
@@ -175,45 +251,29 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
           const admin = await adoptAdminLink(adminToken)
           if (cancelled) return
           rememberAdminToken(admin.tournament.id, admin.adminToken)
-          select(admin.tournament.id)
           window.history.replaceState(null, '', window.location.pathname)
-          append({ kind: 'assistant', text: `Willkommen bei „${admin.tournament.name}“. Du hast den Verwalterlink, du darfst alles.` })
           showTournament(admin.tournament)
+          await switchTo(admin.tournament)
+          if (cancelled) return
+          append({ kind: 'assistant', text: `Willkommen bei „${admin.tournament.name}“. Du hast den Verwalterlink, du darfst alles.` })
           return
         } catch (e) {
           append({ kind: 'error', text: (e as Error).message })
         }
       }
 
-      const stored = sessionId()
-      if (stored) {
-        try {
-          const old = await api.session(stored)
-          if (cancelled) return
-          for (const m of old.messages) {
-            if (m.text) append({ kind: m.role === 'user' ? 'user' : 'assistant', text: m.text })
-          }
-          const tournamentId = old.tournamentId ?? currentTournament()
-          if (tournamentId) {
-            const view = await api.get(tournamentId).catch(() => null)
-            if (cancelled) return
-            if (view) {
-              select(view.id)
-              showTournament(view)
-              return
-            }
-            select(null)
-          }
-          // Kein laufendes Turnier — dann ist die Historie das Nützlichste.
-          if (!cancelled) await showMine()
-          return
-        } catch {
-          rememberSession(null)
-          setSession(null)
-        }
+      // Zuletzt offen war ein Turnier: das Turnier und sein Gespräch. Sonst das
+      // allgemeine Gespräch und die Liste — die Historie ist dann das Nützlichste.
+      const last = currentTournament()
+      const view = last ? await api.get(last).catch(() => null) : null
+      if (cancelled) return
+      if (view) {
+        showTournament(view)
+        await switchTo(view)
+        return
       }
 
-      append({ kind: 'assistant', text: GREETING })
+      await switchTo(null)
       if (!cancelled) await showMine()
     }
 
@@ -234,20 +294,12 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
 
   useEffect(() => {
     if (!current || !bekannt) return
-    return subscribeLive(current, showView, () => {
-      setViews((all) => {
-        const rest = { ...all }
-        delete rest[current]
-        return rest
-      })
-      forgetAdminToken(current)
-      select(null)
-      setStage(null)
-    })
+    // Löscht jemand anderes das Turnier, geht es mit dem allgemeinen Gespräch weiter.
+    return subscribeLive(current, showView, () => forget(current))
     // views selbst gehört nicht in die Abhängigkeiten: Jedes Live-Ereignis
     // ersetzt das Objekt, und das risse die Verbindung bei jedem Ereignis ab,
     // um sie neu aufzubauen. Der Merker kippt einmal und bleibt dann stehen.
-  }, [current, bekannt, showView, select])
+  }, [current, bekannt, showView, forget])
 
   useEffect(() => {
     // Ist das Gespräch zugeklappt, gibt es nichts zu scrollen — und der Ruf
@@ -268,11 +320,14 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
       append({ kind: 'pending' })
 
       let sessionForRun = session
+      let after = { kind: 'stay' } as AfterRun
       await sendMessage(message, session, current, (event) => {
         switch (event.type) {
           case 'session':
             sessionForRun = event.data.sessionId
-            rememberSession(sessionForRun)
+            // Das allgemeine Gespräch merkt sich der Browser; eines zu einem
+            // Turnier findet sich über das Turnier.
+            if (!current) rememberSession(sessionForRun)
             setSession(sessionForRun)
             break
           case 'text':
@@ -288,17 +343,57 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
             setItems((all) => [...all.filter((i) => i.kind !== 'pending'), { id: id(), kind: 'error', text: event.data.message }])
             break
           case 'done':
-            if (event.data.tournamentId !== current) select(event.data.tournamentId)
+            after = afterRun(current, event.data.tournamentId, event.data.activeTournamentId ?? null)
             break
         }
       }).catch((e: Error) => append({ kind: 'error', text: e.message }))
 
       setItems((all) => all.filter((i) => i.kind !== 'pending'))
+
+      switch (after.kind) {
+        case 'bind':
+          // Das allgemeine Gespräch gehört jetzt diesem Turnier — die Zeilen bleiben stehen.
+          select(after.tournamentId)
+          rememberSession(null)
+          break
+        case 'unbind':
+          select(null)
+          rememberSession(sessionForRun)
+          break
+        case 'switch': {
+          if (!current) rememberSession(null)
+          const next = await api.get(after.tournamentId).catch(() => null)
+          if (next) {
+            showView(next)
+            await switchTo(next)
+            append({ kind: 'assistant', text: `Weiter geht es hier, im Gespräch zu „${next.name}“.` })
+          }
+          break
+        }
+      }
+
       setBusy(false)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busy, session, current, showChat],
+    [busy, session, current, showChat, switchTo],
   )
+
+  /** Das Gespräch löschen — das Turnier bleibt, das Gespräch beginnt von vorn. */
+  const deleteChat = useCallback(async () => {
+    setAskDelete(false)
+    if (session) {
+      try {
+        await api.deleteChat(session)
+      } catch (e) {
+        append({ kind: 'error', text: (e as Error).message })
+        return
+      }
+    }
+    if (!current) rememberSession(null)
+    const view = current ? views[current] : undefined
+    setSession(null)
+    setItems([{ id: id(), kind: 'assistant', text: view ? greetingFor(view.name) : GREETING }])
+  }, [session, current, views, append])
 
   /** Ein Widget des Agenten löst ab, was auf der Bühne steht, statt sich anzuhängen. */
   function handleWidget(event: WidgetEvent) {
@@ -322,7 +417,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
 
   // --- Direkte Handlungen aus den Widgets, am Modell vorbei ---
   const act = useCallback(
-    async (work: () => Promise<AdminView | void>) => {
+    async (work: () => Promise<Scored | void>) => {
       try {
         const admin = await work()
         if (admin) takeAdmin(admin)
@@ -337,13 +432,13 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
     async (tournamentId: string) => {
       try {
         const view = await api.get(tournamentId)
-        select(view.id)
         showTournament(view)
+        if (view.id !== current) await switchTo(view)
       } catch (e) {
         append({ kind: 'error', text: (e as Error).message })
       }
     },
-    [append, select, showTournament],
+    [append, current, showTournament, switchTo],
   )
 
   const current_view = current ? views[current] : undefined
@@ -372,10 +467,22 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
             Turniere
           </button>
           {canShare && (
-            <button type="button" className="button button--quiet" onClick={() => void showShare(current_view.id)} title="Mitschau-Link und Verwalterlink">
+            <button type="button" className="button button--quiet" onClick={() => void showShare(current_view.id)} title="Mitschau-Link, Eintragen-Link und Verwalterlink">
               Teilen
             </button>
           )}
+          <button
+            type="button"
+            className="button button--quiet button--icon"
+            onClick={() => setAskDelete(!askDelete)}
+            aria-expanded={askDelete}
+            aria-label="Chat löschen"
+            title={current_view ? `Das Gespräch zu „${current_view.name}“ löschen` : 'Das Gespräch löschen'}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           {konto && (
             <button
               type="button"
@@ -399,6 +506,20 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
         </div>
       )}
 
+      {askDelete && (
+        <div className="notice notice--ask" role="alertdialog" aria-label="Gespräch löschen">
+          <span>{current_view ? `Das Gespräch zu „${current_view.name}“ löschen? Das Turnier bleibt.` : 'Dieses Gespräch löschen?'}</span>
+          <span className="notice__actions">
+            <button type="button" className="button button--danger" onClick={() => void deleteChat()} disabled={busy}>
+              Ja, löschen
+            </button>
+            <button type="button" className="button" onClick={() => setAskDelete(false)}>
+              Abbrechen
+            </button>
+          </span>
+        </div>
+      )}
+
       <section className="stage" aria-label="Anzeige">
         {stage ? (
           <Widget
@@ -407,7 +528,10 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
             act={act}
             apply={takeAdmin}
             open={open}
-            onNewTournament={(v) => { select(v.id); showTournament(v) }}
+            onNewTournament={(v) => {
+              showTournament(v)
+              void switchTo(v)
+            }}
             onDeleted={() => {
               if (current) forget(current)
               void showMine()
@@ -441,7 +565,7 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
         ))}
         {items.length <= 2 && !busy && configured !== false && (
           <div className="suggestions">
-            {SUGGESTIONS.map((s) => (
+            {(current ? TOURNAMENT_SUGGESTIONS : SUGGESTIONS).map((s) => (
               <button key={s} type="button" className="chip" onClick={() => void send(s)}>
                 {s}
               </button>

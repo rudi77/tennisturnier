@@ -37,6 +37,9 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
     public async Task<Tournament> GetByAdminTokenAsync(string adminToken, CancellationToken ct = default) =>
         await store.FindByAdminTokenAsync(adminToken, ct) ?? throw new NotFoundException("Diesen Verwalterlink gibt es nicht.");
 
+    public async Task<Tournament> GetByScorerTokenAsync(string scorerToken, CancellationToken ct = default) =>
+        await store.FindByScorerTokenAsync(scorerToken, ct) ?? throw new NotFoundException("Diesen Eintragen-Link gibt es nicht (mehr).");
+
     public Task<Tournament> UpdateAsync(Actor actor, Guid id, UpdateTournamentRequest request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -110,11 +113,34 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
     public Task<Tournament> RecordResultAsync(Actor actor, Guid id, Guid matchId, ResultRequest request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return MutateAsync(actor, id, t => t.RecordResult(matchId, ToScore(request, t.Format)), ct);
+        return MutateAsync(actor, id, t => t.RecordResult(matchId, ToScore(request, t.Format)), ct, scoring: true);
     }
 
     public Task<Tournament> ClearResultAsync(Actor actor, Guid id, Guid matchId, CancellationToken ct = default) =>
-        MutateAsync(actor, id, t => t.ClearResult(matchId), ct);
+        MutateAsync(actor, id, t => t.ClearResult(matchId), ct, scoring: true);
+
+    /// <summary>
+    /// Ein Punkt, ein Spiel oder ein Schritt zurück, während gespielt wird. Wer
+    /// mitschaut, sieht jeden davon — das ist der Sinn der Sache.
+    /// </summary>
+    public Task<Tournament> LiveAsync(Actor actor, Guid id, Guid matchId, LiveRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return MutateAsync(actor, id, t =>
+        {
+            switch (request.Action)
+            {
+                case LiveAction.Undo:
+                    t.UndoLive(matchId);
+                    break;
+                case LiveAction.Point or LiveAction.Game:
+                    t.ScoreLive(matchId, new LiveEvent(request.Action == LiveAction.Point ? LiveEventKind.Point : LiveEventKind.Game, request.Side));
+                    break;
+                default:
+                    throw new DomainException("Unbekannter Schritt.");
+            }
+        }, ct, scoring: true);
+    }
 
     public Task<Tournament> RotateAdminTokenAsync(Actor actor, Guid id, CancellationToken ct = default) =>
         MutateAsync(actor, id, t => t.RotateAdminToken(), ct);
@@ -124,6 +150,7 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
         var tournament = await GetAsync(id, ct);
         RequireManage(actor, tournament);
         await store.DeleteAsync(id, ct);
+        await store.DeleteSessionsOfTournamentAsync(id, ct);
         live.Publish(id, null);
     }
 
@@ -157,11 +184,19 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
     private static SetScore Orient(SetScore fromWinner, int winnerSide) =>
         winnerSide == 1 ? fromWinner : new SetScore(fromWinner.Games2, fromWinner.Games1, fromWinner.TiebreakPoints);
 
-    private async Task<Tournament> MutateAsync(Actor actor, Guid id, Action<Tournament> action, CancellationToken ct)
+    private async Task<Tournament> MutateAsync(Actor actor, Guid id, Action<Tournament> action, CancellationToken ct, bool scoring = false)
     {
         var tournament = await store.MutateAsync(id, t =>
         {
-            RequireManage(actor, t);
+            if (scoring)
+            {
+                RequireScore(actor, t);
+            }
+            else
+            {
+                RequireManage(actor, t);
+            }
+
             action(t);
         }, ct);
 
@@ -174,6 +209,14 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
         if (!actor.MayManage(tournament))
         {
             throw new ForbiddenException("Dafür braucht es den Verwalterlink dieses Turniers.");
+        }
+    }
+
+    private static void RequireScore(Actor actor, Tournament tournament)
+    {
+        if (!actor.MayScore(tournament))
+        {
+            throw new ForbiddenException("Eintragen darf die Turnierleitung — oder wer den Eintragen-Link hat.");
         }
     }
 }

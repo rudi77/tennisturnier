@@ -123,7 +123,7 @@ export function TournamentForm({
             disabled={locked || disciplineLocked}
             note={
               locked
-                ? 'Nach der Auslosung fest.'
+                ? 'Fest, seit gespielt wird.'
                 : disciplineLocked
                   ? 'Erst die Teilnehmerliste leeren — ein Einzelname ist kein Team.'
                   : draft.discipline === 'Doubles'
@@ -143,7 +143,7 @@ export function TournamentForm({
             disabled={locked}
             note={
               locked
-                ? 'Nach der Auslosung fest.'
+                ? 'Fest, seit gespielt wird.'
                 : draft.mode === 'Knockout'
                   ? 'Wer verliert, ist draußen. Überzählige Plätze werden Freilose.'
                   : 'Jeder spielt gegen jeden, die Tabelle entscheidet.'

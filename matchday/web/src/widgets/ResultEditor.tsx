@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { MatchView, ResultKind, ResultRequest, SetScore, TournamentView } from '../api'
 
 /**
@@ -96,7 +97,9 @@ export function ResultEditor({
   const setsToWin = Math.floor(format.bestOf / 2) + 1
   const decided = kind === 'Played' && (wins1 === setsToWin || wins2 === setsToWin)
 
-  return (
+  // Ins Dokument selbst gehängt, wie das Zählfenster: auf der Bühne läge es
+  // unter Gespräch und Eingabefeld.
+  return createPortal(
     <div className="modal" role="dialog" aria-modal="true" aria-label={`Ergebnis ${match.label}`} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal__box">
         <div className="card__head">
@@ -209,6 +212,7 @@ export function ResultEditor({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -1,4 +1,4 @@
-import { api, type AdminView, type CreateBody, type Links, type TournamentSummary, type TournamentView } from '../api'
+import { api, type AdminView, type CreateBody, type Links, type Scored, type TournamentSummary, type TournamentView } from '../api'
 import { adminTokenFor } from '../client'
 import { Bracket } from './Bracket'
 import { ParticipantList } from './ParticipantList'
@@ -7,7 +7,7 @@ import { Standings } from './Standings'
 import { TournamentCard } from './TournamentCard'
 import { TournamentList } from './TournamentList'
 import { useState } from 'react'
-import { ResultEditor } from './ResultEditor'
+import { LiveScorer } from './LiveScorer'
 import type { MatchView } from '../api'
 
 export interface WidgetItem {
@@ -19,8 +19,8 @@ export interface WidgetItem {
 /** Eine direkte Handlung: Fehler landen als Zeile im Gespräch. */
 export type Act = (work: () => Promise<AdminView | void>) => Promise<void>
 
-/** Eine Verwaltersicht übernehmen — für Widgets, die ihre Fehler selbst zeigen. */
-export type Apply = (admin: AdminView) => void
+/** Eine Antwort übernehmen — für Widgets, die ihre Fehler selbst zeigen. */
+export type Apply = (scored: Scored) => void
 
 /**
  * Der feste Katalog: der Agent benennt ein Widget, die Oberfläche zeichnet es
@@ -43,7 +43,7 @@ export function Widget({
   onNewTournament: (view: TournamentView) => void
   onDeleted: () => void
 }) {
-  const [editing, setEditing] = useState<MatchView | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
 
   if (item.widget === 'tournaments') {
     return (
@@ -65,15 +65,18 @@ export function Widget({
   if (!view) return <div className="card muted">Dieses Turnier gibt es nicht mehr.</div>
 
   const admin = adminTokenFor(view.id) !== null
-  const onOpen = admin && view.state !== 'Setup' ? setEditing : null
+  const onOpen = admin && view.state !== 'Setup' ? (match: MatchView) => setEditing(match.id) : null
 
+  // Ein Match antippen heißt: mitzählen. Das ganze Ergebnis auf einmal steht
+  // im selben Fenster eine Ebene tiefer.
   const editor = editing && (
-    <ResultEditor
+    <LiveScorer
       view={view}
-      match={editing}
+      matchId={editing}
       onClose={() => setEditing(null)}
-      onSave={async (result) => apply(await api.recordResult(view.id, editing.id, result))}
-      onClear={async () => apply(await api.clearResult(view.id, editing.id))}
+      onLive={async (action, side) => apply(await api.live(view.id, editing, action, side))}
+      onSave={async (result) => apply(await api.recordResult(view.id, editing, result))}
+      onClear={async () => apply(await api.clearResult(view.id, editing))}
     />
   )
 

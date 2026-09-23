@@ -18,14 +18,29 @@ export function setText(set: SetScore, side: 1 | 2): string {
   return String(own)
 }
 
-/** Die Sätze eines Matches als Spalten je Seite, mit dem Tiebreak als Hochzahl. */
+/**
+ * Die Sätze eines Matches als Spalten je Seite, mit dem Tiebreak als Hochzahl.
+ * Läuft das Match, sind es die Sätze bis hierher samt dem laufenden — und den
+ * laufenden hat noch niemand gewonnen.
+ */
 export function setColumns(match: MatchView, side: 1 | 2): { games: number; tiebreak: number | null; won: boolean }[] {
-  if (!match.score) return []
-  return match.score.sets.map((set) => {
+  const live = !match.score && match.live ? match.live : null
+  const sets = match.score?.sets ?? live?.sets ?? []
+  return sets.map((set, i) => {
     const own = side === 1 ? set.games1 : set.games2
     const other = side === 1 ? set.games2 : set.games1
-    return { games: own, tiebreak: set.tiebreakPoints ?? null, won: own > other }
+    const open = live !== null && live.running && i === sets.length - 1
+    return { games: own, tiebreak: set.tiebreakPoints ?? null, won: !open && own > other }
   })
+}
+
+/**
+ * Hat das Turnier begonnen? Sobald irgendwo ein Punkt gezählt oder ein
+ * Ergebnis eingetragen ist — Freilose zählen nicht. Bis dahin lässt sich
+ * alles ändern, danach steht der Rahmen.
+ */
+export function hasBegun(view: TournamentView): boolean {
+  return view.matches.some((m) => !m.isBye && (m.score !== null || (m.live ?? null) !== null))
 }
 
 export function roundName(view: TournamentView, round: number): string {

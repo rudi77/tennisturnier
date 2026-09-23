@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api, type TournamentView } from '../api'
 import { isTeam, splitEntries, splitPlayers } from '../entries'
+import { hasBegun } from '../format'
 import type { Act } from './Widget'
 
 /**
@@ -14,7 +15,10 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
   const [name, setName] = useState('')
   const [confirm, setConfirm] = useState(false)
   const setup = view.state === 'Setup'
-  const canEdit = admin && setup
+  // Bis zum ersten Punkt bleibt die Liste offen; ist schon ausgelost, lost die
+  // Anwendung mit jeder Änderung neu aus.
+  const started = hasBegun(view)
+  const canEdit = admin && !started
   const doubles = view.discipline === 'Doubles'
   const entries = splitEntries(name)
 
@@ -97,7 +101,7 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
         </p>
       )}
       {canEdit && incomplete && !loose && <p className="field__note">Ein Doppel braucht zwei Spieler je Team: „Anna / Tom“.</p>}
-      {canEdit && view.participants.length >= 2 && (
+      {canEdit && setup && view.participants.length >= 2 && (
         <div className="actions">
           {confirm ? (
             <>
@@ -116,7 +120,8 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
           )}
         </div>
       )}
-      {!setup && <p className="muted">Ausgelost — die Liste ist fest.</p>}
+      {!setup && started && <p className="muted">Es wird gespielt — die Liste ist fest.</p>}
+      {!setup && !started && admin && <p className="field__note">Ausgelost, aber noch kein Punkt gespielt: Wer dazukommt oder gestrichen wird, wird mitgelost — die Auslosung wird neu gemacht.</p>}
     </>
   )
 

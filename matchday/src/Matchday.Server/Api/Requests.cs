@@ -2,11 +2,18 @@ using Matchday.Domain;
 
 namespace Matchday.Server.Api;
 
-/// <summary>Wer handelt: die Browserkennung und, falls über den Verwalterlink gekommen, das Token.</summary>
-public sealed record Actor(string ClientId, string? AdminToken)
+/// <summary>
+/// Wer handelt: die Browserkennung und, falls über einen Link gekommen, das
+/// Token des Verwalterlinks oder des Eintragen-Links.
+/// </summary>
+public sealed record Actor(string ClientId, string? AdminToken, string? ScorerToken = null)
 {
     public bool MayManage(Tournament t) =>
         t.OwnerId == ClientId || (AdminToken is not null && AdminToken == t.AdminToken);
+
+    /// <summary>Spielstände und Ergebnisse eintragen: die Verwaltung, und wer den Eintragen-Link hat.</summary>
+    public bool MayScore(Tournament t) =>
+        MayManage(t) || (ScorerToken is not null && ScorerToken == t.ScorerToken);
 }
 
 public sealed record CreateTournamentRequest(
@@ -50,3 +57,18 @@ public sealed record ResultRequest(
     int WinnerSide,
     IReadOnlyList<SetScore> Sets,
     SetScore? AbandonedSet = null);
+
+public enum LiveAction
+{
+    /// <summary>Ein Punkt für eine Seite.</summary>
+    Point,
+
+    /// <summary>Das laufende Spiel für eine Seite, ohne die Punkte einzeln.</summary>
+    Game,
+
+    /// <summary>Das letzte Eingetragene zurück.</summary>
+    Undo,
+}
+
+/// <summary>Ein Schritt während des Matches. <c>Side</c> braucht es nur für Punkt und Spiel.</summary>
+public sealed record LiveRequest(LiveAction Action, int Side = 0);

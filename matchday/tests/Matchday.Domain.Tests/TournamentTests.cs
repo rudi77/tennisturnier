@@ -212,21 +212,65 @@ public sealed class TournamentTests
     }
 
     [Fact]
-    public void Nach_der_Auslosung_ist_der_Rahmen_eingefroren()
+    public void Bis_zum_ersten_Punkt_bleibt_ein_ausgelostes_Turnier_offen()
     {
         var t = Neu(Mode.Knockout, "A", "B");
         t.Draw(new Random(1));
+        Assert.False(t.IsStarted);
+        Assert.Contains("schon ausgelost", Assert.Throws<DomainException>(() => t.Draw()).Message);
 
-        Assert.Throws<DomainException>(() => t.AddParticipant("C"));
+        // Wer dazukommt, wird mitgelost — die Auslosung ist neu, nicht zurück.
+        t.AddParticipant("C");
+        Assert.Equal(TournamentState.Running, t.State);
+        Assert.Contains(t.Matches, m => m.IsBye);
+        Assert.Equal(3, t.Matches.SelectMany(m => new[] { m.Side1.ParticipantId, m.Side2.ParticipantId }).Where(id => id is not null).Distinct().Count());
+
+        t.SetMode(Mode.RoundRobin);
+        Assert.Equal(3, t.Matches.Count);
+        Assert.DoesNotContain(t.Matches, m => m.IsBye);
+
+        // Das Format ändert keine Paarung, gelost wird dafür nicht.
+        var before = t.Matches.Select(m => m.Id).ToList();
+        t.SetFormat(new MatchFormat(BestOf: 1));
+        Assert.Equal(before, t.Matches.Select(m => m.Id).ToList());
+
+        var c = t.Participants.Single(p => p.Name == "C");
+        t.RemoveParticipant(c.Id);
+        Assert.Single(t.Matches);
+
+        // Reicht es nicht mehr zum Auslosen, bleibt es bei der Vorbereitung.
+        t.RemoveParticipant(t.Participants[0].Id);
+        Assert.Equal(TournamentState.Setup, t.State);
+        Assert.Empty(t.Matches);
+        Assert.Throws<DomainException>(() => t.RemoveParticipant(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void Nach_dem_ersten_Punkt_ist_der_Rahmen_eingefroren()
+    {
+        var t = Neu(Mode.Knockout, "A", "B");
+        t.Draw(new Random(1));
+        t.ScoreLive(t.Matches[0].Id, new LiveEvent(LiveEventKind.Point, 1));
+        Assert.True(t.IsStarted);
+
+        var nachricht = Assert.Throws<DomainException>(() => t.AddParticipant("C")).Message;
+        Assert.Contains("begonnen", nachricht);
+        Assert.Throws<DomainException>(() => t.RemoveParticipant(t.Participants[0].Id));
         Assert.Throws<DomainException>(() => t.SetMode(Mode.RoundRobin));
         Assert.Throws<DomainException>(() => t.SetFormat(new MatchFormat(BestOf: 1)));
+        Assert.Throws<DomainException>(() => t.SetDiscipline(Discipline.Doubles));
+        Assert.Throws<DomainException>(() => t.AddRandomTeams(["X", "Y"]));
         t.Rename("Neuer Name");
         t.SetDate(new DateOnly(2026, 10, 3));
+
+        // Der Punkt zurück, und es ist wieder offen.
+        t.UndoLive(t.Matches[0].Id);
+        Assert.False(t.IsStarted);
+        t.AddParticipant("C");
 
         t.UndoDraw();
         Assert.Equal(TournamentState.Setup, t.State);
         Assert.Empty(t.Matches);
-        t.AddParticipant("C");
         t.SetMode(Mode.RoundRobin);
     }
 
@@ -477,7 +521,14 @@ public sealed class TournamentTests
 
         t.AddParticipant("Rudi / Max");
         t.Draw(new Random(1));
-        Assert.Throws<DomainException>(() => t.AddRandomTeams(["Eva", "Ida"]));
+
+        // Ausgelost, aber nicht begonnen: Die neuen Teams werden mitgelost.
+        t.AddRandomTeams(["Eva", "Ida"], new Random(2));
+        Assert.Equal(3, t.Participants.Count);
+        Assert.Equal(TournamentState.Running, t.State);
+
+        t.RecordResult(t.Matches.First(m => m.Status == MatchStatus.Ready).Id, Sieg1(t));
+        Assert.Throws<DomainException>(() => t.AddRandomTeams(["Olga", "Paul"]));
     }
 
     [Fact]

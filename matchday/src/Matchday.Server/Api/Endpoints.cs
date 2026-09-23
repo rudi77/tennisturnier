@@ -10,13 +10,15 @@ namespace Matchday.Server.Api;
 
 /// <summary>
 /// Die HTTP-API, die die Widgets direkt rufen — am Modell vorbei (ADR-0016).
-/// Wer handelt, steht in zwei Kopfzeilen: der Browser in <c>X-Matchday-Client</c>,
-/// der Verwalterlink in <c>X-Admin-Token</c>.
+/// Wer handelt, steht in Kopfzeilen: der Browser in <c>X-Matchday-Client</c>,
+/// der Verwalterlink in <c>X-Admin-Token</c>, der Eintragen-Link in
+/// <c>X-Scorer-Token</c>.
 /// </summary>
 public static class Endpoints
 {
     public const string ClientHeader = "X-Matchday-Client";
     public const string AdminHeader = "X-Admin-Token";
+    public const string ScorerHeader = "X-Scorer-Token";
 
     public static void MapMatchday(this IEndpointRouteBuilder app)
     {
@@ -46,6 +48,15 @@ public static class Endpoints
         {
             RequireLogin(http);
             return Results.Ok(Admin(await actions.GetByAdminTokenAsync(token, ct), http));
+        });
+
+        // Der Eintragen-Link: wie der Verwalterlink ein Schlüssel, nur kleiner.
+        // Zurück kommt die Sicht und sein eigenes Token, nie das der Verwaltung.
+        tournaments.MapGet("/by-scorer/{token}", async (HttpContext http, TournamentActions actions, string token, CancellationToken ct) =>
+        {
+            RequireLogin(http);
+            var t = await actions.GetByScorerTokenAsync(token, ct);
+            return Results.Ok(new ScorerAccess(ViewBuilder.Build(t), t.ScorerToken));
         });
 
         tournaments.MapGet("/{id:guid}", async (TournamentActions actions, Guid id, CancellationToken ct) =>
@@ -78,10 +89,13 @@ public static class Endpoints
             Results.Ok(Admin(await actions.UndoDrawAsync(ActorOf(http), id, ct), http)));
 
         tournaments.MapPut("/{id:guid}/matches/{matchId:guid}/result", async (HttpContext http, TournamentActions actions, Guid id, Guid matchId, ResultRequest request, CancellationToken ct) =>
-            Results.Ok(Admin(await actions.RecordResultAsync(ActorOf(http), id, matchId, request, ct), http)));
+            Scored(await actions.RecordResultAsync(ActorOf(http), id, matchId, request, ct), http));
 
         tournaments.MapDelete("/{id:guid}/matches/{matchId:guid}/result", async (HttpContext http, TournamentActions actions, Guid id, Guid matchId, CancellationToken ct) =>
-            Results.Ok(Admin(await actions.ClearResultAsync(ActorOf(http), id, matchId, ct), http)));
+            Scored(await actions.ClearResultAsync(ActorOf(http), id, matchId, ct), http));
+
+        tournaments.MapPost("/{id:guid}/matches/{matchId:guid}/live", async (HttpContext http, TournamentActions actions, Guid id, Guid matchId, LiveRequest request, CancellationToken ct) =>
+            Scored(await actions.LiveAsync(ActorOf(http), id, matchId, request, ct), http));
 
         tournaments.MapPost("/{id:guid}/admin-token/rotate", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
             Results.Ok(Admin(await actions.RotateAdminTokenAsync(ActorOf(http), id, ct), http)));
@@ -150,10 +164,11 @@ public static class Endpoints
     internal static Actor ActorOf(HttpContext http)
     {
         var admin = http.Request.Headers[AdminHeader].FirstOrDefault();
+        var scorer = http.Request.Headers[ScorerHeader].FirstOrDefault();
 
         if (Required(http))
         {
-            return new Actor(AccountOf(http), admin);
+            return new Actor(AccountOf(http), admin, scorer);
         }
 
         var client = http.Request.Headers[ClientHeader].FirstOrDefault();
@@ -163,7 +178,7 @@ public static class Endpoints
             throw new ForbiddenException($"Die Kopfzeile {ClientHeader} fehlt.");
         }
 
-        return new Actor(client, admin);
+        return new Actor(client, admin, scorer);
     }
 
     /// <summary>
@@ -213,6 +228,14 @@ public static class Endpoints
     /// <summary>Was die Verwaltung bekommt: die Sicht plus die beiden Links.</summary>
     private static object Admin(Tournament t, HttpContext http) => new AdminView(
         ViewBuilder.Build(t), ViewBuilder.Links(t, BaseUrl(http)), t.AdminToken);
+
+    /// <summary>
+    /// Die Antwort auf ein Eintragen. Die Verwaltung bekommt wie sonst ihre
+    /// Sicht samt Links; wer nur den Eintragen-Link hat, bekommt die Sicht —
+    /// und damit nie das Verwaltertoken zu sehen.
+    /// </summary>
+    private static IResult Scored(Tournament t, HttpContext http) =>
+        Results.Ok(ActorOf(http).MayManage(t) ? Admin(t, http) : new ScorerAccess(ViewBuilder.Build(t), t.ScorerToken));
 }
 
 public sealed record AdminView(TournamentView Tournament, TournamentLinks Links, string AdminToken);

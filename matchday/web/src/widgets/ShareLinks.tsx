@@ -6,6 +6,7 @@ export function ShareLinks({ view, links }: { view: TournamentView; links: Links
     <section className="card">
       <h2 className="card__title">„{view.name}“ teilen</h2>
       <LinkRow label="Zum Mitschauen — für alle" url={links.publicUrl} />
+      <LinkRow label="Zum Eintragen — für Mitspieler: Spielstände live zählen und Ergebnisse eintragen" url={links.scorerUrl} />
       <LinkRow label="Zum Verwalten — geheim, nur für dich" url={links.adminUrl} secret />
     </section>
   )

@@ -73,7 +73,7 @@ public sealed class AgentTools(TournamentActions actions)
             Schema(new { tournamentId = TournamentIdProperty }, "tournamentId")),
 
         new("update_tournament",
-            "Ändert Name, Datum, Ort, Modus, Disziplin oder Satzformat des aktuellen Turniers. Modus, Disziplin und Format nur vor der Auslosung; die Disziplin nur, solange noch niemand eingetragen ist.",
+            "Ändert Name, Datum, Ort, Modus, Disziplin oder Satzformat des aktuellen Turniers. Modus, Disziplin und Format nur, solange das Turnier nicht begonnen hat (noch kein Punkt, kein Ergebnis); ist schon ausgelost, lost ein neuer Modus neu aus. Die Disziplin nur, solange noch niemand eingetragen ist.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
@@ -88,7 +88,7 @@ public sealed class AgentTools(TournamentActions actions)
             })),
 
         new("add_participants",
-            "Trägt Teilnehmer in das aktuelle Turnier ein. Nur vor der Auslosung. Im Doppel ist ein Teilnehmer ein Team: je Eintrag beide Spieler, getrennt durch „/“.",
+            "Trägt Teilnehmer in das aktuelle Turnier ein. Geht, solange das Turnier nicht begonnen hat; war schon ausgelost, wird neu ausgelost. Im Doppel ist ein Teilnehmer ein Team: je Eintrag beide Spieler, getrennt durch „/“.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
@@ -96,7 +96,7 @@ public sealed class AgentTools(TournamentActions actions)
             }, "names")),
 
         new("add_random_teams",
-            "Würfelt aus einzelnen Spielern Doppel-Teams und trägt sie ein — das Los für die Paarungen. Nur im Doppel und nur vor der Auslosung. Nimm dieses Werkzeug, wenn der Benutzer zufällige Teams will, statt selbst Paare zu bilden; gemischt wird in der Anwendung. Die Spielerzahl muss gerade sein.",
+            "Würfelt aus einzelnen Spielern Doppel-Teams und trägt sie ein — das Los für die Paarungen. Nur im Doppel und nur vor der Auslosung. Nimm dieses Werkzeug, wenn der Benutzer zufällige Teams will, statt selbst Paare zu bilden; gemischt wird in der Anwendung. Die Spielerzahl muss gerade sein. Geht, solange das Turnier nicht begonnen hat.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
@@ -104,7 +104,7 @@ public sealed class AgentTools(TournamentActions actions)
             }, "players")),
 
         new("remove_participants",
-            "Streicht Teilnehmer aus dem aktuellen Turnier. Nur vor der Auslosung. Im Doppel genügt ein Spieler des Teams.",
+            "Streicht Teilnehmer aus dem aktuellen Turnier. Geht, solange das Turnier nicht begonnen hat; war schon ausgelost, wird neu ausgelost. Im Doppel genügt ein Spieler des Teams.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
@@ -146,7 +146,7 @@ public sealed class AgentTools(TournamentActions actions)
             }, "nameA", "nameB")),
 
         new("share_links",
-            "Die Links zum aktuellen Turnier: einer zum Mitschauen für alle, einer zum Verwalten (geheim).",
+            "Die Links zum aktuellen Turnier: einer zum Mitschauen für alle, einer zum Eintragen von Spielständen (für Mitspieler und Helfer) und einer zum Verwalten (geheim).",
             Schema(new { tournamentId = TournamentIdProperty })),
 
         new("delete_tournament",
@@ -319,7 +319,7 @@ public sealed class AgentTools(TournamentActions actions)
 
         var links = ViewBuilder.Links(t, baseUrl);
         return new ToolOutcome(
-            $"Mitschau-Link (für alle): {links.PublicUrl}\nVerwalterlink (geheim, nur für die Turnierleitung): {links.AdminUrl}",
+            $"Mitschau-Link (für alle): {links.PublicUrl}\nEintragen-Link (für alle, die Spielstände eintragen sollen): {links.ScorerUrl}\nVerwalterlink (geheim, nur für die Turnierleitung): {links.AdminUrl}",
             IsError: false,
             WidgetShare,
             new { tournament = ViewBuilder.Build(t), links },
@@ -372,7 +372,10 @@ public sealed class AgentTools(TournamentActions actions)
             lines.Add("Matches:");
             lines.AddRange(t.Matches.Select(m =>
                 $"- {m.Label}: {t.NameOf(m.Side1)} – {t.NameOf(m.Side2)}" +
-                (m.Score is null ? (m.Status == MatchStatus.Ready ? " (offen)" : " (Gegner offen)") : $" → {t.NameOf(m.SideOf(m.Score.WinnerSide))} {ScoreFromWinner(m.Score)}")));
+                (m.Score is not null ? $" → {t.NameOf(m.SideOf(m.Score.WinnerSide))} {ScoreFromWinner(m.Score)}"
+                    : m.Status == MatchStatus.Playing ? $" (läuft: {LiveText(t.LiveStateOf(m)!)})"
+                    : m.Status == MatchStatus.Ready ? " (offen)"
+                    : " (Gegner offen)")));
         }
 
         if (t.State != TournamentState.Setup)
@@ -395,6 +398,20 @@ public sealed class AgentTools(TournamentActions actions)
 
         var text = string.Join(", ", score.Sets.Select(s => new SetScore(s.Games2, s.Games1, s.TiebreakPoints)));
         return score.Outcome == MatchOutcome.Retirement ? $"{text} (Aufgabe)" : text;
+    }
+
+    /// <summary>Der laufende Stand aus Sicht von Seite 1: Sätze, Spiele im Satz, Punkte im Spiel.</summary>
+    internal static string LiveText(LiveState s)
+    {
+        var parts = s.CompletedSets.Select(set => set.ToString()).ToList();
+        parts.Add(s.InMatchTiebreak ? $"Match-Tiebreak {s.Points1}:{s.Points2}" : $"{s.Games1}:{s.Games2}");
+
+        if (!s.InMatchTiebreak)
+        {
+            parts.Add(s.InTiebreak ? $"Tiebreak {s.Points1}:{s.Points2}" : $"{s.PointsText(1)}:{s.PointsText(2)}");
+        }
+
+        return string.Join(", ", parts);
     }
 
     internal static string ModeText(Mode mode) => mode == Mode.Knockout ? "K.o." : "jeder gegen jeden";

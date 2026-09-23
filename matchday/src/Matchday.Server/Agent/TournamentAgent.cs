@@ -42,6 +42,16 @@ public sealed class TournamentAgent(
             : JsonSerializer.Deserialize<ChatSession>(json, Json)!;
     }
 
+    /// <summary>Das Gespräch zu einem Turnier — oder null, wenn darüber noch keines geführt wurde.</summary>
+    public async Task<ChatSession?> SessionForTournamentAsync(Guid tournamentId, Actor actor, CancellationToken ct)
+    {
+        var json = await store.FindSessionJsonForTournamentAsync(tournamentId, actor.ClientId, ct);
+        return json is null ? null : JsonSerializer.Deserialize<ChatSession>(json, Json)!;
+    }
+
+    public Task<bool> DeleteSessionAsync(string sessionId, Actor actor, CancellationToken ct) =>
+        store.DeleteSessionAsync(sessionId, actor.ClientId, ct);
+
     public async IAsyncEnumerable<ChatEvent> RunAsync(
         ChatRequest request,
         Actor actor,
@@ -51,10 +61,10 @@ public sealed class TournamentAgent(
         var session = await LoadSessionAsync(request.SessionId ?? Guid.NewGuid().ToString("N"), actor, ct);
         yield return new ChatEvent("session", new { sessionId = session.Id });
 
-        if (request.TournamentId is { } requested)
-        {
-            session.TournamentId = requested;
-        }
+        // Ein Gespräch gehört zu einem Turnier, und dabei bleibt es: Das erste,
+        // um das es geht, bindet es. Ein allgemeines Gespräch — noch ohne
+        // Turnier — findet so zu dem Turnier, das darin entsteht.
+        session.TournamentId ??= request.TournamentId;
 
         if (!model.IsConfigured)
         {
@@ -101,7 +111,7 @@ public sealed class TournamentAgent(
 
             updates.Add(update);
 
-            foreach (var chatEvent in EventsFrom(update, run, session, steps, text))
+            foreach (var chatEvent in EventsFrom(update, run, steps, text))
             {
                 yield return chatEvent;
             }
@@ -112,14 +122,14 @@ public sealed class TournamentAgent(
             yield return chatEvent;
         }
 
-        session.TournamentId = run.TournamentId;
+        await BindAsync(session, run, ct);
 
         if (failed)
         {
             // Bruchstücke nicht aufheben: ein Werkzeugaufruf ohne Ergebnis
             // würde die nächste Runde stolpern lassen. Was die Werkzeuge in der
             // Datenbank getan haben, steht dort ohnehin.
-            await store.SaveSessionJsonAsync(session.Id, session.ClientId, JsonSerializer.Serialize(session, Json), ct);
+            await store.SaveSessionJsonAsync(session.Id, session.ClientId, JsonSerializer.Serialize(session, Json), session.TournamentId, ct);
             yield return new ChatEvent("error", new { message = "Das Modell ist gerade nicht erreichbar. Die Widgets funktionieren trotzdem." });
             yield break;
         }
@@ -134,8 +144,28 @@ public sealed class TournamentAgent(
             }
         }
 
-        await store.SaveSessionJsonAsync(session.Id, session.ClientId, JsonSerializer.Serialize(session, Json), ct);
-        yield return new ChatEvent("done", new { sessionId = session.Id, tournamentId = session.TournamentId });
+        await store.SaveSessionJsonAsync(session.Id, session.ClientId, JsonSerializer.Serialize(session, Json), session.TournamentId, ct);
+
+        // tournamentId ist das Turnier des Gesprächs, activeTournamentId das, bei
+        // dem der Agent zuletzt war. Weichen sie ab, ist ein anderes Turnier ins
+        // Spiel gekommen — die Oberfläche wechselt dann in dessen Gespräch.
+        yield return new ChatEvent("done", new { sessionId = session.Id, tournamentId = session.TournamentId, activeTournamentId = run.TournamentId });
+    }
+
+    /// <summary>
+    /// Bindet ein allgemeines Gespräch an das Turnier, das darin ins Spiel kam.
+    /// Ist das eigene Turnier gelöscht worden, wird das Gespräch wieder
+    /// allgemein — oder gehört dem Turnier, bei dem der Agent jetzt ist.
+    /// </summary>
+    private async Task BindAsync(ChatSession session, ToolRun run, CancellationToken ct)
+    {
+        if (session.TournamentId is { } bound && bound != run.TournamentId && await store.FindAsync(bound, ct) is null)
+        {
+            session.TournamentId = run.TournamentId;
+            return;
+        }
+
+        session.TournamentId ??= run.TournamentId;
     }
 
     // --- Vom Strom zu den Ereignissen --------------------------------------
@@ -148,7 +178,6 @@ public sealed class TournamentAgent(
     private static List<ChatEvent> EventsFrom(
         AgentResponseUpdate update,
         ToolRun run,
-        ChatSession session,
         Dictionary<string, ToolStep> steps,
         StringBuilder text)
     {
@@ -174,12 +203,11 @@ public sealed class TournamentAgent(
                     if (run.NextStep() is { } step)
                     {
                         steps[result.CallId] = step;
-                        session.TournamentId = run.TournamentId;
                         events.Add(new ChatEvent("tool", new { name = step.Name, input = step.Input }));
 
                         if (step.Outcome.Widget is not null)
                         {
-                            events.Add(new ChatEvent("widget", new { widget = step.Outcome.Widget, data = step.Outcome.WidgetData, tournamentId = session.TournamentId }));
+                            events.Add(new ChatEvent("widget", new { widget = step.Outcome.Widget, data = step.Outcome.WidgetData, tournamentId = run.TournamentId }));
                         }
                     }
 

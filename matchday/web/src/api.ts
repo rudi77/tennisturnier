@@ -2,14 +2,14 @@
  * Die HTTP-API des Servers und ihre Typen. Zwei Kopfzeilen sagen, wer
  * handelt: die Browserkennung und, wenn vorhanden, das Verwaltertoken.
  */
-import { adminTokenFor, clientId, rememberAdminToken } from './client'
+import { adminTokenFor, clientId, rememberAdminToken, scorerTokenFor } from './client'
 import { idToken, rememberToken, ABGEMELDET, type AuthConfig } from './auth'
 
 export type Mode = 'Knockout' | 'RoundRobin'
 export type Discipline = 'Singles' | 'Doubles'
 export type TournamentState = 'Setup' | 'Running' | 'Completed'
 export type FinalSetMode = 'Regular' | 'MatchTiebreak10' | 'Advantage'
-export type MatchStatus = 'Pending' | 'Ready' | 'Finished'
+export type MatchStatus = 'Pending' | 'Ready' | 'Playing' | 'Finished'
 export type SideKind = 'WinnerOf' | 'Participant' | 'Bye'
 export type MatchOutcome = 'Normal' | 'Retirement' | 'Walkover' | 'Bye'
 
@@ -45,6 +45,23 @@ export interface ScoreView {
   text: string
 }
 
+/**
+ * Der laufende Stand, solange mitgezählt wird: die Sätze samt dem laufenden,
+ * und die Punkte des laufenden Spiels, wie man sie ansagt („15“, „A“).
+ */
+export interface LiveView {
+  sets: SetScore[]
+  games1: number
+  games2: number
+  points1: string
+  points2: string
+  inTiebreak: boolean
+  inMatchTiebreak: boolean
+  events: number
+  /** Ob der letzte Satz in `sets` noch läuft. */
+  running: boolean
+}
+
 export interface MatchView {
   id: string
   round: number
@@ -55,6 +72,9 @@ export interface MatchView {
   status: MatchStatus
   isBye: boolean
   score: ScoreView | null
+  live?: LiveView | null
+  /** Wie viele Schritte live gezählt wurden — auch nach dem Ende, damit sich der letzte zurücknehmen lässt. */
+  liveEvents?: number
 }
 
 export interface Standing {
@@ -103,12 +123,37 @@ export interface TournamentSummary {
 export interface Links {
   publicUrl: string
   adminUrl: string
+  scorerUrl: string
 }
 
 export interface AdminView {
   tournament: TournamentView
   links: Links
   adminToken: string
+}
+
+/** Was der Eintragen-Link bekommt: die Sicht und sein eigenes Token — nie das der Verwaltung. */
+export interface ScorerAccess {
+  tournament: TournamentView
+  scorerToken: string
+}
+
+/** Die Antwort auf ein Eintragen: die Verwaltung bekommt ihre Sicht, der Eintragen-Link die seine. */
+export type Scored = AdminView | ScorerAccess
+
+export type LiveAction = 'Point' | 'Game' | 'Undo'
+
+export interface ChatMessage {
+  role: string
+  text: string
+  widgets: string[]
+}
+
+/** Ein Gespräch zum Nachladen. Ohne `id` wurde noch keines geführt. */
+export interface Transcript {
+  id: string | null
+  tournamentId: string | null
+  messages: ChatMessage[]
 }
 
 /** Was der Server beim Anlegen annimmt. Alles außer dem Namen ist freiwillig. */
@@ -162,6 +207,8 @@ async function call<T>(method: string, path: string, body?: unknown, tournamentI
   }
   const token = tournamentId ? adminTokenFor(tournamentId) : null
   if (token) headers['X-Admin-Token'] = token
+  const scorer = tournamentId ? scorerTokenFor(tournamentId) : null
+  if (scorer) headers['X-Scorer-Token'] = scorer
 
   // Ist keine Anmeldung verlangt, gibt es kein Token und die Kopfzeile fehlt —
   // der Server schaut dann ohnehin nicht danach.
@@ -213,15 +260,23 @@ export const api = {
   draw: (id: string) => call<AdminView>('POST', `/api/tournaments/${id}/draw`, undefined, id),
   undoDraw: (id: string) => call<AdminView>('DELETE', `/api/tournaments/${id}/draw`, undefined, id),
   recordResult: (id: string, matchId: string, result: ResultRequest) =>
-    call<AdminView>('PUT', `/api/tournaments/${id}/matches/${matchId}/result`, result, id),
+    call<Scored>('PUT', `/api/tournaments/${id}/matches/${matchId}/result`, result, id),
   clearResult: (id: string, matchId: string) =>
-    call<AdminView>('DELETE', `/api/tournaments/${id}/matches/${matchId}/result`, undefined, id),
+    call<Scored>('DELETE', `/api/tournaments/${id}/matches/${matchId}/result`, undefined, id),
+  /** Ein Punkt, ein Spiel oder ein Schritt zurück — während gespielt wird. */
+  live: (id: string, matchId: string, action: LiveAction, side?: 1 | 2) =>
+    call<Scored>('POST', `/api/tournaments/${id}/matches/${matchId}/live`, side ? { action, side } : { action }, id),
+  byScorer: (token: string) => call<ScorerAccess>('GET', `/api/tournaments/by-scorer/${encodeURIComponent(token)}`),
   remove: (id: string) => call<void>('DELETE', `/api/tournaments/${id}`, undefined, id),
-  session: (sessionId: string) =>
-    call<{ id: string; tournamentId: string | null; messages: { role: string; text: string; widgets: string[] }[] }>(
-      'GET',
-      `/api/chat/${sessionId}`,
-    ),
+  session: (sessionId: string) => call<Transcript>('GET', `/api/chat/${sessionId}`),
+  /** Das Gespräch zu einem Turnier — je Turnier eines. */
+  chatFor: (tournamentId: string) => call<Transcript>('GET', `/api/chat/tournament/${tournamentId}`),
+  deleteChat: (sessionId: string) => call<void>('DELETE', `/api/chat/${sessionId}`),
+}
+
+/** Hat die Antwort ein Verwaltertoken, ist sie eine Verwaltersicht. */
+export function isAdmin(scored: Scored): scored is AdminView {
+  return 'adminToken' in scored
 }
 
 /** Ein Turnier aus dem Verwalterlink übernehmen: Token merken, Sicht liefern. */

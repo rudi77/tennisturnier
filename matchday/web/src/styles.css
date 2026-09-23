@@ -621,3 +621,75 @@ a { color: var(--accent); }
 }
 .chat__account img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .chat__account:hover { border-color: var(--accent); }
+
+/* --- Chat löschen ------------------------------------------------------- */
+
+.button--icon { display: inline-grid; place-items: center; padding: 6px 8px; }
+.notice--ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  background: var(--bg-elev);
+  color: var(--fg);
+  border: 1px solid var(--line);
+}
+.notice__actions { display: inline-flex; gap: 8px; margin-left: auto; }
+
+/* --- Live: Match-Karte ---------------------------------------------------- */
+
+.match--playing { border-color: color-mix(in srgb, #22c55e 55%, var(--line)); }
+.match__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #15803d;
+}
+.match__live .live__dot { background: #22c55e; animation: pulse 1.6s infinite ease-in-out; }
+.set--points {
+  min-width: 1.8em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--fg);
+  font-weight: 700;
+  text-align: center;
+}
+
+/* --- Live: Zählfenster ---------------------------------------------------- */
+
+.scoreboard { width: 100%; border-collapse: collapse; margin: 12px 0 4px; font-variant-numeric: tabular-nums; }
+.scoreboard th, .scoreboard td { padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.scoreboard tr:last-child th, .scoreboard tr:last-child td { border-bottom: 0; }
+.scoreboard__name { text-align: left; font-weight: 600; width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scoreboard .winner .scoreboard__name { font-weight: 800; }
+.scoreboard__set { text-align: center; color: var(--fg-muted); min-width: 1.6em; }
+.scoreboard__set--won { color: var(--fg); font-weight: 700; }
+.scoreboard__points {
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 800;
+  min-width: 2.4em;
+  color: var(--accent);
+}
+.live-scorer__state { margin: 4px 0 0; color: var(--fg-muted); font-size: 0.9rem; }
+.live-scorer__sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.live-scorer__side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.live-scorer__point {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 96px;
+  padding: 12px 8px;
+  font-size: 1rem;
+}
+.live-scorer__plus { font-size: 1.6rem; font-weight: 800; line-height: 1; }
+.live-scorer__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-scorer__game { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.scorer__hint { margin: 4px 0 12px; }

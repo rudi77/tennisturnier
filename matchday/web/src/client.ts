@@ -1,10 +1,12 @@
 /**
- * Was der Browser sich merkt: seine Kennung, die Sitzung des Gesprächs und
- * die Verwaltertoken der Turniere, die er kennt. Kein Konto (ADR-0016).
+ * Was der Browser sich merkt: seine Kennung, das allgemeine Gespräch (das
+ * noch keinem Turnier gehört), die Verwaltertoken der Turniere, die er kennt,
+ * und die Token der Eintragen-Links. Kein Konto (ADR-0016).
  */
 const CLIENT_KEY = 'matchday.client'
 const SESSION_KEY = 'matchday.session'
 const TOKENS_KEY = 'matchday.tokens'
+const SCORER_KEY = 'matchday.scorer'
 const CURRENT_KEY = 'matchday.current'
 const CHAT_KEY = 'matchday.chat'
 
@@ -65,6 +67,25 @@ export function forgetAdminToken(tournamentId: string) {
   const all = tokens()
   delete all[tournamentId]
   write(TOKENS_KEY, JSON.stringify(all))
+}
+
+function scorerTokens(): Record<string, string> {
+  try {
+    return JSON.parse(read(SCORER_KEY) ?? '{}') as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+/** Das Token des Eintragen-Links zu einem Turnier — wer es hat, darf Spielstände eintragen. */
+export function scorerTokenFor(tournamentId: string): string | null {
+  return scorerTokens()[tournamentId] ?? null
+}
+
+export function rememberScorerToken(tournamentId: string, token: string) {
+  const all = scorerTokens()
+  all[tournamentId] = token
+  write(SCORER_KEY, JSON.stringify(all))
 }
 
 /**

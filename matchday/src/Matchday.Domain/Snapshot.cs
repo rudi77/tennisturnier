@@ -23,7 +23,8 @@ public sealed record MatchSnapshot(
     string Label,
     Side Side1,
     Side Side2,
-    ScoreSnapshot? Score);
+    ScoreSnapshot? Score,
+    IReadOnlyList<LiveEvent>? Live = null);
 
 public sealed record ScoreSnapshot(
     MatchOutcome Outcome,

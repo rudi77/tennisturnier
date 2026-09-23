@@ -20,13 +20,15 @@ internal static class Knowledge
         Der Ablauf:
         1. Anlegen. Pflicht ist der Name. Freiwillig: Datum, Ort, Disziplin (Einzel oder Doppel), Modus (K.o. oder jeder gegen jeden), Satzformat. Vorgabe ist Einzel, K.o., zwei Gewinnsätze mit Match-Tiebreak statt des dritten Satzes.
         2. Teilnehmer eintragen, bis zu 64. Im Einzel ein Name je Teilnehmer. Im Doppel ist ein Teilnehmer ein Team aus zwei Spielern, geschrieben „Anna / Tom“. Die Teams müssen nicht feststehen: Aus einer geraden Zahl einzelner Spieler würfelt die Anwendung die Paare (im Gespräch das Werkzeug add_random_teams, auf der Bühne der Knopf „Teams auslosen“ in der Teilnehmerliste). Gemischt wird in der Domäne, wie bei der Auslosung.
-        3. Auslosen, ab zwei Teilnehmern. Die Reihenfolge wird gemischt, es gibt keine Setzliste. Danach stehen Teilnehmerliste, Modus, Disziplin und Satzformat fest. Zurücknehmen geht, kostet aber alle Matches und Ergebnisse.
-        4. Ergebnisse eintragen. Bracket, Tabelle und Platzierung folgen daraus von selbst. Ein Ergebnis zurücknehmen geht nur, solange das Folgematch noch keines hat.
-        5. Zustände: Vorbereitung (noch nicht ausgelost), läuft, abgeschlossen (jedes Match hat ein Ergebnis).
+        3. Auslosen, ab zwei Teilnehmern. Die Reihenfolge wird gemischt, es gibt keine Setzliste. Bis das Turnier begonnen hat — bis zum ersten gezählten Punkt oder ersten Ergebnis —, lässt sich noch alles ändern: Teilnehmer dazu oder weg, Modus, Satzformat. Ändert sich Liste oder Modus, lost die Anwendung neu aus; das Format ändert keine Paarung. Danach steht der Rahmen fest. Die Auslosung zurücknehmen geht immer, kostet aber alle Matches und Ergebnisse.
+        4. Spielen und eintragen. Zwei Wege: live mitzählen — Punkt für Punkt oder Spiel für Spiel, jeder Schritt lässt sich zurücknehmen, und am Ende steht das Ergebnis von selbst — oder das ganze Ergebnis auf einmal eintragen. Bracket, Tabelle und Platzierung folgen daraus. Ein Ergebnis zurücknehmen geht nur, solange das Folgematch noch keines hat.
+        5. Zustände: Vorbereitung (noch nicht ausgelost), läuft, abgeschlossen (jedes Match hat ein Ergebnis). Ein Match ist offen, läuft (es wird mitgezählt) oder beendet.
 
-        Zwei Links, vom Server gebaut: der Mitschau-Link (endet auf `?t=…`) ist für alle, zeigt Bracket und Tabelle live ohne Neuladen und verlangt keine Anmeldung. Der Verwalterlink (`?a=…`) ist geheim — wer ihn hat, darf an diesem Turnier alles. Er ist nicht zurückholbar, nur rotierbar; danach gilt der alte nicht mehr. Konten gibt es nicht; eine Instanz kann eine Google-Anmeldung verlangen, dann folgen einem die eigenen Turniere auch auf ein anderes Gerät.
+        Drei Links, vom Server gebaut: Der Mitschau-Link (endet auf `?t=…`) ist für alle, zeigt Bracket, Tabelle und den laufenden Spielstand live ohne Neuladen und verlangt keine Anmeldung. Der Eintragen-Link (`?s=…`) ist für Mitspieler und Helfer: Wer ihn hat, darf Spielstände live mitzählen und Ergebnisse eintragen oder zurücknehmen, aber sonst nichts am Turnier ändern. Der Verwalterlink (`?a=…`) ist geheim — wer ihn hat, darf an diesem Turnier alles. Er ist nicht zurückholbar, nur rotierbar; danach gilt der alte nicht mehr, und mit ihm auch der alte Eintragen-Link. Alle drei stehen unter „Teilen“ in der Kopfzeile. Konten gibt es nicht; eine Instanz kann eine Google-Anmeldung verlangen, dann folgen einem die eigenen Turniere auch auf ein anderes Gerät.
 
-        Auf der Bühne steht immer genau ein Widget: Turnierkarte, Teilnehmerliste, Bracket, Tabelle, Turnierliste oder die Links. Ohne mich gehen dort: Turnier anlegen und seine Einstellungen ändern, Teilnehmer eintragen und streichen, im Doppel Teams aus einzelnen Spielern auslosen, auslosen und die Auslosung zurücknehmen, ein Match antippen und im Ergebnisfenster Sätze, Nichtantreten, Aufgabe eintragen oder das Ergebnis löschen, Turnier löschen, Links kopieren und teilen, über „Turniere“ in der Kopfzeile die eigene Liste öffnen.
+        Auf der Bühne steht immer genau ein Widget: Turnierkarte, Teilnehmerliste, Bracket, Tabelle, Turnierliste oder die Links. Ohne mich gehen dort: Turnier anlegen und seine Einstellungen ändern, Teilnehmer eintragen und streichen, im Doppel Teams aus einzelnen Spielern auslosen, auslosen und die Auslosung zurücknehmen, ein Match antippen und live zählen (Punkt oder Spiel je Seite, Rückgängig) oder das ganze Ergebnis mit Sätzen, Nichtantreten oder Aufgabe eintragen oder löschen, Turnier löschen, Links kopieren und teilen, über „Turniere“ in der Kopfzeile die eigene Liste öffnen.
+
+        Gespräche: Zu jedem Turnier gibt es ein eigenes Gespräch. Wer ein anderes Turnier öffnet, landet in dessen Gespräch; ein Gespräch ohne Turnier gehört dem Turnier, das darin angelegt wird. Über „Chat löschen“ in der Kopfzeile lässt sich das Gespräch leeren — das Turnier selbst bleibt dabei unberührt.
         </anwendung>
 
         <modi>
@@ -55,12 +57,13 @@ internal static class Knowledge
         - Spiel: 15, 30, 40, Spiel. Bei 40:40 ist Einstand, dann braucht es Vorteil und den nächsten Punkt, also zwei Punkte Vorsprung.
         - Satz: sechs Spiele mit zwei Spielen Vorsprung. Bei 6:6 ein Tiebreak bis 7 Punkte mit zwei Vorsprung, notiert als 7:6.
         - Match: so viele Gewinnsätze, wie das Format sagt. Ein Match-Tiebreak bis 10 ersetzt den letzten Satz, wenn das Format es so vorsieht.
-        - Doppel: zwei gegen zwei, das Feld ist um die Korridore breiter, Aufschlag- und Rückschlagreihenfolge stehen je Satz fest. Gezählt wird wie im Einzel. MATCHDAY erfasst nur Ergebnisse — wer wann aufschlägt, entscheidet der Platz.
+        - Doppel: zwei gegen zwei, das Feld ist um die Korridore breiter, Aufschlag- und Rückschlagreihenfolge stehen je Satz fest. Gezählt wird wie im Einzel. MATCHDAY zählt Punkte, Spiele und Sätze mit — wer wann aufschlägt, entscheidet der Platz.
         </spielregeln>
 
         <grenzen>
         - Höchstens 64 Teilnehmer beziehungsweise Teams.
-        - Nach der Auslosung lassen sich Teilnehmer, Modus, Disziplin und Satzformat nicht mehr ändern; dafür erst die Auslosung zurücknehmen.
+        - Hat das Turnier begonnen (ein Punkt gezählt oder ein Ergebnis eingetragen), lassen sich Teilnehmer, Modus, Disziplin und Satzformat nicht mehr ändern; dafür erst die Ergebnisse oder die Auslosung zurücknehmen.
+        - Live mitzählen geht nicht auf ein Match, das schon ein eingetragenes Ergebnis hat — erst das Ergebnis löschen.
         - Die Disziplin lässt sich nur wechseln, solange niemand eingetragen ist: ein Einzelname ist kein Team.
         - Jeder Teilnehmername kommt einmal vor; im Doppel darf ein Spieler nur in einem Team stehen.
         - Ein gelöschtes Turnier ist weg. Ergebnisse lassen sich einzeln zurücknehmen, die Auslosung nur ganz.

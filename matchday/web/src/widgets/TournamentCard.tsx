@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, type MatchView, type TournamentView } from '../api'
-import { dateText, disciplineText, modeText, stateText } from '../format'
+import { dateText, disciplineText, hasBegun, modeText, stateText } from '../format'
 import { Bracket } from './Bracket'
 import { ParticipantList } from './ParticipantList'
 import { Standings } from './Standings'
@@ -57,6 +57,9 @@ export function TournamentCard({
       ) : (
         <Standings view={view} onOpen={onOpen} embedded />
       )}
+
+      {/* Ausgelost, aber noch nicht gespielt: Die Liste lässt sich noch ändern. */}
+      {admin && view.state !== 'Setup' && !hasBegun(view) && <ParticipantList view={view} admin={admin} act={act} embedded />}
     </section>
   )
 }
@@ -79,6 +82,8 @@ function TournamentSettings({ view, act, onDeleted }: { view: TournamentView; ac
   const changes = changesBetween(server, draft)
   const dirty = Object.keys(changes).length > 0
   const drawn = view.state !== 'Setup'
+  // Fest ist der Rahmen erst, wenn gespielt wird — bis dahin wird neu gelost.
+  const started = hasBegun(view)
 
   return (
     <div className="card__section">
@@ -86,9 +91,10 @@ function TournamentSettings({ view, act, onDeleted }: { view: TournamentView; ac
       <TournamentForm
         draft={draft}
         onChange={(next) => setEdit({ base: server, draft: next })}
-        locked={drawn}
+        locked={started}
         disciplineLocked={view.participants.length > 0}
       />
+      {drawn && !started && <p className="field__note">Schon ausgelost, aber noch kein Punkt gespielt: Ein neuer Modus lost neu aus, das Format ändert keine Paarung.</p>}
 
       <div className="actions">
         <span className="spacer" />

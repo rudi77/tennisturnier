@@ -83,6 +83,22 @@ public sealed class Tournament
     /// <summary>Der geheime Teil des Verwalterlinks. Wer ihn hat, darf alles.</summary>
     public string AdminToken { get; private set; }
 
+    /// <summary>
+    /// Der geheime Teil des Eintragen-Links: Wer ihn hat, darf Spielstände und
+    /// Ergebnisse eintragen, sonst nichts. Er ist aus dem Verwaltertoken
+    /// abgeleitet und nicht gespeichert — so wird er mit dem Verwalterlink
+    /// zusammen rotiert, und aus ihm lässt sich der Verwalterlink nicht
+    /// zurückrechnen.
+    /// </summary>
+    public string ScorerToken => Derive("matchday-scorer:" + AdminToken);
+
+    /// <summary>
+    /// Ob gespielt wird: Sobald ein Match einen Punkt oder ein Ergebnis hat,
+    /// stehen Teilnehmer, Modus und Format fest. Bis dahin ist auch ein
+    /// ausgelostes Turnier noch zu ändern — die Auslosung wird dann neu gemacht.
+    /// </summary>
+    public bool IsStarted => _matches.Any(m => m.HasBegun);
+
     public DateTimeOffset CreatedAt { get; }
 
     public IReadOnlyList<Participant> Participants => _participants;
@@ -126,11 +142,7 @@ public sealed class Tournament
 
     public void SetLocation(string? location) => Location = CleanOptional(location);
 
-    public void SetMode(Mode mode)
-    {
-        RequireSetup("Der Modus");
-        Mode = mode;
-    }
+    public void SetMode(Mode mode) => Change("Der Modus", () => Mode = mode);
 
     /// <summary>
     /// Einzel oder Doppel. Der Wechsel geht nur mit leerer Teilnehmerliste: Ein
@@ -139,7 +151,7 @@ public sealed class Tournament
     /// </summary>
     public void SetDiscipline(Discipline discipline)
     {
-        RequireSetup("Die Disziplin");
+        RequireNotStarted("Die Disziplin");
 
         if (discipline != Discipline && _participants.Count > 0)
         {
@@ -154,8 +166,10 @@ public sealed class Tournament
     public void SetFormat(MatchFormat format)
     {
         ArgumentNullException.ThrowIfNull(format);
-        RequireSetup("Das Satzformat");
+        RequireNotStarted("Das Satzformat");
         format.Validate();
+
+        // Die Paarungen hängen nicht am Format: Neu gelost wird dafür nicht.
         Format = format;
     }
 
@@ -169,7 +183,13 @@ public sealed class Tournament
     /// </summary>
     public Participant AddParticipant(string name)
     {
-        RequireSetup("Die Teilnehmerliste");
+        Participant? added = null;
+        Change("Die Teilnehmerliste", () => added = Enter(name));
+        return added!;
+    }
+
+    private Participant Enter(string name)
+    {
         var players = Lineups.Split(RequireText(name, "Der Name")).Select(CleanName).ToList();
         RequireLineup(players);
 
@@ -240,7 +260,7 @@ public sealed class Tournament
     public IReadOnlyList<Participant> AddRandomTeams(IReadOnlyList<string> players, Random? random = null)
     {
         ArgumentNullException.ThrowIfNull(players);
-        RequireSetup("Die Teilnehmerliste");
+        RequireNotStarted("Die Teilnehmerliste");
 
         if (Discipline != Discipline.Doubles)
         {
@@ -296,23 +316,25 @@ public sealed class Tournament
 
         var teams = new List<Participant>();
 
-        for (var i = 0; i < names.Count; i += 2)
+        Change("Die Teilnehmerliste", () =>
         {
-            teams.Add(AddParticipant(Lineups.Compose([names[i], names[i + 1]])));
-        }
+            for (var i = 0; i < names.Count; i += 2)
+            {
+                teams.Add(Enter(Lineups.Compose([names[i], names[i + 1]])));
+            }
+        });
 
         return teams;
     }
 
     public void RemoveParticipant(Guid participantId)
     {
-        RequireSetup("Die Teilnehmerliste");
-        var removed = _participants.RemoveAll(p => p.Id == participantId);
-
-        if (removed == 0)
+        if (_participants.All(p => p.Id != participantId))
         {
             throw new DomainException("Diesen Teilnehmer gibt es nicht.");
         }
+
+        Change("Die Teilnehmerliste", () => _participants.RemoveAll(p => p.Id == participantId));
     }
 
     /// <summary>
@@ -345,7 +367,10 @@ public sealed class Tournament
     /// </summary>
     public void Draw(Random? random = null)
     {
-        RequireSetup("Die Auslosung");
+        if (State != TournamentState.Setup)
+        {
+            throw new DomainException("Es ist schon ausgelost. Wer neu losen will, nimmt die Auslosung erst zurück.");
+        }
 
         if (_participants.Count < 2)
         {
@@ -385,9 +410,19 @@ public sealed class Tournament
         _matches.FirstOrDefault(m => m.Id == matchId)
         ?? throw new DomainException("Dieses Match gibt es nicht.");
 
+    /// <summary>
+    /// Trägt ein ganzes Ergebnis ein. Was bis dahin live mitgezählt wurde, ist
+    /// damit ersetzt: Das Ergebnis ist, was jemand ausdrücklich gesagt hat.
+    /// </summary>
     public void RecordResult(Guid matchId, Score score)
     {
         ArgumentNullException.ThrowIfNull(score);
+        Settle(matchId, score);
+        FindMatch(matchId).SetLive(null);
+    }
+
+    private void Settle(Guid matchId, Score score)
+    {
         RequireDrawn();
 
         var match = FindMatch(matchId);
@@ -420,7 +455,14 @@ public sealed class Tournament
         State = _matches.All(m => m.Status == MatchStatus.Finished) ? TournamentState.Completed : TournamentState.Running;
     }
 
+    /// <summary>Nimmt ein Ergebnis zurück — und mit ihm, was live dazu gezählt wurde.</summary>
     public void ClearResult(Guid matchId)
+    {
+        Unsettle(matchId);
+        FindMatch(matchId).SetLive(null);
+    }
+
+    private void Unsettle(Guid matchId)
     {
         RequireDrawn();
         var match = FindMatch(matchId);
@@ -449,6 +491,76 @@ public sealed class Tournament
         }
 
         State = TournamentState.Running;
+    }
+
+    // --- Live ------------------------------------------------------------
+
+    /// <summary>
+    /// Ein Punkt oder ein Spiel während des Matches. Ist das Match damit
+    /// entschieden, steht das Ergebnis — so, als hätte es jemand eingetragen.
+    /// </summary>
+    public LiveState ScoreLive(Guid matchId, LiveEvent liveEvent)
+    {
+        ArgumentNullException.ThrowIfNull(liveEvent);
+        RequireDrawn();
+        var match = FindMatch(matchId);
+
+        if (match.IsBye)
+        {
+            throw new DomainException($"{Describe(match)} ist ein Freilos, da wird nicht gespielt.");
+        }
+
+        if (match.Status == MatchStatus.Pending)
+        {
+            throw new DomainException($"{Describe(match)}: die Gegner stehen noch nicht fest.");
+        }
+
+        if (match.Score is not null && match.Live is null)
+        {
+            throw new DomainException($"{Describe(match)} hat schon ein Ergebnis. Erst zurücknehmen, dann live zählen.");
+        }
+
+        var events = new List<LiveEvent>(match.Live ?? []) { liveEvent };
+        var state = LiveScoring.Replay(events, Format);
+        match.SetLive(events);
+
+        if (state.WinnerSide is not null)
+        {
+            Settle(match.Id, Score.Played(state.CompletedSets, Format));
+        }
+
+        return state;
+    }
+
+    /// <summary>
+    /// Nimmt das letzte Live-Ereignis zurück. War das Match damit entschieden,
+    /// ist das Ergebnis wieder weg — sofern das Folgematch noch keines hat.
+    /// </summary>
+    public LiveState UndoLive(Guid matchId)
+    {
+        RequireDrawn();
+        var match = FindMatch(matchId);
+
+        if (match.Live is not { } events)
+        {
+            throw new DomainException($"{Describe(match)}: hier wurde nichts live gezählt.");
+        }
+
+        if (match.Score is not null)
+        {
+            Unsettle(match.Id);
+        }
+
+        var rest = events.Take(events.Count - 1).ToList();
+        match.SetLive(rest);
+        return LiveScoring.Replay(rest, Format);
+    }
+
+    /// <summary>Der laufende Stand eines Matches — oder null, wenn niemand mitzählt.</summary>
+    public LiveState? LiveStateOf(Match match)
+    {
+        ArgumentNullException.ThrowIfNull(match);
+        return match.Live is { } events ? LiveScoring.Replay(events, Format) : null;
     }
 
     // --- Tabelle ----------------------------------------------------------
@@ -560,7 +672,8 @@ public sealed class Tournament
             m.Label,
             m.Side1,
             m.Side2,
-            m.Score is null ? null : new ScoreSnapshot(m.Score.Outcome, m.Score.WinnerSide, m.Score.CompletedSets, m.Score.AbandonedSet)))
+            m.Score is null ? null : new ScoreSnapshot(m.Score.Outcome, m.Score.WinnerSide, m.Score.CompletedSets, m.Score.AbandonedSet),
+            m.Live))
         .ToList());
 
     public static Tournament FromSnapshot(TournamentSnapshot snapshot)
@@ -587,7 +700,8 @@ public sealed class Tournament
                 m.Label,
                 m.Side1,
                 m.Side2,
-                m.Score is null ? null : Score.Rehydrate(m.Score.Outcome, m.Score.WinnerSide, m.Score.CompletedSets, m.Score.AbandonedSet)))
+                m.Score is null ? null : Score.Rehydrate(m.Score.Outcome, m.Score.WinnerSide, m.Score.CompletedSets, m.Score.AbandonedSet),
+                m.Live))
             .ToList());
     }
 
@@ -604,11 +718,38 @@ public sealed class Tournament
 
     private IEnumerable<Match> Dependents(Match match) => _matches.Where(m => m.DependsOn(match.Id));
 
-    private void RequireSetup(string what)
+    /// <summary>
+    /// Eine Änderung an dem, was die Auslosung trägt. Vor der Auslosung geht sie
+    /// einfach; danach, solange noch niemand gespielt hat, wird neu gelost —
+    /// die alten Paarungen passten nicht mehr zur neuen Liste oder zum neuen
+    /// Modus. Reichen die Teilnehmer dafür nicht mehr, bleibt es bei der
+    /// Vorbereitung.
+    /// </summary>
+    private void Change(string what, Action change)
     {
-        if (State != TournamentState.Setup)
+        RequireNotStarted(what);
+        var drawn = State != TournamentState.Setup;
+
+        if (drawn)
         {
-            throw new DomainException($"{what} lässt sich nach der Auslosung nicht mehr ändern. Erst die Auslosung zurücknehmen.");
+            _matches.Clear();
+            State = TournamentState.Setup;
+        }
+
+        change();
+
+        if (drawn && _participants.Count >= 2)
+        {
+            Draw();
+        }
+    }
+
+    private void RequireNotStarted(string what)
+    {
+        if (IsStarted)
+        {
+            throw new DomainException(
+                $"{what} lässt sich nicht mehr ändern: Das Turnier hat begonnen, es steht schon ein Spielstand. Erst die Ergebnisse zurücknehmen oder die Auslosung zurücknehmen.");
         }
     }
 
@@ -643,6 +784,12 @@ public sealed class Tournament
         }
 
         return text.Trim();
+    }
+
+    private static string Derive(string text)
+    {
+        var hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text));
+        return Convert.ToBase64String(hash, 0, 16).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
     private static string NewToken()

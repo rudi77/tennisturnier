@@ -11,7 +11,7 @@ export type ChatEvent =
   | { type: 'tool'; data: { name: string; input: unknown } }
   | { type: 'widget'; data: WidgetEvent }
   | { type: 'error'; data: { message: string } }
-  | { type: 'done'; data: { sessionId: string; tournamentId: string | null } }
+  | { type: 'done'; data: { sessionId: string; tournamentId: string | null; activeTournamentId?: string | null } }
 
 export interface WidgetEvent {
   widget: string

@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChatScreen } from './ChatScreen'
 import { PublicScreen } from './PublicScreen'
+import { ScorerScreen } from './ScorerScreen'
 import { SignIn } from './SignIn'
 import { api } from './api'
 import { ABGEMELDET, abgelaufen, idToken, kontoAus, rememberToken, type AuthConfig } from './auth'
 
 /**
- * Zwei Adressen, kein Router: `?t=<id>` ist der Mitschau-Link für alle,
- * `?a=<token>` der Verwalterlink. Alles andere ist das Gespräch.
+ * Drei Adressen, kein Router: `?t=<id>` ist der Mitschau-Link für alle,
+ * `?s=<token>` der Eintragen-Link für Mitspieler, `?a=<token>` der
+ * Verwalterlink. Alles andere ist das Gespräch.
  *
  * Davor liegt die Frage, ob eine Anmeldung verlangt wird. Sie gilt nicht für
  * das Mitschauen: Zuschauer haben kein Konto und sollen keins brauchen
@@ -76,6 +78,10 @@ export function App() {
     return <SignIn clientId={auth.googleClientId} onToken={anmelden} />
   }
 
+  // Der Eintragen-Link verlangt, wie der Verwalterlink, die Anmeldung der
+  // Instanz — er schreibt, anders als das Mitschauen.
+  if (route.scorerToken) return <ScorerScreen token={route.scorerToken} />
+
   return <ChatScreen adminToken={route.adminToken} />
 }
 
@@ -115,5 +121,5 @@ function gültigesToken(): string | null {
 
 function read() {
   const params = new URLSearchParams(window.location.search)
-  return { publicId: params.get('t'), adminToken: params.get('a') }
+  return { publicId: params.get('t'), adminToken: params.get('a'), scorerToken: params.get('s') }
 }
