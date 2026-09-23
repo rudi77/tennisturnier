@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { api, type MatchView, type TournamentView } from '../api'
+import { useNow } from '../device'
 import { countdown, dateText, disciplineText, hasBegun, modeText, stateText } from '../format'
 import { Bracket } from './Bracket'
 import { ParticipantList } from './ParticipantList'
@@ -27,16 +28,7 @@ export function TournamentHeader({ view }: { view: TournamentView }) {
  * und der Live-Kanal bringt den Start auf jedes Gerät.
  */
 function Countdown({ view }: { view: TournamentView }) {
-  const [now, setNow] = useState(() => new Date())
-  const left = countdown(view, now)
-  const ticking = left !== null && !left.due
-
-  useEffect(() => {
-    if (!ticking) return
-    const timer = window.setInterval(() => setNow(new Date()), 1000)
-    return () => window.clearInterval(timer)
-  }, [ticking])
-
+  const left = countdown(view, useNow(counting(view)))
   if (!left) return null
   return <p className={`countdown${left.due ? ' countdown--due' : ''}`}>{left.text}</p>
 }
@@ -72,14 +64,7 @@ export function TournamentCard({
       {admin && settings && <TournamentSettings view={view} act={act} onDeleted={onDeleted} />}
 
       {/* Ausgelost, noch nicht gestartet: Der Anpfiff ist ein eigener Schritt (ADR-0024). */}
-      {admin && view.state === 'Running' && !hasBegun(view) && (
-        <div className="actions actions--start">
-          <button type="button" className="button button--primary" onClick={() => void act(() => api.start(view.id))}>
-            Turnier starten
-          </button>
-          <span className="muted">Erst danach wird gezählt, und Teilnehmer und Modus stehen fest.</span>
-        </div>
-      )}
+      {admin && view.state === 'Running' && !hasBegun(view) && <StartControl view={view} act={act} />}
 
       {view.state === 'Setup' ? (
         <ParticipantList view={view} admin={admin} act={act} embedded />
@@ -92,6 +77,44 @@ export function TournamentCard({
       {/* Ausgelost, aber noch nicht gespielt: Die Liste lässt sich noch ändern. */}
       {admin && view.state !== 'Setup' && !hasBegun(view) && <ParticipantList view={view} admin={admin} act={act} embedded />}
     </section>
+  )
+}
+
+/** Ob es überhaupt etwas zu zählen gibt — sonst muss keine Uhr ticken. */
+const counting = (view: TournamentView) => view.date !== null && !hasBegun(view) && view.state !== 'Completed'
+
+/**
+ * Der Anpfiff, mit Rückfrage: Zurück geht er nur mit der Auslosung, und die
+ * lost neu. Ist die Startzeit da, drängt sich der Knopf vor — der Countdown
+ * steht dann auf „Gleich geht's los“ und wartet auf genau diesen Tipp.
+ */
+function StartControl({ view, act }: { view: TournamentView; act: Act }) {
+  const [asking, setAsking] = useState(false)
+  const due = countdown(view, useNow(counting(view)))?.due ?? false
+
+  if (asking) {
+    return (
+      <div className="actions actions--start">
+        <span className="muted">Jetzt starten? Danach stehen Teilnehmer und Modus fest.</span>
+        <button type="button" className="button button--primary" onClick={() => { setAsking(false); void act(() => api.start(view.id)) }}>
+          Ja, starten
+        </button>
+        <button type="button" className="button" onClick={() => setAsking(false)}>
+          Abbrechen
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`actions actions--start${due ? ' start--due' : ''}`}>
+      <button type="button" className={`button button--primary${due ? ' button--pulse' : ''}`} onClick={() => setAsking(true)}>
+        Turnier starten
+      </button>
+      <span className="muted">
+        {due ? 'Die Startzeit ist da — alle warten auf den Anpfiff.' : 'Die Matches lassen sich erst nach dem Start antippen und zählen.'}
+      </span>
+    </div>
   )
 }
 

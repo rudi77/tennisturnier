@@ -376,6 +376,11 @@ a { color: var(--accent); }
 .button--wrap { white-space: normal; text-align: left; }
 .button:disabled { opacity: 0.45; cursor: default; }
 .button--primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 600; }
+.button--pulse { animation: anpfiff 1.6s ease-in-out infinite; }
+@keyframes anpfiff { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 0 0 8px transparent; } }
+@media (prefers-reduced-motion: reduce) { .button--pulse { animation: none; } }
+.start--due .muted { color: var(--accent); font-weight: 600; }
+.stage__hint { margin: 0 0 8px; font-size: 0.9rem; }
 .button--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; justify-content: flex-end; }

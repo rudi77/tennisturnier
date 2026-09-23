@@ -121,7 +121,7 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
         </div>
       )}
       {!setup && started && <p className="muted">Es wird gespielt — die Liste ist fest.</p>}
-      {!setup && !started && admin && <p className="field__note">Ausgelost, aber noch kein Punkt gespielt: Wer dazukommt oder gestrichen wird, wird mitgelost — die Auslosung wird neu gemacht.</p>}
+      {!setup && !started && admin && <p className="field__note">Ausgelost, aber noch nicht gestartet: Wer dazukommt oder gestrichen wird, wird mitgelost — die Auslosung wird neu gemacht.</p>}
     </>
   )
 

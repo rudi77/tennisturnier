@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { LiveAction, MatchView, ResultRequest, TournamentView } from '../api'
+import { tick, useWakeLock } from '../device'
 import { setColumns } from '../format'
 import { ResultEditor } from './ResultEditor'
 
@@ -36,6 +37,9 @@ export function LiveScorer({
   // kommt die neue Sicht über die Live-Verbindung und steht sofort hier.
   const match = view.matches.find((m) => m.id === matchId)
 
+  // Solange gezählt werden kann, bleibt der Bildschirm an.
+  useWakeLock(match !== undefined && match.status !== 'Finished')
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !whole && onClose()
     window.addEventListener('keydown', onKey)
@@ -49,6 +53,7 @@ export function LiveScorer({
   }
 
   async function step(action: LiveAction, side?: 1 | 2) {
+    tick()
     setBusy(true)
     setError(null)
     try {
