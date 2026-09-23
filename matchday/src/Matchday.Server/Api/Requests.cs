@@ -73,5 +73,11 @@ public enum LiveAction
     Undo,
 }
 
-/// <summary>Ein Schritt während des Matches. <c>Side</c> braucht es nur für Punkt und Spiel.</summary>
-public sealed record LiveRequest(LiveAction Action, int Side = 0);
+/// <summary>
+/// Ein Schritt während des Matches. <c>Side</c> braucht es nur für Punkt und
+/// Spiel. <c>After</c> sagt, wie viele Schritte das Match hatte, als der
+/// Schritt getippt wurde: Stimmt das nicht mehr, war ein anderes Handy
+/// schneller — oder ein nachgeschickter Schritt ist schon angekommen, und
+/// seine Antwort ging unterwegs verloren. In beiden Fällen gilt er nicht.
+/// </summary>
+public sealed record LiveRequest(LiveAction Action, int Side = 0, int? After = null);

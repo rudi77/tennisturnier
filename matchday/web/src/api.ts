@@ -275,8 +275,8 @@ export const api = {
   clearResult: (id: string, matchId: string) =>
     call<Scored>('DELETE', `/api/tournaments/${id}/matches/${matchId}/result`, undefined, id),
   /** Ein Punkt, ein Spiel oder ein Schritt zurück — während gespielt wird. */
-  live: (id: string, matchId: string, action: LiveAction, side?: 1 | 2) =>
-    call<Scored>('POST', `/api/tournaments/${id}/matches/${matchId}/live`, side ? { action, side } : { action }, id),
+  live: (id: string, matchId: string, action: LiveAction, side?: 1 | 2, after?: number) =>
+    call<Scored>('POST', `/api/tournaments/${id}/matches/${matchId}/live`, { action, ...(side ? { side } : {}), ...(after === undefined ? {} : { after }) }, id),
   byScorer: (token: string) => call<ScorerAccess>('GET', `/api/tournaments/by-scorer/${encodeURIComponent(token)}`),
   remove: (id: string) => call<void>('DELETE', `/api/tournaments/${id}`, undefined, id),
   session: (sessionId: string) => call<Transcript>('GET', `/api/chat/${sessionId}`),

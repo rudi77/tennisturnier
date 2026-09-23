@@ -32,6 +32,7 @@ noch einmal von vorn beginnt.
 | [0023](0023-freigabeliste.md) | Eine Freigabeliste hinter der Anmeldung | Accepted |
 | [0024](0024-countdown-und-ausdruecklicher-start.md) | Ein Countdown, und der Start ist ein eigener Schritt | Accepted |
 | [0025](0025-sitzung-statt-google-token.md) | Eine Sitzung statt des Google-Tokens | Accepted |
+| [0026](0026-zaehlen-ohne-netz.md) | Zählen ohne Netz, und nichts zählt doppelt | Accepted |
 
 ## Status
 

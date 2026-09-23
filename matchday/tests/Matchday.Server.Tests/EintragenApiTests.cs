@@ -66,6 +66,19 @@ public sealed class EintragenApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Ein_ueberholter_Schritt_kommt_als_409_zurueck()
+    {
+        var (id, match, _) = await Ausgelost();
+        var rudi = Client("browser-rudi");
+
+        (await rudi.PostAsJsonAsync($"/api/tournaments/{id}/matches/{match}/live", new { action = "Point", side = 1, after = 0 })).EnsureSuccessStatusCode();
+        var zweimal = await rudi.PostAsJsonAsync($"/api/tournaments/{id}/matches/{match}/live", new { action = "Point", side = 1, after = 0 });
+
+        Assert.Equal(HttpStatusCode.Conflict, zweimal.StatusCode);
+        Assert.Contains("geändert", (await zweimal.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+    }
+
+    [Fact]
     public async Task Mit_dem_Eintragen_Link_zaehlt_jeder_mit_aber_verwaltet_nicht()
     {
         var (id, match, scorerUrl) = await Ausgelost();

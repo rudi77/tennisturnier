@@ -82,6 +82,24 @@ public sealed class LiveZaehlenTests : IDisposable
     }
 
     [Fact]
+    public async Task Ein_Schritt_auf_altem_Stand_gilt_nicht()
+    {
+        // Zwei Handys am selben Match, oder ein nachgeschickter Schritt, dessen
+        // Antwort verloren ging: Wer auf einem Stand zählt, den es nicht mehr
+        // gibt, zählt nicht mit.
+        var (t, match) = await Ausgelost(MatchFormat.Standard);
+
+        await _a.Actions.LiveAsync(_a.Rudi, t.Id, match, new LiveRequest(LiveAction.Point, 1, After: 0));
+        await _a.Actions.LiveAsync(_a.Rudi, t.Id, match, new LiveRequest(LiveAction.Point, 2, After: 1));
+
+        await Assert.ThrowsAsync<ConflictException>(() => _a.Actions.LiveAsync(_a.Rudi, t.Id, match, new LiveRequest(LiveAction.Point, 2, After: 1)));
+        await Assert.ThrowsAsync<ConflictException>(() => _a.Actions.LiveAsync(_a.Rudi, t.Id, match, new LiveRequest(LiveAction.Undo, After: 3)));
+
+        var stand = await _a.Actions.LiveAsync(_a.Rudi, t.Id, match, new LiveRequest(LiveAction.Undo, After: 2));
+        Assert.Single(stand.FindMatch(match).Live!);
+    }
+
+    [Fact]
     public async Task Ein_unbekannter_Schritt_wird_abgewiesen()
     {
         var (t, match) = await Ausgelost(MatchFormat.Standard);

@@ -80,7 +80,7 @@ export function Widget({
       view={view}
       matchId={editing}
       onClose={() => setEditing(null)}
-      onLive={async (action, side) => apply(await api.live(view.id, editing, action, side))}
+      apply={apply}
       onSave={async (result) => apply(await api.recordResult(view.id, editing, result))}
       onClear={async () => apply(await api.clearResult(view.id, editing))}
     />

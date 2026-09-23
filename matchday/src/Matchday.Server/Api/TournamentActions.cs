@@ -141,6 +141,11 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
         ArgumentNullException.ThrowIfNull(request);
         return MutateAsync(actor, id, t =>
         {
+            if (request.After is { } after && (t.FindMatch(matchId).Live?.Count ?? 0) != after)
+            {
+                throw new ConflictException("Der Stand hat sich inzwischen geändert — da hat jemand anderes mitgezählt.");
+            }
+
             switch (request.Action)
             {
                 case LiveAction.Undo:

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api, subscribeLive, type Scored, type TournamentView } from './api'
 import { rememberScorerToken } from './client'
 import { Mark } from './Mark'
@@ -48,7 +48,7 @@ export function ScorerScreen({ token }: { token: string }) {
     }
   }, [token])
 
-  const take = (scored: Scored) => setView(scored.tournament)
+  const take = useCallback((scored: Scored) => setView(scored.tournament), [])
   const started = (view?.startedAt ?? null) !== null
   const onOpen = view && view.state !== 'Setup' && started ? (match: { id: string }) => setEditing(match.id) : null
 
@@ -86,7 +86,7 @@ export function ScorerScreen({ token }: { token: string }) {
                 view={view}
                 matchId={editing}
                 onClose={() => setEditing(null)}
-                onLive={async (action, side) => take(await api.live(view.id, editing, action, side))}
+                apply={take}
                 onSave={async (result) => take(await api.recordResult(view.id, editing, result))}
                 onClear={async () => take(await api.clearResult(view.id, editing))}
               />
