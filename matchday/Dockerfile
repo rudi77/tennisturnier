@@ -35,6 +35,9 @@ COPY --from=build /app ./
 # überlebt die Datenbank den nächsten Start nicht.
 RUN mkdir -p /data
 ENV ConnectionStrings__Default="Data Source=/data/matchday.db"
+# Die Schlüssel des Sitzungs-Cookies gehören ebenfalls auf den Datenträger —
+# sonst ist nach jedem Deploy jede Anmeldung ungültig (ADR-0025).
+ENV Auth__KeysPath=/data/keys
 EXPOSE 8080
 
 # Den Port gibt die Plattform über PORT vor; 8080 ist der Rückfall für einen

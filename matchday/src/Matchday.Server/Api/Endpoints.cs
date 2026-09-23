@@ -233,14 +233,12 @@ public static class Endpoints
         return $"google:{subject}";
     }
 
-    internal static string BaseUrl(HttpContext http)
-    {
-        var forwardedProto = http.Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
-        var forwardedHost = http.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
-        var scheme = string.IsNullOrEmpty(forwardedProto) ? http.Request.Scheme : forwardedProto;
-        var host = string.IsNullOrEmpty(forwardedHost) ? http.Request.Host.Value : forwardedHost;
-        return $"{scheme}://{host}";
-    }
+    /// <summary>
+    /// Die Adresse, unter der die Instanz von außen erreichbar ist. Was der
+    /// Proxy davor weiterreicht, hat die Middleware in Program.cs schon in
+    /// Schema und Host übernommen.
+    /// </summary>
+    internal static string BaseUrl(HttpContext http) => $"{http.Request.Scheme}://{http.Request.Host}";
 
     /// <summary>Was die Verwaltung bekommt: die Sicht plus die beiden Links.</summary>
     private static object Admin(Tournament t, HttpContext http) => new AdminView(

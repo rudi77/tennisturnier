@@ -4,7 +4,7 @@ import { PublicScreen } from './PublicScreen'
 import { ScorerScreen } from './ScorerScreen'
 import { SignIn } from './SignIn'
 import { api } from './api'
-import { ABGEMELDET, abgelaufen, idToken, kontoAus, rememberToken, type AuthConfig } from './auth'
+import { ABGEMELDET, type AuthConfig, type Konto } from './auth'
 
 /**
  * Drei Adressen, kein Router: `?t=<id>` ist der Mitschau-Link für alle,
@@ -18,7 +18,8 @@ import { ABGEMELDET, abgelaufen, idToken, kontoAus, rememberToken, type AuthConf
 export function App() {
   const [route, setRoute] = useState(read)
   const [auth, setAuth] = useState<AuthConfig | null>(null)
-  const [token, setToken] = useState<string | null>(() => gültigesToken())
+  // undefined heißt: noch nicht gefragt; null: keine Sitzung.
+  const [konto, setKonto] = useState<Konto | null | undefined>(undefined)
   const [fehler, setFehler] = useState('')
 
   useEffect(() => {
@@ -27,10 +28,10 @@ export function App() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  // Läuft das Token mitten im Gespräch ab, meldet die API das einmal — und
-  // hier landet man wieder auf der Anmeldung statt in einer Reihe von 401ern.
+  // Trägt die Sitzung nicht mehr, meldet die API das einmal — und hier landet
+  // man wieder auf der Anmeldung statt in einer Reihe von 401ern.
   useEffect(() => {
-    const abmelden = () => setToken(null)
+    const abmelden = () => setKonto(null)
     window.addEventListener(ABGEMELDET, abmelden)
     return () => window.removeEventListener(ABGEMELDET, abmelden)
   }, [])
@@ -45,8 +46,12 @@ export function App() {
 
     api
       .authConfig()
-      .then((config) => {
-        if (!abgebrochen) setAuth(config)
+      .then(async (config) => {
+        // Steht die Sitzung noch? Das Cookie liest kein Skript, also fragen.
+        const ich = config.required ? await api.me().catch(() => null) : null
+        if (abgebrochen) return
+        setKonto(ich)
+        setAuth(config)
       })
       .catch(() => {
         // Antwortet der Server nicht, ist offen, ob eine Anmeldung nötig wäre.
@@ -62,25 +67,28 @@ export function App() {
     }
   }, [mitschauen])
 
-  // Angemeldet ist noch nicht freigegeben (ADR-0023): Erst fragen, ob das
-  // Konto hier trägt — sonst stünde man mit gültigem Token vor lauter 403ern.
-  const anmelden = useCallback((neues: string) => {
-    rememberToken(neues)
+  // Das Google-Token wird gleich eingelöst. Ein Konto, das nicht freigegeben
+  // ist (ADR-0023), bekommt dabei keine Sitzung, sondern einen Satz, warum.
+  const anmelden = useCallback((credential: string) => {
     setFehler('')
     api
-      .checkAccount()
-      .then(() => setToken(neues))
-      .catch((e: Error) => {
-        rememberToken(null)
-        setFehler(e.message)
-      })
+      .signIn(credential)
+      .then(setKonto)
+      .catch((e: Error) => setFehler(e.message))
+  }, [])
+
+  const abmelden = useCallback(() => {
+    void api
+      .logout()
+      .catch(() => undefined)
+      .then(() => setKonto(null))
   }, [])
 
   if (mitschauen) return <PublicScreen tournamentId={route.publicId!} />
 
   if (auth === null) return <Lade />
 
-  if (auth.required && token === null) {
+  if (auth.required && !konto) {
     if (!auth.googleClientId) {
       return <Hinweis text={fehler || 'Für diese Instanz ist eine Anmeldung verlangt, aber keine Google-Client-Id hinterlegt.'} />
     }
@@ -91,7 +99,7 @@ export function App() {
   // Instanz — er schreibt, anders als das Mitschauen.
   if (route.scorerToken) return <ScorerScreen token={route.scorerToken} />
 
-  return <ChatScreen adminToken={route.adminToken} />
+  return <ChatScreen adminToken={route.adminToken} konto={konto ?? null} onAbmelden={abmelden} />
 }
 
 function Lade() {
@@ -112,20 +120,6 @@ function Hinweis({ text }: { text: string }) {
       </div>
     </div>
   )
-}
-
-/** Ein abgelaufenes Token ist so gut wie keins — es gäbe nur 401er. */
-function gültigesToken(): string | null {
-  const vorhanden = idToken()
-  if (!vorhanden) return null
-
-  const konto = kontoAus(vorhanden)
-  if (konto === null || abgelaufen(konto)) {
-    rememberToken(null)
-    return null
-  }
-
-  return vorhanden
 }
 
 function read() {

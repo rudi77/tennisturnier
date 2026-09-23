@@ -5,7 +5,10 @@ using Matchday.Server.Api;
 using Matchday.Server.Auth;
 using Matchday.Server.Live;
 using Matchday.Server.Storage;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 
@@ -48,8 +51,34 @@ if (!auth.IsConfigured)
 
 if (auth.Required)
 {
+    // Die Schlüssel, mit denen das Sitzungs-Cookie verschlüsselt ist. Lägen sie
+    // im Container, wäre nach jedem Deploy jede Sitzung ungültig — sie gehören
+    // auf den Datenträger neben die Datenbank.
+    var protection = builder.Services.AddDataProtection().SetApplicationName("matchday");
+
+    if (!string.IsNullOrWhiteSpace(auth.KeysPath))
+    {
+        protection.PersistKeysToFileSystem(new DirectoryInfo(auth.KeysPath));
+    }
+
+    // Zwei Wege herein, ein Schema davor: Das Google-Token kommt genau einmal,
+    // beim Einlösen gegen die Sitzung; danach trägt das Cookie (ADR-0025).
     builder.Services
-        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddAuthentication(AuthOptions.Scheme)
+        .AddPolicyScheme(AuthOptions.Scheme, "Sitzung oder Google", options =>
+            options.ForwardDefaultSelector = context =>
+                context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.Ordinal)
+                    ? JwtBearerDefaults.AuthenticationScheme
+                    : CookieAuthenticationDefaults.AuthenticationScheme)
+        .AddCookie(options =>
+        {
+            options.Cookie.Name = AuthEndpoint.CookieName;
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.ExpireTimeSpan = TimeSpan.FromDays(30);
+            options.SlidingExpiration = true;
+        })
         .AddJwtBearer(options =>
         {
             options.Authority = AuthOptions.GoogleIssuer;
@@ -71,6 +100,14 @@ builder.Services.AddSingleton<TournamentAgent>();
 
 var app = builder.Build();
 
+// Railway schließt TLS vor der Anwendung ab. Ohne die weitergereichten
+// Kopfzeilen hielte sie jede Anfrage für http und gäbe das Cookie ohne
+// Secure heraus.
+var forwarded = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost };
+forwarded.KnownIPNetworks.Clear();
+forwarded.KnownProxies.Clear();
+app.UseForwardedHeaders(forwarded);
+
 app.UseExceptionHandler(handler => handler.Run(async context =>
 {
     var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
@@ -80,6 +117,7 @@ app.UseExceptionHandler(handler => handler.Run(async context =>
         NotFoundException e => (StatusCodes.Status404NotFound, e.Message),
         UnauthorizedException e => (StatusCodes.Status401Unauthorized, e.Message),
         ForbiddenException e => (StatusCodes.Status403Forbidden, e.Message),
+        ConflictException e => (StatusCodes.Status409Conflict, e.Message),
         BadHttpRequestException e => (StatusCodes.Status400BadRequest, e.Message),
         _ => (StatusCodes.Status500InternalServerError, "Da ist etwas schiefgegangen."),
     };

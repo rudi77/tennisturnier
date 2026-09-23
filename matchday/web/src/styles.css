@@ -630,6 +630,24 @@ a { color: var(--accent); }
 .chat__account img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .chat__account:hover { border-color: var(--accent); }
 
+.account { position: fixed; inset: 0; z-index: 30; }
+.account__box {
+  position: absolute;
+  top: calc(max(10px, env(safe-area-inset-top)) + 46px);
+  right: 12px;
+  width: min(18rem, calc(100vw - 24px));
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.15);
+  overflow-wrap: anywhere;
+}
+.account__email { color: var(--fg-muted); font-size: 0.9rem; }
+.account__logout { margin-top: 10px; justify-self: start; }
+
 /* --- Chat löschen ------------------------------------------------------- */
 
 .button--icon { display: inline-grid; place-items: center; padding: 6px 8px; }

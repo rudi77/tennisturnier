@@ -3,7 +3,7 @@
  * handelt: die Browserkennung und, wenn vorhanden, das Verwaltertoken.
  */
 import { adminTokenFor, clientId, rememberAdminToken, scorerTokenFor } from './client'
-import { idToken, rememberToken, ABGEMELDET, type AuthConfig } from './auth'
+import { ABGEMELDET, type AuthConfig, type Konto } from './auth'
 
 export type Mode = 'Knockout' | 'RoundRobin'
 export type Discipline = 'Singles' | 'Doubles'
@@ -210,33 +210,27 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(method: string, path: string, body?: unknown, tournamentId?: string): Promise<T> {
+async function call<T>(method: string, path: string, body?: unknown, tournamentId?: string, extra: Record<string, string> = {}): Promise<T> {
   const headers: Record<string, string> = {
     'X-Matchday-Client': clientId(),
     Accept: 'application/json',
+    ...extra,
   }
   const token = tournamentId ? adminTokenFor(tournamentId) : null
   if (token) headers['X-Admin-Token'] = token
   const scorer = tournamentId ? scorerTokenFor(tournamentId) : null
   if (scorer) headers['X-Scorer-Token'] = scorer
 
-  // Ist keine Anmeldung verlangt, gibt es kein Token und die Kopfzeile fehlt —
-  // der Server schaut dann ohnehin nicht danach.
-  const angemeldet = idToken()
-  if (angemeldet) headers.Authorization = `Bearer ${angemeldet}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   const response = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
 
   if (!response.ok) {
-    // Ein abgelaufenes oder zurückgezogenes Token trägt nicht mehr. Das hier
-    // zu bemerken und nicht in jedem Aufrufer einzeln, hält die Stelle an
-    // einer Stelle — und die Oberfläche kommt zurück auf die Anmeldung,
-    // statt eine Fehlermeldung nach der anderen zu zeigen.
-    if (response.status === 401 && idToken()) {
-      rememberToken(null)
-      window.dispatchEvent(new Event(ABGEMELDET))
-    }
+    // Eine abgelaufene oder abgemeldete Sitzung trägt nicht mehr. Das hier zu
+    // bemerken und nicht in jedem Aufrufer einzeln, hält die Stelle an einer
+    // Stelle — und die Oberfläche kommt zurück auf die Anmeldung, statt eine
+    // Fehlermeldung nach der anderen zu zeigen.
+    if (response.status === 401) window.dispatchEvent(new Event(ABGEMELDET))
 
     let message = `Fehler ${response.status}`
     try {
@@ -254,8 +248,11 @@ async function call<T>(method: string, path: string, body?: unknown, tournamentI
 
 export const api = {
   authConfig: () => call<AuthConfig>('GET', '/api/auth/config'),
-  /** Trägt das angemeldete Konto hier? 403, wenn es nicht freigegeben ist (ADR-0023). */
-  checkAccount: () => call<void>('GET', '/api/auth/check'),
+  /** Das Google-Token einmal einlösen; zurück kommt das Konto, und die Sitzung steht im Cookie. */
+  signIn: (credential: string) => call<Konto>('POST', '/api/auth/session', undefined, undefined, { Authorization: `Bearer ${credential}` }),
+  /** Wer bin ich? 401 heißt: keine Sitzung. */
+  me: () => call<Konto>('GET', '/api/auth/me'),
+  logout: () => call<void>('POST', '/api/auth/logout'),
   status: () => call<{ configured: boolean; missing: string }>('GET', '/api/chat/status'),
   mine: () => call<TournamentSummary[]>('GET', '/api/tournaments'),
   get: (id: string) => call<TournamentView>('GET', `/api/tournaments/${id}`),

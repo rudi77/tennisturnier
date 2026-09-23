@@ -5,7 +5,8 @@ import { sendMessage, type WidgetEvent } from './chat'
 import { Composer } from './Composer'
 import { Widget, type WidgetItem } from './widgets/Widget'
 import { Mark } from './Mark'
-import { ABGEMELDET, idToken, kontoAus, rememberToken } from './auth'
+import { AccountMenu } from './AccountMenu'
+import type { Konto } from './auth'
 
 export type Item =
   | { id: number; kind: 'user'; text: string }
@@ -86,7 +87,16 @@ export function itemsOf(transcript: Transcript): ItemInput[] {
     .map((m): ItemInput => (m.role === 'user' ? { kind: 'user', text: m.text } : { kind: 'assistant', text: m.text }))
 }
 
-export function ChatScreen({ adminToken }: { adminToken: string | null }) {
+export function ChatScreen({
+  adminToken,
+  konto = null,
+  onAbmelden = () => undefined,
+}: {
+  adminToken: string | null
+  /** Wer angemeldet ist — null, wenn die Instanz keine Anmeldung verlangt. */
+  konto?: Konto | null
+  onAbmelden?: () => void
+}) {
   const [items, setItems] = useState<Item[]>([])
   const [views, setViews] = useState<Record<string, TournamentView>>({})
 
@@ -444,13 +454,6 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
   const current_view = current ? views[current] : undefined
   const canShare = current_view !== undefined && adminTokenFor(current_view.id) !== null
 
-  // Wer angemeldet ist, soll das sehen und wieder herauskommen. Ohne
-  // Anmeldung gibt es kein Token, und die Kopfzeile bleibt wie bisher.
-  const konto = (() => {
-    const token = idToken()
-    return token === null ? null : kontoAus(token)
-  })()
-
   return (
     <div className={offen ? 'chat' : 'chat chat--zu'}>
       <header className="chat__bar">
@@ -483,20 +486,8 @@ export function ChatScreen({ adminToken }: { adminToken: string | null }) {
               <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          {konto && (
-            <button
-              type="button"
-              className="chat__account"
-              onClick={() => {
-                rememberToken(null)
-                window.dispatchEvent(new Event(ABGEMELDET))
-              }}
-              title={`${konto.email || konto.name} — abmelden`}
-              aria-label={`Angemeldet als ${konto.email || konto.name}. Abmelden.`}
-            >
-              {konto.bild ? <img src={konto.bild} alt="" /> : <span>{(konto.name || '?').slice(0, 1)}</span>}
-            </button>
-          )}
+          {/* Wer angemeldet ist, soll das sehen und wieder herauskommen. */}
+          {konto && <AccountMenu konto={konto} onAbmelden={onAbmelden} />}
         </div>
       </header>
 

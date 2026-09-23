@@ -46,6 +46,16 @@ public sealed class AuthOptions
             && allowed.Contains(email.Trim(), StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Wohin die Schlüssel des Sitzungs-Cookies gehören. Im Bild
+    /// <c>/data/keys</c>, neben die Datenbank; leer heißt: dorthin, wo ASP.NET
+    /// sie von selbst ablegt — für die Entwicklung genug.
+    /// </summary>
+    public string? KeysPath { get; set; }
+
+    /// <summary>Das Schema, das zwischen Sitzung und Google-Token wählt.</summary>
+    public const string Scheme = "matchday";
+
     /// <summary>Der Aussteller, den Google für Id-Token verwendet.</summary>
     public const string GoogleIssuer = "https://accounts.google.com";
 
