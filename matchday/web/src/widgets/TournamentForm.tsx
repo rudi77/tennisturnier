@@ -10,6 +10,8 @@ export interface Draft {
   name: string
   /** YYYY-MM-DD, leer heißt: kein Datum. */
   date: string
+  /** HH:mm, leer heißt: keine Uhrzeit. */
+  time: string
   location: string
   mode: Mode
   discipline: Discipline
@@ -21,6 +23,7 @@ export interface Draft {
 export const emptyDraft: Draft = {
   name: '',
   date: '',
+  time: '',
   location: '',
   mode: 'Knockout',
   discipline: 'Singles',
@@ -33,6 +36,7 @@ export function draftOf(view: TournamentView): Draft {
   return {
     name: view.name,
     date: view.date ?? '',
+    time: (view.startTime ?? '').slice(0, 5),
     location: view.location ?? '',
     mode: view.mode,
     discipline: view.discipline,
@@ -49,6 +53,10 @@ export function changesBetween(before: Draft, after: Draft): UpdateBody {
   if (after.date !== before.date) {
     if (after.date === '') body.clearDate = true
     else body.date = after.date
+  }
+  if (after.time !== before.time) {
+    if (after.time === '') body.clearStartTime = true
+    else body.startTime = `${after.time}:00`
   }
   if (after.location.trim() !== before.location) {
     if (after.location.trim() === '') body.clearLocation = true
@@ -98,7 +106,7 @@ export function TournamentForm({
 
       {!open ? (
         <button type="button" className="button button--quiet button--wrap" onClick={() => setOpen(true)}>
-          Mehr einstellen — Datum, Ort, Einzel oder Doppel, Modus, Sätze
+          Mehr einstellen — Datum, Startzeit, Ort, Einzel oder Doppel, Modus, Sätze
         </button>
       ) : (
         <>
@@ -106,6 +114,10 @@ export function TournamentForm({
             <label className="field">
               <span className="field__label">Datum</span>
               <input type="date" value={draft.date} onChange={(e) => set('date', e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field__label">Start</span>
+              <input type="time" value={draft.time} onChange={(e) => set('time', e.target.value)} />
             </label>
             <label className="field">
               <span className="field__label">Ort</span>
@@ -123,7 +135,7 @@ export function TournamentForm({
             disabled={locked || disciplineLocked}
             note={
               locked
-                ? 'Fest, seit gespielt wird.'
+                ? 'Fest, seit das Turnier gestartet ist.'
                 : disciplineLocked
                   ? 'Erst die Teilnehmerliste leeren — ein Einzelname ist kein Team.'
                   : draft.discipline === 'Doubles'
@@ -143,7 +155,7 @@ export function TournamentForm({
             disabled={locked}
             note={
               locked
-                ? 'Fest, seit gespielt wird.'
+                ? 'Fest, seit das Turnier gestartet ist.'
                 : draft.mode === 'Knockout'
                   ? 'Wer verliert, ist draußen. Überzählige Plätze werden Freilose.'
                   : 'Jeder spielt gegen jeden, die Tabelle entscheidet.'

@@ -332,6 +332,9 @@ a { color: var(--accent); }
 .tournament__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tournament__name { font-size: 1.35rem; margin: 0; }
 .tournament__meta { margin: 4px 0 0; color: var(--fg-muted); font-size: 0.92rem; }
+.countdown { margin: 8px 0 0; font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.countdown--due { color: var(--accent); }
+.public .countdown { font-size: 1.8rem; }
 
 .state {
   font-size: 0.75rem;

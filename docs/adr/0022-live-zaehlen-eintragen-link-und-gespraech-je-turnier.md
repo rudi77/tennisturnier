@@ -55,6 +55,8 @@ ohnehin verwalten darf; sonst kommt die Sicht ohne es.
 
 ### „Begonnen" statt „ausgelost"
 
+> Ersetzt durch [ADR-0024](0024-countdown-und-ausdruecklicher-start.md): Fest wird der Rahmen jetzt mit dem ausdrücklichen Start, nicht mit dem ersten Punkt.
+
 Fest wird der Rahmen, sobald ein Match (kein Freilos) einen Punkt oder ein
 Ergebnis hat — nicht mit der Auslosung. Bis dahin lassen sich Teilnehmer,
 Modus und Format ändern. Ändert sich Liste oder Modus eines ausgelosten

@@ -18,6 +18,7 @@ public sealed class LiveZaehlenTests : IDisposable
     {
         var t = await _a.Actions.CreateAsync(_a.Rudi, new CreateTournamentRequest("Cup", Format: format, Participants: ["Anna", "Tom"]));
         t = await _a.Actions.DrawAsync(_a.Rudi, t.Id);
+        t = await _a.Actions.StartAsync(_a.Rudi, t.Id);
         return (t, t.Matches[0].Id);
     }
 

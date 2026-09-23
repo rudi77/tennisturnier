@@ -63,6 +63,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, "A", "B", "C", "D");
         t.Draw(new Random(1));
+        t.Start(Now);
 
         Assert.Equal(TournamentState.Running, t.State);
         Assert.Equal(3, t.Matches.Count);
@@ -95,6 +96,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, "A", "B", "C", "D", "E", "F", "G", "H");
         t.Draw(new Random(7));
+        t.Start(Now);
 
         var firstRound = t.Matches.Where(m => m.Round == 1).Select(m => t.NameOf(m.Side1) + t.NameOf(m.Side2));
         Assert.NotEqual(["AB", "CD", "EF", "GH"], firstRound);
@@ -105,6 +107,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, "A", "B", "C", "D", "E");
         t.Draw(new Random(3));
+        t.Start(Now);
 
         Assert.Equal(7, t.Matches.Count);
         var byes = t.Matches.Where(m => m.IsBye).ToList();
@@ -126,6 +129,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, "A", "B", "C", "D");
         t.Draw(new Random(1));
+        t.Start(Now);
         var (hf1, hf2, final) = (t.Matches[0], t.Matches[1], t.Matches[2]);
 
         t.RecordResult(hf1.Id, Sieg1(t));
@@ -152,6 +156,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.RoundRobin, "A", "B", "C", "D", "E");
         t.Draw(new Random(1));
+        t.Start(Now);
 
         Assert.Equal(10, t.Matches.Count);
         Assert.All(t.Matches, m => Assert.Equal(MatchStatus.Ready, m.Status));
@@ -175,6 +180,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.RoundRobin, "A", "B", "C");
         t.Draw(new Random(1));
+        t.Start(Now);
 
         var ab = Find(t, "A", "B");
         var ac = Find(t, "A", "C");
@@ -201,6 +207,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.RoundRobin, "A", "B");
         t.Draw(new Random(1));
+        t.Start(Now);
         var m = t.Matches[0];
 
         t.RecordResult(m.Id, Score.Walkover(absentSide: 2));
@@ -212,7 +219,7 @@ public sealed class TournamentTests
     }
 
     [Fact]
-    public void Bis_zum_ersten_Punkt_bleibt_ein_ausgelostes_Turnier_offen()
+    public void Bis_zum_Start_bleibt_ein_ausgelostes_Turnier_offen()
     {
         var t = Neu(Mode.Knockout, "A", "B");
         t.Draw(new Random(1));
@@ -246,15 +253,44 @@ public sealed class TournamentTests
     }
 
     [Fact]
-    public void Nach_dem_ersten_Punkt_ist_der_Rahmen_eingefroren()
+    public void Vor_dem_Start_wird_nicht_gezaehlt()
+    {
+        // Ausgelost heißt nicht angepfiffen: Bis zum Start zählt der Countdown,
+        // nicht der Spielstand (ADR-0024).
+        var t = Neu(Mode.Knockout, "A", "B");
+        Assert.Contains("auslosen", Assert.Throws<DomainException>(() => t.Start(Now)).Message);
+
+        t.Draw(new Random(1));
+        var m = t.Matches[0];
+        Assert.Contains("nicht gestartet", Assert.Throws<DomainException>(() => t.ScoreLive(m.Id, new LiveEvent(LiveEventKind.Point, 1))).Message);
+        Assert.Throws<DomainException>(() => t.RecordResult(m.Id, Sieg1(t)));
+
+        t.Start(Now);
+        Assert.Equal(Now, t.StartedAt);
+        Assert.Contains("läuft schon", Assert.Throws<DomainException>(() => t.Start(Now)).Message);
+        t.RecordResult(m.Id, Sieg1(t));
+    }
+
+    [Fact]
+    public void Die_Startzeit_laesst_sich_setzen_und_wieder_nehmen()
+    {
+        var t = Tournament.Create("Abend", "browser-1", Now, startTime: new TimeOnly(18, 30));
+        Assert.Equal(new TimeOnly(18, 30), t.StartTime);
+
+        t.SetStartTime(null);
+        Assert.Null(t.StartTime);
+    }
+
+    [Fact]
+    public void Nach_dem_Start_ist_der_Rahmen_eingefroren()
     {
         var t = Neu(Mode.Knockout, "A", "B");
         t.Draw(new Random(1));
-        t.ScoreLive(t.Matches[0].Id, new LiveEvent(LiveEventKind.Point, 1));
+        t.Start(Now);
         Assert.True(t.IsStarted);
 
         var nachricht = Assert.Throws<DomainException>(() => t.AddParticipant("C")).Message;
-        Assert.Contains("begonnen", nachricht);
+        Assert.Contains("gestartet", nachricht);
         Assert.Throws<DomainException>(() => t.RemoveParticipant(t.Participants[0].Id));
         Assert.Throws<DomainException>(() => t.SetMode(Mode.RoundRobin));
         Assert.Throws<DomainException>(() => t.SetFormat(new MatchFormat(BestOf: 1)));
@@ -262,13 +298,17 @@ public sealed class TournamentTests
         Assert.Throws<DomainException>(() => t.AddRandomTeams(["X", "Y"]));
         t.Rename("Neuer Name");
         t.SetDate(new DateOnly(2026, 10, 3));
+        t.SetStartTime(new TimeOnly(9, 0));
 
-        // Der Punkt zurück, und es ist wieder offen.
+        // Ein Punkt und wieder zurück: gestartet bleibt gestartet.
+        t.ScoreLive(t.Matches[0].Id, new LiveEvent(LiveEventKind.Point, 1));
         t.UndoLive(t.Matches[0].Id);
+        Assert.True(t.IsStarted);
+
+        // Offen wird es erst mit der Auslosung, die zurückgeht.
+        t.UndoDraw();
         Assert.False(t.IsStarted);
         t.AddParticipant("C");
-
-        t.UndoDraw();
         Assert.Equal(TournamentState.Setup, t.State);
         Assert.Empty(t.Matches);
         t.SetMode(Mode.RoundRobin);
@@ -279,6 +319,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, "A", "B", "C");
         t.Draw(new Random(1));
+        t.Start(Now);
         var ready = t.Matches.First(m => m.Status == MatchStatus.Ready);
         t.RecordResult(ready.Id, Score.Retired([new(6, 4)], new(3, 2), 2, t.Format));
 
@@ -290,6 +331,26 @@ public sealed class TournamentTests
         Assert.Equal(t.Matches.Select(m => (m.Id, m.Side1, m.Side2, m.Score)), copy.Matches.Select(m => (m.Id, m.Side1, m.Side2, m.Score)));
         Assert.Equal(t.State, copy.State);
         Assert.Equal(t.Standings(), copy.Standings());
+        Assert.Equal(Now, copy.StartedAt);
+    }
+
+    [Fact]
+    public void Was_vor_dem_ausdruecklichen_Start_gespielt_wurde_gilt_als_gestartet()
+    {
+        // Vor ADR-0024 fing ein Turnier mit dem ersten Punkt an. Ein solcher
+        // Stand darf nach dem Update nicht plötzlich ungestartet dastehen —
+        // sonst ließe sich dort nichts mehr eintragen.
+        var t = Neu(Mode.Knockout, "A", "B", "C");
+        t.Draw(new Random(1));
+        var ungestartet = t.ToSnapshot() with { StartedAt = null };
+        Assert.Null(Tournament.FromSnapshot(ungestartet).StartedAt);
+
+        t.Start(Now.AddHours(3));
+        t.RecordResult(t.Matches.First(m => m.Status == MatchStatus.Ready).Id, Sieg1(t));
+        var alt = t.ToSnapshot() with { StartedAt = null };
+
+        // Wann genau, weiß niemand mehr — das Anlegen ist die Näherung.
+        Assert.Equal(Now, Tournament.FromSnapshot(alt).StartedAt);
     }
 
     [Fact]
@@ -297,6 +358,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, "A", "B", "C", "D");
         t.Draw(new Random(1));
+        t.Start(Now);
 
         Assert.Contains("Sieger aus Halbfinale 1", t.Describe(t.Matches[2]));
         Assert.StartsWith("Halbfinale 1 (", t.Describe(t.Matches[0]));
@@ -312,6 +374,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, Enumerable.Range(1, players).Select(i => $"S{i}").ToArray());
         t.Draw(new Random(1));
+        t.Start(Now);
 
         Assert.Equal(matches, t.Matches.Count);
         Assert.Equal(KnockoutDraw.NextPowerOfTwo(players) - players, t.Matches.Count(m => m.IsBye));
@@ -328,6 +391,7 @@ public sealed class TournamentTests
         {
             var t = Neu(Mode.Knockout, [.. Enumerable.Range(1, spieler).Select(i => $"S{i}")]);
             t.Draw(new Random(spieler));
+            t.Start(Now);
 
             foreach (var freilos in t.Matches.Where(m => m.IsBye))
             {
@@ -343,6 +407,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, [.. Enumerable.Range(1, 32).Select(i => $"S{i}")]);
         t.Draw(new Random(7));
+        t.Start(Now);
 
         var namen = t.Matches.Select(m => m.Label).ToList();
 
@@ -389,6 +454,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, "Rudi", "Max");
         t.Draw(new Random(1));
+        t.Start(Now);
 
         Assert.Throws<DomainException>(() => t.FindMatch(Guid.NewGuid()));
     }
@@ -398,6 +464,7 @@ public sealed class TournamentTests
     {
         var t = Neu(Mode.Knockout, "Rudi", "Max", "Anna", "Tom");
         t.Draw(new Random(1));
+        t.Start(Now);
 
         var halbfinals = t.Matches.Where(m => m.Round == 1).ToList();
         var finale = t.Matches.Single(m => m.Round == 2);
@@ -522,10 +589,12 @@ public sealed class TournamentTests
         t.AddParticipant("Rudi / Max");
         t.Draw(new Random(1));
 
-        // Ausgelost, aber nicht begonnen: Die neuen Teams werden mitgelost.
+        // Ausgelost, aber nicht gestartet: Die neuen Teams werden mitgelost.
         t.AddRandomTeams(["Eva", "Ida"], new Random(2));
         Assert.Equal(3, t.Participants.Count);
         Assert.Equal(TournamentState.Running, t.State);
+
+        t.Start(Now);
 
         t.RecordResult(t.Matches.First(m => m.Status == MatchStatus.Ready).Id, Sieg1(t));
         Assert.Throws<DomainException>(() => t.AddRandomTeams(["Olga", "Paul"]));
@@ -611,6 +680,7 @@ public sealed class TournamentTests
         t.AddParticipant("Rudi / Max");
 
         t.Draw(new Random(1));
+        t.Start(Now);
         Assert.Throws<DomainException>(() => t.SetDiscipline(Discipline.Singles));
     }
 
@@ -621,6 +691,7 @@ public sealed class TournamentTests
         t.AddParticipant("Anna / Tom");
         t.AddParticipant("Rudi / Max");
         t.Draw(new Random(1));
+        t.Start(Now);
 
         var finale = t.Matches.Single();
         Assert.Equal("Finale", finale.Label);

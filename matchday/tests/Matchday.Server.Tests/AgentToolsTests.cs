@@ -20,7 +20,7 @@ public sealed class AgentToolsTests : IDisposable
     [Fact]
     public void Jedes_Werkzeug_hat_ein_gueltiges_Schema()
     {
-        Assert.Equal(13, AgentTools.Definitions.Count);
+        Assert.Equal(14, AgentTools.Definitions.Count);
 
         foreach (var tool in AgentTools.Definitions)
         {
@@ -29,6 +29,29 @@ public sealed class AgentToolsTests : IDisposable
             Assert.Equal(JsonValueKind.Object, schema.GetProperty("properties").ValueKind);
             Assert.NotEmpty(tool.Description);
         }
+    }
+
+    [Fact]
+    public async Task Die_Uhrzeit_des_Starts_versteht_der_Agent()
+    {
+        var anlegen = await Run("create_tournament", new { name = "Abendrunde", date = "2026-09-26", time = "18:30" });
+        Assert.False(anlegen.IsError);
+        Assert.Contains("Start: 18:30 Uhr", anlegen.ResultForModel);
+        var id = anlegen.TournamentId!.Value;
+
+        var frueher = await Run("update_tournament", new { time = "9:05" }, id);
+        Assert.Contains("Start: 09:05 Uhr", frueher.ResultForModel);
+
+        var falsch = await Run("update_tournament", new { time = "halb sieben" }, id);
+        Assert.True(falsch.IsError);
+        Assert.Contains("HH:mm", falsch.ResultForModel);
+
+        var weg = await Run("update_tournament", new { time = "" }, id);
+        Assert.DoesNotContain("Start:", weg.ResultForModel);
+
+        // Ohne Uhrzeit angelegt, steht auch keine da.
+        var ohne = await Run("create_tournament", new { name = "Irgendwann" });
+        Assert.DoesNotContain("Start:", ohne.ResultForModel);
     }
 
     [Fact]
@@ -66,6 +89,16 @@ public sealed class AgentToolsTests : IDisposable
         var los = await Run("draw", new { }, id);
         Assert.Equal(AgentTools.WidgetStandings, los.Widget);
         Assert.Contains("Runde 1", los.ResultForModel);
+        Assert.Contains("wartet auf den Start", los.ResultForModel);
+
+        // Ausgelost ist nicht angepfiffen: Vor dem Start gibt es kein Ergebnis.
+        var vorDemStart = await Run("record_result", new { winner = "max", loser = "Rudi", sets = new[] { new[] { 7, 6, 4 } } }, id);
+        Assert.True(vorDemStart.IsError);
+        Assert.Contains("nicht gestartet", vorDemStart.ResultForModel);
+
+        var start = await Run("start_tournament", new { }, id);
+        Assert.False(start.IsError);
+        Assert.Contains("Zustand: läuft", start.ResultForModel);
 
         var ergebnis = await Run("record_result", new { winner = "max", loser = "Rudi", sets = new[] { new[] { 7, 6, 4 } } }, id);
         Assert.False(ergebnis.IsError);
@@ -143,6 +176,7 @@ public sealed class AgentToolsTests : IDisposable
         var t = await _a.Actions.CreateAsync(_a.Rudi, new CreateTournamentRequest("Cup"));
         await _a.Actions.AddParticipantsAsync(_a.Rudi, t.Id, ["Rudi", "Max", "Anna", "Tom"]);
         var gelost = await _a.Actions.DrawAsync(_a.Rudi, t.Id);
+        await _a.Actions.StartAsync(_a.Rudi, t.Id);
 
         var hf = gelost.Matches[0];
         var (gefunden, seite) = AgentTools.FindMatch(gelost, gelost.NameOf(hf.Side2), gelost.NameOf(hf.Side1));
@@ -199,6 +233,7 @@ public sealed class AgentToolsTests : IDisposable
         });
         var id = anlegen.TournamentId!.Value;
         await Run("draw", new { }, id);
+        await Run("start_tournament", new { }, id);
 
         // Ein K.o.-Turnier zeigt den Baum, und das Finale kennt seine Gegner noch nicht.
         var baum = await Run("get_tournament", new { tournamentId = id.ToString() });
@@ -254,6 +289,7 @@ public sealed class AgentToolsTests : IDisposable
         var t = await _a.Actions.CreateAsync(_a.Rudi, new CreateTournamentRequest("Cup"));
         await _a.Actions.AddParticipantsAsync(_a.Rudi, t.Id, ["Rudi", "Max", "Anna", "Tom"]);
         var gelost = await _a.Actions.DrawAsync(_a.Rudi, t.Id);
+        await _a.Actions.StartAsync(_a.Rudi, t.Id);
         var ersteRunde = gelost.Matches.Where(m => m.Status == MatchStatus.Ready).ToList();
 
         var fremdePaarung = await Run(
@@ -276,6 +312,7 @@ public sealed class AgentToolsTests : IDisposable
         var t = await _a.Actions.CreateAsync(_a.Rudi, new CreateTournamentRequest("Cup", Mode: Mode.RoundRobin));
         await _a.Actions.AddParticipantsAsync(_a.Rudi, t.Id, ["Rudi", "Max", "Anna", "Tom"]);
         var gelost = await _a.Actions.DrawAsync(_a.Rudi, t.Id);
+        await _a.Actions.StartAsync(_a.Rudi, t.Id);
 
         Assert.Equal(6, gelost.Matches.Count);
 
@@ -302,6 +339,7 @@ public sealed class AgentToolsTests : IDisposable
         var t = await _a.Actions.CreateAsync(_a.Rudi, new CreateTournamentRequest("Cup"));
         await _a.Actions.AddParticipantsAsync(_a.Rudi, t.Id, ["Rudi", "Max", "Anna"]);
         var gelost = await _a.Actions.DrawAsync(_a.Rudi, t.Id);
+        await _a.Actions.StartAsync(_a.Rudi, t.Id);
 
         var freilos = gelost.Matches.Single(m => m.IsBye);
         var durch = gelost.NameOf(freilos.Side1);
@@ -339,6 +377,7 @@ public sealed class AgentToolsTests : IDisposable
         var anlegen = await Run("create_tournament", new { name = "Cup", bestOf = 3, finalSet = "Regular", participants = new[] { "Rudi", "Max" } });
         var id = anlegen.TournamentId!.Value;
         await Run("draw", new { }, id);
+        await Run("start_tournament", new { }, id);
 
         // Ein Satz aus einer Zahl ist kein Satz.
         var halberSatz = await Run("record_result", new { winner = "Rudi", loser = "Max", sets = new[] { new[] { 6 } } }, id);
@@ -409,6 +448,7 @@ public sealed class AgentToolsTests : IDisposable
 
         var los = await Run("draw", new { }, id);
         Assert.False(los.IsError);
+        await Run("start_tournament", new { }, id);
 
         // Für das Ergebnis genügt je Team ein Spieler.
         var ergebnis = await Run("record_result", new { winner = "Anna", loser = "Max", sets = new[] { new[] { 6, 3 } } }, id);

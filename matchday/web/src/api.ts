@@ -106,6 +106,10 @@ export interface TournamentView {
   matches: MatchView[]
   standings: Standing[]
   rounds: number
+  /** Die Uhrzeit des Starts am Ort, „HH:mm:ss“ — worauf der Countdown zählt. */
+  startTime?: string | null
+  /** Wann die Turnierleitung gestartet hat. Erst danach wird gezählt (ADR-0024). */
+  startedAt?: string | null
 }
 
 export interface TournamentSummary {
@@ -118,6 +122,7 @@ export interface TournamentSummary {
   state: TournamentState
   participantCount: number
   adminToken: string
+  startedAt?: string | null
 }
 
 export interface Links {
@@ -160,6 +165,8 @@ export interface Transcript {
 export interface CreateBody {
   name: string
   date?: string | null
+  /** „HH:mm:ss“ */
+  startTime?: string | null
   location?: string | null
   mode?: Mode
   discipline?: Discipline
@@ -175,6 +182,9 @@ export interface UpdateBody {
   name?: string
   date?: string | null
   clearDate?: boolean
+  /** „HH:mm:ss“ */
+  startTime?: string | null
+  clearStartTime?: boolean
   location?: string | null
   clearLocation?: boolean
   mode?: Mode
@@ -244,6 +254,8 @@ async function call<T>(method: string, path: string, body?: unknown, tournamentI
 
 export const api = {
   authConfig: () => call<AuthConfig>('GET', '/api/auth/config'),
+  /** Trägt das angemeldete Konto hier? 403, wenn es nicht freigegeben ist (ADR-0023). */
+  checkAccount: () => call<void>('GET', '/api/auth/check'),
   status: () => call<{ configured: boolean; missing: string }>('GET', '/api/chat/status'),
   mine: () => call<TournamentSummary[]>('GET', '/api/tournaments'),
   get: (id: string) => call<TournamentView>('GET', `/api/tournaments/${id}`),
@@ -259,6 +271,8 @@ export const api = {
     call<AdminView>('DELETE', `/api/tournaments/${id}/participants/${participantId}`, undefined, id),
   draw: (id: string) => call<AdminView>('POST', `/api/tournaments/${id}/draw`, undefined, id),
   undoDraw: (id: string) => call<AdminView>('DELETE', `/api/tournaments/${id}/draw`, undefined, id),
+  /** Der Anpfiff: Ab hier wird gezählt, der Countdown ist vorbei. */
+  start: (id: string) => call<AdminView>('POST', `/api/tournaments/${id}/start`, undefined, id),
   recordResult: (id: string, matchId: string, result: ResultRequest) =>
     call<Scored>('PUT', `/api/tournaments/${id}/matches/${matchId}/result`, result, id),
   clearResult: (id: string, matchId: string) =>

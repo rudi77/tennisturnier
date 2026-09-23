@@ -14,7 +14,7 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
     {
         ArgumentNullException.ThrowIfNull(request);
         var tournament = Tournament.Create(
-            request.Name, actor.ClientId, clock.GetUtcNow(), request.Mode, request.Format, request.Date, request.Location, request.Discipline);
+            request.Name, actor.ClientId, clock.GetUtcNow(), request.Mode, request.Format, request.Date, request.Location, request.Discipline, request.StartTime);
 
         // Teilnehmer gleich mit: Ein Turnier anzulegen und dann niemanden
         // eintragen zu können, wäre ein halber Weg — und über den Chat kommt
@@ -57,6 +57,15 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
             else if (request.Date is not null)
             {
                 t.SetDate(request.Date);
+            }
+
+            if (request.ClearStartTime)
+            {
+                t.SetStartTime(null);
+            }
+            else if (request.StartTime is not null)
+            {
+                t.SetStartTime(request.StartTime);
             }
 
             if (request.ClearLocation)
@@ -106,6 +115,10 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
 
     public Task<Tournament> DrawAsync(Actor actor, Guid id, CancellationToken ct = default) =>
         MutateAsync(actor, id, t => t.Draw(), ct);
+
+    /// <summary>Der Anpfiff: Ab hier wird gezählt, und der Countdown ist vorbei (ADR-0024).</summary>
+    public Task<Tournament> StartAsync(Actor actor, Guid id, CancellationToken ct = default) =>
+        MutateAsync(actor, id, t => t.Start(clock.GetUtcNow()), ct);
 
     public Task<Tournament> UndoDrawAsync(Actor actor, Guid id, CancellationToken ct = default) =>
         MutateAsync(actor, id, t => t.UndoDraw(), ct);

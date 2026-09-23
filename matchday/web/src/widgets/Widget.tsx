@@ -65,7 +65,8 @@ export function Widget({
   if (!view) return <div className="card muted">Dieses Turnier gibt es nicht mehr.</div>
 
   const admin = adminTokenFor(view.id) !== null
-  const onOpen = admin && view.state !== 'Setup' ? (match: MatchView) => setEditing(match.id) : null
+  // Gezählt wird erst nach dem Start; davor ist ein Match nur zum Ansehen da.
+  const onOpen = admin && view.state !== 'Setup' && view.startedAt ? (match: MatchView) => setEditing(match.id) : null
 
   // Ein Match antippen heißt: mitzählen. Das ganze Ergebnis auf einmal steht
   // im selben Fenster eine Ebene tiefer.

@@ -86,6 +86,26 @@ public sealed class AuthApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Die_Pruefung_nach_der_Anmeldung_verlangt_eine_Anmeldung()
+    {
+        // Mit Token geht es tiefer, in AuthTests — hier zählt, dass der Weg
+        // hängt und nicht offen steht.
+        var antwort = await _mitAnmeldung.CreateClient().GetAsync("/api/auth/check");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, antwort.StatusCode);
+    }
+
+    [Fact]
+    public async Task Ohne_Schalter_traegt_die_Pruefung_immer()
+    {
+        using var ohne = Bauen(_ => { });
+
+        var antwort = await ohne.CreateClient().GetAsync("/api/auth/check");
+
+        Assert.Equal(HttpStatusCode.NoContent, antwort.StatusCode);
+    }
+
+    [Fact]
     public void Verlangen_ohne_Client_Id_bricht_beim_Start_ab()
     {
         // Lieber hier laut als im Betrieb leise: Ohne Client-Id kann kein

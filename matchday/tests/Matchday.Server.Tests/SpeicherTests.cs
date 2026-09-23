@@ -45,6 +45,7 @@ public sealed class SpeicherTests
 
         // Und es lässt sich weiterspielen: auslosen, Ergebnis, Tabelle.
         t.Draw(new Random(1));
+        t.Start(DateTimeOffset.UtcNow);
         t.RecordResult(t.Matches[0].Id, Score.Played([new(6, 4), new(6, 4)], t.Format));
         Assert.Equal(TournamentState.Completed, t.State);
     }

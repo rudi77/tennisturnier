@@ -1,7 +1,9 @@
 # MATCHDAY — ein Turnier mit Freunden
 
-Ein Turnier anlegen, Freunde eintragen, auslosen, Ergebnisse eintragen, und
-alle sehen auf dem Handy, wie es steht. **Einzel oder Doppel** — im Doppel ist
+Ein Turnier anlegen, Freunde eintragen, auslosen, starten, Ergebnisse
+eintragen, und alle sehen auf dem Handy, wie es steht — vor dem Start mit
+einem Countdown auf Datum und Uhrzeit
+([ADR-0024](../docs/adr/0024-countdown-und-ausdruecklicher-start.md)). **Einzel oder Doppel** — im Doppel ist
 ein Teilnehmer ein Team, geschrieben `Anna / Tom`
 ([ADR-0020](../docs/adr/0020-einzel-und-doppel.md)). Geführt wird das Ganze im
 Gespräch: unten ein Eingabefeld, wahlweise per Sprache, und der Agent legt an,
@@ -49,7 +51,7 @@ leitet `/api` auf 5080 weiter).
 | Wo | Was |
 | --- | --- |
 | `src/Matchday.Domain` | Turnier, Teilnehmer (Einzel und Doppel), Matches, Satzvalidierung, K.o.-Baum, Kreisverfahren, Tabelle. Keine Pakete. |
-| `src/Matchday.Server` | Minimal API, SQLite als Dokumentspeicher, Live-Stream per SSE, der Agent mit seinen dreizehn Werkzeugen, Auslieferung der Oberfläche. |
+| `src/Matchday.Server` | Minimal API, SQLite als Dokumentspeicher, Live-Stream per SSE, der Agent mit seinen vierzehn Werkzeugen, Auslieferung der Oberfläche. |
 | `web` | Vite + React: das Gespräch mit Widgets, die Ergebnismaske, die Mitschau-Ansicht. Auf dem Telefon lässt sich das Gespräch zuklappen — dann gehört der Schirm den Widgets. |
 | `tests` | Domänen- und Servertests, darunter die Werkzeuge des Agenten ohne Modell. |
 
@@ -94,6 +96,7 @@ docker run --rm -p 8080:8080 -v matchday-daten:/data   -e AZURE_OPENAI_ENDPOINT=
 | `Agent__MaxToolRounds` | Wie oft der Agent in einer Antwort Werkzeuge rufen darf. Vorgabe 12. |
 | `Auth__Required` | Vorgabe `false`: kein Konto, Verwalter- und Mitschau-Links wie in ADR-0016. Auf `true` verlangt jeder besitzergebundene Aufruf eine Google-Anmeldung — **auf einer öffentlich erreichbaren Instanz gehört er dorthin** (ADR-0019). |
 | `Auth__GoogleClientId` | Die Client-Id aus der Google Cloud Console, zugleich die Audience der Token. Bei `Auth__Required=true` Pflicht: Fehlt sie, bricht der Start ab, statt jeden still abzuweisen. |
+| `Auth__AllowedEmails` | Wer herein darf: E-Mail-Adressen, getrennt durch Komma. Leer heißt jedes Google-Konto. Ein anderes Konto bekommt nach der Anmeldung „nicht freigegeben“ zu sehen ([ADR-0023](../docs/adr/0023-freigabeliste.md)). |
 | `ConnectionStrings__Default` | Vorgabe im Bild `Data Source=/data/matchday.db`. Ohne Datenträger ist die Datenbank nach jedem Neustart leer. |
 
 ### Die Anmeldung einrichten
@@ -107,6 +110,9 @@ docker run --rm -p 8080:8080 -v matchday-daten:/data   -e AZURE_OPENAI_ENDPOINT=
    Weiterleitungs-URIs braucht es nicht: Die Oberfläche holt das Id-Token über
    Google Identity Services, nicht über einen Umweg auf den Server.
 3. `Auth__GoogleClientId` auf die Client-Id setzen und `Auth__Required=true`.
+4. `Auth__AllowedEmails` auf die Adressen setzen, die herein dürfen. Ohne sie
+   kommt jedes Google-Konto herein — und jedes Gespräch geht auf die eigene
+   Modellrechnung.
 
 Zuschauer bleiben davon unberührt — der Mitschau-Link verlangt keine Anmeldung.
 

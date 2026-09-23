@@ -53,6 +53,9 @@ public sealed class TournamentActionsTests : IDisposable
         await _a.Actions.AddParticipantsAsync(_a.Rudi, t.Id, ["Rudi", "Max", "Anna", "Tom"]);
         var gelost = await _a.Actions.DrawAsync(_a.Rudi, t.Id);
         Assert.Equal(TournamentState.Running, gelost.State);
+        Assert.Null(gelost.StartedAt);
+        gelost = await _a.Actions.StartAsync(_a.Rudi, t.Id);
+        Assert.NotNull(ViewBuilder.Build(gelost).StartedAt);
 
         foreach (var match in gelost.Matches.Where(m => m.Round == 1))
         {
@@ -71,19 +74,46 @@ public sealed class TournamentActionsTests : IDisposable
         var hf = fertig.Matches.First(m => m.Round == 1);
         Assert.Equal(new SetScore(3, 6), hf.Score!.Sets[0]);
 
-        // Fünf Änderungen nach dem Abonnieren: Teilnehmer, Auslosung, zwei Halbfinals, Finale.
+        // Sechs Änderungen nach dem Abonnieren: Teilnehmer, Auslosung, Start, zwei Halbfinals, Finale.
         var empfangen = 0;
         while (reader.TryRead(out _))
         {
             empfangen++;
         }
 
-        Assert.Equal(5, empfangen);
+        Assert.Equal(6, empfangen);
 
         await _a.Actions.DeleteAsync(_a.Rudi, t.Id);
         Assert.True(reader.TryRead(out var letzte));
         Assert.Null(letzte);
         await Assert.ThrowsAsync<NotFoundException>(() => _a.Actions.GetAsync(t.Id));
+    }
+
+    [Fact]
+    public async Task Die_Startzeit_kommt_und_geht_ueber_das_Aendern()
+    {
+        var t = await _a.Actions.CreateAsync(_a.Rudi, new CreateTournamentRequest("Abendrunde", StartTime: new TimeOnly(18, 0)));
+        Assert.Equal(new TimeOnly(18, 0), ViewBuilder.Build(t).StartTime);
+
+        t = await _a.Actions.UpdateAsync(_a.Rudi, t.Id, new UpdateTournamentRequest(StartTime: new TimeOnly(18, 30)));
+        Assert.Equal(new TimeOnly(18, 30), t.StartTime);
+
+        // Nichts gesagt heißt: nicht angefasst.
+        t = await _a.Actions.UpdateAsync(_a.Rudi, t.Id, new UpdateTournamentRequest(Name: "Abendrunde 2"));
+        Assert.Equal(new TimeOnly(18, 30), t.StartTime);
+
+        t = await _a.Actions.UpdateAsync(_a.Rudi, t.Id, new UpdateTournamentRequest(ClearStartTime: true));
+        Assert.Null(t.StartTime);
+    }
+
+    [Fact]
+    public async Task Starten_darf_nur_die_Turnierleitung()
+    {
+        var t = await _a.Actions.CreateAsync(_a.Rudi, new CreateTournamentRequest("Cup", Participants: ["A", "B"]));
+        await _a.Actions.DrawAsync(_a.Rudi, t.Id);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => _a.Actions.StartAsync(_a.Fremder, t.Id));
+        await Assert.ThrowsAsync<ForbiddenException>(() => _a.Actions.StartAsync(new Actor("browser-helfer", null, t.ScorerToken), t.Id));
     }
 
     [Fact]
@@ -100,13 +130,14 @@ public sealed class TournamentActionsTests : IDisposable
         await _a.Actions.AddParticipantsAsync(_a.Rudi, t.Id, ["A", "B"]);
         await _a.Actions.DrawAsync(_a.Rudi, t.Id);
 
-        // Ausgelost, aber noch kein Punkt: Der Modus lässt sich ändern, und es wird neu gelost.
+        // Ausgelost, aber nicht gestartet: Der Modus lässt sich ändern, und es wird neu gelost.
         var neu = await _a.Actions.UpdateAsync(_a.Rudi, t.Id, new UpdateTournamentRequest(Mode: Mode.Knockout));
         Assert.Equal(Mode.Knockout, neu.Mode);
         Assert.Equal(TournamentState.Running, neu.State);
         neu = await _a.Actions.UpdateAsync(_a.Rudi, t.Id, new UpdateTournamentRequest(Mode: Mode.RoundRobin));
 
-        // Mit dem ersten Punkt steht der Rahmen.
+        // Mit dem Start steht der Rahmen.
+        await _a.Actions.StartAsync(_a.Rudi, t.Id);
         await _a.Actions.LiveAsync(_a.Rudi, t.Id, neu.Matches[0].Id, new LiveRequest(LiveAction.Point, 1));
         await Assert.ThrowsAsync<DomainException>(() =>
             _a.Actions.UpdateAsync(_a.Rudi, t.Id, new UpdateTournamentRequest(Mode: Mode.Knockout)));

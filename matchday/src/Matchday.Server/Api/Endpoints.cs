@@ -88,6 +88,9 @@ public static class Endpoints
         tournaments.MapDelete("/{id:guid}/draw", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
             Results.Ok(Admin(await actions.UndoDrawAsync(ActorOf(http), id, ct), http)));
 
+        tournaments.MapPost("/{id:guid}/start", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.StartAsync(ActorOf(http), id, ct), http)));
+
         tournaments.MapPut("/{id:guid}/matches/{matchId:guid}/result", async (HttpContext http, TournamentActions actions, Guid id, Guid matchId, ResultRequest request, CancellationToken ct) =>
             Scored(await actions.RecordResultAsync(ActorOf(http), id, matchId, request, ct), http));
 
@@ -194,8 +197,10 @@ public static class Endpoints
         }
     }
 
-    private static bool Required(HttpContext http) =>
-        http.RequestServices.GetRequiredService<IOptions<AuthOptions>>().Value.Required;
+    private static bool Required(HttpContext http) => Options(http).Required;
+
+    private static AuthOptions Options(HttpContext http) =>
+        http.RequestServices.GetRequiredService<IOptions<AuthOptions>>().Value;
 
     /// <summary>
     /// Die Kennung des angemeldeten Kontos. Das Präfix hält sie von den
@@ -211,6 +216,18 @@ public static class Endpoints
         if (http.User.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(subject))
         {
             throw new UnauthorizedException("Dafür musst du angemeldet sein.");
+        }
+
+        // Angemeldet heißt nur: Google weiß, wer das ist. Ob dieses Konto hier
+        // etwas anlegen darf, sagt die Freigabeliste (ADR-0023) — 403, nicht
+        // 401, denn eine neue Anmeldung mit demselben Konto änderte nichts.
+        var email = http.User.FindFirst(ClaimTypes.Email)?.Value ?? http.User.FindFirst("email")?.Value;
+        var verified = string.Equals(http.User.FindFirst("email_verified")?.Value, "true", StringComparison.OrdinalIgnoreCase);
+
+        if (!Options(http).Allows(email, verified))
+        {
+            throw new ForbiddenException(
+                $"Das Konto {email ?? "ohne E-Mail-Adresse"} ist für diese Instanz nicht freigegeben. Frag die Person, die sie betreibt.");
         }
 
         return $"google:{subject}";

@@ -62,9 +62,18 @@ export function App() {
     }
   }, [mitschauen])
 
+  // Angemeldet ist noch nicht freigegeben (ADR-0023): Erst fragen, ob das
+  // Konto hier trägt — sonst stünde man mit gültigem Token vor lauter 403ern.
   const anmelden = useCallback((neues: string) => {
     rememberToken(neues)
-    setToken(neues)
+    setFehler('')
+    api
+      .checkAccount()
+      .then(() => setToken(neues))
+      .catch((e: Error) => {
+        rememberToken(null)
+        setFehler(e.message)
+      })
   }, [])
 
   if (mitschauen) return <PublicScreen tournamentId={route.publicId!} />
@@ -75,7 +84,7 @@ export function App() {
     if (!auth.googleClientId) {
       return <Hinweis text={fehler || 'Für diese Instanz ist eine Anmeldung verlangt, aber keine Google-Client-Id hinterlegt.'} />
     }
-    return <SignIn clientId={auth.googleClientId} onToken={anmelden} />
+    return <SignIn clientId={auth.googleClientId} onToken={anmelden} hinweis={fehler} />
   }
 
   // Der Eintragen-Link verlangt, wie der Verwalterlink, die Anmeldung der

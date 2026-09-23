@@ -49,7 +49,16 @@ function skriptLaden(): Promise<void> {
   return geladen
 }
 
-export function SignIn({ clientId, onToken }: { clientId: string; onToken: (token: string) => void }) {
+export function SignIn({
+  clientId,
+  onToken,
+  hinweis = '',
+}: {
+  clientId: string
+  onToken: (token: string) => void
+  /** Was nach der Anmeldung schiefging — etwa ein Konto, das nicht freigegeben ist. */
+  hinweis?: string
+}) {
   const knopf = useRef<HTMLDivElement>(null)
   const [fehler, setFehler] = useState('')
 
@@ -95,7 +104,7 @@ export function SignIn({ clientId, onToken }: { clientId: string; onToken: (toke
           dafür genügt der Link, den du bekommen hast.
         </p>
         <div ref={knopf} className="signin__button" />
-        {fehler && <p className="signin__error">{fehler}</p>}
+        {(fehler || hinweis) && <p className="signin__error">{fehler || hinweis}</p>}
       </div>
     </div>
   )

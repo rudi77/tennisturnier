@@ -29,6 +29,8 @@ noch einmal von vorn beginnt.
 | [0020](0020-einzel-und-doppel.md) | Einzel und Doppel: ein Teilnehmer ist eine Aufstellung | Accepted |
 | [0021](0021-der-agent-erklaert-und-die-widgets-koennen-alles.md) | Der Agent erklärt auch, und jeder Weg führt durch | Accepted |
 | [0022](0022-live-zaehlen-eintragen-link-und-gespraech-je-turnier.md) | Live zählen, ein Eintragen-Link und ein Gespräch je Turnier | Accepted |
+| [0023](0023-freigabeliste.md) | Eine Freigabeliste hinter der Anmeldung | Accepted |
+| [0024](0024-countdown-und-ausdruecklicher-start.md) | Ein Countdown, und der Start ist ein eigener Schritt | Accepted |
 
 ## Status
 

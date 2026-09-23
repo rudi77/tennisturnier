@@ -14,7 +14,9 @@ public sealed record TournamentSnapshot(
     string AdminToken,
     DateTimeOffset CreatedAt,
     IReadOnlyList<Participant> Participants,
-    IReadOnlyList<MatchSnapshot> Matches);
+    IReadOnlyList<MatchSnapshot> Matches,
+    TimeOnly? StartTime = null,
+    DateTimeOffset? StartedAt = null);
 
 public sealed record MatchSnapshot(
     Guid Id,

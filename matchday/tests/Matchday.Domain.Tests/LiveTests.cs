@@ -150,6 +150,7 @@ public sealed class LiveTests
         }
 
         t.Draw(new Random(1));
+        t.Start(Now);
         return (t, t.Matches.First(m => m.Status == MatchStatus.Ready));
     }
 
@@ -251,9 +252,6 @@ public sealed class LiveTests
 
         Assert.Contains("Freilos", Assert.Throws<DomainException>(() => t.ScoreLive(freilos.Id, new LiveEvent(LiveEventKind.Point, 1))).Message);
         Assert.Contains("Gegner", Assert.Throws<DomainException>(() => t.ScoreLive(finale.Id, new LiveEvent(LiveEventKind.Point, 1))).Message);
-
-        // Ein Freilos ist kein Beginn.
-        Assert.False(t.IsStarted);
 
         var offen = Tournament.Create("Offen", "browser-1", Now);
         Assert.Throws<DomainException>(() => offen.ScoreLive(Guid.NewGuid(), new LiveEvent(LiveEventKind.Point, 1)));

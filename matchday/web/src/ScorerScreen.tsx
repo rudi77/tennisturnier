@@ -49,7 +49,8 @@ export function ScorerScreen({ token }: { token: string }) {
   }, [token])
 
   const take = (scored: Scored) => setView(scored.tournament)
-  const onOpen = view && view.state !== 'Setup' ? (match: { id: string }) => setEditing(match.id) : null
+  const started = (view?.startedAt ?? null) !== null
+  const onOpen = view && view.state !== 'Setup' && started ? (match: { id: string }) => setEditing(match.id) : null
 
   return (
     <div className="public">
@@ -72,7 +73,11 @@ export function ScorerScreen({ token }: { token: string }) {
               </section>
             ) : (
               <>
-                <p className="muted scorer__hint">Tipp ein Match an, um live mitzuzählen oder das Ergebnis einzutragen.</p>
+                <p className="muted scorer__hint">
+                  {started
+                    ? 'Tipp ein Match an, um live mitzuzählen oder das Ergebnis einzutragen.'
+                    : 'Ausgelost — gezählt wird, sobald die Turnierleitung das Turnier startet.'}
+                </p>
                 {view.mode === 'Knockout' ? <Bracket view={view} onOpen={onOpen} /> : <Standings view={view} onOpen={onOpen} />}
               </>
             )}

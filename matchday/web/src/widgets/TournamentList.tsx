@@ -29,6 +29,7 @@ export function TournamentList({
       format: { bestOf: draft.bestOf, finalSetMode: draft.finalSetMode, tiebreakAt: draft.tiebreakAt },
     }
     if (draft.date) body.date = draft.date
+    if (draft.time) body.startTime = `${draft.time}:00`
     if (draft.location.trim()) body.location = draft.location.trim()
     setDraft(emptyDraft)
     void onCreate(body)
@@ -53,7 +54,7 @@ export function TournamentList({
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
-                <span className={`state state--${t.state.toLowerCase()}`}>{stateText(t.state)}</span>
+                <span className={`state state--${t.state.toLowerCase()}`}>{stateText(t.state, (t.startedAt ?? null) !== null)}</span>
               </button>
             </li>
           ))}

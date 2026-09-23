@@ -57,7 +57,8 @@ public sealed class EintragenApiTests : IDisposable
             participants = new[] { "Anna", "Tom" },
         });
         var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tournament").GetProperty("id").GetString()!;
-        var drawn = await (await rudi.PostAsync($"/api/tournaments/{id}/draw", null)).Content.ReadFromJsonAsync<JsonElement>();
+        (await rudi.PostAsync($"/api/tournaments/{id}/draw", null)).EnsureSuccessStatusCode();
+        var drawn = await (await rudi.PostAsync($"/api/tournaments/{id}/start", null)).Content.ReadFromJsonAsync<JsonElement>();
 
         var match = drawn.GetProperty("tournament").GetProperty("matches")[0].GetProperty("id").GetString()!;
         var scorerUrl = drawn.GetProperty("links").GetProperty("scorerUrl").GetString()!;

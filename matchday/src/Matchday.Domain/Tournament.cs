@@ -44,7 +44,9 @@ public sealed class Tournament
         string adminToken,
         DateTimeOffset createdAt,
         List<Participant> participants,
-        List<Match> matches)
+        List<Match> matches,
+        TimeOnly? startTime,
+        DateTimeOffset? startedAt)
     {
         Id = id;
         Name = name;
@@ -59,6 +61,8 @@ public sealed class Tournament
         CreatedAt = createdAt;
         _participants = participants;
         _matches = matches;
+        StartTime = startTime;
+        StartedAt = startedAt;
     }
 
     public Guid Id { get; }
@@ -66,6 +70,19 @@ public sealed class Tournament
     public string Name { get; private set; }
 
     public DateOnly? Date { get; private set; }
+
+    /// <summary>
+    /// Wann es losgehen soll — die Uhrzeit am Ort, ohne Zeitzone. Unter
+    /// Freunden stehen alle am selben Platz; worauf der Countdown zählt,
+    /// rechnet das Gerät des Zuschauers in seiner eigenen Zeit (ADR-0024).
+    /// </summary>
+    public TimeOnly? StartTime { get; private set; }
+
+    /// <summary>
+    /// Wann die Turnierleitung auf „Start“ gedrückt hat. Erst ab da wird
+    /// gezählt und eingetragen, und erst ab da steht der Rahmen fest.
+    /// </summary>
+    public DateTimeOffset? StartedAt { get; private set; }
 
     public string? Location { get; private set; }
 
@@ -93,11 +110,11 @@ public sealed class Tournament
     public string ScorerToken => Derive("matchday-scorer:" + AdminToken);
 
     /// <summary>
-    /// Ob gespielt wird: Sobald ein Match einen Punkt oder ein Ergebnis hat,
-    /// stehen Teilnehmer, Modus und Format fest. Bis dahin ist auch ein
-    /// ausgelostes Turnier noch zu ändern — die Auslosung wird dann neu gemacht.
+    /// Ob gespielt wird: Ab dem ausdrücklichen Start stehen Teilnehmer, Modus
+    /// und Format fest (ADR-0024). Bis dahin ist auch ein ausgelostes Turnier
+    /// noch zu ändern — die Auslosung wird dann neu gemacht.
     /// </summary>
-    public bool IsStarted => _matches.Any(m => m.HasBegun);
+    public bool IsStarted => StartedAt is not null;
 
     public DateTimeOffset CreatedAt { get; }
 
@@ -113,7 +130,8 @@ public sealed class Tournament
         MatchFormat? format = null,
         DateOnly? date = null,
         string? location = null,
-        Discipline discipline = Discipline.Singles)
+        Discipline discipline = Discipline.Singles,
+        TimeOnly? startTime = null)
     {
         format ??= MatchFormat.Standard;
         format.Validate();
@@ -131,7 +149,9 @@ public sealed class Tournament
             NewToken(),
             now,
             [],
-            []);
+            [],
+            startTime,
+            null);
     }
 
     // --- Stammdaten -------------------------------------------------------
@@ -139,6 +159,8 @@ public sealed class Tournament
     public void Rename(string name) => Name = CleanName(name);
 
     public void SetDate(DateOnly? date) => Date = date;
+
+    public void SetStartTime(TimeOnly? startTime) => StartTime = startTime;
 
     public void SetLocation(string? location) => Location = CleanOptional(location);
 
@@ -388,8 +410,27 @@ public sealed class Tournament
         // Seite 2 (siehe Match.IsBye), also kommt Seite 1 weiter.
         foreach (var match in _matches.Where(m => m.IsBye).ToList())
         {
-            RecordResult(match.Id, Score.ByeFor(advancingSide: 1));
+            Settle(match.Id, Score.ByeFor(advancingSide: 1));
         }
+    }
+
+    /// <summary>
+    /// Der Anpfiff. Ausdrücklich, nicht mit dem ersten Punkt: Bis hierher
+    /// zählt der Countdown, ab hier wird gespielt und eingetragen (ADR-0024).
+    /// </summary>
+    public void Start(DateTimeOffset now)
+    {
+        if (State == TournamentState.Setup)
+        {
+            throw new DomainException("Erst auslosen, dann starten.");
+        }
+
+        if (IsStarted)
+        {
+            throw new DomainException("Das Turnier läuft schon.");
+        }
+
+        StartedAt = now;
     }
 
     /// <summary>Nimmt die Auslosung zurück. Alle Matches und Ergebnisse gehen verloren.</summary>
@@ -402,6 +443,7 @@ public sealed class Tournament
 
         _matches.Clear();
         State = TournamentState.Setup;
+        StartedAt = null;
     }
 
     // --- Ergebnisse -------------------------------------------------------
@@ -417,6 +459,7 @@ public sealed class Tournament
     public void RecordResult(Guid matchId, Score score)
     {
         ArgumentNullException.ThrowIfNull(score);
+        RequireStarted();
         Settle(matchId, score);
         FindMatch(matchId).SetLive(null);
     }
@@ -502,7 +545,7 @@ public sealed class Tournament
     public LiveState ScoreLive(Guid matchId, LiveEvent liveEvent)
     {
         ArgumentNullException.ThrowIfNull(liveEvent);
-        RequireDrawn();
+        RequireStarted();
         var match = FindMatch(matchId);
 
         if (match.IsBye)
@@ -674,11 +717,29 @@ public sealed class Tournament
             m.Side2,
             m.Score is null ? null : new ScoreSnapshot(m.Score.Outcome, m.Score.WinnerSide, m.Score.CompletedSets, m.Score.AbandonedSet),
             m.Live))
-        .ToList());
+        .ToList(),
+        StartTime,
+        StartedAt);
 
     public static Tournament FromSnapshot(TournamentSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
+        var matches = snapshot.Matches.Select(m => new Match(
+                m.Id,
+                m.Round,
+                m.Position,
+                m.Label,
+                m.Side1,
+                m.Side2,
+                m.Score is null ? null : Score.Rehydrate(m.Score.Outcome, m.Score.WinnerSide, m.Score.CompletedSets, m.Score.AbandonedSet),
+                m.Live))
+            .ToList();
+
+        // Vor ADR-0024 begann ein Turnier mit dem ersten Punkt. Wo schon
+        // gespielt wurde, gilt es als gestartet — wann genau, weiß niemand
+        // mehr; das Anlegen ist die ehrlichste Näherung.
+        var startedAt = snapshot.StartedAt ?? (matches.Any(m => m.HasBegun) ? snapshot.CreatedAt : null);
 
         return new Tournament(
             snapshot.Id,
@@ -693,16 +754,9 @@ public sealed class Tournament
             snapshot.AdminToken,
             snapshot.CreatedAt,
             snapshot.Participants.ToList(),
-            snapshot.Matches.Select(m => new Match(
-                m.Id,
-                m.Round,
-                m.Position,
-                m.Label,
-                m.Side1,
-                m.Side2,
-                m.Score is null ? null : Score.Rehydrate(m.Score.Outcome, m.Score.WinnerSide, m.Score.CompletedSets, m.Score.AbandonedSet),
-                m.Live))
-            .ToList());
+            matches,
+            snapshot.StartTime,
+            startedAt);
     }
 
     // --- Hilfen -----------------------------------------------------------
@@ -720,7 +774,7 @@ public sealed class Tournament
 
     /// <summary>
     /// Eine Änderung an dem, was die Auslosung trägt. Vor der Auslosung geht sie
-    /// einfach; danach, solange noch niemand gespielt hat, wird neu gelost —
+    /// einfach; danach, solange nicht gestartet ist, wird neu gelost —
     /// die alten Paarungen passten nicht mehr zur neuen Liste oder zum neuen
     /// Modus. Reichen die Teilnehmer dafür nicht mehr, bleibt es bei der
     /// Vorbereitung.
@@ -749,7 +803,17 @@ public sealed class Tournament
         if (IsStarted)
         {
             throw new DomainException(
-                $"{what} lässt sich nicht mehr ändern: Das Turnier hat begonnen, es steht schon ein Spielstand. Erst die Ergebnisse zurücknehmen oder die Auslosung zurücknehmen.");
+                $"{what} lässt sich nicht mehr ändern: Das Turnier ist gestartet. Wer den Rahmen ändern will, nimmt erst die Auslosung zurück.");
+        }
+    }
+
+    private void RequireStarted()
+    {
+        RequireDrawn();
+
+        if (!IsStarted)
+        {
+            throw new DomainException("Das Turnier ist noch nicht gestartet. Erst starten, dann wird gezählt.");
         }
     }
 

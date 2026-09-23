@@ -127,10 +127,90 @@ public sealed class AuthTests
         Assert.Equal(erwartet, optionen.IsConfigured);
     }
 
+    [Fact]
+    public void Ohne_Freigabeliste_darf_jedes_Konto_herein()
+    {
+        // So stand es in ADR-0019, und so bleibt es, solange niemand eine
+        // Liste setzt — auch ein Konto ganz ohne Adresse.
+        var http = Anfrage(Verlangt(), Angemeldet("1"));
+
+        Assert.Equal("google:1", Endpoints.ActorOf(http).ClientId);
+    }
+
+    [Fact]
+    public void Ein_freigegebenes_Konto_kommt_herein_gleich_wie_geschrieben()
+    {
+        var http = Anfrage(Freigegeben("anna@example.org"), Angemeldet("1", ("email", "Anna@Example.org"), ("email_verified", "true")));
+
+        Assert.Equal("google:1", Endpoints.ActorOf(http).ClientId);
+    }
+
+    [Fact]
+    public void Die_Adresse_wird_auch_unter_dem_abgebildeten_Namen_gefunden()
+    {
+        // ASP.NET bildet „email" je nach Einstellung auf ClaimTypes.Email ab —
+        // wie beim Subjekt müssen beide Wege tragen.
+        var http = Anfrage(Freigegeben("anna@example.org"), Angemeldet("1", (ClaimTypes.Email, "anna@example.org"), ("email_verified", "True")));
+
+        Assert.Equal("google:1", Endpoints.ActorOf(http).ClientId);
+    }
+
+    [Fact]
+    public void Ein_fremdes_Konto_bekommt_403_mit_seiner_Adresse()
+    {
+        // 403 und nicht 401: Eine neue Anmeldung mit demselben Konto änderte
+        // nichts, die Oberfläche soll also nicht zurück auf die Anmeldung.
+        var http = Anfrage(Freigegeben("anna@example.org"), Angemeldet("2", ("email", "tom@example.org"), ("email_verified", "true")));
+
+        var fehler = Assert.Throws<ForbiddenException>(() => Endpoints.ActorOf(http));
+
+        Assert.Contains("tom@example.org", fehler.Message);
+    }
+
+    [Fact]
+    public void Eine_unbestaetigte_Adresse_zaehlt_nicht()
+    {
+        var http = Anfrage(Freigegeben("anna@example.org"), Angemeldet("3", ("email", "anna@example.org"), ("email_verified", "false")));
+
+        Assert.Throws<ForbiddenException>(() => Endpoints.ActorOf(http));
+    }
+
+    [Fact]
+    public void Ein_Konto_ohne_Adresse_kommt_an_einer_Liste_nicht_vorbei()
+    {
+        var http = Anfrage(Freigegeben("anna@example.org"), Angemeldet("4"));
+
+        var fehler = Assert.Throws<ForbiddenException>(() => Endpoints.RequireLogin(http));
+
+        Assert.Contains("ohne E-Mail-Adresse", fehler.Message);
+    }
+
+    [Theory]
+    [InlineData("anna@example.org, tom@example.org", "tom@example.org", true)]
+    [InlineData("anna@example.org;tom@example.org", "tom@example.org", true)]
+    [InlineData("anna@example.org\ntom@example.org", " tom@example.org ", true)]
+    [InlineData(" , ; ", "wer@auch.immer", true)]
+    [InlineData("anna@example.org", "", false)]
+    [InlineData("anna@example.org", null, false)]
+    [InlineData("anna@example.org", "anna@example.org.evil", false)]
+    public void Die_Liste_versteht_die_ueblichen_Trenner(string liste, string? email, bool erwartet)
+    {
+        Assert.Equal(erwartet, new AuthOptions { AllowedEmails = liste }.Allows(email, verified: true));
+    }
+
     private static AuthOptions Verlangt() => new() { Required = true, GoogleClientId = "matchday.apps.googleusercontent.com" };
 
-    private static ClaimsPrincipal Angemeldet(string subjekt) =>
-        new(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, subjekt)], authenticationType: "Test"));
+    private static AuthOptions Freigegeben(string liste)
+    {
+        var optionen = Verlangt();
+        optionen.AllowedEmails = liste;
+        return optionen;
+    }
+
+    private static ClaimsPrincipal Angemeldet(string subjekt, params (string Typ, string Wert)[] weitere) =>
+        new(new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, subjekt), .. weitere.Select(w => new Claim(w.Typ, w.Wert))],
+            authenticationType: "Test"));
 
     private static HttpContext Anfrage(AuthOptions optionen, ClaimsPrincipal? benutzer = null)
     {

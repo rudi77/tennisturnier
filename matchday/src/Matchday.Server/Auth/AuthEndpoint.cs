@@ -1,3 +1,4 @@
+using Matchday.Server.Api;
 using Microsoft.Extensions.Options;
 
 namespace Matchday.Server.Auth;
@@ -18,5 +19,14 @@ public static class AuthEndpoint
             required = options.Value.Required,
             googleClientId = options.Value.GoogleClientId ?? string.Empty,
         }));
+
+        // Gleich nach der Anmeldung gefragt: Trägt dieses Konto hier? Sonst
+        // stünde man mit einem gültigen Token vor lauter 403ern und wüsste
+        // nicht, warum (ADR-0023).
+        app.MapGet("/api/auth/check", (HttpContext http) =>
+        {
+            Endpoints.RequireLogin(http);
+            return Results.NoContent();
+        });
     }
 }

@@ -23,7 +23,8 @@ public sealed record CreateTournamentRequest(
     Mode Mode = Mode.Knockout,
     MatchFormat? Format = null,
     Discipline Discipline = Discipline.Singles,
-    IReadOnlyList<string>? Participants = null);
+    IReadOnlyList<string>? Participants = null,
+    TimeOnly? StartTime = null);
 
 public sealed record UpdateTournamentRequest(
     string? Name = null,
@@ -33,7 +34,9 @@ public sealed record UpdateTournamentRequest(
     bool ClearLocation = false,
     Mode? Mode = null,
     Discipline? Discipline = null,
-    MatchFormat? Format = null);
+    MatchFormat? Format = null,
+    TimeOnly? StartTime = null,
+    bool ClearStartTime = false);
 
 public sealed record AddParticipantsRequest(IReadOnlyList<string> Names);
 

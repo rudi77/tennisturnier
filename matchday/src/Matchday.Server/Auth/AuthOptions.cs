@@ -20,6 +20,32 @@ public sealed class AuthOptions
     /// </summary>
     public string? GoogleClientId { get; set; }
 
+    /// <summary>
+    /// Wer herein darf: E-Mail-Adressen, getrennt durch Komma, Semikolon oder
+    /// Leerraum (ADR-0023). Leer heißt jedes Google-Konto — eine Anmeldung
+    /// allein sagt nur, wer jemand ist, nicht, ob er hier etwas anlegen darf.
+    /// </summary>
+    public string? AllowedEmails { get; set; }
+
+    /// <summary>
+    /// Darf dieses Konto herein? Gezählt wird nur eine Adresse, die Google
+    /// bestätigt hat: Eine unbestätigte ließe sich auf jede beliebige setzen.
+    /// </summary>
+    public bool Allows(string? email, bool verified)
+    {
+        var allowed = (AllowedEmails ?? string.Empty)
+            .Split([',', ';', ' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
+
+        if (allowed.Length == 0)
+        {
+            return true;
+        }
+
+        return verified
+            && !string.IsNullOrWhiteSpace(email)
+            && allowed.Contains(email.Trim(), StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>Der Aussteller, den Google für Id-Token verwendet.</summary>
     public const string GoogleIssuer = "https://accounts.google.com";
 

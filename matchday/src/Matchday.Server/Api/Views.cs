@@ -19,7 +19,9 @@ public sealed record TournamentView(
     IReadOnlyList<Participant> Participants,
     IReadOnlyList<MatchView> Matches,
     IReadOnlyList<Standing> Standings,
-    int Rounds);
+    int Rounds,
+    TimeOnly? StartTime = null,
+    DateTimeOffset? StartedAt = null);
 
 public sealed record MatchView(
     Guid Id,
@@ -55,7 +57,7 @@ public sealed record LiveView(
     int Events,
     bool Running);
 
-public sealed record TournamentSummary(Guid Id, string Name, DateOnly? Date, string? Location, Mode Mode, Discipline Discipline, TournamentState State, int ParticipantCount, string AdminToken);
+public sealed record TournamentSummary(Guid Id, string Name, DateOnly? Date, string? Location, Mode Mode, Discipline Discipline, TournamentState State, int ParticipantCount, string AdminToken, DateTimeOffset? StartedAt = null);
 
 /// <summary>Die Links: einer zum Mitschauen, einer zum Eintragen, einer zum Verwalten.</summary>
 public sealed record TournamentLinks(string PublicUrl, string AdminUrl, string ScorerUrl);
@@ -90,10 +92,12 @@ public static class ViewBuilder
             m.Live?.Count ?? 0))
         .ToList(),
         t.Standings(),
-        t.Matches.Count == 0 ? 0 : t.Matches.Max(m => m.Round));
+        t.Matches.Count == 0 ? 0 : t.Matches.Max(m => m.Round),
+        t.StartTime,
+        t.StartedAt);
 
     public static TournamentSummary Summarize(Tournament t) => new(
-        t.Id, t.Name, t.Date, t.Location, t.Mode, t.Discipline, t.State, t.Participants.Count, t.AdminToken);
+        t.Id, t.Name, t.Date, t.Location, t.Mode, t.Discipline, t.State, t.Participants.Count, t.AdminToken, t.StartedAt);
 
     public static TournamentLinks Links(Tournament t, string baseUrl) => new(
         $"{baseUrl}/?t={t.Id}",
