@@ -38,6 +38,8 @@ ENV ConnectionStrings__Default="Data Source=/data/matchday.db"
 # Die Schlüssel des Sitzungs-Cookies gehören ebenfalls auf den Datenträger —
 # sonst ist nach jedem Deploy jede Anmeldung ungültig (ADR-0025).
 ENV Auth__KeysPath=/data/keys
+# Eine Kopie der Datenbank am Tag, sieben Tage zurück.
+ENV Backup__Path=/data/backups
 EXPOSE 8080
 
 # Den Port gibt die Plattform über PORT vor; 8080 ist der Rückfall für einen

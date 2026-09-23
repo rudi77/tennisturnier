@@ -100,6 +100,16 @@ builder.Services.AddSingleton<TournamentAgent>();
 
 builder.Services.AddSingleton(new IndexPage(builder.Environment.WebRootFileProvider));
 
+// Einmal am Tag eine Kopie der Datenbank — im Bild nach /data/backups, in der
+// Entwicklung gar nicht.
+var backup = builder.Configuration.GetSection("Backup").Get<BackupOptions>() ?? new BackupOptions();
+
+if (!string.IsNullOrWhiteSpace(backup.Path))
+{
+    builder.Services.AddSingleton(backup);
+    builder.Services.AddHostedService<Backup>();
+}
+
 var app = builder.Build();
 
 // Railway schließt TLS vor der Anwendung ab. Ohne die weitergereichten

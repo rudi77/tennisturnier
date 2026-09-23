@@ -301,6 +301,20 @@ public sealed class TournamentStore
     private static Tournament? Deserialize(string? json) =>
         json is null ? null : Tournament.FromSnapshot(JsonSerializer.Deserialize<TournamentSnapshot>(json, Json)!);
 
+    /// <summary>
+    /// Eine Kopie der ganzen Datenbank in eine neue Datei. VACUUM INTO liest in
+    /// einer Transaktion: Die Kopie ist in sich stimmig, auch wenn nebenher
+    /// jemand einträgt.
+    /// </summary>
+    public async Task BackupAsync(string file, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "VACUUM INTO $file";
+        command.Parameters.AddWithValue("$file", file);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
     private SqliteConnection Open()
     {
         var connection = new SqliteConnection(_connectionString);

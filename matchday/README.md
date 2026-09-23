@@ -98,6 +98,7 @@ docker run --rm -p 8080:8080 -v matchday-daten:/data   -e AZURE_OPENAI_ENDPOINT=
 | `Auth__GoogleClientId` | Die Client-Id aus der Google Cloud Console, zugleich die Audience der Token. Bei `Auth__Required=true` Pflicht: Fehlt sie, bricht der Start ab, statt jeden still abzuweisen. |
 | `Auth__AllowedEmails` | Wer herein darf: E-Mail-Adressen, getrennt durch Komma. Leer heißt jedes Google-Konto. Ein anderes Konto bekommt nach der Anmeldung „nicht freigegeben“ zu sehen ([ADR-0023](../docs/adr/0023-freigabeliste.md)). |
 | `Auth__KeysPath` | Wo die Schlüssel des Sitzungs-Cookies liegen. Im Bild `/data/keys`, neben der Datenbank — sonst ist nach jedem Deploy jede Anmeldung ungültig ([ADR-0025](../docs/adr/0025-sitzung-statt-google-token.md)). |
+| `Backup__Path`, `Backup__Keep` | Einmal am Tag eine Kopie der Datenbank dorthin, die letzten `Keep` (Vorgabe 7) bleiben. Im Bild `/data/backups`; leer heißt keine Sicherung. Die Kopien liegen auf demselben Datenträger — gegen ein gelöschtes Turnier helfen sie, gegen einen verlorenen Datenträger nicht. |
 | `ConnectionStrings__Default` | Vorgabe im Bild `Data Source=/data/matchday.db`. Ohne Datenträger ist die Datenbank nach jedem Neustart leer. |
 
 ### Die Anmeldung einrichten
