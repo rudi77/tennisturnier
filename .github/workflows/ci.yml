@@ -1,11 +1,12 @@
 name: CI
 
+# Railway liefert MATCHDAY aus und wartet dabei auf diese Pipeline: Ist sie
+# rot, unterbleibt der Deploy (ADR-0018). Es gibt nur noch einen Baum, also
+# nur noch einen Durchlauf — und der prüft jeden Push vollständig.
 on:
   push:
     branches: ["**"]
   pull_request:
-  # Auf Zuruf: „Actions → CI → Run workflow“. Damit ist auch der Durchlauf
-  # Ende zu Ende erreichbar, der von selbst nicht mehr mitläuft.
   workflow_dispatch:
 
 # Ein zweiter Push auf denselben Branch macht den laufenden Durchgang
@@ -15,274 +16,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Welcher Baum ist überhaupt betroffen?
-  #
-  # Railway liefert MATCHDAY aus und wartet dabei auf diese Pipeline: ist sie
-  # rot, unterbleibt der Deploy. Der alte Baum wird aber nicht mehr
-  # ausgeliefert (ADR-0016) — sein Durchlauf darf die Auslieferung des neuen
-  # also nicht aufhalten. Wer ihn anfasst, bekommt ihn weiterhin vollständig
-  # geprüft; wer ihn nicht anfasst, wartet nicht auf ihn.
-  bereich:
-    name: Betroffene Bäume
-    runs-on: ubuntu-latest
-
-    outputs:
-      alt: ${{ steps.pruefen.outputs.alt }}
-      matchday: ${{ steps.pruefen.outputs.matchday }}
-
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - id: pruefen
-        env:
-          BASIS: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          HAUPT: ${{ github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-
-          # Beim ersten Push eines neuen Branches gibt es kein Davor — dann ist
-          # die Abzweigung von main der richtige Vergleichspunkt. Er ist
-          # derselbe, den der Lauf desselben Commits als Pull Request nimmt;
-          # ohne ihn galt hier alles als geändert, und derselbe Commit war
-          # einmal grün und einmal rot, je nachdem, welcher Auslöser ihn
-          # anfasste. Erst wenn auch das nicht geht — kein main in Sicht —,
-          # bleibt es beim Alles-gilt: zu viel zu prüfen ist ein Ärgernis, zu
-          # wenig ein Fehler.
-          brauchbar=true
-          case "${BASIS}" in
-            "" | 0000000000000000000000000000000000000000) brauchbar=false ;;
-          esac
-          if [ "${brauchbar}" = true ] && ! git cat-file -e "${BASIS}^{commit}" 2>/dev/null; then
-            brauchbar=false
-          fi
-
-          if [ "${brauchbar}" = false ]; then
-            if abzweigung=$(git merge-base HEAD "origin/${HAUPT}" 2>/dev/null); then
-              echo "Kein Vergleichspunkt — es gilt die Abzweigung von ${HAUPT}: ${abzweigung}"
-              BASIS="${abzweigung}"
-            else
-              echo "Kein Vergleichspunkt und kein ${HAUPT} — es gilt alles als geändert."
-              echo "alt=true" >> "$GITHUB_OUTPUT"
-              echo "matchday=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          fi
-
-          dateien=$(git diff --name-only "${BASIS}" HEAD)
-          echo "Geändert:"
-          echo "${dateien}" | sed 's/^/  /'
-
-          # Die Pipeline selbst zählt zu matchday: geprüft wird sie an dem
-          # Baum, der auch ausgeliefert wird. Sie dem alten zuzuschlagen hieße,
-          # jede Änderung an ihr durch dessen Durchlauf zu schicken — und der
-          # ist lang und derzeit rot, hielte also die Auslieferung auf.
-          alt=false
-          matchday=false
-          if echo "${dateien}" | grep -qE '^(app|src|tests|deploy)/|^(Dockerfile|docker-compose\.yml|NuGet\.config|TennisTurnier\.slnx|Directory\.(Build|Packages)\.props)$'; then
-            alt=true
-          fi
-          if echo "${dateien}" | grep -qE '^matchday/|^\.github/workflows/'; then
-            matchday=true
-          fi
-
-          echo "alter Baum: ${alt}, matchday: ${matchday}"
-          echo "alt=${alt}" >> "$GITHUB_OUTPUT"
-          echo "matchday=${matchday}" >> "$GITHUB_OUTPUT"
-
-  backend:
-    name: Backend
-    runs-on: ubuntu-latest
-    needs: bereich
-    if: needs.bereich.outputs.alt == 'true'
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Abhängigkeiten
-        run: |
-          dotnet restore
-          dotnet tool restore
-
-      # Das Protokoll wird mitgeschrieben, damit Warnungen danach als
-      # Annotation an ihrer Zeile stehen. `TreatWarningsAsErrors` ist an: eine
-      # Warnung bricht hier schon ab — sichtbar soll sie trotzdem sein.
-      - name: Bauen
-        run: |
-          set -o pipefail
-          dotnet build --no-restore --configuration Release \
-            -p:GenerateFullPaths=true \
-            -consoleLoggerParameters:NoSummary \
-            | tee build.log
-
-      - name: Warnungen zeigen
-        if: always()
-        run: python3 scripts/ci-bericht.py warnungen build.log >> "$GITHUB_STEP_SUMMARY"
-
-      # Misst und prüft in einem: das Skript lässt die Testprojekte
-      # nacheinander laufen, rechnet die Treffer zusammen und bricht ab, sobald
-      # eine Zeile oder ein Zweig ungetestet bleibt.
-      - name: Tests und Abdeckung
-        shell: pwsh
-        run: ./scripts/coverage.ps1
-
-      - name: Testergebnisse zeigen
-        if: always()
-        run: python3 scripts/ci-bericht.py tests TestResults >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Abdeckung zeigen
-        if: always()
-        run: |
-          dotnet tool run reportgenerator \
-            -reports:TestResults/merged/Cobertura.xml \
-            -targetdir:TestResults/report \
-            "-reporttypes:Html;MarkdownSummaryGithub" \
-            -title:"Backend"
-          {
-            echo '## Abdeckung Backend'
-            echo
-            tail -n +2 TestResults/report/SummaryGithub.md
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Berichte ablegen
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: backend-berichte
-          path: |
-            TestResults/report
-            TestResults/**/*.trx
-            TestResults/merged/Cobertura.xml
-            build.log
-          if-no-files-found: warn
-
-  frontend:
-    name: Frontend
-    runs-on: ubuntu-latest
-    needs: bereich
-    if: needs.bereich.outputs.alt == 'true'
-    defaults:
-      run:
-        working-directory: app
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-
-      - name: Abhängigkeiten
-        run: npm ci
-
-      - name: Typen
-        run: npm run typecheck
-
-      # Der eigentliche Bau — nicht nur die Typprüfung. Ein Bündel, das nicht
-      # entsteht, ist ein Fehler, den keine Typprüfung findet.
-      - name: Bauen
-        run: npm run build
-
-      # Die Schranken stehen in vitest.config.ts: hundert Prozent, sonst rot.
-      - name: Tests und Abdeckung
-        run: npm run coverage
-
-      - name: Abdeckung zeigen
-        if: always()
-        working-directory: .
-        run: python3 scripts/ci-bericht.py abdeckung-frontend app/coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Berichte ablegen
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: frontend-berichte
-          path: |
-            app/coverage
-            app/dist
-          if-no-files-found: warn
-
-  # Ende zu Ende läuft nur noch auf Zuruf.
-  #
-  # Er prüft den alten Baum, und der wird nicht mehr ausgeliefert (ADR-0016).
-  # Zugleich ist er der längste Durchlauf der Pipeline und derzeit rot, ohne
-  # dass ein Commit daran schuld wäre: Keycloak weist die von Hand gebaute
-  # Authorize-Adresse der Anmeldeprobe ab, weil ihr code_challenge_method
-  # fehlt, und im Spielplan fängt der Knopf „Satz 2 verringern“ den Klick auf
-  # „Satz 1 erhöhen“ ab. Wer den alten Baum wieder pflegt, holt den Durchlauf
-  # über „Actions → CI → Run workflow“ zurück — abgeschaltet ist er, nicht
-  # gelöscht, und kein einziger Test ist dafür angefasst worden.
-  e2e:
-    name: Ende zu Ende
-    runs-on: ubuntu-latest
-    needs: bereich
-    if: github.event_name == 'workflow_dispatch' && needs.bereich.outputs.alt == 'true'
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "10.0.x"
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-
-      # Der Identity Provider läuft als Container mit demselben Realm wie
-      # lokal — ohne ihn prüfte der Durchlauf eine Anwendung ohne Anmeldung.
-      - name: Keycloak starten
-        run: |
-          docker compose up -d keycloak
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/realms/tennisturnier > /dev/null; then
-              echo "Keycloak steht."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Keycloak ist nicht hochgekommen." >&2
-          docker compose logs keycloak
-          exit 1
-
-      - name: Abhängigkeiten
-        working-directory: app
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-
-      - name: Durchläufe
-        working-directory: app
-        run: npm run e2e
-
-      - name: Ergebnisse zeigen
-        if: always()
-        run: python3 scripts/ci-bericht.py e2e app/playwright-report/ergebnisse.json >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Bericht ablegen
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: e2e-bericht
-          path: |
-            app/playwright-report
-            app/test-results
-          if-no-files-found: warn
-
   matchday:
-    name: MATCHDAY (matchday/)
+    name: MATCHDAY
     runs-on: ubuntu-latest
-    needs: bereich
-    if: needs.bereich.outputs.matchday == 'true'
     defaults:
       run:
         working-directory: matchday
@@ -294,7 +30,7 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm

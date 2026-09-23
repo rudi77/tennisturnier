@@ -436,33 +436,13 @@ FodyWeavers.xsd
 *.sqlite
 *.sqlite3
 
-# Die Regel oben trifft unter Windows (core.ignorecase = true) auch das
-# Projektverzeichnis TennisTurnier.Adapters.Persistence.Sqlite — und damit jede
-# neue Datei darin, lautlos. Bereits verfolgte Dateien fallen dabei nicht auf,
-# neue schon: in 6045e1d verschwanden auf diesem Weg sämtliche EF-Migrationen
-# aus dem Index, und RoleAssignmentRepository.cs wurde nie aufgenommen. Ein
-# frischer Klon hätte weder Schema noch Übersetzung.
-!src/TennisTurnier.Adapters.Persistence.Sqlite/
-
-# Lokale Konfiguration mit Geheimnissen (Authority, Client Secrets)
+# Lokale Konfiguration mit Geheimnissen
 appsettings.Local.json
 appsettings.*.Local.json
 
-# Von `dotnet ef` beim Entwurfszeit-Zugriff angelegt
-design-time.db
-
 # --- Testberichte ---------------------------------------------------------
-# Coverage-Berichte und Playwright-Artefakte entstehen bei jedem Lauf neu.
-/TestResults/
-
-# Das Bauprotokoll, aus dem der CI-Lauf seine Warnungen liest.
-build.log
-app/coverage/
-app/playwright-report/
-app/test-results/
-app/blob-report/
-app/.playwright/
-/test-results/
+# Abdeckungsberichte entstehen bei jedem Lauf neu.
+TestResults/
 
 # MATCHDAY (matchday/): die gebaute Oberfläche liegt neben der Anwendung
 matchday/src/Matchday.Server/wwwroot/
