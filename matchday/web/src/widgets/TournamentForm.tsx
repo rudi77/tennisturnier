@@ -190,19 +190,57 @@ export function TournamentForm({
 
           <label className="field">
             <span className="field__label">Ein Satz geht bis</span>
-            <input
-              type="number"
-              min={1}
-              max={12}
-              value={draft.tiebreakAt}
-              disabled={locked}
-              onChange={(e) => set('tiebreakAt', Math.max(1, Math.min(12, Number(e.target.value) || 1)))}
-            />
+            <GamesInput value={draft.tiebreakAt} disabled={locked} onChange={(value) => set('tiebreakAt', value)} />
             <span className="field__note">Spiele — üblich 6, kurze Sätze 4. Bei Gleichstand entscheidet der Tiebreak.</span>
           </label>
         </>
       )}
     </div>
+  )
+}
+
+/** Eine Satzlänge aus dem, was im Feld steht — oder null, solange es keine gültige ist (1 bis 12). */
+export function gamesFrom(text: string): number | null {
+  if (!/^\d{1,2}$/.test(text.trim())) return null
+  const games = Number(text.trim())
+  return games >= 1 && games <= 12 ? games : null
+}
+
+/**
+ * Die Satzlänge als Zahlenfeld. Beim Tippen steht darin, was getippt wurde —
+ * auch ein leeres Feld oder eine halbe Zahl. Früher wurde schon dabei
+ * korrigiert: Aus der gelöschten 6 wurde sofort eine 1, und die getippte 4
+ * machte daraus „14“, gekappt auf 12. Jetzt zählt nur eine gültige Zahl, und
+ * wer das Feld mit etwas anderem verlässt, sieht wieder den letzten Wert.
+ */
+function GamesInput({ value, disabled, onChange }: { value: number; disabled: boolean; onChange: (value: number) => void }) {
+  const [text, setText] = useState(String(value))
+  const [shown, setShown] = useState(value)
+
+  // Ändert sich der Wert von außen — Zurücksetzen, ein anderes Handy —, zieht das Feld nach.
+  if (value !== shown) {
+    setShown(value)
+    setText(String(value))
+  }
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={1}
+      max={12}
+      value={text}
+      disabled={disabled}
+      onChange={(e) => {
+        setText(e.target.value)
+        const games = gamesFrom(e.target.value)
+        if (games !== null && games !== value) {
+          setShown(games)
+          onChange(games)
+        }
+      }}
+      onBlur={() => setText(String(value))}
+    />
   )
 }
 
