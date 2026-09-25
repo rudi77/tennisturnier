@@ -3,8 +3,8 @@ import { Mark } from './Mark'
 
 /**
  * Der Anmeldeschirm. Er steht vor dem Gespräch, wenn der Server eine
- * Anmeldung verlangt — das Mitschauen erreicht er nie, denn das ist ein
- * eigener Weg und bleibt offen (ADR-0019).
+ * Anmeldung verlangt — Mitschauen und Eintragen erreicht er nie, denn das
+ * sind eigene Wege und bleiben offen (ADR-0019, ADR-0030).
  *
  * Den Knopf zeichnet Google selbst: Ein nachgebauter dürfte die Marke gar
  * nicht tragen, und die Skript-Einbindung brauchte es ohnehin.
@@ -100,7 +100,7 @@ export function SignIn({
         <Mark />
         <h1 className="signin__title">Ein Turnier mit Freunden</h1>
         <p className="signin__text">
-          Zum Anlegen und Verwalten von Turnieren brauchst du eine Anmeldung. Zum <strong>Mitschauen</strong> nicht —
+          Zum Anlegen und Verwalten von Turnieren brauchst du eine Anmeldung. Zum <strong>Mitschauen</strong> und <strong>Eintragen</strong> nicht —
           dafür genügt der Link, den du bekommen hast.
         </p>
         <div ref={knopf} className="signin__button" />

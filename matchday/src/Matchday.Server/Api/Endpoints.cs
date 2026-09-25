@@ -57,11 +57,11 @@ public static class Endpoints
             return Results.Ok(Admin(await actions.GetByAdminTokenAsync(token, ct), http));
         });
 
-        // Der Eintragen-Link: wie der Verwalterlink ein Schlüssel, nur kleiner.
+        // Der Eintragen-Link: ein Schlüssel wie der Mitschau-Link, auch ohne
+        // Anmeldung — Mitspieler am Platz haben hier kein Konto (ADR-0030).
         // Zurück kommt die Sicht und sein eigenes Token, nie das der Verwaltung.
-        tournaments.MapGet("/by-scorer/{token}", async (HttpContext http, TournamentActions actions, string token, CancellationToken ct) =>
+        tournaments.MapGet("/by-scorer/{token}", async (TournamentActions actions, string token, CancellationToken ct) =>
         {
-            RequireLogin(http);
             var t = await actions.GetByScorerTokenAsync(token, ct);
             return Results.Ok(new ScorerAccess(ViewBuilder.Build(t), t.ScorerToken));
         });
@@ -104,13 +104,13 @@ public static class Endpoints
             Results.Ok(Admin(await actions.StartAsync(ActorOf(http), id, ct), http)));
 
         tournaments.MapPut("/{id:guid}/matches/{matchId:guid}/result", async (HttpContext http, TournamentActions actions, Guid id, Guid matchId, ResultRequest request, CancellationToken ct) =>
-            Scored(await actions.RecordResultAsync(ActorOf(http), id, matchId, request, ct), http));
+            await Scored(http, actor => actions.RecordResultAsync(actor, id, matchId, request, ct)));
 
         tournaments.MapDelete("/{id:guid}/matches/{matchId:guid}/result", async (HttpContext http, TournamentActions actions, Guid id, Guid matchId, CancellationToken ct) =>
-            Scored(await actions.ClearResultAsync(ActorOf(http), id, matchId, ct), http));
+            await Scored(http, actor => actions.ClearResultAsync(actor, id, matchId, ct)));
 
         tournaments.MapPost("/{id:guid}/matches/{matchId:guid}/live", async (HttpContext http, TournamentActions actions, Guid id, Guid matchId, LiveRequest request, CancellationToken ct) =>
-            Scored(await actions.LiveAsync(ActorOf(http), id, matchId, request, ct), http));
+            await Scored(http, actor => actions.LiveAsync(actor, id, matchId, request, ct)));
 
         tournaments.MapPost("/{id:guid}/admin-token/rotate", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
             Results.Ok(Admin(await actions.RotateAdminTokenAsync(ActorOf(http), id, ct), http)));
@@ -250,6 +250,27 @@ public static class Endpoints
     }
 
     /// <summary>
+    /// Wer einträgt. Mit dem Eintragen-Link kommt man auch ohne Anmeldung
+    /// herein — oder mit einem Konto, das hier nicht freigegeben ist: Der Link
+    /// ist der Schlüssel, nicht das Konto (ADR-0030). Dürfen tut man damit nur,
+    /// was <see cref="Actor.MayScore"/> erlaubt. Ohne Link gilt <see cref="ActorOf"/>.
+    /// </summary>
+    internal static Actor ScorerOf(HttpContext http)
+    {
+        var scorer = http.Request.Headers[ScorerHeader].FirstOrDefault();
+
+        try
+        {
+            return ActorOf(http);
+        }
+        catch (Exception e) when ((e is UnauthorizedException or ForbiddenException) && !string.IsNullOrEmpty(scorer))
+        {
+            // Niemand: Eine leere Kennung gehört keinem Turnier.
+            return new Actor("", null, scorer);
+        }
+    }
+
+    /// <summary>
     /// Nur die Anmeldung prüfen, ohne einen Handelnden zu brauchen — für
     /// Endpunkte, die keinem Eigentümer gehören und trotzdem nicht offen
     /// stehen sollen, wenn der Schalter an ist.
@@ -314,8 +335,12 @@ public static class Endpoints
     /// Sicht samt Links; wer nur den Eintragen-Link hat, bekommt die Sicht —
     /// und damit nie das Verwaltertoken zu sehen.
     /// </summary>
-    private static IResult Scored(Tournament t, HttpContext http) =>
-        Results.Ok(ActorOf(http).MayManage(t) ? Admin(t, http) : new ScorerAccess(ViewBuilder.Build(t), t.ScorerToken));
+    private static async Task<IResult> Scored(HttpContext http, Func<Actor, Task<Tournament>> action)
+    {
+        var actor = ScorerOf(http);
+        var t = await action(actor);
+        return Results.Ok(actor.MayManage(t) ? Admin(t, http) : new ScorerAccess(ViewBuilder.Build(t), t.ScorerToken));
+    }
 }
 
 public sealed record AdminView(TournamentView Tournament, TournamentLinks Links, string AdminToken);

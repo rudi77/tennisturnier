@@ -12,8 +12,9 @@ import { ABGEMELDET, type AuthConfig, type Konto } from './auth'
  * Verwalterlink. Alles andere ist das Gespräch.
  *
  * Davor liegt die Frage, ob eine Anmeldung verlangt wird. Sie gilt nicht für
- * das Mitschauen: Zuschauer haben kein Konto und sollen keins brauchen
- * (ADR-0016), und der Server hält diesen Weg entsprechend offen (ADR-0019).
+ * die beiden Links, die man weitergibt: Zuschauer und Mitspieler am Platz
+ * haben kein Konto und sollen keins brauchen (ADR-0016, ADR-0030). Der Link
+ * ist dort der Schlüssel, und der Server hält diese Wege offen.
  */
 export function App() {
   const [route, setRoute] = useState(read)
@@ -36,12 +37,12 @@ export function App() {
     return () => window.removeEventListener(ABGEMELDET, abmelden)
   }, [])
 
-  // Der Mitschau-Weg fragt gar nicht erst: Er braucht die Antwort nicht, und
-  // ein Netzfehler dürfte ihn nicht aufhalten.
-  const mitschauen = route.viewerToken !== null
+  // Diese Wege fragen gar nicht erst: Sie brauchen die Antwort nicht, und ein
+  // Netzfehler dürfte sie nicht aufhalten.
+  const perLink = Boolean(route.viewerToken || route.scorerToken)
 
   useEffect(() => {
-    if (mitschauen) return
+    if (perLink) return
     let abgebrochen = false
 
     api
@@ -65,7 +66,7 @@ export function App() {
     return () => {
       abgebrochen = true
     }
-  }, [mitschauen])
+  }, [perLink])
 
   // Das Google-Token wird gleich eingelöst. Ein Konto, das nicht freigegeben
   // ist (ADR-0023), bekommt dabei keine Sitzung, sondern einen Satz, warum.
@@ -84,7 +85,8 @@ export function App() {
       .then(() => setKonto(null))
   }, [])
 
-  if (mitschauen) return <PublicScreen token={route.viewerToken!} />
+  if (route.viewerToken) return <PublicScreen token={route.viewerToken} />
+  if (route.scorerToken) return <ScorerScreen token={route.scorerToken} />
 
   if (auth === null) return <Lade />
 
@@ -94,10 +96,6 @@ export function App() {
     }
     return <SignIn clientId={auth.googleClientId} onToken={anmelden} hinweis={fehler} />
   }
-
-  // Der Eintragen-Link verlangt, wie der Verwalterlink, die Anmeldung der
-  // Instanz — er schreibt, anders als das Mitschauen.
-  if (route.scorerToken) return <ScorerScreen token={route.scorerToken} />
 
   return <ChatScreen adminToken={route.adminToken} konto={konto ?? null} onAbmelden={abmelden} />
 }

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Matchday.Server.Api;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -183,6 +184,50 @@ public sealed class SitzungTests : IDisposable
         {
             Assert.Equal(HttpStatusCode.Forbidden, (await wer.GetAsync($"/api/tournaments/{id}/live")).StatusCode);
             Assert.Equal("event: view", await ErsteZeile(wer, $"/api/tournaments/{id}/live?key={mitschau}"));
+        }
+    }
+
+    [Fact]
+    public async Task Mit_dem_Eintragen_Link_traegt_man_auch_ohne_freigegebenes_Konto_ein()
+    {
+        // Der Freund am Platz: ein Google-Konto, aber nicht auf der Liste —
+        // oder gar nicht angemeldet. Der Link ist der Schlüssel.
+        var fabrik = Bauen(freigegeben: "anna@example.org");
+        var anna = fabrik.CreateClient();
+        (await Einloesen(anna, Token("777", "anna@example.org"))).EnsureSuccessStatusCode();
+        var angelegt = await (await anna.PostAsJsonAsync("/api/tournaments", new
+        {
+            name = "Cup",
+            format = new { bestOf = 1, finalSetMode = "Regular", tiebreakAt = 6 },
+            participants = new[] { "Anna", "Tom" },
+        })).Content.ReadFromJsonAsync<JsonElement>();
+        var id = angelegt.GetProperty("tournament").GetProperty("id").GetString();
+        var scorer = angelegt.GetProperty("links").GetProperty("scorerUrl").GetString()!.Split("?s=")[1];
+        (await anna.PostAsync($"/api/tournaments/{id}/draw", null)).EnsureSuccessStatusCode();
+        var gestartet = await (await anna.PostAsync($"/api/tournaments/{id}/start", null)).Content.ReadFromJsonAsync<JsonElement>();
+        var match = gestartet.GetProperty("tournament").GetProperty("matches")[0].GetProperty("id").GetString();
+
+        var anonym = fabrik.CreateClient();
+        var tom = fabrik.CreateClient();
+        tom.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token("888", "tom@example.org"));
+
+        foreach (var wer in new[] { anonym, tom })
+        {
+            // Ohne Link ist nichts zu machen.
+            var ohne = await wer.PostAsJsonAsync($"/api/tournaments/{id}/matches/{match}/live", new { action = "Point", side = 1 });
+            Assert.True(ohne.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden);
+
+            var zugang = await wer.GetFromJsonAsync<JsonElement>($"/api/tournaments/by-scorer/{scorer}");
+            Assert.Equal(scorer, zugang.GetProperty("scorerToken").GetString());
+
+            wer.DefaultRequestHeaders.Add(Endpoints.ScorerHeader, scorer);
+            var punkt = await wer.PostAsJsonAsync($"/api/tournaments/{id}/matches/{match}/live", new { action = "Point", side = 1 });
+            punkt.EnsureSuccessStatusCode();
+            Assert.False((await punkt.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("adminToken", out _));
+
+            // Eintragen ja, verwalten nein.
+            var verwalten = await wer.PostAsync($"/api/tournaments/{id}/draw", null);
+            Assert.True(verwalten.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden);
         }
     }
 
