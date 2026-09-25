@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { MatchView, ResultKind, ResultRequest, SetScore, TournamentView } from '../api'
+import { withoutLeadingZeros } from '../format'
 
 /**
  * Die Ergebnismaske: Sätze tippen, fertig. Der Sieger folgt aus den Sätzen;
@@ -160,7 +161,13 @@ export function ResultEditor({
                         min={0}
                         max={99}
                         value={side === 1 ? s.games1 : s.games2}
-                        onChange={(e) => update(i, side, Number(e.target.value))}
+                        // Antippen markiert die Zahl, die nächste Ziffer ersetzt sie.
+                        onFocus={(e) => e.currentTarget.select()}
+                        onChange={(e) => {
+                          const clean = withoutLeadingZeros(e.target.value)
+                          if (clean !== e.target.value) e.target.value = clean
+                          update(i, side, Number(clean))
+                        }}
                         aria-label={`Satz ${i + 1}, ${side === 1 ? match.side1.name : match.side2.name}`}
                       />
                     </td>
@@ -172,7 +179,7 @@ export function ResultEditor({
                 {sets.map((s, i) => (
                   <td key={i}>
                     {isTiebreakSet(s, i) ? (
-                      <input type="number" inputMode="numeric" min={0} placeholder="Verlierer" value={s.tiebreakPoints ?? ''} onChange={(e) => updateTiebreak(i, e.target.value)} aria-label={`Tiebreak-Punkte des Unterlegenen, Satz ${i + 1}`} />
+                      <input type="number" inputMode="numeric" min={0} placeholder="Verlierer" value={s.tiebreakPoints ?? ''} onFocus={(e) => e.currentTarget.select()} onChange={(e) => updateTiebreak(i, e.target.value)} aria-label={`Tiebreak-Punkte des Unterlegenen, Satz ${i + 1}`} />
                     ) : (
                       <span className="muted">–</span>
                     )}

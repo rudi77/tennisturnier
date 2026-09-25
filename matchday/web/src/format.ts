@@ -93,3 +93,12 @@ export function roundName(view: TournamentView, round: number): string {
   if (!match) return `Runde ${round}`
   return match.label.replace(/ \d+$/, '')
 }
+
+/**
+ * Was in einem Zahlenfeld stehen soll, wenn davor schon eine 0 stand: „04“
+ * wird „4“, „00“ wird „0“. React schreibt das Feld selbst nicht nach, weil 4
+ * und „04“ für es dieselbe Zahl sind — sonst müsste man die 0 von Hand löschen.
+ */
+export function withoutLeadingZeros(text: string): string {
+  return text.replace(/^0+(?=\d)/, '')
+}

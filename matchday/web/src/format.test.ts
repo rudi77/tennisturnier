@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countdown, disciplineText, hasBegun, roundName, setColumns, stateText, unpaired } from './format'
+import { countdown, disciplineText, hasBegun, roundName, setColumns, stateText, unpaired, withoutLeadingZeros } from './format'
 import type { MatchView, TournamentView } from './api'
 
 const match = (label: string, round: number, score: MatchView['score'] = null): MatchView => ({
@@ -152,5 +152,19 @@ describe('disciplineText', () => {
     expect(disciplineText('Singles')).toBe('Einzel')
     expect(disciplineText('Doubles')).toBe('Doppel')
     expect(disciplineText('Open')).toBe('Einzel oder Doppel offen')
+  })
+})
+
+describe('withoutLeadingZeros', () => {
+  it('nimmt die 0 weg, die vor der getippten Ziffer stand', () => {
+    expect(withoutLeadingZeros('04')).toBe('4')
+    expect(withoutLeadingZeros('012')).toBe('12')
+    expect(withoutLeadingZeros('00')).toBe('0')
+  })
+
+  it('lässt stehen, was schon stimmt', () => {
+    expect(withoutLeadingZeros('0')).toBe('0')
+    expect(withoutLeadingZeros('10')).toBe('10')
+    expect(withoutLeadingZeros('')).toBe('')
   })
 })
