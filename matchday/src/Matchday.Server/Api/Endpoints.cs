@@ -20,6 +20,13 @@ public static class Endpoints
     public const string AdminHeader = "X-Admin-Token";
     public const string ScorerHeader = "X-Scorer-Token";
 
+    /// <summary>
+    /// Die Browserkennung als Cookie — nur für die Live-Verbindung, denn ein
+    /// EventSource schickt keine Kopfzeilen. Die Kennung in die Adresse zu
+    /// schreiben, hieße, sie in jedes Protokoll zu schreiben.
+    /// </summary>
+    public const string ClientCookie = "matchday.client";
+
     public static void MapMatchday(this IEndpointRouteBuilder app)
     {
         var api = app.MapGroup("/api");
@@ -59,8 +66,13 @@ public static class Endpoints
             return Results.Ok(new ScorerAccess(ViewBuilder.Build(t), t.ScorerToken));
         });
 
-        tournaments.MapGet("/{id:guid}", async (TournamentActions actions, Guid id, CancellationToken ct) =>
-            Results.Ok(ViewBuilder.Build(await actions.GetAsync(id, ct))));
+        // Der Mitschau-Link: offen für alle, auch wenn die Instanz eine
+        // Anmeldung verlangt (ADR-0019). Er öffnet die Sicht und sonst nichts.
+        tournaments.MapGet("/by-viewer/{token}", async (TournamentActions actions, string token, CancellationToken ct) =>
+            Results.Ok(ViewBuilder.Build(await actions.GetByViewerTokenAsync(token, ct))));
+
+        tournaments.MapGet("/{id:guid}", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
+            Results.Ok(ViewBuilder.Build(await actions.ReadAsync(ActorOf(http), id, ct))));
 
         tournaments.MapGet("/{id:guid}/live", Live);
 
@@ -102,12 +114,29 @@ public static class Endpoints
 
         tournaments.MapPost("/{id:guid}/admin-token/rotate", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
             Results.Ok(Admin(await actions.RotateAdminTokenAsync(ActorOf(http), id, ct), http)));
+
+        tournaments.MapPost("/{id:guid}/viewer-token/rotate", async (HttpContext http, TournamentActions actions, Guid id, CancellationToken ct) =>
+            Results.Ok(Admin(await actions.RotateViewerTokenAsync(ActorOf(http), id, ct), http)));
     }
 
-    /// <summary>Server-Sent Events: jede Änderung als vollständige Sicht, dazwischen ein Lebenszeichen.</summary>
-    internal static async Task Live(HttpContext http, TournamentActions actions, LiveHub hub, Guid id, CancellationToken ct)
+    /// <summary>
+    /// Server-Sent Events: jede Änderung als vollständige Sicht, dazwischen ein
+    /// Lebenszeichen. Herein kommt, wem das Turnier gehört, und wer einen seiner
+    /// drei Links hat — der Schlüssel steht in der Adresse, denn ein EventSource
+    /// schickt keine Kopfzeilen. Gilt beides nach einer Änderung nicht mehr,
+    /// endet der Strom.
+    /// </summary>
+    internal static async Task Live(HttpContext http, TournamentActions actions, LiveHub hub, Guid id, string? key, CancellationToken ct)
     {
         var tournament = await actions.GetAsync(id, ct);
+        var owner = OwnerOf(http);
+
+        bool Admits(Tournament t) => Opens(t, key) || t.OwnerId == owner;
+
+        if (!Admits(tournament))
+        {
+            throw new ForbiddenException("Dieses Turnier sieht nur, wer einen seiner Links hat.");
+        }
 
         http.Response.Headers.ContentType = "text/event-stream";
         http.Response.Headers.CacheControl = "no-cache";
@@ -125,15 +154,21 @@ public static class Endpoints
 
             try
             {
-                var view = await reader.ReadAsync(timeout.Token);
+                var next = await reader.ReadAsync(timeout.Token);
 
-                if (view is null)
+                if (next is null)
                 {
                     await Write(http, "deleted", new { id }, ct);
                     return;
                 }
 
-                await Write(http, "view", view, ct);
+                if (!Admits(next))
+                {
+                    await Write(http, "revoked", new { id }, ct);
+                    return;
+                }
+
+                await Write(http, "view", ViewBuilder.Build(next), ct);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -146,6 +181,36 @@ public static class Endpoints
             }
         }
     }
+
+    /// <summary>
+    /// Wer die Live-Verbindung als Eigentümer öffnet — oder <c>null</c>. Mit
+    /// Anmeldung trägt das Sitzungs-Cookie. Ohne nennt sich der Browser im
+    /// Cookie selbst, so wie sonst in der Kopfzeile (ADR-0016). Wer sich so
+    /// nicht ausweist, ist hier kein Fehler, sondern einfach niemand: Mit einem
+    /// gültigen Link schaut er trotzdem zu.
+    /// </summary>
+    internal static string? OwnerOf(HttpContext http)
+    {
+        if (!Required(http))
+        {
+            // Leer oder überlang gehört keinem Turnier: Solche Kennungen weist
+            // schon das Anlegen ab, geprüft werden muss hier nichts.
+            return http.Request.Cookies[ClientCookie];
+        }
+
+        try
+        {
+            return AccountOf(http);
+        }
+        catch (Exception e) when (e is UnauthorizedException or ForbiddenException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Ob der Schlüssel einer der Links dieses Turniers ist.</summary>
+    internal static bool Opens(Tournament t, string? key) =>
+        key is not null && (key == t.ViewerToken || key == t.ScorerToken || key == t.AdminToken);
 
     internal static async Task Write(HttpContext http, string eventName, object payload, CancellationToken ct)
     {

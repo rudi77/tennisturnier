@@ -7,7 +7,7 @@ import { api } from './api'
 import { ABGEMELDET, type AuthConfig, type Konto } from './auth'
 
 /**
- * Drei Adressen, kein Router: `?t=<id>` ist der Mitschau-Link für alle,
+ * Drei Adressen, kein Router: `?t=<token>` ist der Mitschau-Link für alle,
  * `?s=<token>` der Eintragen-Link für Mitspieler, `?a=<token>` der
  * Verwalterlink. Alles andere ist das Gespräch.
  *
@@ -38,7 +38,7 @@ export function App() {
 
   // Der Mitschau-Weg fragt gar nicht erst: Er braucht die Antwort nicht, und
   // ein Netzfehler dürfte ihn nicht aufhalten.
-  const mitschauen = route.publicId !== null
+  const mitschauen = route.viewerToken !== null
 
   useEffect(() => {
     if (mitschauen) return
@@ -84,7 +84,7 @@ export function App() {
       .then(() => setKonto(null))
   }, [])
 
-  if (mitschauen) return <PublicScreen tournamentId={route.publicId!} />
+  if (mitschauen) return <PublicScreen token={route.viewerToken!} />
 
   if (auth === null) return <Lade />
 
@@ -124,5 +124,5 @@ function Hinweis({ text }: { text: string }) {
 
 function read() {
   const params = new URLSearchParams(window.location.search)
-  return { publicId: params.get('t'), adminToken: params.get('a'), scorerToken: params.get('s') }
+  return { viewerToken: params.get('t'), adminToken: params.get('a'), scorerToken: params.get('s') }
 }

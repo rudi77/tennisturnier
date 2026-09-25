@@ -80,7 +80,8 @@ public sealed class AuthApiTests : IDisposable
         // brauchen. 404 statt 401 heißt genau das — gefragt werden darf.
         var client = _mitAnmeldung.CreateClient();
 
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/tournaments/{Guid.NewGuid()}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/tournaments/by-viewer/unbekannt")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/tournaments/{Guid.NewGuid()}/live?key=unbekannt")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/health")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/chat/status")).StatusCode);
     }

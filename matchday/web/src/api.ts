@@ -256,7 +256,12 @@ export const api = {
   logout: () => call<void>('POST', '/api/auth/logout'),
   status: () => call<{ configured: boolean; missing: string }>('GET', '/api/chat/status'),
   mine: () => call<TournamentSummary[]>('GET', '/api/tournaments'),
-  get: (id: string) => call<TournamentView>('GET', `/api/tournaments/${id}`),
+  /** Über die Id sieht ein Turnier nur, wer es verwaltet oder den Eintragen-Link hat. */
+  get: (id: string) => call<TournamentView>('GET', `/api/tournaments/${id}`, undefined, id),
+  /** Der Mitschau-Link: offen für alle, die ihn haben. */
+  byViewer: (token: string) => call<TournamentView>('GET', `/api/tournaments/by-viewer/${encodeURIComponent(token)}`),
+  /** Ein neuer Mitschau-Link; der alte gilt ab sofort nicht mehr. */
+  renewViewerLink: (id: string) => call<AdminView>('POST', `/api/tournaments/${id}/viewer-token/rotate`, undefined, id),
   byAdmin: (token: string) => call<AdminView>('GET', `/api/tournaments/by-admin/${encodeURIComponent(token)}`),
   create: (body: CreateBody) => call<AdminView>('POST', '/api/tournaments', body),
   update: (id: string, body: UpdateBody) => call<AdminView>('PUT', `/api/tournaments/${id}`, body, id),
@@ -302,16 +307,30 @@ export function rememberAdmin(admin: AdminView) {
   rememberAdminToken(admin.tournament.id, admin.adminToken)
 }
 
-/** Die Mitschau-Ansicht abonnieren. Liefert die Abmeldung. */
+/**
+ * Die Mitschau-Ansicht abonnieren. Ein EventSource kann keine Kopfzeilen
+ * schicken: Der Schlüssel — Mitschau-, Eintragen- oder Verwaltertoken — kommt
+ * deshalb in der Adresse mit, und der Browser nennt sich in einem Cookie, damit
+ * die Turnierleitung auch ohne Token live mitschaut. Gilt beides nicht mehr,
+ * endet der Strom mit `revoked`. Liefert die Abmeldung.
+ */
 export function subscribeLive(
   id: string,
+  key: string | null,
   onView: (view: TournamentView) => void,
   onDeleted: () => void,
+  onRevoked: () => void = () => undefined,
 ): () => void {
-  const source = new EventSource(`/api/tournaments/${id}/live`)
+  document.cookie = `matchday.client=${encodeURIComponent(clientId())}; path=/api/tournaments; SameSite=Strict`
+  const source = new EventSource(`/api/tournaments/${id}/live${key ? `?key=${encodeURIComponent(key)}` : ''}`)
   source.addEventListener('view', (event) => onView(JSON.parse((event as MessageEvent).data) as TournamentView))
+  // Beide Enden schließen selbst: Sonst verbände sich der Browser von allein neu.
   source.addEventListener('deleted', () => {
     onDeleted()
+    source.close()
+  })
+  source.addEventListener('revoked', () => {
+    onRevoked()
     source.close()
   })
   return () => source.close()

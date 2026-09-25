@@ -5,34 +5,49 @@ import { Bracket } from './widgets/Bracket'
 import { Standings } from './widgets/Standings'
 import { TournamentHeader } from './widgets/TournamentCard'
 
+/** Was bleibt, wenn die Turnierleitung den Link erneuert hat — die Sicht verschwindet mit ihm. */
+const VERALTET = 'Dieser Mitschau-Link gilt nicht mehr. Frag die Turnierleitung nach dem aktuellen.'
+
 /**
  * Der Mitschau-Link: reine Anzeige, ohne Modell und ohne Knöpfe. Aktualisiert
- * sich selbst, solange die Seite offen ist (ADR-0016).
+ * sich selbst, solange die Seite offen ist (ADR-0016) — und solange der Link
+ * gilt: Erneuert ihn die Turnierleitung, bleibt nur der Hinweis stehen.
  */
-export function PublicScreen({ tournamentId }: { tournamentId: string }) {
+export function PublicScreen({ token }: { token: string }) {
   const [view, setView] = useState<TournamentView | null>(null)
   const [gone, setGone] = useState<string | null>(null)
   const [live, setLive] = useState(false)
 
   useEffect(() => {
     let unsubscribe = () => {}
+    let cancelled = false
     api
-      .get(tournamentId)
+      .byViewer(token)
       .then((v) => {
+        if (cancelled) return
         setView(v)
         unsubscribe = subscribeLive(
-          tournamentId,
+          v.id,
+          token,
           (next) => {
             setView(next)
             setLive(true)
           },
           () => setGone('Dieses Turnier wurde gelöscht.'),
+          () => {
+            setView(null)
+            setLive(false)
+            setGone(VERALTET)
+          },
         )
         setLive(true)
       })
       .catch((e: Error) => setGone(e.message))
-    return () => unsubscribe()
-  }, [tournamentId])
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [token])
 
   return (
     <div className="public">

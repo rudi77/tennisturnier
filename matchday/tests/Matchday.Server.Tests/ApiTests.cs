@@ -52,16 +52,26 @@ public sealed class ApiTests : IDisposable
         var admin = await created.Content.ReadFromJsonAsync<JsonElement>();
         var id = admin.GetProperty("tournament").GetProperty("id").GetString();
         var token = admin.GetProperty("adminToken").GetString();
-        Assert.Contains($"?t={id}", admin.GetProperty("links").GetProperty("publicUrl").GetString());
+        var mitschau = admin.GetProperty("links").GetProperty("publicUrl").GetString()!.Split("?t=")[1];
+
+        // Der Mitschau-Link ist ein eigener Schlüssel, nicht die Id.
+        Assert.NotEqual(id, mitschau);
 
         // Öffentlich, ohne Kopfzeile: die Sicht ohne Token.
         var anonym = _factory.CreateClient();
-        var view = await anonym.GetFromJsonAsync<JsonElement>($"/api/tournaments/{id}");
+        var view = await anonym.GetFromJsonAsync<JsonElement>($"/api/tournaments/by-viewer/{mitschau}");
         Assert.Equal("Sommercup", view.GetProperty("name").GetString());
         Assert.False(view.TryGetProperty("adminToken", out _));
+        Assert.False(view.TryGetProperty("viewerToken", out _));
+
+        // Die Id steht in der Sicht — einlösen lässt sie sich nur mit einem der Links.
+        var fremd = Client("browser-fremd");
+        Assert.Equal(HttpStatusCode.Forbidden, (await anonym.GetAsync($"/api/tournaments/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await fremd.GetAsync($"/api/tournaments/{id}")).StatusCode);
+        Assert.Equal("Sommercup", (await rudi.GetFromJsonAsync<JsonElement>($"/api/tournaments/{id}")).GetProperty("name").GetString());
+        Assert.Equal("Sommercup", (await Client("browser-fremd", token).GetFromJsonAsync<JsonElement>($"/api/tournaments/{id}")).GetProperty("name").GetString());
 
         // Ein Fremder darf nicht ändern — mit Token schon.
-        var fremd = Client("browser-fremd");
         var verboten = await fremd.PostAsJsonAsync($"/api/tournaments/{id}/participants", new { names = new[] { "Max" } });
         Assert.Equal(HttpStatusCode.Forbidden, verboten.StatusCode);
 
@@ -74,8 +84,12 @@ public sealed class ApiTests : IDisposable
         var ohneKopfzeile = await anonym.GetAsync("/api/tournaments");
         Assert.Equal(HttpStatusCode.Forbidden, ohneKopfzeile.StatusCode);
 
-        var nichtDa = await anonym.GetAsync($"/api/tournaments/{Guid.NewGuid()}");
+        // Suchmaschinen bleiben draußen, auch wenn ein Link öffentlich landet.
+        Assert.Equal("noindex, nofollow", (await anonym.GetAsync("/api/health")).Headers.GetValues("X-Robots-Tag").Single());
+
+        var nichtDa = await fremd.GetAsync($"/api/tournaments/{Guid.NewGuid()}");
         Assert.Equal(HttpStatusCode.NotFound, nichtDa.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonym.GetAsync("/api/tournaments/by-viewer/geraten")).StatusCode);
 
         var byAdmin = await fremd.GetFromJsonAsync<JsonElement>($"/api/tournaments/by-admin/{token}");
         Assert.Equal(id, byAdmin.GetProperty("tournament").GetProperty("id").GetString());
@@ -351,10 +365,16 @@ public sealed class ApiTests : IDisposable
     {
         var rudi = Client("browser-rudi");
         var created = await rudi.PostAsJsonAsync("/api/tournaments", new { name = "Sommercup" });
-        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tournament").GetProperty("id").GetString();
+        var admin = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var id = admin.GetProperty("tournament").GetProperty("id").GetString();
+        var mitschau = admin.GetProperty("links").GetProperty("publicUrl").GetString()!.Split("?t=")[1];
+
+        // Ohne Schlüssel keine Mitschau — auch nicht mit der Id.
+        var ohne = await _factory.CreateClient().GetAsync($"/api/tournaments/{id}/live");
+        Assert.Equal(HttpStatusCode.Forbidden, ohne.StatusCode);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        using var response = await _factory.CreateClient().GetAsync($"/api/tournaments/{id}/live", HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        using var response = await _factory.CreateClient().GetAsync($"/api/tournaments/{id}/live?key={mitschau}", HttpCompletionOption.ResponseHeadersRead, cts.Token);
         Assert.Equal("text/event-stream", response.Content.Headers.ContentType?.MediaType);
 
         using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
@@ -363,5 +383,34 @@ public sealed class ApiTests : IDisposable
         var data = await reader.ReadLineAsync(cts.Token);
         Assert.StartsWith("data: {", data);
         Assert.Contains("Sommercup", data);
+    }
+
+    [Fact]
+    public async Task Ein_erneuerter_Mitschau_Link_sperrt_den_alten_aus()
+    {
+        var rudi = Client("browser-rudi");
+        var created = await rudi.PostAsJsonAsync("/api/tournaments", new { name = "Sommercup" });
+        var admin = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var id = admin.GetProperty("tournament").GetProperty("id").GetString();
+        var links = admin.GetProperty("links");
+        var alt = links.GetProperty("publicUrl").GetString()!.Split("?t=")[1];
+
+        // Erneuern darf nur die Verwaltung.
+        var fremd = await Client("browser-fremd").PostAsync($"/api/tournaments/{id}/viewer-token/rotate", null);
+        Assert.Equal(HttpStatusCode.Forbidden, fremd.StatusCode);
+
+        var erneuert = await (await rudi.PostAsync($"/api/tournaments/{id}/viewer-token/rotate", null)).Content.ReadFromJsonAsync<JsonElement>();
+        var neueLinks = erneuert.GetProperty("links");
+        var neu = neueLinks.GetProperty("publicUrl").GetString()!.Split("?t=")[1];
+
+        Assert.NotEqual(alt, neu);
+        Assert.Equal(links.GetProperty("adminUrl").GetString(), neueLinks.GetProperty("adminUrl").GetString());
+        Assert.Equal(links.GetProperty("scorerUrl").GetString(), neueLinks.GetProperty("scorerUrl").GetString());
+
+        var anonym = _factory.CreateClient();
+        var weg = await anonym.GetAsync($"/api/tournaments/by-viewer/{alt}");
+        Assert.Equal(HttpStatusCode.NotFound, weg.StatusCode);
+        Assert.Contains("Turnierleitung", (await weg.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await anonym.GetAsync($"/api/tournaments/by-viewer/{neu}")).StatusCode);
     }
 }

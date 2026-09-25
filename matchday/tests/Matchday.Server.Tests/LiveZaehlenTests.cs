@@ -151,7 +151,9 @@ public sealed class SpeicherWanderungTests
         try
         {
             var t = Tournament.Create("Alter Cup", "browser-rudi", DateTimeOffset.UtcNow);
-            var turnierJson = JsonSerializer.Serialize(t.ToSnapshot(), TournamentStore.Json);
+
+            // Damals kannte die Zeile kein eigenes Mitschau-Token: Die Id war der Link.
+            var turnierJson = JsonSerializer.Serialize(t.ToSnapshot() with { ViewerToken = null }, TournamentStore.Json);
 
             using (var alt = new SqliteConnection(verbindung))
             {
@@ -173,6 +175,10 @@ public sealed class SpeicherWanderungTests
             var store = new TournamentStore(verbindung);
             Assert.Equal(t.Id, (await store.FindByScorerTokenAsync(t.ScorerToken))!.Id);
             Assert.Contains("\"s1\"", await store.FindSessionJsonForTournamentAsync(t.Id, "browser-rudi"));
+
+            // Ein schon geteilter Mitschau-Link mit der Id gilt weiter.
+            var alterLink = (await store.FindByViewerTokenAsync(t.Id.ToString()))!;
+            Assert.Equal(t.Id.ToString(), alterLink.ViewerToken);
 
             // Ein zweiter Start findet die Spalten vor und lässt sie in Ruhe.
             var nochmal = new TournamentStore(verbindung);

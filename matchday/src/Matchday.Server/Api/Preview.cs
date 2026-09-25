@@ -42,8 +42,8 @@ public static partial class Preview
 
             using var reader = new StreamReader(index.CreateReadStream());
             var html = await reader.ReadToEndAsync(http.RequestAborted);
-            var turnier = Guid.TryParse(http.Request.Query["t"], out var id)
-                ? await http.RequestServices.GetRequiredService<TournamentStore>().FindAsync(id, http.RequestAborted)
+            var turnier = http.Request.Query["t"].FirstOrDefault() is { Length: > 0 } token
+                ? await http.RequestServices.GetRequiredService<TournamentStore>().FindByViewerTokenAsync(token, http.RequestAborted)
                 : null;
 
             http.Response.ContentType = "text/html; charset=utf-8";

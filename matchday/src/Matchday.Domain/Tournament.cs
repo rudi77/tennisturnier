@@ -42,6 +42,7 @@ public sealed class Tournament
         TournamentState state,
         string ownerId,
         string adminToken,
+        string viewerToken,
         DateTimeOffset createdAt,
         List<Participant> participants,
         List<Match> matches,
@@ -58,6 +59,7 @@ public sealed class Tournament
         State = state;
         OwnerId = ownerId;
         AdminToken = adminToken;
+        ViewerToken = viewerToken;
         CreatedAt = createdAt;
         _participants = participants;
         _matches = matches;
@@ -110,6 +112,13 @@ public sealed class Tournament
     public string ScorerToken => Derive("matchday-scorer:" + AdminToken);
 
     /// <summary>
+    /// Der Schlüssel des Mitschau-Links. Er steht für sich und hängt nicht am
+    /// Verwaltertoken: Wer den Mitschau-Link erneuert, will die Zuschauer
+    /// aussperren, nicht die Turnierleitung und die Helfer am Platz.
+    /// </summary>
+    public string ViewerToken { get; private set; }
+
+    /// <summary>
     /// Ob gespielt wird: Ab dem ausdrücklichen Start stehen Teilnehmer, Modus
     /// und Format fest (ADR-0024). Bis dahin ist auch ein ausgelostes Turnier
     /// noch zu ändern — die Auslosung wird dann neu gemacht.
@@ -146,6 +155,7 @@ public sealed class Tournament
             format,
             TournamentState.Setup,
             RequireText(ownerId, "Eigentümer"),
+            NewToken(),
             NewToken(),
             now,
             [],
@@ -214,6 +224,9 @@ public sealed class Tournament
     }
 
     public void RotateAdminToken() => AdminToken = NewToken();
+
+    /// <summary>Ein neuer Mitschau-Link; der alte gilt ab sofort nicht mehr.</summary>
+    public void RotateViewerToken() => ViewerToken = NewToken();
 
     // --- Teilnehmer -------------------------------------------------------
 
@@ -772,7 +785,8 @@ public sealed class Tournament
             m.Live))
         .ToList(),
         StartTime,
-        StartedAt);
+        StartedAt,
+        ViewerToken);
 
     public static Tournament FromSnapshot(TournamentSnapshot snapshot)
     {
@@ -805,6 +819,9 @@ public sealed class Tournament
             snapshot.State,
             snapshot.OwnerId,
             snapshot.AdminToken,
+            // Vor dem eigenen Schlüssel war die Id der Mitschau-Link. Ein
+            // schon geteilter Link gilt so weiter, bis ihn jemand erneuert.
+            snapshot.ViewerToken ?? snapshot.Id.ToString(),
             snapshot.CreatedAt,
             snapshot.Participants.ToList(),
             matches,

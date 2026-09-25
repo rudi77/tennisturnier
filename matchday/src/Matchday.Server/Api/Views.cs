@@ -100,7 +100,7 @@ public static class ViewBuilder
         t.Id, t.Name, t.Date, t.Location, t.Mode, t.Discipline, t.State, t.Participants.Count, t.AdminToken, t.StartedAt);
 
     public static TournamentLinks Links(Tournament t, string baseUrl) => new(
-        $"{baseUrl}/?t={t.Id}",
+        $"{baseUrl}/?t={t.ViewerToken}",
         $"{baseUrl}/?a={t.AdminToken}",
         $"{baseUrl}/?s={t.ScorerToken}");
 

@@ -301,15 +301,19 @@ export function ChatScreen({
   // ein EventSource darauf bekommt 404 und versucht es endlos weiter, denn
   // einen Statuscode reicht er nicht heraus. Abonnieren, was man kennt.
   const bekannt = current !== null && views[current] !== undefined
+  // Wem das Turnier gehört, den erkennt der Server auch so. Das
+  // Verwaltertoken braucht es für Turniere, die man über den Verwalterlink
+  // übernommen hat.
+  const schluessel = current ? adminTokenFor(current) : null
 
   useEffect(() => {
     if (!current || !bekannt) return
     // Löscht jemand anderes das Turnier, geht es mit dem allgemeinen Gespräch weiter.
-    return subscribeLive(current, showView, () => forget(current))
+    return subscribeLive(current, schluessel, showView, () => forget(current))
     // views selbst gehört nicht in die Abhängigkeiten: Jedes Live-Ereignis
     // ersetzt das Objekt, und das risse die Verbindung bei jedem Ereignis ab,
     // um sie neu aufzubauen. Der Merker kippt einmal und bleibt dann stehen.
-  }, [current, bekannt, showView, forget])
+  }, [current, bekannt, schluessel, showView, forget])
 
   useEffect(() => {
     // Ist das Gespräch zugeklappt, gibt es nichts zu scrollen — und der Ruf

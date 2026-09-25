@@ -1,16 +1,18 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using Matchday.Server.Api;
+using Matchday.Domain;
 
 namespace Matchday.Server.Live;
 
 /// <summary>
 /// Wer eine Mitschau-Ansicht offen hat, bekommt jede Änderung geschoben.
-/// Im Speicher, ein Prozess — mehr braucht es nicht (ADR-0016).
+/// Im Speicher, ein Prozess — mehr braucht es nicht (ADR-0016). Geschoben
+/// wird das Turnier selbst und nicht seine Sicht: Jede Verbindung prüft
+/// daran, ob ihr Link noch gilt.
 /// </summary>
 public sealed class LiveHub
 {
-    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Guid, Channel<TournamentView?>>> _subscribers = new();
+    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Guid, Channel<Tournament?>>> _subscribers = new();
 
     /// <summary>
     /// Wie lange die Mitschau auf eine Änderung wartet, bevor sie ein
@@ -19,9 +21,9 @@ public sealed class LiveHub
     /// </summary>
     public TimeSpan KeepAlive { get; init; } = TimeSpan.FromSeconds(20);
 
-    public IDisposable Subscribe(Guid tournamentId, out ChannelReader<TournamentView?> reader)
+    public IDisposable Subscribe(Guid tournamentId, out ChannelReader<Tournament?> reader)
     {
-        var channel = Channel.CreateBounded<TournamentView?>(new BoundedChannelOptions(8)
+        var channel = Channel.CreateBounded<Tournament?>(new BoundedChannelOptions(8)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
         });
@@ -40,8 +42,8 @@ public sealed class LiveHub
         });
     }
 
-    /// <summary>Eine neue Sicht — oder <c>null</c>, wenn das Turnier gelöscht wurde.</summary>
-    public void Publish(Guid tournamentId, TournamentView? view)
+    /// <summary>Der neue Stand — oder <c>null</c>, wenn das Turnier gelöscht wurde.</summary>
+    public void Publish(Guid tournamentId, Tournament? tournament)
     {
         if (!_subscribers.TryGetValue(tournamentId, out var channels))
         {
@@ -50,7 +52,7 @@ public sealed class LiveHub
 
         foreach (var channel in channels.Values)
         {
-            channel.Writer.TryWrite(view);
+            channel.Writer.TryWrite(tournament);
         }
     }
 

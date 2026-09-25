@@ -34,6 +34,27 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
     public async Task<Tournament> GetAsync(Guid id, CancellationToken ct = default) =>
         await store.FindAsync(id, ct) ?? throw new NotFoundException("Dieses Turnier gibt es nicht.");
 
+    /// <summary>
+    /// Ein Turnier über seine Id — für die Verwaltung und für den
+    /// Eintragen-Link. Wer nur zuschaut, kommt über seinen Link herein und nicht
+    /// über die Id: Die steht in jeder Sicht, und ließe sie sich einlösen, wäre
+    /// ein erneuerter Mitschau-Link keiner.
+    /// </summary>
+    public async Task<Tournament> ReadAsync(Actor actor, Guid id, CancellationToken ct = default)
+    {
+        var tournament = await GetAsync(id, ct);
+
+        if (!actor.MayScore(tournament))
+        {
+            throw new ForbiddenException("Dieses Turnier sieht nur, wer einen seiner Links hat.");
+        }
+
+        return tournament;
+    }
+
+    public async Task<Tournament> GetByViewerTokenAsync(string viewerToken, CancellationToken ct = default) =>
+        await store.FindByViewerTokenAsync(viewerToken, ct) ?? throw new NotFoundException("Diesen Mitschau-Link gibt es nicht (mehr). Frag die Turnierleitung nach dem aktuellen.");
+
     public async Task<Tournament> GetByAdminTokenAsync(string adminToken, CancellationToken ct = default) =>
         await store.FindByAdminTokenAsync(adminToken, ct) ?? throw new NotFoundException("Diesen Verwalterlink gibt es nicht.");
 
@@ -163,6 +184,10 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
     public Task<Tournament> RotateAdminTokenAsync(Actor actor, Guid id, CancellationToken ct = default) =>
         MutateAsync(actor, id, t => t.RotateAdminToken(), ct);
 
+    /// <summary>Ein neuer Mitschau-Link. Wer mit dem alten zuschaut, fliegt raus — auch mitten im Turnier.</summary>
+    public Task<Tournament> RotateViewerTokenAsync(Actor actor, Guid id, CancellationToken ct = default) =>
+        MutateAsync(actor, id, t => t.RotateViewerToken(), ct);
+
     public async Task DeleteAsync(Actor actor, Guid id, CancellationToken ct = default)
     {
         var tournament = await GetAsync(id, ct);
@@ -218,7 +243,7 @@ public sealed class TournamentActions(TournamentStore store, LiveHub live, TimeP
             action(t);
         }, ct);
 
-        live.Publish(id, ViewBuilder.Build(tournament));
+        live.Publish(id, tournament);
         return tournament;
     }
 

@@ -120,6 +120,15 @@ forwarded.KnownIPNetworks.Clear();
 forwarded.KnownProxies.Clear();
 app.UseForwardedHeaders(forwarded);
 
+// Ein Turnier trägt die Namen von Menschen. Wer einen Link teilt, meint die
+// Gruppe, nicht die Suchmaschine — für die Seite steht es auch im Kopf von
+// index.html, hier gilt es für jede Antwort.
+app.Use((http, next) =>
+{
+    http.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+    return next(http);
+});
+
 app.UseExceptionHandler(handler => handler.Run(async context =>
 {
     var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;

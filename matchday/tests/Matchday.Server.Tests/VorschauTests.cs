@@ -65,15 +65,15 @@ public sealed class VorschauTests : IDisposable
             location = "Baden",
             participants = new[] { "Anna", "Tom" },
         });
-        var id = (await angelegt.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tournament").GetProperty("id").GetString();
+        var mitschau = (await angelegt.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("links").GetProperty("publicUrl").GetString()!.Split("?t=")[1];
 
-        var html = await client.GetStringAsync($"/?t={id}");
+        var html = await client.GetStringAsync($"/?t={mitschau}");
 
         Assert.Contains("<meta property=\"og:title\" content=\"Abendrunde &lt;am See&gt; &amp; &quot;Rudis&quot; Cup&#39;s\" />", html);
         Assert.Contains("<title>Abendrunde &lt;am See&gt; &amp; &quot;Rudis&quot; Cup&#39;s · MATCHDAY</title>", html);
         Assert.Contains("Sa., 26. September 2026 · 18:30 Uhr · Baden — Einzel, K.o., 2 Teilnehmer, noch nicht gestartet", html);
         Assert.Contains("<meta property=\"og:image\" content=\"http://localhost/icon-512.png\" />", html);
-        Assert.Contains($"<meta property=\"og:url\" content=\"http://localhost/?t={id}\" />", html);
+        Assert.Contains($"<meta property=\"og:url\" content=\"http://localhost/?t={mitschau}\" />", html);
     }
 
     [Theory]

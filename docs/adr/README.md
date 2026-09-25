@@ -34,6 +34,7 @@ noch einmal von vorn beginnt.
 | [0025](0025-sitzung-statt-google-token.md) | Eine Sitzung statt des Google-Tokens | Accepted |
 | [0026](0026-zaehlen-ohne-netz.md) | Zählen ohne Netz, und nichts zählt doppelt | Accepted |
 | [0027](0027-erst-die-spieler-dann-die-teams.md) | Erst die Spieler, dann die Teams — und die Disziplin darf warten | Accepted |
+| [0028](0028-eigener-schluessel-fuer-den-mitschau-link.md) | Ein eigener Schlüssel für den Mitschau-Link | Accepted |
 
 ## Status
 

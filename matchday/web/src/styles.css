@@ -465,6 +465,7 @@ a { color: var(--accent); }
 .link-row__label { font-size: 0.85rem; color: var(--fg-muted); }
 .link-row__url { font-family: var(--mono); font-size: 0.85rem; overflow-wrap: anywhere; background: var(--bg); padding: 6px 8px; border-radius: 8px; }
 .link-row__actions { display: flex; gap: 8px; }
+.link-row__renew { display: grid; gap: 6px; justify-items: start; padding: 0 0 10px; font-size: 0.85rem; }
 
 /* --- Ergebnismaske --- */
 

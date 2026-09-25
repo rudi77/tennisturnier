@@ -160,6 +160,40 @@ public sealed class SitzungTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/api/auth/me")).StatusCode);
     }
 
+    [Fact]
+    public async Task Die_Sitzung_oeffnet_die_Mitschau_der_eigenen_Turniere_ohne_Link()
+    {
+        var fabrik = Bauen(freigegeben: "anna@example.org");
+        var anna = fabrik.CreateClient();
+        (await Einloesen(anna, Token("555", "anna@example.org"))).EnsureSuccessStatusCode();
+        var angelegt = await (await anna.PostAsJsonAsync("/api/tournaments", new { name = "Cup" })).Content.ReadFromJsonAsync<JsonElement>();
+        var id = angelegt.GetProperty("tournament").GetProperty("id").GetString();
+        var mitschau = angelegt.GetProperty("links").GetProperty("publicUrl").GetString()!.Split("?t=")[1];
+
+        // Die eigene Sitzung genügt — so wie ein EventSource sie mitschickt.
+        Assert.Equal("event: view", await ErsteZeile(anna, $"/api/tournaments/{id}/live"));
+
+        // Ohne Sitzung, oder mit einem Konto, das nicht freigegeben ist, ist
+        // man hier niemand: ohne Link zu, mit Link offen.
+        var anonym = fabrik.CreateClient();
+        var tom = fabrik.CreateClient();
+        tom.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token("666", "tom@example.org"));
+
+        foreach (var wer in new[] { anonym, tom })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await wer.GetAsync($"/api/tournaments/{id}/live")).StatusCode);
+            Assert.Equal("event: view", await ErsteZeile(wer, $"/api/tournaments/{id}/live?key={mitschau}"));
+        }
+    }
+
+    private static async Task<string?> ErsteZeile(HttpClient client, string adresse)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var antwort = await client.GetAsync(adresse, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        using var reader = new StreamReader(await antwort.Content.ReadAsStreamAsync(cts.Token));
+        return await reader.ReadLineAsync(cts.Token);
+    }
+
     private static Task<HttpResponseMessage> Einloesen(HttpClient client, string token)
     {
         var anfrage = new HttpRequestMessage(HttpMethod.Post, "/api/auth/session");

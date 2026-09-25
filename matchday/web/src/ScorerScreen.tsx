@@ -32,6 +32,7 @@ export function ScorerScreen({ token }: { token: string }) {
         setView(access.tournament)
         unsubscribe = subscribeLive(
           access.tournament.id,
+          access.scorerToken,
           (next) => {
             setView(next)
             setLive(true)

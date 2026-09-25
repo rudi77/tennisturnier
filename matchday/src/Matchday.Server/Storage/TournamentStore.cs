@@ -52,7 +52,12 @@ public sealed class TournamentStore
         // nachgetragen, und was sie tragen sollen, steht schon in der Zeile.
         if (AddColumn(connection, "tournaments", "scorer_token"))
         {
-            BackfillScorerTokens(connection);
+            Backfill(connection, "scorer_token", t => t.ScorerToken);
+        }
+
+        if (AddColumn(connection, "tournaments", "viewer_token"))
+        {
+            Backfill(connection, "viewer_token", t => t.ViewerToken);
         }
 
         if (AddColumn(connection, "sessions", "tournament_id"))
@@ -65,6 +70,7 @@ public sealed class TournamentStore
         using var indexes = connection.CreateCommand();
         indexes.CommandText = """
             CREATE INDEX IF NOT EXISTS ix_tournaments_scorer ON tournaments(scorer_token);
+            CREATE INDEX IF NOT EXISTS ix_tournaments_viewer ON tournaments(viewer_token);
             CREATE INDEX IF NOT EXISTS ix_sessions_tournament ON sessions(client_id, tournament_id);
             """;
         indexes.ExecuteNonQuery();
@@ -87,8 +93,11 @@ public sealed class TournamentStore
         return true;
     }
 
-    /// <summary>Das Token des Eintragen-Links folgt aus dem Verwaltertoken; die Spalte ist nur zum Finden.</summary>
-    private static void BackfillScorerTokens(SqliteConnection connection)
+    /// <summary>
+    /// Eine Spalte, die nur zum Finden da ist, aus der Zeile selbst füllen: Was
+    /// sie tragen soll, weiß das Turnier schon.
+    /// </summary>
+    private static void Backfill(SqliteConnection connection, string column, Func<Tournament, string> value)
     {
         var tokens = new List<(string Id, string Token)>();
 
@@ -99,14 +108,14 @@ public sealed class TournamentStore
 
             while (reader.Read())
             {
-                tokens.Add((reader.GetString(0), Deserialize(reader.GetString(1))!.ScorerToken));
+                tokens.Add((reader.GetString(0), value(Deserialize(reader.GetString(1))!)));
             }
         }
 
         foreach (var (id, token) in tokens)
         {
             using var write = connection.CreateCommand();
-            write.CommandText = "UPDATE tournaments SET scorer_token = $token WHERE id = $id";
+            write.CommandText = $"UPDATE tournaments SET {column} = $token WHERE id = $id";
             write.Parameters.AddWithValue("$token", token);
             write.Parameters.AddWithValue("$id", id);
             write.ExecuteNonQuery();
@@ -140,6 +149,15 @@ public sealed class TournamentStore
         return Deserialize(await command.ExecuteScalarAsync(ct) as string);
     }
 
+    public async Task<Tournament?> FindByViewerTokenAsync(string viewerToken, CancellationToken ct = default)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT json FROM tournaments WHERE viewer_token = $token";
+        command.Parameters.AddWithValue("$token", viewerToken);
+        return Deserialize(await command.ExecuteScalarAsync(ct) as string);
+    }
+
     public async Task<IReadOnlyList<Tournament>> ListByOwnerAsync(string ownerId, CancellationToken ct = default)
     {
         using var connection = Open();
@@ -165,8 +183,8 @@ public sealed class TournamentStore
             using var connection = Open();
             using var command = connection.CreateCommand();
             command.CommandText = """
-                INSERT INTO tournaments (id, owner_id, admin_token, scorer_token, json, updated_at)
-                VALUES ($id, $owner, $token, $scorer, $json, $now)
+                INSERT INTO tournaments (id, owner_id, admin_token, scorer_token, viewer_token, json, updated_at)
+                VALUES ($id, $owner, $token, $scorer, $viewer, $json, $now)
                 """;
             Bind(command, tournament);
             await command.ExecuteNonQueryAsync(ct);
@@ -191,7 +209,7 @@ public sealed class TournamentStore
             using var connection = Open();
             using var command = connection.CreateCommand();
             command.CommandText = """
-                UPDATE tournaments SET owner_id = $owner, admin_token = $token, scorer_token = $scorer, json = $json, updated_at = $now
+                UPDATE tournaments SET owner_id = $owner, admin_token = $token, scorer_token = $scorer, viewer_token = $viewer, json = $json, updated_at = $now
                 WHERE id = $id
                 """;
             Bind(command, tournament);
@@ -294,6 +312,7 @@ public sealed class TournamentStore
         command.Parameters.AddWithValue("$owner", tournament.OwnerId);
         command.Parameters.AddWithValue("$token", tournament.AdminToken);
         command.Parameters.AddWithValue("$scorer", tournament.ScorerToken);
+        command.Parameters.AddWithValue("$viewer", tournament.ViewerToken);
         command.Parameters.AddWithValue("$json", JsonSerializer.Serialize(tournament.ToSnapshot(), Json));
         command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
     }

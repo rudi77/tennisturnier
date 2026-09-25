@@ -111,7 +111,21 @@ export function Widget({
         </>
       )
     case 'share':
-      return <ShareLinks view={view} links={item.data as Links} />
+      return (
+        <ShareLinks
+          view={view}
+          links={item.data as Links}
+          renew={
+            admin
+              ? async () => {
+                  const renewed = await api.renewViewerLink(view.id)
+                  apply(renewed)
+                  return renewed
+                }
+              : undefined
+          }
+        />
+      )
     default:
       return (
         <>

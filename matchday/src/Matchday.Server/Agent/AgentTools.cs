@@ -155,6 +155,10 @@ public sealed class AgentTools(TournamentActions actions)
             "Die Links zum aktuellen Turnier: einer zum Mitschauen für alle, einer zum Eintragen von Spielständen (für Mitspieler und Helfer) und einer zum Verwalten (geheim).",
             Schema(new { tournamentId = TournamentIdProperty })),
 
+        new("renew_viewer_link",
+            "Erneuert den Mitschau-Link: Der alte gilt ab sofort nicht mehr, und wer damit gerade zuschaut, wird abgemeldet. Für den Fall, dass der Link in falsche Hände geraten ist. Eintragen-Link und Verwalterlink bleiben, wie sie sind.",
+            Schema(new { tournamentId = TournamentIdProperty })),
+
         new("delete_tournament",
             "Löscht ein Turnier endgültig. Nur nach ausdrücklicher Zustimmung des Benutzers.",
             Schema(new { tournamentId = TournamentIdProperty }, "tournamentId")),
@@ -176,7 +180,7 @@ public sealed class AgentTools(TournamentActions actions)
             {
                 "list_tournaments" => await ListAsync(actor, ct),
                 "create_tournament" => await CreateAsync(input, actor, baseUrl, ct),
-                "get_tournament" => await GetAsync(Id(input, currentTournamentId), ct),
+                "get_tournament" => Show(await actions.ReadAsync(actor, Id(input, currentTournamentId), ct)),
                 "update_tournament" => await UpdateAsync(input, actor, Id(input, currentTournamentId), ct),
                 "add_participants" => Show(await actions.AddParticipantsAsync(actor, Id(input, currentTournamentId), Strings(input, "names"), ct), WidgetParticipants),
                 "add_random_teams" => Show(await actions.AddRandomTeamsAsync(actor, Id(input, currentTournamentId), Strings(input, "players"), ct), WidgetParticipants),
@@ -187,6 +191,7 @@ public sealed class AgentTools(TournamentActions actions)
                 "record_result" => await RecordAsync(input, actor, Id(input, currentTournamentId), ct),
                 "clear_result" => await ClearAsync(input, actor, Id(input, currentTournamentId), ct),
                 "share_links" => await ShareAsync(actor, Id(input, currentTournamentId), baseUrl, ct),
+                "renew_viewer_link" => await RenewViewerAsync(actor, Id(input, currentTournamentId), baseUrl, ct),
                 "delete_tournament" => await DeleteAsync(actor, Id(input, currentTournamentId), ct),
                 _ => new ToolOutcome($"Unbekanntes Werkzeug: {name}", IsError: true),
             };
@@ -240,9 +245,6 @@ public sealed class AgentTools(TournamentActions actions)
         var links = ViewBuilder.Links(t, baseUrl);
         return Show(t, WidgetTournament, extra: $"Mitschau-Link: {links.PublicUrl}");
     }
-
-    private async Task<ToolOutcome> GetAsync(Guid id, CancellationToken ct) =>
-        Show(await actions.GetAsync(id, ct));
 
     private async Task<ToolOutcome> UpdateAsync(JsonElement input, Actor actor, Guid id, CancellationToken ct)
     {
@@ -328,9 +330,18 @@ public sealed class AgentTools(TournamentActions actions)
             throw new ForbiddenException("Dafür braucht es den Verwalterlink dieses Turniers.");
         }
 
+        return Share(t, baseUrl, "");
+    }
+
+    private async Task<ToolOutcome> RenewViewerAsync(Actor actor, Guid id, string baseUrl, CancellationToken ct) =>
+        Share(await actions.RotateViewerTokenAsync(actor, id, ct), baseUrl, "Der alte Mitschau-Link gilt nicht mehr. ");
+
+    /// <summary>Die drei Links, als Text für das Modell und als Widget für die Bühne.</summary>
+    private static ToolOutcome Share(Tournament t, string baseUrl, string vorweg)
+    {
         var links = ViewBuilder.Links(t, baseUrl);
         return new ToolOutcome(
-            $"Mitschau-Link (für alle): {links.PublicUrl}\nEintragen-Link (für alle, die Spielstände eintragen sollen): {links.ScorerUrl}\nVerwalterlink (geheim, nur für die Turnierleitung): {links.AdminUrl}",
+            $"{vorweg}Mitschau-Link (für alle): {links.PublicUrl}\nEintragen-Link (für alle, die Spielstände eintragen sollen): {links.ScorerUrl}\nVerwalterlink (geheim, nur für die Turnierleitung): {links.AdminUrl}",
             IsError: false,
             WidgetShare,
             new { tournament = ViewBuilder.Build(t), links },

@@ -20,7 +20,7 @@ public sealed class AgentToolsTests : IDisposable
     [Fact]
     public void Jedes_Werkzeug_hat_ein_gueltiges_Schema()
     {
-        Assert.Equal(14, AgentTools.Definitions.Count);
+        Assert.Equal(15, AgentTools.Definitions.Count);
 
         foreach (var tool in AgentTools.Definitions)
         {
@@ -411,6 +411,40 @@ public sealed class AgentToolsTests : IDisposable
 
         Assert.True(fremd.IsError);
         Assert.Contains("Verwalterlink", fremd.ResultForModel);
+    }
+
+    [Fact]
+    public async Task Ein_fremdes_Turnier_zeigt_der_Agent_nicht()
+    {
+        // Die Id steht in jeder Mitschau-Sicht. Über das Gespräch darf sie
+        // nicht mehr öffnen als über die API.
+        var t = await _a.Actions.CreateAsync(_a.Rudi, new CreateTournamentRequest("Cup"));
+
+        var fremd = await _a.Tools.ExecuteAsync(
+            "get_tournament", In(new { }), _a.Fremder, t.Id, "https://matchday.test", CancellationToken.None);
+
+        Assert.True(fremd.IsError);
+        Assert.Contains("Links", fremd.ResultForModel);
+    }
+
+    [Fact]
+    public async Task Der_Agent_erneuert_den_Mitschau_Link()
+    {
+        var t = await _a.Actions.CreateAsync(_a.Rudi, new CreateTournamentRequest("Cup"));
+        var alt = t.ViewerToken;
+
+        var fremd = await _a.Tools.ExecuteAsync(
+            "renew_viewer_link", In(new { }), _a.Fremder, t.Id, "https://matchday.test", CancellationToken.None);
+        Assert.True(fremd.IsError);
+
+        var neu = await Run("renew_viewer_link", new { }, t.Id);
+
+        Assert.False(neu.IsError);
+        Assert.Equal(AgentTools.WidgetShare, neu.Widget);
+        Assert.StartsWith("Der alte Mitschau-Link gilt nicht mehr.", neu.ResultForModel);
+        Assert.DoesNotContain(alt, neu.ResultForModel);
+        Assert.Contains($"?t={(await _a.Actions.GetAsync(t.Id)).ViewerToken}", neu.ResultForModel);
+        Assert.Contains($"?a={t.AdminToken}", neu.ResultForModel);
     }
 
     [Fact]
