@@ -32,8 +32,14 @@ keinen Ort, an dem die Spieler stehen konnten.
   der Auslosung jemand ohne Partner dazu, lost die Anwendung nicht neu aus,
   sondern geht zurück in die Vorbereitung.
 
-Unverändert bleibt: Die Disziplin lässt sich nur mit leerer Liste wechseln.
-Ein Doppel wird als Doppel angelegt. Nur die Paare dürfen später kommen.
+**Die Disziplin lässt sich auch mit Namen auf der Liste wechseln**, bis zum
+Start. Aus einem Einzel wird ein Doppel, dessen Spieler ohne Partner dastehen.
+Aus einem Doppel wird ein Einzel, in dem die Teams in ihre Spieler zerfallen;
+wer schon allein dastand, behält seinen Eintrag. Ergäben die Spieler mehr als
+64 Teilnehmer, wird der Wechsel abgelehnt. Das ersetzt die Regel aus ADR-0020,
+nach der nur mit leerer Liste gewechselt werden durfte: Sie zwang dazu, alle
+Namen zu löschen, nur weil die Entscheidung fürs Doppel später fiel als das
+Eintragen.
 
 ## Folgen
 

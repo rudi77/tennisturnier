@@ -74,7 +74,7 @@ public sealed class AgentTools(TournamentActions actions)
             Schema(new { tournamentId = TournamentIdProperty }, "tournamentId")),
 
         new("update_tournament",
-            "Ändert Name, Datum, Uhrzeit, Ort, Modus, Disziplin oder Satzformat des aktuellen Turniers. Modus, Disziplin und Format nur, solange das Turnier nicht gestartet ist; ist schon ausgelost, lost ein neuer Modus neu aus. Die Disziplin nur, solange noch niemand eingetragen ist.",
+            "Ändert Name, Datum, Uhrzeit, Ort, Modus, Disziplin oder Satzformat des aktuellen Turniers. Modus, Disziplin und Format nur, solange das Turnier nicht gestartet ist; ist schon ausgelost, lost ein neuer Modus neu aus. Wechselt ein Einzel mit Namen ins Doppel, stehen die Spieler danach ohne Partner da; zurück ins Einzel zerfallen die Teams in ihre Spieler.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,

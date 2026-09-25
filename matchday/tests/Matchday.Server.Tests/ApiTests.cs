@@ -129,9 +129,12 @@ public sealed class ApiTests : IDisposable
         Assert.Equal(HttpStatusCode.UnprocessableEntity, dreier.StatusCode);
         Assert.DoesNotContain("Dreierdoppel", await (await rudi.GetAsync("/api/tournaments")).Content.ReadAsStringAsync());
 
-        // Die Disziplin steht nicht mehr zur Wahl, sobald Teams drinstehen.
+        // Zurück ins Einzel: Die Teams zerfallen in ihre Spieler.
         var umstellen = await rudi.PutAsJsonAsync($"/api/tournaments/{id}", new { discipline = "Singles" });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, umstellen.StatusCode);
+        umstellen.EnsureSuccessStatusCode();
+        Assert.Equal(4, (await umstellen.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tournament").GetProperty("participants").GetArrayLength());
+        (await rudi.PutAsJsonAsync($"/api/tournaments/{id}", new { discipline = "Doubles" })).EnsureSuccessStatusCode();
+        (await rudi.PostAsJsonAsync($"/api/tournaments/{id}/participants", new { names = new[] { "Anna / Tom", "Rudi / Max" } })).EnsureSuccessStatusCode();
 
         // Der Rest des Rahmens geht weiterhin — auch ohne Gespräch.
         var geändert = await rudi.PutAsJsonAsync($"/api/tournaments/{id}", new { name = "Doppelrunde am See", location = "Baden", date = "2026-09-19" });

@@ -66,7 +66,7 @@ internal static class Knowledge
         - Ist das Turnier gestartet, lassen sich Teilnehmer, Modus, Disziplin und Satzformat nicht mehr ändern; dafür erst die Auslosung zurücknehmen.
         - Vor dem Start lässt sich nichts zählen und kein Ergebnis eintragen.
         - Live mitzählen geht nicht auf ein Match, das schon ein eingetragenes Ergebnis hat — erst das Ergebnis löschen.
-        - Die Disziplin lässt sich nur wechseln, solange niemand eingetragen ist: ein Einzelname ist kein Team.
+        - Die Disziplin lässt sich bis zum Start wechseln, auch mit eingetragenen Namen: Aus einem Einzel wird ein Doppel, dessen Spieler noch ohne Partner dastehen; aus einem Doppel ein Einzel, in dem die Teams in ihre Spieler zerfallen. Die Namen müssen dafür nicht gelöscht werden.
         - Jeder Teilnehmername kommt einmal vor; im Doppel darf ein Spieler nur in einem Team stehen.
         - Ein gelöschtes Turnier ist weg. Ergebnisse lassen sich einzeln zurücknehmen, die Auslosung nur ganz.
         </grenzen>

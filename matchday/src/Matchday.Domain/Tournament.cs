@@ -167,22 +167,40 @@ public sealed class Tournament
     public void SetMode(Mode mode) => Change("Der Modus", () => Mode = mode);
 
     /// <summary>
-    /// Einzel oder Doppel. Der Wechsel geht nur mit leerer Teilnehmerliste: Ein
-    /// Einzelname ist kein Team, und ein Team ist kein Einzelname — was schon
-    /// auf der Liste steht, ließe sich nicht umdeuten.
+    /// Einzel oder Doppel — auch, wenn schon Namen auf der Liste stehen
+    /// (ADR-0027). Aus einem Einzel wird ein Doppel, dessen Spieler noch ohne
+    /// Partner dastehen; aus einem Doppel ein Einzel, in dem jeder Spieler
+    /// eines Teams für sich spielt.
     /// </summary>
     public void SetDiscipline(Discipline discipline)
     {
-        RequireNotStarted("Die Disziplin");
-
-        if (discipline != Discipline && _participants.Count > 0)
+        if (discipline == Discipline)
         {
-            throw new DomainException(discipline == Discipline.Doubles
-                ? "Im Doppel besteht jeder Teilnehmer aus zwei Spielern. Erst die Teilnehmerliste leeren, dann auf Doppel wechseln."
-                : "Im Einzel steht ein Name je Teilnehmer. Erst die Teilnehmerliste leeren, dann auf Einzel wechseln.");
+            return;
         }
 
-        Discipline = discipline;
+        Change("Die Disziplin", () =>
+        {
+            if (discipline == Discipline.Singles)
+            {
+                // Die Teams zerfallen in ihre Spieler; wer schon allein
+                // dastand, behält seinen Eintrag.
+                var spieler = _participants
+                    .SelectMany(p => p.Lineup.Count == 1 ? [p] : p.Lineup.Select(name => new Participant(Guid.NewGuid(), name, [name])))
+                    .ToList();
+
+                if (spieler.Count > MaxParticipants)
+                {
+                    throw new DomainException(
+                        $"Als Einzel wären es {spieler.Count} Teilnehmer — mehr als {MaxParticipants} passen nicht in ein Turnier.");
+                }
+
+                _participants.Clear();
+                _participants.AddRange(spieler);
+            }
+
+            Discipline = discipline;
+        });
     }
 
     public void SetFormat(MatchFormat format)

@@ -85,13 +85,14 @@ export function TournamentForm({
   draft,
   onChange,
   locked = false,
-  disciplineLocked = false,
+  hasEntries = false,
   extrasOpen = true,
 }: {
   draft: Draft
   onChange: (draft: Draft) => void
   locked?: boolean
-  disciplineLocked?: boolean
+  /** Stehen schon Namen auf der Liste? Dann sagt die Disziplin, was aus ihnen wird. */
+  hasEntries?: boolean
   extrasOpen?: boolean
 }) {
   const [open, setOpen] = useState(extrasOpen)
@@ -132,14 +133,16 @@ export function TournamentForm({
               ['Singles', 'Einzel'],
               ['Doubles', 'Doppel'],
             ]}
-            disabled={locked || disciplineLocked}
+            disabled={locked}
             note={
               locked
                 ? 'Fest, seit das Turnier gestartet ist.'
-                : disciplineLocked
-                  ? 'Erst die Teilnehmerliste leeren — ein Einzelname ist kein Team.'
-                  : draft.discipline === 'Doubles'
-                    ? 'Ein Teilnehmer ist ein Team: „Anna / Tom“.'
+                : draft.discipline === 'Doubles'
+                  ? hasEntries
+                    ? 'Wer schon eingetragen ist, steht ohne Partner da, bis die Teams gebildet sind — spätestens vor dem Auslosen.'
+                    : 'Ein Teilnehmer ist ein Team: „Anna / Tom“. Spieler dürfen auch erst einmal allein auf die Liste.'
+                  : hasEntries
+                    ? 'Im Einzel spielt jeder für sich — Teams zerfallen in ihre Spieler.'
                     : undefined
             }
             onPick={(value) => set('discipline', value)}

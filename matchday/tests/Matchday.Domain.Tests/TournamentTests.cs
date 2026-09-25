@@ -744,22 +744,55 @@ public sealed class TournamentTests
     }
 
     [Fact]
-    public void Die_Disziplin_wechselt_nur_mit_leerer_Liste()
+    public void Aus_dem_Einzel_wird_ein_Doppel_und_zurueck()
     {
-        var t = Neu(Mode.Knockout, "Rudi");
-        Assert.Throws<DomainException>(() => t.SetDiscipline(Discipline.Doubles));
+        // Die Namen stehen schon, und erst dann fällt die Entscheidung fürs
+        // Doppel: Sie bleiben, nur eben noch ohne Partner (ADR-0027).
+        var t = Neu(Mode.Knockout, "Anna", "Tom", "Rudi", "Max");
+        t.Draw(new Random(1));
+
+        t.SetDiscipline(Discipline.Doubles);
+        Assert.Equal(Discipline.Doubles, t.Discipline);
+        Assert.Equal(["Anna", "Tom", "Rudi", "Max"], t.Unpaired.Select(p => p.Name));
+        Assert.Equal(TournamentState.Setup, t.State);
 
         // Derselbe Wert ist kein Wechsel — das darf niemandem im Weg stehen.
-        t.SetDiscipline(Discipline.Singles);
-
-        t.RemoveParticipant(t.Participants[0].Id);
         t.SetDiscipline(Discipline.Doubles);
-        t.AddParticipant("Anna / Tom");
-        t.AddParticipant("Rudi / Max");
 
+        t.AddParticipant("Anna / Tom");
+        t.AddRandomTeams([], new Random(1));
         t.Draw(new Random(1));
+
+        // Zurück ins Einzel: Die Teams zerfallen in ihre Spieler, und die
+        // Auslosung wird mit ihnen neu gemacht.
+        t.SetDiscipline(Discipline.Singles);
+        Assert.Equal(["Anna", "Tom"], t.Participants.Take(2).Select(p => p.Name));
+        Assert.Equal(["Anna", "Max", "Rudi", "Tom"], t.Participants.Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Empty(t.Unpaired);
+        Assert.Equal(TournamentState.Running, t.State);
+
         t.Start(Now);
-        Assert.Throws<DomainException>(() => t.SetDiscipline(Discipline.Singles));
+        Assert.Contains("gestartet", Assert.Throws<DomainException>(() => t.SetDiscipline(Discipline.Doubles)).Message);
+    }
+
+    [Fact]
+    public void Wer_schon_allein_stand_bleibt_beim_Wechsel_derselbe_und_voll_ist_voll()
+    {
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+        var eva = t.AddParticipant("Eva");
+        t.SetDiscipline(Discipline.Singles);
+        Assert.Equal(eva.Id, Assert.Single(t.Participants).Id);
+
+        // 33 Teams wären 66 Spieler — mehr, als in ein Turnier passen.
+        var voll = Tournament.Create("Voll", "browser-1", Now, discipline: Discipline.Doubles);
+
+        for (var i = 0; i < 33; i++)
+        {
+            voll.AddParticipant($"A{i} / B{i}");
+        }
+
+        Assert.Contains("66 Teilnehmer", Assert.Throws<DomainException>(() => voll.SetDiscipline(Discipline.Singles)).Message);
+        Assert.Equal(Discipline.Doubles, voll.Discipline);
     }
 
     [Fact]

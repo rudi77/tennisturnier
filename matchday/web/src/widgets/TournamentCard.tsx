@@ -146,7 +146,7 @@ function TournamentSettings({ view, act, onDeleted }: { view: TournamentView; ac
         draft={draft}
         onChange={(next) => setEdit({ base: server, draft: next })}
         locked={started}
-        disciplineLocked={view.participants.length > 0}
+        hasEntries={view.participants.length > 0}
       />
       {drawn && !started && <p className="field__note">Schon ausgelost, aber noch nicht gestartet: Ein neuer Modus lost neu aus, das Format ändert keine Paarung.</p>}
 

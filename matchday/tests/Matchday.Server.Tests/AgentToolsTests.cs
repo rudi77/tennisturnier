@@ -474,19 +474,22 @@ public sealed class AgentToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task Die_Disziplin_laesst_sich_wechseln_solange_die_Liste_leer_ist()
+    public async Task Aus_dem_Einzel_mit_Namen_wird_ein_Doppel_ohne_Teams()
     {
-        var anlegen = await Run("create_tournament", new { name = "Cup" });
+        // Genau so kam es am Platz: Die Namen stehen schon, dann heißt es
+        // „wir spielen Doppel, Teams haben wir noch nicht“ (ADR-0027).
+        var anlegen = await Run("create_tournament", new { name = "Cup", participants = new[] { "Anna", "Tom", "Rudi", "Max" } });
         var id = anlegen.TournamentId!.Value;
 
         var aufDoppel = await Run("update_tournament", new { discipline = "Doubles" }, id);
         Assert.False(aufDoppel.IsError);
         Assert.Contains("Doppel", aufDoppel.ResultForModel);
+        Assert.Contains("Ohne Partner: Anna, Tom, Rudi, Max", aufDoppel.ResultForModel);
 
         await Run("add_participants", new { names = new[] { "Anna / Tom" } }, id);
         var zurueck = await Run("update_tournament", new { discipline = "Singles" }, id);
-        Assert.True(zurueck.IsError);
-        Assert.Contains("Teilnehmerliste leeren", zurueck.ResultForModel);
+        Assert.False(zurueck.IsError);
+        Assert.Contains("Teilnehmer (4)", zurueck.ResultForModel);
     }
 
     [Fact]
