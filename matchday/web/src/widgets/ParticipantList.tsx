@@ -1,61 +1,51 @@
 import { useState } from 'react'
 import { api, type TournamentView } from '../api'
-import { isTeam, splitEntries, splitPlayers } from '../entries'
-import { hasBegun } from '../format'
+import { splitEntries } from '../entries'
+import { hasBegun, unpaired } from '../format'
 import type { Act } from './Widget'
 
 /**
  * Namen, sonst nichts — im Doppel je Teilnehmer zwei, getrennt durch „/“.
  * Eintragen und streichen gehen direkt, am Modell vorbei.
  *
- * Im Doppel darf dasselbe Feld auch einzelne Spieler tragen: Dann würfelt
- * „Teams auslosen“ die Paare — dieselbe Domänenmethode, die der Agent ruft.
+ * Im Doppel dürfen Spieler auch allein auf die Liste, wenn die Teams noch
+ * nicht feststehen (ADR-0027). Gepaart wird später: „Teams auslosen“ würfelt
+ * aus allen ohne Partner, und „Anna / Tom“ einzutragen macht zwei, die schon
+ * allein dastehen, zum Team. Ausgelost wird erst, wenn jeder einen Partner hat.
  */
 export function ParticipantList({ view, admin, act, embedded = false }: { view: TournamentView; admin: boolean; act: Act; embedded?: boolean }) {
   const [name, setName] = useState('')
   const [confirm, setConfirm] = useState(false)
   const setup = view.state === 'Setup'
-  // Bis zum ersten Punkt bleibt die Liste offen; ist schon ausgelost, lost die
+  // Bis zum Start bleibt die Liste offen; ist schon ausgelost, lost die
   // Anwendung mit jeder Änderung neu aus.
   const started = hasBegun(view)
   const canEdit = admin && !started
   const doubles = view.discipline === 'Doubles'
   const entries = splitEntries(name)
-
-  // Im Doppel fängt der Hinweis ab, was die Domäne ohnehin zurückweisen würde —
-  // nur eben, bevor jemand auf „Eintragen“ drückt.
-  const incomplete = doubles && entries.some((entry) => !isTeam(entry))
-
-  // Lauter einzelne Namen im Doppel: gemeint sind Spieler, nicht halbe Teams.
-  // Daraus wird kein Fehler, sondern ein Angebot.
-  const loose = doubles && entries.length >= 2 && entries.every((entry) => splitPlayers(entry).length === 1)
-  const canRandom = loose && entries.length % 2 === 0
+  const allein = unpaired(view)
+  const teams = view.participants.length - allein.length
 
   function add() {
-    if (entries.length === 0 || incomplete) return
+    if (entries.length === 0) return
     setName('')
     void act(() => api.addParticipants(view.id, entries))
-  }
-
-  function randomTeams() {
-    if (!canRandom) return
-    setName('')
-    void act(() => api.addRandomTeams(view.id, entries))
   }
 
   const body = (
     <>
       <div className="card__head">
         <h2 className="card__title">{doubles ? 'Teams' : 'Teilnehmer'}</h2>
-        <span className="muted">{view.participants.length}</span>
+        <span className="muted">{doubles && allein.length > 0 ? `${teams} + ${allein.length} ohne Partner` : view.participants.length}</span>
       </div>
       {view.participants.length === 0 ? (
-        <p className="muted">{doubles ? 'Noch kein Team eingetragen.' : 'Noch niemand eingetragen.'}</p>
+        <p className="muted">{doubles ? 'Noch niemand eingetragen — Teams oder erst einmal die Spieler.' : 'Noch niemand eingetragen.'}</p>
       ) : (
         <ol className="participants">
           {view.participants.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} className={allein.includes(p) ? 'participants__alone' : undefined}>
               <span>{p.name}</span>
+              {allein.includes(p) && <span className="participants__tag">ohne Partner</span>}
               {canEdit && (
                 <button type="button" className="icon" aria-label={`${p.name} streichen`} title="Streichen" onClick={() => void act(() => api.removeParticipant(view.id, p.id))}>
                   ×
@@ -70,38 +60,45 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
           className="inline-form"
           onSubmit={(e) => {
             e.preventDefault()
-            // Eingabetaste tut, was der Knopf daneben tut — im Doppel also
-            // auslosen, sobald dort einzelne Spieler stehen.
-            if (loose) randomTeams()
-            else add()
+            add()
           }}
         >
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={doubles ? 'Anna / Tom — oder Spieler einzeln zum Auslosen' : 'Name, oder mehrere mit Komma'}
-            aria-label={doubles ? 'Neues Team' : 'Neuer Teilnehmer'}
+            placeholder={doubles ? 'Anna / Tom — oder Spieler einzeln, Teams später' : 'Name, oder mehrere mit Komma'}
+            aria-label={doubles ? 'Neues Team oder neuer Spieler' : 'Neuer Teilnehmer'}
           />
-          {loose ? (
-            <button type="button" className="button" disabled={!canRandom} onClick={randomTeams} title="Aus den einzelnen Spielern zufällige Teams würfeln">
-              Teams auslosen
-            </button>
-          ) : (
-            <button type="submit" className="button" disabled={entries.length === 0 || incomplete}>
-              Eintragen
-            </button>
-          )}
+          <button type="submit" className="button" disabled={entries.length === 0}>
+            Eintragen
+          </button>
         </form>
       )}
-      {canEdit && loose && (
-        <p className="field__note">
-          {canRandom
-            ? `${entries.length} Spieler einzeln — „Teams auslosen“ würfelt ${entries.length / 2} Teams daraus.`
-            : `${entries.length} Spieler gehen nicht auf: ein Team sind zwei. Einer fehlt oder ist zu viel.`}
-        </p>
+      {canEdit && allein.length > 0 && (
+        <div className="actions actions--start">
+          <button
+            type="button"
+            className="button"
+            disabled={allein.length < 2 || allein.length % 2 === 1}
+            onClick={() => void act(() => api.addRandomTeams(view.id, []))}
+            title="Aus allen ohne Partner zufällige Teams würfeln"
+          >
+            Teams auslosen
+          </button>
+          <span className="field__note">
+            {allein.length === 1
+              ? `${allein[0].name} steht noch ohne Partner da.`
+              : allein.length % 2 === 1
+              ? `${allein.length} ohne Partner gehen nicht auf — einer fehlt oder ist zu viel.`
+              : `Würfelt ${allein.length / 2} ${allein.length === 2 ? 'Team' : 'Teams'} aus allen ohne Partner.`}{' '}
+            Von Hand geht es mit „{allein[0].name} / Partner“.
+          </span>
+        </div>
       )}
-      {canEdit && incomplete && !loose && <p className="field__note">Ein Doppel braucht zwei Spieler je Team: „Anna / Tom“.</p>}
-      {canEdit && setup && view.participants.length >= 2 && (
+      {canEdit && setup && view.participants.length >= 2 && allein.length > 0 && (
+        <p className="field__note">Ausgelost wird, sobald jeder einen Partner hat.</p>
+      )}
+      {canEdit && setup && view.participants.length >= 2 && allein.length === 0 && (
         <div className="actions">
           {confirm ? (
             <>

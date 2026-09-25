@@ -10,10 +10,12 @@ Gespräch: unten ein Eingabefeld, wahlweise per Sprache, und der Agent legt an,
 trägt ein, lost aus und zeigt jeweils das Widget, das gerade zählt. Warum es so
 gebaut ist, steht in [ADR-0016](../docs/adr/0016-neuanfang-ein-turnier-mit-freunden.md).
 
-Im Doppel müssen die Paare nicht feststehen: Nenn die Spieler einzeln, und
-**das Los bildet die Teams** — im Gespräch („mach daraus zufällige Teams“) wie
-über den Knopf „Teams auslosen“ in der Teilnehmerliste. Gemischt wird in der
-Domäne, wie bei der Auslosung selbst.
+Im Doppel müssen die Paare nicht feststehen: Trag die Spieler einzeln ein, sie
+stehen dann **ohne Partner** auf der Liste ([ADR-0027](../docs/adr/0027-erst-die-spieler-dann-die-teams.md)).
+Die Teams kommen später: **Das Los bildet sie** aus allen ohne Partner, im
+Gespräch („mach daraus zufällige Teams“) oder über den Knopf „Teams auslosen“.
+Von Hand geht es mit „Anna / Tom“. Ausgelost wird erst, wenn jeder einen Partner
+hat. Gemischt wird in der Domäne, wie bei der Auslosung selbst.
 
 **Drei Wege, und jeder führt durch:** ganz im Gespräch, ganz über die Widgets
 auf der Bühne, oder gemischt. Beide rufen dieselben Anwendungsfälle, und der

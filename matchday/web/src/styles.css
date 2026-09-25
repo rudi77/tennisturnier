@@ -382,6 +382,10 @@ a { color: var(--accent); }
 .start--due .muted { color: var(--accent); font-weight: 600; }
 .live-scorer__pending { margin: 8px 0 0; font-size: 0.9rem; color: var(--fg-muted); }
 .live-scorer__pending--offline { color: var(--danger); font-weight: 600; }
+.participants__alone > span:first-child { color: var(--fg-muted); }
+/* Wer noch keinen Partner hat, steht blasser da — und darunter, warum. */
+.participants__alone { flex-wrap: wrap; }
+.participants li .participants__tag { order: 1; flex: 0 0 100%; margin: -4px 0 0 calc(1.4em + 8px); font-size: 0.78rem; color: var(--fg-muted); }
 .stage__hint { margin: 0 0 8px; font-size: 0.9rem; }
 .button--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 

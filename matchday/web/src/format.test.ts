@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countdown, hasBegun, roundName, setColumns, stateText } from './format'
+import { countdown, hasBegun, roundName, setColumns, stateText, unpaired } from './format'
 import type { MatchView, TournamentView } from './api'
 
 const match = (label: string, round: number, score: MatchView['score'] = null): MatchView => ({
@@ -123,5 +123,25 @@ describe('roundName', () => {
     expect(roundName(view, 1)).toBe('Halbfinale')
     expect(roundName(view, 2)).toBe('Finale')
     expect(roundName(view, 9)).toBe('Runde 9')
+  })
+})
+
+describe('unpaired', () => {
+  const liste = (discipline: string) =>
+    ({
+      discipline,
+      participants: [
+        { id: '1', name: 'Anna / Tom', players: ['Anna', 'Tom'] },
+        { id: '2', name: 'Eva', players: ['Eva'] },
+        { id: '3', name: 'Rudi' },
+      ],
+    }) as unknown as TournamentView
+
+  it('findet im Doppel, wer noch keinen Partner hat', () => {
+    expect(unpaired(liste('Doubles')).map((p) => p.name)).toEqual(['Eva', 'Rudi'])
+  })
+
+  it('kennt im Einzel kein „ohne Partner“', () => {
+    expect(unpaired(liste('Singles'))).toEqual([])
   })
 })

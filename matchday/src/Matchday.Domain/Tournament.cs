@@ -201,7 +201,8 @@ public sealed class Tournament
 
     /// <summary>
     /// Trägt einen Teilnehmer ein. Im Einzel ist das ein Name, im Doppel ein
-    /// Paar — „Anna / Tom“, „Anna und Tom“, „Anna + Tom“.
+    /// Paar — „Anna / Tom“, „Anna und Tom“, „Anna + Tom“ — oder ein einzelner
+    /// Spieler, der seinen Partner erst später bekommt (ADR-0027).
     /// </summary>
     public Participant AddParticipant(string name)
     {
@@ -210,14 +211,31 @@ public sealed class Tournament
         return added!;
     }
 
+    /// <summary>
+    /// Im Doppel: die Spieler, die noch keinen Partner haben. Sie dürfen auf der
+    /// Liste stehen, solange nicht ausgelost ist — gespielt wird nur in Teams.
+    /// </summary>
+    public IReadOnlyList<Participant> Unpaired =>
+        Discipline == Discipline.Doubles ? _participants.Where(p => p.Lineup.Count == 1).ToList() : [];
+
     private Participant Enter(string name)
     {
         var players = Lineups.Split(RequireText(name, "Der Name")).Select(CleanName).ToList();
         RequireLineup(players);
 
+        if (players.Count == 2 && string.Equals(players[0], players[1], StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DomainException("Ein Doppel braucht zwei verschiedene Spieler.");
+        }
+
         var clean = Lineups.Compose(players);
 
-        if (_participants.Any(p => string.Equals(p.Name, clean, StringComparison.OrdinalIgnoreCase)))
+        // Ein Paar aus Spielern, die schon ohne Partner dastehen, ist kein neuer
+        // Eintrag, sondern das Paaren von Hand: Die beiden werden zum Team.
+        var partnerlos = players.Count == 2 ? Unpaired.Where(p => players.Any(p.Has)).ToList() : [];
+        var andere = _participants.Except(partnerlos).ToList();
+
+        if (andere.Any(p => string.Equals(p.Name, clean, StringComparison.OrdinalIgnoreCase)))
         {
             throw new DomainException($"„{clean}“ steht schon auf der Liste.");
         }
@@ -226,28 +244,28 @@ public sealed class Tournament
         // müsste gegen sich selbst spielen.
         foreach (var player in players)
         {
-            if (_participants.FirstOrDefault(p => p.Has(player)) is { } other)
+            if (andere.FirstOrDefault(p => p.Has(player)) is { } other)
             {
                 throw new DomainException($"„{player}“ spielt schon in „{other.Name}“ mit.");
             }
         }
 
-        if (players.Count == 2 && string.Equals(players[0], players[1], StringComparison.OrdinalIgnoreCase))
-        {
-            throw new DomainException("Ein Doppel braucht zwei verschiedene Spieler.");
-        }
-
-        if (_participants.Count >= MaxParticipants)
+        if (andere.Count >= MaxParticipants)
         {
             throw new DomainException($"Mehr als {MaxParticipants} Teilnehmer passen nicht in ein Turnier.");
         }
 
+        // Das Team steht dort, wo der erste der beiden stand — die Liste soll
+        // beim Paaren nicht durcheinandergeraten.
+        var stelle = partnerlos.Count == 0 ? _participants.Count : _participants.IndexOf(partnerlos[0]);
+        _participants.RemoveAll(partnerlos.Contains);
+
         var participant = new Participant(Guid.NewGuid(), clean, players);
-        _participants.Add(participant);
+        _participants.Insert(Math.Min(stelle, _participants.Count), participant);
         return participant;
     }
 
-    /// <summary>So viele Spieler, wie die Disziplin verlangt — einer oder zwei.</summary>
+    /// <summary>So viele Spieler, wie die Disziplin verlangt — einer, oder im Doppel einer oder zwei.</summary>
     private void RequireLineup(IReadOnlyList<string> players)
     {
         if (players.Count == 0)
@@ -261,19 +279,19 @@ public sealed class Tournament
                 $"Dieses Turnier ist ein Einzel — „{Lineups.Compose(players)}“ sind zwei Spieler. Entweder auf Doppel umstellen oder einen Namen eintragen.");
         }
 
-        if (Discipline == Discipline.Doubles && players.Count != 2)
+        if (players.Count > 2)
         {
             throw new DomainException(
-                $"Im Doppel besteht ein Team aus zwei Spielern, getrennt durch „/“ — etwa „{players[0]} / Partner“.");
+                $"Ein Team sind zwei Spieler, nicht {players.Count}. Mehrere Teams trennt ein Komma: „Anna / Tom, Rudi / Max“.");
         }
     }
 
     /// <summary>
-    /// Würfelt aus einzelnen Spielern Teams und trägt sie ein — das Los für die
-    /// Paarungen, nur im Doppel. Gemischt wird hier, wie bei der Auslosung: Wer
-    /// mit wem spielt, entscheidet über den Turnierverlauf, und das ist eine
-    /// Sache der Anwendung und nicht des Modells, das sich Namen ausdenken
-    /// könnte.
+    /// Würfelt Teams — das Los für die Paarungen, nur im Doppel. Gepaart werden
+    /// alle, die ohne Partner auf der Liste stehen, samt den Spielern, die hier
+    /// noch dazukommen. Gemischt wird hier, wie bei der Auslosung: Wer mit wem
+    /// spielt, entscheidet über den Turnierverlauf, und das ist eine Sache der
+    /// Anwendung und nicht des Modells, das sich Namen ausdenken könnte.
     ///
     /// Geprüft wird alles vor dem ersten Eintrag. Fiele der Fehler erst beim
     /// dritten Paar auf, stünden zwei erwürfelte Teams auf der Liste, die so
@@ -290,30 +308,32 @@ public sealed class Tournament
                 "Zufällige Teams gibt es nur im Doppel — im Einzel spielt jeder für sich. Erst auf Doppel umstellen, dann lose ich die Paare aus.");
         }
 
-        var names = players.Select(CleanName).ToList();
+        var neue = players.Select(CleanName).ToList();
+        var ohnePartner = Unpaired;
+        var names = ohnePartner.Select(p => p.Name).Concat(neue).ToList();
 
         if (names.Count < 2)
         {
-            throw new DomainException("Zum Auslosen der Teams braucht es mindestens zwei Spieler.");
+            throw new DomainException("Zum Auslosen der Teams braucht es mindestens zwei Spieler ohne Partner.");
         }
 
         if (names.Count % 2 == 1)
         {
             throw new DomainException(
-                $"{names.Count} Spieler gehen im Doppel nicht auf: ein Team sind zwei. Nimm einen heraus oder nenn mir einen weiteren.");
+                $"{names.Count} Spieler ohne Partner gehen im Doppel nicht auf: ein Team sind zwei. Nimm einen heraus oder trag einen weiteren ein.");
         }
 
         // Die Obergrenze steht vor der Namensprüfung: Eine Liste mit tausenden
         // Namen soll nicht erst Namen gegen Namen geprüft werden, um am Ende an
         // der Grenze zu scheitern. Danach sind es höchstens 128 Namen.
-        if (_participants.Count + (names.Count / 2) > MaxParticipants)
+        if (_participants.Count - ohnePartner.Count + (names.Count / 2) > MaxParticipants)
         {
             throw new DomainException($"Mehr als {MaxParticipants} Teilnehmer passen nicht in ein Turnier.");
         }
 
-        var gesehen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var gesehen = new HashSet<string>(ohnePartner.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
 
-        foreach (var name in names)
+        foreach (var name in neue)
         {
             // Ein Eintrag ist ein Spieler. Stünde hier schon ein Paar, käme mit
             // dem Partner ein Dreier heraus — und das fiele erst beim Eintragen
@@ -340,6 +360,8 @@ public sealed class Tournament
 
         Change("Die Teilnehmerliste", () =>
         {
+            _participants.RemoveAll(ohnePartner.Contains);
+
             for (var i = 0; i < names.Count; i += 2)
             {
                 teams.Add(Enter(Lineups.Compose([names[i], names[i + 1]])));
@@ -397,6 +419,13 @@ public sealed class Tournament
         if (_participants.Count < 2)
         {
             throw new DomainException("Zum Auslosen braucht es mindestens zwei Teilnehmer.");
+        }
+
+        if (Unpaired.Count > 0)
+        {
+            var namen = string.Join(", ", Unpaired.Select(p => p.Name));
+            throw new DomainException(
+                $"Im Doppel spielen Teams — ohne Partner {(Unpaired.Count == 1 ? "steht noch" : "stehen noch")} {namen}. Erst die Teams bilden: auslosen oder als Paar eintragen, etwa „{Unpaired[0].Name} / Partner“.");
         }
 
         var order = _participants.ToList();
@@ -776,8 +805,8 @@ public sealed class Tournament
     /// Eine Änderung an dem, was die Auslosung trägt. Vor der Auslosung geht sie
     /// einfach; danach, solange nicht gestartet ist, wird neu gelost —
     /// die alten Paarungen passten nicht mehr zur neuen Liste oder zum neuen
-    /// Modus. Reichen die Teilnehmer dafür nicht mehr, bleibt es bei der
-    /// Vorbereitung.
+    /// Modus. Reichen die Teilnehmer dafür nicht mehr, oder steht im Doppel
+    /// jemand ohne Partner da, bleibt es bei der Vorbereitung.
     /// </summary>
     private void Change(string what, Action change)
     {
@@ -792,7 +821,7 @@ public sealed class Tournament
 
         change();
 
-        if (drawn && _participants.Count >= 2)
+        if (drawn && _participants.Count >= 2 && Unpaired.Count == 0)
         {
             Draw();
         }

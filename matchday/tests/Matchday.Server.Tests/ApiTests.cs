@@ -105,16 +105,29 @@ public sealed class ApiTests : IDisposable
             ["Anna / Tom", "Rudi / Max"],
             tournament.GetProperty("participants").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
 
-        // Ein Team mit nur einem Spieler fällt auf, und zwar vollständig: das
-        // halb gefüllte Turnier entsteht gar nicht.
-        var halb = await rudi.PostAsJsonAsync("/api/tournaments", new
+        // Ein Doppel darf mit Spielern ohne Partner entstehen; die Teams kommen
+        // später. Ein Eintrag mit drei Spielern fällt dagegen auf, und zwar
+        // vollständig: Das halb gefüllte Turnier entsteht gar nicht.
+        var ohneTeams = await rudi.PostAsJsonAsync("/api/tournaments", new
         {
-            name = "Halbes Doppel",
+            name = "Doppel ohne Teams",
             discipline = "Doubles",
-            participants = new[] { "Eva" },
+            participants = new[] { "Eva", "Ida" },
         });
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, halb.StatusCode);
-        Assert.DoesNotContain("Halbes Doppel", await (await rudi.GetAsync("/api/tournaments")).Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Created, ohneTeams.StatusCode);
+        var ohneId = (await ohneTeams.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tournament").GetProperty("id").GetString();
+        var losen = await rudi.PostAsync($"/api/tournaments/{ohneId}/draw", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, losen.StatusCode);
+        Assert.Contains("Eva, Ida", await losen.Content.ReadAsStringAsync());
+
+        var dreier = await rudi.PostAsJsonAsync("/api/tournaments", new
+        {
+            name = "Dreierdoppel",
+            discipline = "Doubles",
+            participants = new[] { "Anna / Tom / Eva" },
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, dreier.StatusCode);
+        Assert.DoesNotContain("Dreierdoppel", await (await rudi.GetAsync("/api/tournaments")).Content.ReadAsStringAsync());
 
         // Die Disziplin steht nicht mehr zur Wahl, sobald Teams drinstehen.
         var umstellen = await rudi.PutAsJsonAsync($"/api/tournaments/{id}", new { discipline = "Singles" });

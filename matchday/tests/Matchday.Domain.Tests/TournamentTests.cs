@@ -520,10 +520,88 @@ public sealed class TournamentTests
         Assert.Equal("Rudi / Max", t.AddParticipant("Rudi und Max").Name);
         Assert.Equal(["Rudi", "Max"], t.Participants[1].Lineup);
 
-        // Ein Name allein ist kein Team, und zweimal derselbe Spieler auch nicht.
-        Assert.Throws<DomainException>(() => t.AddParticipant("Eva"));
+        // Zweimal derselbe Spieler ist kein Team, drei sind keines, und wer
+        // schon in einem Team steht, spielt in keinem zweiten.
         Assert.Throws<DomainException>(() => t.AddParticipant("Eva / Eva"));
+        Assert.Contains("nicht 3", Assert.Throws<DomainException>(() => t.AddParticipant("Eva / Ida / Nina")).Message);
         Assert.Contains("Anna", Assert.Throws<DomainException>(() => t.AddParticipant("Anna / Eva")).Message);
+        Assert.Contains("schon auf der Liste", Assert.Throws<DomainException>(() => t.AddParticipant("anna / tom")).Message);
+    }
+
+    [Fact]
+    public void Im_Doppel_duerfen_Spieler_erst_einmal_allein_auf_die_Liste()
+    {
+        // Wer das Doppel anlegt, kennt die Spieler — die Teams vielleicht noch
+        // nicht. Die kommen später, spätestens vor der Auslosung (ADR-0027).
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+        t.AddParticipant("Anna / Tom");
+        t.AddParticipant("Eva");
+        t.AddParticipant("Rudi");
+        t.AddParticipant("Max");
+
+        Assert.Equal(["Eva", "Rudi", "Max"], t.Unpaired.Select(p => p.Name));
+        Assert.Contains("steht schon auf der Liste", Assert.Throws<DomainException>(() => t.AddParticipant("eva")).Message);
+
+        // Auslosen geht erst, wenn alle einen Partner haben — und die Meldung sagt, wer fehlt.
+        var fehler = Assert.Throws<DomainException>(() => t.Draw()).Message;
+        Assert.Contains("Eva, Rudi, Max", fehler);
+        Assert.Contains("„Eva / Partner“", fehler);
+
+        // Von Hand gepaart: Die beiden werden zum Team, an der Stelle des ersten.
+        var team = t.AddParticipant("Rudi / Eva");
+        Assert.Equal(["Anna / Tom", "Rudi / Eva", "Max"], t.Participants.Select(p => p.Name));
+        Assert.Equal(["Rudi", "Eva"], team.Lineup);
+
+        // Einer allein ist noch einer zu wenig.
+        Assert.Contains("steht noch Max", Assert.Throws<DomainException>(() => t.Draw()).Message);
+
+        // Wer ohne Partner dasteht, bekommt ihn auch mit einem neuen Namen.
+        t.AddParticipant("Max / Ida");
+        Assert.Empty(t.Unpaired);
+        t.Draw(new Random(1));
+        Assert.Equal(TournamentState.Running, t.State);
+
+        // Kommt nach der Auslosung jemand ohne Partner dazu, wird nicht neu gelost,
+        // sondern zurück in die Vorbereitung — gespielt wird nur in Teams.
+        t.AddParticipant("Nina");
+        Assert.Equal(TournamentState.Setup, t.State);
+        Assert.Empty(t.Matches);
+
+        // Im Einzel gibt es kein „ohne Partner“.
+        Assert.Empty(Neu(Mode.Knockout, "A", "B").Unpaired);
+    }
+
+    [Fact]
+    public void Teams_auslosen_paart_alle_ohne_Partner()
+    {
+        var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);
+        t.AddParticipant("Anna / Tom");
+        t.AddParticipant("Eva");
+        t.AddParticipant("Rudi");
+
+        // Die schon eingetragenen samt denen, die hier dazukommen.
+        var teams = t.AddRandomTeams(["Max", "Ida"], new Random(3));
+
+        Assert.Equal(2, teams.Count);
+        Assert.Empty(t.Unpaired);
+        Assert.Equal(["Eva", "Ida", "Max", "Rudi"], teams.SelectMany(team => team.Lineup).Order(StringComparer.Ordinal));
+        Assert.Equal("Anna / Tom", t.Participants[0].Name);
+
+        // Ohne neue Namen: nur die, die schon allein dastehen.
+        t.AddParticipant("Nina");
+        t.AddParticipant("Olga");
+        Assert.Single(t.AddRandomTeams([], new Random(1)));
+
+        // Drei ohne Partner gehen nicht auf, einer allein auch nicht — und wer
+        // schon allein dasteht, wird nicht ein zweites Mal genannt.
+        t.AddParticipant("Paul");
+        t.AddParticipant("Quirin");
+        t.AddParticipant("Rosa");
+        Assert.Contains("3 Spieler", Assert.Throws<DomainException>(() => t.AddRandomTeams([])).Message);
+        Assert.Contains("steht zweimal", Assert.Throws<DomainException>(() => t.AddRandomTeams(["paul"])).Message);
+        t.RemoveParticipant(t.Unpaired[0].Id);
+        t.RemoveParticipant(t.Unpaired[0].Id);
+        Assert.Contains("mindestens zwei", Assert.Throws<DomainException>(() => t.AddRandomTeams([])).Message);
     }
 
     [Fact]

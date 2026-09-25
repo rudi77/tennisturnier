@@ -90,20 +90,20 @@ public sealed class AgentTools(TournamentActions actions)
             })),
 
         new("add_participants",
-            "Trägt Teilnehmer in das aktuelle Turnier ein. Geht, solange das Turnier nicht begonnen hat; war schon ausgelost, wird neu ausgelost. Im Doppel ist ein Teilnehmer ein Team: je Eintrag beide Spieler, getrennt durch „/“.",
+            "Trägt Teilnehmer in das aktuelle Turnier ein. Geht, solange das Turnier nicht gestartet ist; war schon ausgelost, wird neu ausgelost. Im Doppel ist ein Teilnehmer ein Team: je Eintrag beide Spieler, getrennt durch „/“. Stehen die Teams noch nicht fest, trag die Spieler einzeln ein — sie stehen dann ohne Partner auf der Liste. Ein Paar aus zwei Spielern, die schon ohne Partner dastehen, macht die beiden zum Team.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
-                names = new { type = "array", items = new { type = "string" }, description = "Namen der Teilnehmer; im Doppel je Team „Anna / Tom“" },
+                names = new { type = "array", items = new { type = "string" }, description = "Namen der Teilnehmer; im Doppel je Team „Anna / Tom“ oder ein Spieler allein, wenn sein Partner noch offen ist" },
             }, "names")),
 
         new("add_random_teams",
-            "Würfelt aus einzelnen Spielern Doppel-Teams und trägt sie ein — das Los für die Paarungen. Nur im Doppel und nur vor der Auslosung. Nimm dieses Werkzeug, wenn der Benutzer zufällige Teams will, statt selbst Paare zu bilden; gemischt wird in der Anwendung. Die Spielerzahl muss gerade sein. Geht, solange das Turnier nicht begonnen hat.",
+            "Würfelt Doppel-Teams — das Los für die Paarungen. Gepaart werden alle, die ohne Partner auf der Liste stehen, samt den Spielern, die hier noch genannt werden. Nur im Doppel und nur, solange das Turnier nicht gestartet ist. Nimm dieses Werkzeug, wenn der Benutzer zufällige Teams will, statt selbst Paare zu bilden; gemischt wird in der Anwendung. Zusammen muss die Zahl gerade sein.",
             Schema(new
             {
                 tournamentId = TournamentIdProperty,
-                players = new { type = "array", items = new { type = "string" }, description = "Die Spieler einzeln, je Eintrag ein Name — keine Paare" },
-            }, "players")),
+                players = new { type = "array", items = new { type = "string" }, description = "Weitere Spieler einzeln, je Eintrag ein Name — keine Paare. Weglassen, wenn nur die schon Eingetragenen gepaart werden sollen." },
+            })),
 
         new("remove_participants",
             "Streicht Teilnehmer aus dem aktuellen Turnier. Geht, solange das Turnier nicht begonnen hat; war schon ausgelost, wird neu ausgelost. Im Doppel genügt ein Spieler des Teams.",
@@ -381,7 +381,13 @@ public sealed class AgentTools(TournamentActions actions)
         }
 
         var what = t.Discipline == Discipline.Doubles ? "Teams" : "Teilnehmer";
-        lines.Add($"{what} ({t.Participants.Count}): {string.Join("; ", t.Participants.Select(p => p.Name))}");
+        var teams = t.Participants.Except(t.Unpaired).ToList();
+        lines.Add($"{what} ({teams.Count}): {string.Join("; ", teams.Select(p => p.Name))}");
+
+        if (t.Unpaired.Count > 0)
+        {
+            lines.Add($"Ohne Partner: {string.Join(", ", t.Unpaired.Select(p => p.Name))} — vor der Auslosung braucht jeder ein Team.");
+        }
 
         if (t.Matches.Count > 0)
         {

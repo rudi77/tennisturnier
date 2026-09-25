@@ -440,11 +440,22 @@ public sealed class AgentToolsTests : IDisposable
         Assert.Contains("Teams (2): Anna / Tom; Rudi / Max", anlegen.ResultForModel);
         var id = anlegen.TournamentId!.Value;
 
-        // Ein Team mit einem Spieler weist die Domäne zurück, und der Satz
-        // darüber sagt dem Modell, was fehlt.
-        var halb = await Run("add_participants", new { names = new[] { "Eva" } }, id);
-        Assert.True(halb.IsError);
-        Assert.Contains("zwei Spielern", halb.ResultForModel);
+        // Spieler dürfen erst einmal allein auf die Liste. Auslosen geht dann
+        // noch nicht, und der Satz darüber sagt dem Modell, wer fehlt.
+        var allein = await Run("add_participants", new { names = new[] { "Eva", "Ida" } }, id);
+        Assert.False(allein.IsError);
+        Assert.Contains("Ohne Partner: Eva, Ida", allein.ResultForModel);
+
+        var zuFrueh = await Run("draw", new { }, id);
+        Assert.True(zuFrueh.IsError);
+        Assert.Contains("Eva, Ida", zuFrueh.ResultForModel);
+
+        // Teams auslosen ohne neue Namen paart die, die schon dastehen.
+        var gepaart = await Run("add_random_teams", new { }, id);
+        Assert.False(gepaart.IsError);
+        Assert.DoesNotContain("Ohne Partner", gepaart.ResultForModel);
+        Assert.Contains("Teams (3)", gepaart.ResultForModel);
+        await Run("remove_participants", new { names = new[] { "Eva" } }, id);
 
         var los = await Run("draw", new { }, id);
         Assert.False(los.IsError);

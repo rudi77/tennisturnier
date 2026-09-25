@@ -1,4 +1,4 @@
-import type { Discipline, MatchView, Mode, SetScore, TournamentState, TournamentView } from './api'
+import type { Discipline, MatchView, Mode, Participant, SetScore, TournamentState, TournamentView } from './api'
 
 export const modeText = (mode: Mode) => (mode === 'Knockout' ? 'K.o.' : 'Jeder gegen jeden')
 
@@ -79,6 +79,12 @@ export function countdown(view: TournamentView, now: Date): Countdown | null {
   const clock = `${two(Math.floor((left % 86_400) / 3600))}:${two(Math.floor((left % 3600) / 60))}:${two(left % 60)}`
   const prefix = days === 0 ? '' : days === 1 ? '1 Tag ' : `${days} Tage `
   return { text: `Start in ${prefix}${clock}`, due: false }
+}
+
+/** Im Doppel: wer noch ohne Partner auf der Liste steht. Im Einzel niemand. */
+export function unpaired(view: TournamentView): Participant[] {
+  if (view.discipline !== 'Doubles') return []
+  return view.participants.filter((p) => (p.players?.length ?? 1) === 1)
 }
 
 export function roundName(view: TournamentView, round: number): string {
