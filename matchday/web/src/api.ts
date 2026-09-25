@@ -6,7 +6,8 @@ import { adminTokenFor, clientId, rememberAdminToken, scorerTokenFor } from './c
 import { ABGEMELDET, type AuthConfig, type Konto } from './auth'
 
 export type Mode = 'Knockout' | 'RoundRobin'
-export type Discipline = 'Singles' | 'Doubles'
+/** Offen: Die Namen stehen schon, entschieden wird vor der Auslosung (ADR-0027). */
+export type Discipline = 'Singles' | 'Doubles' | 'Open'
 export type TournamentState = 'Setup' | 'Running' | 'Completed'
 export type FinalSetMode = 'Regular' | 'MatchTiebreak10' | 'Advantage'
 export type MatchStatus = 'Pending' | 'Ready' | 'Playing' | 'Finished'

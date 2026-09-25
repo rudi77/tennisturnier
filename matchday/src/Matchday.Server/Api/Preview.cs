@@ -90,14 +90,14 @@ public static partial class Preview
             termin.Add(t.Location);
         }
 
-        var wer = t.Discipline == Discipline.Doubles ? "Teams" : "Teilnehmer";
+        var wer = t.Discipline.Entries();
         var zustand = t.State switch
         {
             TournamentState.Completed => "abgeschlossen",
             _ when t.IsStarted => "läuft gerade — live mitschauen",
             _ => "noch nicht gestartet",
         };
-        var rahmen = $"{(t.Discipline == Discipline.Doubles ? "Doppel" : "Einzel")}, {(t.Mode == Mode.Knockout ? "K.o." : "jeder gegen jeden")}, {t.Participants.Count} {wer}, {zustand}";
+        var rahmen = $"{t.Discipline.Describe()}, {(t.Mode == Mode.Knockout ? "K.o." : "jeder gegen jeden")}, {t.Participants.Count} {wer}, {zustand}";
 
         return termin.Count == 0 ? rahmen : $"{string.Join(" · ", termin)} — {rahmen}";
     }

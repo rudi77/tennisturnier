@@ -8,6 +8,27 @@ public enum Discipline
 
     /// <summary>Doppel: ein Paar je Seite. Ein Teilnehmer ist dann ein Team aus zwei Spielern.</summary>
     Doubles,
+
+    /// <summary>
+    /// Noch offen: Die Namen stehen schon, entschieden wird später — spätestens
+    /// vor der Auslosung (ADR-0027). Steht bewusst hinten: Ein Turnier ohne
+    /// Angabe liest sich weiter als Einzel.
+    /// </summary>
+    Open,
+}
+
+public static class Disciplines
+{
+    /// <summary>So steht die Disziplin in Sätzen, Kopfzeilen und Vorschauen.</summary>
+    public static string Describe(this Discipline discipline) => discipline switch
+    {
+        Discipline.Singles => "Einzel",
+        Discipline.Doubles => "Doppel",
+        _ => "Einzel oder Doppel offen",
+    };
+
+    /// <summary>Wie die Einträge heißen: im Doppel Teams, sonst Teilnehmer.</summary>
+    public static string Entries(this Discipline discipline) => discipline == Discipline.Doubles ? "Teams" : "Teilnehmer";
 }
 
 /// <summary>

@@ -356,7 +356,7 @@ public sealed class TournamentAgent(
     /// </summary>
     private static string Describe(Tournament t) =>
         $"„{t.Name}“ (id {t.Id}, {AgentTools.DisciplineText(t.Discipline)}, {AgentTools.ModeText(t.Mode)}, " +
-        $"{AgentTools.StateText(t)}, {t.Participants.Count} {(t.Discipline == Discipline.Doubles ? "Teams" : "Teilnehmer")})";
+        $"{AgentTools.StateText(t)}, {t.Participants.Count} {t.Discipline.Entries()})";
 
     /// <summary>
     /// Die Anweisungen. Sie sagen, wie der Agent handelt; was er über die

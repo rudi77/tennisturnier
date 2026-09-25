@@ -43,8 +43,8 @@ public sealed class AgentTools(TournamentActions actions)
     private static readonly object DisciplineProperty = new
     {
         type = "string",
-        @enum = new[] { "Singles", "Doubles" },
-        description = "Singles = Einzel, Doubles = Doppel. Im Doppel ist ein Teilnehmer ein Team aus zwei Spielern.",
+        @enum = new[] { "Singles", "Doubles", "Open" },
+        description = "Singles = Einzel, Doubles = Doppel, Open = noch offen. Im Doppel ist ein Teilnehmer ein Team aus zwei Spielern. Open, solange der Benutzer es nicht gesagt hat — entschieden wird spätestens vor der Auslosung.",
     };
 
     public static IReadOnlyList<ToolDefinition> Definitions { get; } =
@@ -54,7 +54,7 @@ public sealed class AgentTools(TournamentActions actions)
             Schema(new { })),
 
         new("create_tournament",
-            "Legt ein neues Turnier an und macht es zum aktuellen Turnier. Nur der Name ist Pflicht; frag nicht nach dem Rest, außer der Benutzer will es angeben. Standard: Einzel, K.o., zwei Gewinnsätze mit Match-Tiebreak.",
+            "Legt ein neues Turnier an und macht es zum aktuellen Turnier. Nur der Name ist Pflicht; frag nicht nach dem Rest, außer der Benutzer will es angeben. Standard: Einzel oder Doppel offen, K.o., zwei Gewinnsätze mit Match-Tiebreak.",
             Schema(new
             {
                 name = new { type = "string", description = "Name des Turniers" },
@@ -228,7 +228,7 @@ public sealed class AgentTools(TournamentActions actions)
             String(input, "location"),
             Enum<Mode>(input, "mode") ?? Mode.Knockout,
             format,
-            Enum<Discipline>(input, "discipline") ?? Discipline.Singles,
+            Enum<Discipline>(input, "discipline") ?? Discipline.Open,
             Strings(input, "participants"),
             Time(input, "time"));
 
@@ -380,7 +380,7 @@ public sealed class AgentTools(TournamentActions actions)
             lines.Add($"Ort: {t.Location}");
         }
 
-        var what = t.Discipline == Discipline.Doubles ? "Teams" : "Teilnehmer";
+        var what = t.Discipline.Entries();
         var teams = t.Participants.Except(t.Unpaired).ToList();
         lines.Add($"{what} ({teams.Count}): {string.Join("; ", teams.Select(p => p.Name))}");
 
@@ -438,7 +438,7 @@ public sealed class AgentTools(TournamentActions actions)
 
     internal static string ModeText(Mode mode) => mode == Mode.Knockout ? "K.o." : "jeder gegen jeden";
 
-    internal static string DisciplineText(Discipline discipline) => discipline == Discipline.Doubles ? "Doppel" : "Einzel";
+    internal static string DisciplineText(Discipline discipline) => discipline.Describe();
 
     internal static string StateText(Tournament t) => t.State switch
     {

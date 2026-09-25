@@ -2,7 +2,8 @@ import type { Discipline, MatchView, Mode, Participant, SetScore, TournamentStat
 
 export const modeText = (mode: Mode) => (mode === 'Knockout' ? 'K.o.' : 'Jeder gegen jeden')
 
-export const disciplineText = (discipline: Discipline) => (discipline === 'Doubles' ? 'Doppel' : 'Einzel')
+export const disciplineText = (discipline: Discipline) =>
+  discipline === 'Doubles' ? 'Doppel' : discipline === 'Singles' ? 'Einzel' : 'Einzel oder Doppel offen'
 
 /** Ausgelost, aber nicht gestartet, heißt „Ausgelost“ — laufen tut es erst nach dem Start. */
 export const stateText = (state: TournamentState, started = true) =>

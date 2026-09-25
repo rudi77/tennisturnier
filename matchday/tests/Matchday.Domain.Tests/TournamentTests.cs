@@ -776,6 +776,38 @@ public sealed class TournamentTests
     }
 
     [Fact]
+    public void Einzel_oder_Doppel_darf_bis_zur_Auslosung_offen_bleiben()
+    {
+        // Die Namen stehen, die Entscheidung fällt später (ADR-0027).
+        var t = Tournament.Create("Cup", "browser-1", Now, discipline: Discipline.Open);
+        t.AddParticipant("Anna");
+        t.AddParticipant("Tom");
+        t.AddParticipant("Rudi / Max");
+        Assert.Empty(t.Unpaired);
+        Assert.Equal("Einzel oder Doppel offen", t.Discipline.Describe());
+        Assert.Equal("Teilnehmer", t.Discipline.Entries());
+
+        Assert.Contains("Einzel oder Doppel?", Assert.Throws<DomainException>(() => t.Draw()).Message);
+
+        // Doppel: Die Paare bleiben, wer allein ist, steht ohne Partner da.
+        t.SetDiscipline(Discipline.Doubles);
+        Assert.Equal(["Anna", "Tom"], t.Unpaired.Select(p => p.Name));
+        Assert.Equal("Teams", t.Discipline.Entries());
+        t.AddParticipant("Anna / Tom");
+        t.Draw(new Random(1));
+
+        // Wieder offen: zurück in die Vorbereitung, gelost wird nicht.
+        t.SetDiscipline(Discipline.Open);
+        Assert.Equal(TournamentState.Setup, t.State);
+        Assert.Equal(2, t.Participants.Count);
+
+        // Einzel: Die Paare zerfallen in ihre Spieler.
+        t.SetDiscipline(Discipline.Singles);
+        Assert.Equal(["Anna", "Max", "Rudi", "Tom"], t.Participants.Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Contains("Einzel", Assert.Throws<DomainException>(() => t.AddParticipant("Eva / Ida")).Message);
+    }
+
+    [Fact]
     public void Wer_schon_allein_stand_bleibt_beim_Wechsel_derselbe_und_voll_ist_voll()
     {
         var t = Tournament.Create("Doppelrunde", "browser-1", Now, discipline: Discipline.Doubles);

@@ -167,10 +167,10 @@ public sealed class Tournament
     public void SetMode(Mode mode) => Change("Der Modus", () => Mode = mode);
 
     /// <summary>
-    /// Einzel oder Doppel — auch, wenn schon Namen auf der Liste stehen
-    /// (ADR-0027). Aus einem Einzel wird ein Doppel, dessen Spieler noch ohne
-    /// Partner dastehen; aus einem Doppel ein Einzel, in dem jeder Spieler
-    /// eines Teams für sich spielt.
+    /// Einzel, Doppel oder noch offen — auch, wenn schon Namen auf der Liste
+    /// stehen (ADR-0027). Aus einem Einzel wird ein Doppel, dessen Spieler noch
+    /// ohne Partner dastehen; im Einzel spielt jeder Spieler eines Paares für
+    /// sich. Offen bleibt die Liste, wie sie ist.
     /// </summary>
     public void SetDiscipline(Discipline discipline)
     {
@@ -283,7 +283,7 @@ public sealed class Tournament
         return participant;
     }
 
-    /// <summary>So viele Spieler, wie die Disziplin verlangt — einer, oder im Doppel einer oder zwei.</summary>
+    /// <summary>So viele Spieler, wie die Disziplin verlangt — im Einzel einer, sonst einer oder zwei.</summary>
     private void RequireLineup(IReadOnlyList<string> players)
     {
         if (players.Count == 0)
@@ -437,6 +437,12 @@ public sealed class Tournament
         if (_participants.Count < 2)
         {
             throw new DomainException("Zum Auslosen braucht es mindestens zwei Teilnehmer.");
+        }
+
+        if (Discipline == Discipline.Open)
+        {
+            throw new DomainException(
+                "Vor der Auslosung muss feststehen, was gespielt wird: Einzel oder Doppel? Im Doppel stehen die Eingetragenen danach ohne Partner da, bis die Teams gebildet sind.");
         }
 
         if (Unpaired.Count > 0)
@@ -823,8 +829,9 @@ public sealed class Tournament
     /// Eine Änderung an dem, was die Auslosung trägt. Vor der Auslosung geht sie
     /// einfach; danach, solange nicht gestartet ist, wird neu gelost —
     /// die alten Paarungen passten nicht mehr zur neuen Liste oder zum neuen
-    /// Modus. Reichen die Teilnehmer dafür nicht mehr, oder steht im Doppel
-    /// jemand ohne Partner da, bleibt es bei der Vorbereitung.
+    /// Modus. Reichen die Teilnehmer dafür nicht mehr, steht im Doppel jemand
+    /// ohne Partner da oder ist die Disziplin wieder offen, bleibt es bei der
+    /// Vorbereitung.
     /// </summary>
     private void Change(string what, Action change)
     {
@@ -839,7 +846,7 @@ public sealed class Tournament
 
         change();
 
-        if (drawn && _participants.Count >= 2 && Unpaired.Count == 0)
+        if (drawn && _participants.Count >= 2 && Unpaired.Count == 0 && Discipline != Discipline.Open)
         {
             Draw();
         }

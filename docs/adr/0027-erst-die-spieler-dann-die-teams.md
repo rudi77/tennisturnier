@@ -1,4 +1,4 @@
-# ADR-0027 — Erst die Spieler, dann die Teams
+# ADR-0027 — Erst die Spieler, dann die Teams — und die Disziplin darf warten
 
 **Status:** Accepted — ändert ADR-0020 an einer Stelle
 
@@ -40,6 +40,19 @@ wer schon allein dastand, behält seinen Eintrag. Ergäben die Spieler mehr als
 nach der nur mit leerer Liste gewechselt werden durfte: Sie zwang dazu, alle
 Namen zu löschen, nur weil die Entscheidung fürs Doppel später fiel als das
 Eintragen.
+
+**Die Disziplin darf offen bleiben** (`Discipline.Open`). Ein Turnier lässt
+sich anlegen, ohne Einzel oder Doppel zu wählen; im Formular und im Gespräch
+ist „offen“ die Vorgabe. Eingetragen wird trotzdem schon — einzeln oder als
+Paar. Ausgelost wird erst, wenn entschieden ist: Die Teilnehmerliste fragt
+dann „Einzel oder Doppel?“, und der Agent fragt nach, statt zu raten. Wird ein
+ausgelostes Turnier wieder auf offen gestellt, geht es zurück in die
+Vorbereitung.
+
+`Open` steht in der Aufzählung hinten. Turniere, die vor dieser Entscheidung
+gespeichert wurden, tragen keinen oder einen der beiden alten Werte und lesen
+sich unverändert; Schnittstelle und Domäne behalten Einzel als Vorgabe, nur
+Formular und Agent schlagen „offen“ vor.
 
 ## Folgen
 

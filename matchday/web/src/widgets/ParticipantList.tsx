@@ -22,6 +22,7 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
   const started = hasBegun(view)
   const canEdit = admin && !started
   const doubles = view.discipline === 'Doubles'
+  const offen = view.discipline === 'Open'
   const entries = splitEntries(name)
   const allein = unpaired(view)
   const teams = view.participants.length - allein.length
@@ -36,7 +37,7 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
     <>
       <div className="card__head">
         <h2 className="card__title">{doubles ? 'Teams' : 'Teilnehmer'}</h2>
-        <span className="muted">{doubles && allein.length > 0 ? `${teams} + ${allein.length} ohne Partner` : view.participants.length}</span>
+        <span className="muted">{doubles && allein.length > 0 ? `${teams > 0 ? `${teams} + ` : ''}${allein.length} ohne Partner` : view.participants.length}</span>
       </div>
       {view.participants.length === 0 ? (
         <p className="muted">{doubles ? 'Noch niemand eingetragen — Teams oder erst einmal die Spieler.' : 'Noch niemand eingetragen.'}</p>
@@ -66,7 +67,9 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={doubles ? 'Anna / Tom — oder Spieler einzeln, Teams später' : 'Name, oder mehrere mit Komma'}
+            placeholder={
+              doubles ? 'Anna / Tom — oder Spieler einzeln, Teams später' : offen ? 'Namen, mit Komma — Einzel oder Doppel später' : 'Name, oder mehrere mit Komma'
+            }
             aria-label={doubles ? 'Neues Team oder neuer Spieler' : 'Neuer Teilnehmer'}
           />
           <button type="submit" className="button" disabled={entries.length === 0}>
@@ -98,7 +101,19 @@ export function ParticipantList({ view, admin, act, embedded = false }: { view: 
       {canEdit && setup && view.participants.length >= 2 && allein.length > 0 && (
         <p className="field__note">Ausgelost wird, sobald jeder einen Partner hat.</p>
       )}
-      {canEdit && setup && view.participants.length >= 2 && allein.length === 0 && (
+      {/* Offen gelassen: Vor dem Auslosen fällt hier die Entscheidung. */}
+      {canEdit && setup && view.participants.length >= 2 && offen && (
+        <div className="actions actions--start">
+          <span className="muted">Einzel oder Doppel? Vor dem Auslosen muss es feststehen.</span>
+          <button type="button" className="button" onClick={() => void act(() => api.update(view.id, { discipline: 'Singles' }))}>
+            Einzel spielen
+          </button>
+          <button type="button" className="button" onClick={() => void act(() => api.update(view.id, { discipline: 'Doubles' }))}>
+            Doppel spielen
+          </button>
+        </div>
+      )}
+      {canEdit && setup && view.participants.length >= 2 && allein.length === 0 && !offen && (
         <div className="actions">
           {confirm ? (
             <>

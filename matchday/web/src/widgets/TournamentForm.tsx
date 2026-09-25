@@ -26,7 +26,9 @@ export const emptyDraft: Draft = {
   time: '',
   location: '',
   mode: 'Knockout',
-  discipline: 'Singles',
+  // Wer ein Turnier anlegt, muss sich noch nicht festlegen — die Namen kommen
+  // oft vor der Entscheidung, ob Einzel oder Doppel gespielt wird.
+  discipline: 'Open',
   bestOf: 3,
   finalSetMode: 'MatchTiebreak10',
   tiebreakAt: 6,
@@ -132,6 +134,7 @@ export function TournamentForm({
             options={[
               ['Singles', 'Einzel'],
               ['Doubles', 'Doppel'],
+              ['Open', 'Später'],
             ]}
             disabled={locked}
             note={
@@ -141,9 +144,11 @@ export function TournamentForm({
                   ? hasEntries
                     ? 'Wer schon eingetragen ist, steht ohne Partner da, bis die Teams gebildet sind — spätestens vor dem Auslosen.'
                     : 'Ein Teilnehmer ist ein Team: „Anna / Tom“. Spieler dürfen auch erst einmal allein auf die Liste.'
-                  : hasEntries
-                    ? 'Im Einzel spielt jeder für sich — Teams zerfallen in ihre Spieler.'
-                    : undefined
+                  : draft.discipline === 'Open'
+                    ? 'Die Namen lassen sich schon eintragen — entschieden wird spätestens vor dem Auslosen.'
+                    : hasEntries
+                      ? 'Im Einzel spielt jeder für sich — Teams zerfallen in ihre Spieler.'
+                      : undefined
             }
             onPick={(value) => set('discipline', value)}
           />

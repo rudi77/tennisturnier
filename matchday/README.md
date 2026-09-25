@@ -10,6 +10,10 @@ Gespräch: unten ein Eingabefeld, wahlweise per Sprache, und der Agent legt an,
 trägt ein, lost aus und zeigt jeweils das Widget, das gerade zählt. Warum es so
 gebaut ist, steht in [ADR-0016](../docs/adr/0016-neuanfang-ein-turnier-mit-freunden.md).
 
+Auch **Einzel oder Doppel** muss beim Anlegen nicht feststehen: Das Turnier
+steht dann auf „offen“, die Namen lassen sich trotzdem eintragen, und vor dem
+Auslosen fragt die Teilnehmerliste, was gespielt wird.
+
 Im Doppel müssen die Paare nicht feststehen: Trag die Spieler einzeln ein, sie
 stehen dann **ohne Partner** auf der Liste ([ADR-0027](../docs/adr/0027-erst-die-spieler-dann-die-teams.md)).
 Die Teams kommen später: **Das Los bildet sie** aus allen ohne Partner, im

@@ -22,6 +22,7 @@ public sealed class WissenTests
     {
         [Discipline.Singles] = "Einzel",
         [Discipline.Doubles] = "Doppel",
+        [Discipline.Open] = "offen",
     };
 
     private static readonly Dictionary<FinalSetMode, string> LetzterSatz = new()

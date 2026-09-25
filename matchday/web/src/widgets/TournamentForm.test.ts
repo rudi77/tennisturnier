@@ -46,3 +46,9 @@ describe('die Satzlänge im Formular', () => {
     expect(gamesFrom('vier')).toBeNull()
   })
 })
+
+describe('ein neues Turnier', () => {
+  it('lässt Einzel oder Doppel offen, bis jemand entscheidet', () => {
+    expect(emptyDraft.discipline).toBe('Open')
+  })
+})

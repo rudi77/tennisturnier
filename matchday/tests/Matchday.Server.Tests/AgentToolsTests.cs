@@ -86,6 +86,13 @@ public sealed class AgentToolsTests : IDisposable
         var zuFrueh = await Run("record_result", new { winner = "Rudi", loser = "Max", sets = new[] { new[] { 6, 4 } } }, id);
         Assert.True(zuFrueh.IsError);
 
+        // Nichts gesagt heißt offen — und vor der Auslosung muss es feststehen.
+        Assert.Contains("Einzel oder Doppel offen", anlegen.ResultForModel);
+        var offen = await Run("draw", new { }, id);
+        Assert.True(offen.IsError);
+        Assert.Contains("Einzel oder Doppel?", offen.ResultForModel);
+        await Run("update_tournament", new { discipline = "Singles" }, id);
+
         var los = await Run("draw", new { }, id);
         Assert.Equal(AgentTools.WidgetStandings, los.Widget);
         Assert.Contains("Runde 1", los.ResultForModel);
@@ -227,6 +234,7 @@ public sealed class AgentToolsTests : IDisposable
         {
             name = "Herbstcup",
             mode = "Knockout",
+            discipline = "Singles",
             bestOf = 3,
             finalSet = "Regular",
             participants = new[] { "Rudi", "Max", "Anna", "Tom" },
@@ -374,7 +382,7 @@ public sealed class AgentToolsTests : IDisposable
         Assert.True(keineId.IsError);
         Assert.Contains("ist keine Turnier-Id", keineId.ResultForModel);
 
-        var anlegen = await Run("create_tournament", new { name = "Cup", bestOf = 3, finalSet = "Regular", participants = new[] { "Rudi", "Max" } });
+        var anlegen = await Run("create_tournament", new { name = "Cup", discipline = "Singles", bestOf = 3, finalSet = "Regular", participants = new[] { "Rudi", "Max" } });
         var id = anlegen.TournamentId!.Value;
         await Run("draw", new { }, id);
         await Run("start_tournament", new { }, id);

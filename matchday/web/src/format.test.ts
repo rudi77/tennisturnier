@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countdown, hasBegun, roundName, setColumns, stateText, unpaired } from './format'
+import { countdown, disciplineText, hasBegun, roundName, setColumns, stateText, unpaired } from './format'
 import type { MatchView, TournamentView } from './api'
 
 const match = (label: string, round: number, score: MatchView['score'] = null): MatchView => ({
@@ -141,7 +141,16 @@ describe('unpaired', () => {
     expect(unpaired(liste('Doubles')).map((p) => p.name)).toEqual(['Eva', 'Rudi'])
   })
 
-  it('kennt im Einzel kein „ohne Partner“', () => {
+  it('kennt im Einzel kein „ohne Partner“ — und solange es offen ist, auch nicht', () => {
     expect(unpaired(liste('Singles'))).toEqual([])
+    expect(unpaired(liste('Open'))).toEqual([])
+  })
+})
+
+describe('disciplineText', () => {
+  it('sagt auch, wenn es noch offen ist', () => {
+    expect(disciplineText('Singles')).toBe('Einzel')
+    expect(disciplineText('Doubles')).toBe('Doppel')
+    expect(disciplineText('Open')).toBe('Einzel oder Doppel offen')
   })
 })
