@@ -128,3 +128,11 @@ Auf Railway: der Dienst dieses Repositories baut MATCHDAY. **Root Directory
 bleibt die Wurzel** — das `railway.json` dort nennt `matchday/Dockerfile` und
 `/api/health`. Zu tun bleibt: einen Datenträger auf `/data` hängen und die drei
 `AZURE_OPENAI_*`-Variablen setzen.
+
+Zwei Umgebungen, zwei Branches ([ADR-0029](../docs/adr/0029-erst-staging-dann-production.md)):
+**Staging** baut `main`, **Production** baut `production`. Live geht ein Stand
+erst, wenn er auf Staging lief:
+
+```bash
+git push origin main:production
+```
